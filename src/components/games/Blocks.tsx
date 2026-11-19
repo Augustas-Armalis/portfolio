@@ -46,7 +46,11 @@ function Joystick({ onMove }: { onMove: (x: number, y: number) => void }) {
       className={`relative flex h-[120px] w-[120px] touch-none items-center justify-center rounded-full bg-white/10 backdrop-blur-md ${GLASS_RING}`}
       onPointerDown={(e) => {
         if (active.current) return;
-        e.currentTarget.setPointerCapture(e.pointerId);
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // a pointer that is already gone: carry on without capture
+        }
         const rect = e.currentTarget.getBoundingClientRect();
         active.current = { id: e.pointerId, cx: rect.left + rect.width / 2, cy: rect.top + rect.height / 2 };
         track(e);
@@ -69,7 +73,11 @@ function HoldButton({ label, className, onHold }: { label: string; className: st
       type="button"
       className={`absolute flex touch-none items-center justify-center rounded-full bg-white/15 text-[12px] font-semibold tracking-[0.01em] text-white/90 backdrop-blur-md transition-colors duration-100 [-webkit-touch-callout:none] active:bg-white/30 ${GLASS_RING} ${className}`}
       onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // a pointer that is already gone: carry on without capture
+        }
         onHold(true);
       }}
       onPointerUp={end}
@@ -201,7 +209,11 @@ export default function Blocks({ compact = false }: { compact?: boolean }) {
           className="absolute inset-0 z-10 touch-none"
           onPointerDown={(e) => {
             if (lookPointer.current) return;
-            e.currentTarget.setPointerCapture(e.pointerId);
+            try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // a pointer that is already gone: carry on without capture
+        }
             lookPointer.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
           }}
           onPointerMove={(e) => {
