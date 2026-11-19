@@ -49,7 +49,7 @@ export function Ground({ def, pal, mobile, size = 2400 }: { def: WorldDef; pal: 
 // ---------- the path of light ----------
 // A ribbon of light hanging in the air at the height the plane keeps, with a
 // slow pulse running along it toward the gate; at intervals a lantern of
-// light on a thread, and now and then an angel standing by to show the way.
+// light trailing a thread, and now and then an angel standing by to show the way.
 function ribbonGeometry(pts: THREE.Vector3[], width: number) {
   const pos: number[] = [];
   const uv: number[] = [];
@@ -129,9 +129,9 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
       const lz = p.z;
       const g = id === "home" ? 0 : groundAt(def, lx, lz);
       halos.push({ p: [p.x, p.y - 0.75, p.z], size: 2.2, col: tint, k: 0.17 * gain });
-      // the thread it hangs on, down into the mist
-      const h = p.y - 0.75 - g;
-      if (h > 2 && def.water === null) k.box(0.035, h, 0.035, [p.x, g + h / 2, p.z], [tint[0] * 0.8, tint[1] * 0.74, tint[2] * 0.6], { glow: 0.22 * gain });
+      // a fine thread of light falling from it, gone before it reaches the ground
+      const h = Math.min(p.y - 0.75 - g - 0.5, 5.5);
+      if (h > 1.5) k.add(new THREE.CylinderGeometry(0.03, 0.004, h, 4, 1, true), [p.x, p.y - 0.75 - h / 2, p.z], [tint[0] * 0.8, tint[1] * 0.74, tint[2] * 0.6], { glow: 0.3 * gain });
       if (angels && n % 4 === 1 && effects > 0.25) {
         tan.subVectors(pts[i + 1], pts[i - 1]).normalize();
         const s = n % 8 === 1 ? 1 : -1;
