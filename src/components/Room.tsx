@@ -50,9 +50,9 @@ import {
 import { TRACK, geist, geistReady } from "./scene/font";
 import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
-import { ROUTE, SEA_HOUR, STATIONS, stationAt } from "./scene/flightPath";
 import { Trees } from "./scene/Trees";
-import { Voyage } from "./scene/Voyage";
+import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
+import { WORLDS, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
 import { Birds, Ground, Lake, MistBands, Mountains, Sky, makeSkyMaterial } from "./scene/World";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
@@ -230,9 +230,6 @@ function Scene({
   onHandoff,
   onReaderInfo,
   onSky,
-  free,
-  onStation,
-  voyage,
   q,
 }: {
   mobile: boolean;
@@ -255,9 +252,6 @@ function Scene({
   onHandoff: (t?: UserId) => void;
   onReaderInfo: (i: ReaderInfo) => void;
   onSky: (s: { label: string; night: number; hdr: "day" | "sunset" | "night" }) => void;
-  free: boolean;
-  onStation: (i: number) => void;
-  voyage: boolean;
   q: Quality;
 }) {
   const { camera, size, gl, scene, advance } = useThree();
@@ -354,7 +348,6 @@ function Scene({
   const skyTick = useRef(-1);
   const musicClock = useRef(nowS());
   const musicDrift = useRef({ t: 0 });
-  const flightSky = useRef({ w: 0, hour: 12, at: -1 });
   const lastH = useRef(-1);
   const lastLabel = useRef("");
   const veilH = useRef(-2);
@@ -375,7 +368,7 @@ function Scene({
   }, [scene, fog]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __fs: flightSky, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.() });
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.() });
     if (process.env.NODE_ENV === "production") return;
     // window.__scene: scrub the world deterministically and save stills.
     //   step(seconds, dt)  run the simulation forward in fixed steps (the pane itself only paints ~2 fps)
@@ -399,6 +392,8 @@ function Scene({
         fly: () => enterRef.current?.("plane"),
         land: () => exitRef.current?.(),
         warp: (z: number) => planeApi.current?.warp(z),
+        // straight into a world (optionally part-way along its path of light, 0..1)
+        world: (id: WorldId, along?: number) => planeApi.current?.jump(id, along),
         // t seconds into the arrival; negative is the loader still up (the in-canvas dark and line; __loader.reset() / .set(p) bring back and draw the DOM layer)
         intro: (t: number) => {
           introAt.current = nowS() - t;
@@ -635,6 +630,10 @@ function Scene({
     if (m === "plane") {
       play("plane");
       flightMusicTo("road");
+      // only in the air: coming home on the way down must not start the music again
+      voyage.onEnter = (id) => {
+        if (stage.current === "fly") flightMusicTo(WORLDS[id].music);
+      };
       planeApi.current?.launch(cam);
       onMode("plane");
       setStage("fly");
@@ -654,6 +653,7 @@ function Scene({
   const exit = () => {
     const s = stage.current;
     if (s === "fly") {
+      voyage.onEnter = null;
       planeApi.current?.beginLand(cam);
       flightMusicStop();
       setStage("land");
@@ -894,40 +894,12 @@ function Scene({
     let h = clockHours();
     const DUSK = 21.6;
     if (lean > 0.0005 && h > 5 && h < DUSK) h += (DUSK - h) * lean;
-    // in flight each station brings its own hour: the gold of the suns, the
-    // night of the stars, the long dusk over the sea
-    const fs = flightSky.current;
-    let fw = 0;
-    let fh = fs.hour;
-    let at = -1;
-    if ((stage.current === "fly" || stage.current === "land") && planeApi.current) {
-      const sa = stationAt(planeApi.current.pos.z);
-      if (sa.sea > sa.w) {
-        fw = sa.sea;
-        fh = SEA_HOUR;
-        at = STATIONS.length;
-      } else if (sa.index >= 0) {
-        fw = sa.w;
-        fh = STATIONS[sa.index].hour;
-        at = sa.w > 0.35 ? sa.index : -1;
-      }
-      if (stage.current === "land") at = -1;
-    }
-    // a station's hour is reached by gliding there from whatever the sky is
-    // doing now, and one station's hour glides into the next: never a snap
-    if (fs.w < 0.02) fs.hour = h;
-    fs.w += (fw - fs.w) * (1 - Math.exp(-dtS * 1.6));
-    if (fw > 0) fs.hour = (fs.hour + (((fh - fs.hour + 36) % 24) - 12) * (1 - Math.exp(-dtS * 1.4)) + 24) % 24;
-    if (fs.w > 0.002) h = (h + ((((fs.hour - h + 36) % 24) - 12) * fs.w) + 24) % 24;
-    if (at !== fs.at) {
-      fs.at = at;
-      onStation(at);
-    }
-    const pulsing = SKY_U.uPulse.value > 0.004 || md.t > 0 || fs.w > 0.002;
+    // in flight every world brings its own sky; the change happens behind closed cloud
+    const pulsing = SKY_U.uPulse.value > 0.004 || md.t > 0 || voyageBusy();
     if (!pulsing && now - skyTick.current < 1 && skyTick.current > 0 && Math.abs(h - lastH.current) < 0.003) return;
     skyTick.current = now;
     lastH.current = h;
-    const s = skyState(h);
+    const s = voyageSky(skyState(h), dtS);
     applySky(s);
     const beat = SKY_U.uPulse.value;
     gl.toneMappingExposure = s.exposure * (1 + beat * 0.07);
@@ -1034,11 +1006,14 @@ function Scene({
     if (stage.current === "idle" || stage.current === "fly") reportFrame(rawDt);
     const flying = stage.current === "fly";
     const lk = lakeK(cam.position.x, cam.position.z);
+    const wdef = WORLDS[voyage.cur];
     ambienceScene({
       night: SKY_U.uNight.value,
-      water: Math.max(clamp01(1 - (lk - 1) / 2.5) * 0.8, clamp01((ROUTE.shoreZ + 50 - cam.position.z) / 70)),
+      water: voyage.cur === "home" ? clamp01(1 - (lk - 1) / 2.5) * 0.8 : wdef.water !== null ? 0.5 : 0,
       speed: flying ? (planeApi.current?.speed() ?? 0) : 0,
       boost: flying ? (planeApi.current?.boost() ?? 0) : 0,
+      // the avenue is a wood; every painted world has a bed of its own
+      place: voyage.cur === "home" ? (voyage.flying && cam.position.z < -46 ? "forest" : "meadow") : wdef.place,
     });
     const s = stage.current;
     const el = now - st.current;
@@ -1053,7 +1028,7 @@ function Scene({
     // arrival mist thins out, continuously, as the camera comes down
     const at = introAt.current;
     const mist = instant ? 0 : at === null ? START.mist : START.mist * (1 - smooth(clamp01((now - at) / (ARRIVE * 0.8))));
-    SKY_U.uMist.value = Math.max(mist, (planeApi.current?.landMist() ?? 0) * 0.55);
+    SKY_U.uMist.value = Math.max(mist, voyage.mist);
     // the plain three fog (the desk and its things) keeps pace with the shader fog
     fog.far = Math.min(176, 3 / (FOG + mist));
     fog.near = fog.far * (20.5 / 176);
@@ -1150,13 +1125,15 @@ function Scene({
     }
     if (s === "fly") {
       const inp = input.current;
+      // the pointer (or a finger) is the stick; A / D bank, W / S and the wheel work the throttle, E / Q climb and sink
+      const k = inp.keys;
       let sx = inp.sx;
-      let sy = inp.sy;
-      if (inp.keys.has("a") || inp.keys.has("arrowleft")) sx = -1;
-      if (inp.keys.has("d") || inp.keys.has("arrowright")) sx = 1;
-      if (inp.keys.has("w") || inp.keys.has("arrowup")) sy = 1;
-      if (inp.keys.has("s") || inp.keys.has("arrowdown")) sy = -1;
-      planeApi.current?.fly(dt, { sx, sy }, cam);
+      const bank = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
+      if (bank) sx = bank;
+      const thr = (k.has("w") || k.has("arrowup") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0);
+      const climb = (k.has("e") || k.has(" ") ? 1 : 0) - (k.has("q") || k.has("shift") ? 1 : 0);
+      planeApi.current?.fly(dt, { sx, sy: inp.sy, thr, climb, wheel: inp.zoom, moved: inp.last, keys: bank !== 0 || climb !== 0 }, cam);
+      inp.zoom = 0;
       return;
     }
     if (s === "land") {
@@ -1267,14 +1244,19 @@ function Scene({
   return (
     <>
       <Sky />
-      <Mountains mobile={mobile} />
-      <Trees mobile={mobile || q.trees < 0.7} fogDensity={FOG * 0.42} />
-      {q.effects > 0.2 && <MistBands mobile={mobile || q.effects < 0.7} />}
-      <Ground fogDensity={FOG * 0.55} />
-      <Lake fogDensity={FOG * 0.7} />
-      <Grass mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} density={q.grass} />
-      <Flowers mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} />
-      <Birds />
+      {/* the desk's own field: not drawn while the plane is away in another world */}
+      <HomeWorld>
+        <Mountains mobile={mobile} />
+        <Trees mobile={mobile || q.trees < 0.7} fogDensity={FOG * 0.42} />
+        {q.effects > 0.2 && <MistBands mobile={mobile || q.effects < 0.7} />}
+        <Ground fogDensity={FOG * 0.55} />
+        <Lake fogDensity={FOG * 0.7} />
+        <Grass mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} density={q.grass} />
+        <Flowers mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} />
+        <Birds />
+      </HomeWorld>
+      {/* the path of light, the gate, and whichever painted world the plane is in */}
+      <Worlds mobile={mobile} effects={q.effects} trees={q.trees} far={q.far} grass={q.grass} reduced={reduced} />
       <SkyLife reduced={reduced} amount={q.effects} />
 
       {/* the HDRIs load in their own boundary so the scene never waits on them */}
@@ -1337,9 +1319,8 @@ function Scene({
           </Piece>
         );
       })}
-      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} free={free} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={SETTLE + 0.4} instant={instant} />
+      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={SETTLE + 0.4} instant={instant} />
       {idle && mode === "none" && <PlaneLabel spot={planeSpot} introAt={introAt} instant={instant} />}
-      {voyage && <Voyage mobile={mobile || q.trees < 0.7} />}
       <Post level={devPost ?? (mobile ? Math.min(1, q.post) : q.post)} />
     </>
   );
@@ -1463,7 +1444,6 @@ export default function Room({
   const [sky, setSky] = useState<{ label: string; night: number; hdr: string }>({ label: "", night: 0, hdr: "day" });
   const [skipIntro] = useState(introOff);
   const q = useQuality();
-  const [free, setFree] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [quiet, setQuiet] = useState(ambienceMuted);
   useEffect(() => onAmbienceChange(() => setQuiet(ambienceMuted())), []);
@@ -1483,10 +1463,6 @@ export default function Room({
     },
     [],
   );
-  const [station, setStation] = useState(-1);
-  // the far world (stations, gate, sea) is built behind the loader with everything
-  // else, so nothing appears on the horizon, or hitches, once the dark has lifted
-  const voyage = true;
 
   // the 3D chunk has arrived
   useEffect(() => loader.set(0.34), []);
@@ -1572,9 +1548,10 @@ export default function Room({
     inp.py = (e.clientY / window.innerHeight) * 2 - 1;
     if (mode === "plane" && !isMobile) {
       // the pointer is the stick: distance from centre steers
-      const dz = (v: number) => (Math.abs(v) < 0.06 ? 0 : THREE.MathUtils.clamp((v - Math.sign(v) * 0.06) * 1.5, -1, 1));
+      const dz = (v: number) => (Math.abs(v) < 0.09 ? 0 : THREE.MathUtils.clamp((v - Math.sign(v) * 0.09) * 1.45, -1, 1));
       inp.sx = dz(inp.px);
       inp.sy = dz(-inp.py);
+      inp.last = performance.now();
     }
     const prev = pointers.current.get(e.pointerId);
     if (!prev) return;
@@ -1656,8 +1633,14 @@ export default function Room({
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerCancel={onUp}
+      onPointerLeave={() => {
+        // a pointer that has left the window is not holding the plane's stick
+        if (mode === "plane" && !isMobile) input.current.sx = input.current.sy = 0;
+      }}
       onWheel={(e) => {
         if (mode === "camera") photoCtl.onWheel?.(e.ctrlKey ? e.deltaY * 2.5 : e.deltaY);
+        // in flight the wheel is the throttle: up for more
+        if (mode === "plane") input.current.zoom += e.ctrlKey ? e.deltaY * 2.5 : e.deltaY;
         if (!orbiting) return;
         // scroll up (or pinch out, which arrives as ctrl+wheel) moves in
         input.current.zoom += e.ctrlKey ? e.deltaY * 2.5 : e.deltaY;
@@ -1697,13 +1680,7 @@ export default function Room({
           onHandoff={onHandoff}
           onReaderInfo={setReaderInfo}
           onSky={setSky}
-          free={free}
-          onStation={(i) => {
-            setStation(i);
-            if (stageRef.current === "fly") flightMusicTo(i < 0 ? "road" : i >= STATIONS.length ? "sea" : STATIONS[i].id);
-          }}
           q={q}
-          voyage={voyage}
         />
       </Canvas>
 
@@ -1791,7 +1768,7 @@ export default function Room({
           />
         )}
         {mode === "sketch" && <SketchUI key="sketch" onExit={exit} onClear={() => apiRef.current?.sketch.current?.clear()} onSave={() => apiRef.current?.sketch.current?.save()} />}
-        {mode === "plane" && <FlightUI key="plane" onLand={exit} mobile={isMobile} free={free} onFree={setFree} station={stage === "fly" ? station : -1} />}
+        {mode === "plane" && <FlightUI key="plane" onLand={exit} mobile={isMobile} flying={stage === "fly"} />}
       </AnimatePresence>
 
       {/* the place has a sound of its own; one small pill silences it */}

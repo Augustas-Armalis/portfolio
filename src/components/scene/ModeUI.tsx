@@ -1,13 +1,14 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Check, Download, Grid3x3, Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { play } from "@/lib/sfx";
 import { STATIONS } from "./flightPath";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
+import { photoCtl, postCtl, type Capture } from "./Post";
 
 // DOM controls for the focused desk modes. Quiet, glassy, dark-on-light pills
 // that sit over the 3D scene. Every mode has the same exit: Esc or "Put down".
@@ -60,78 +61,413 @@ export function PianoUI({ onExit }: { onExit: () => void }) {
 
 // ---------- camera ----------
 
-export function CameraUI({ onExit, onShoot }: { onExit: () => void; onShoot: () => string | null }) {
-  const [shots, setShots] = useState<string[]>([]);
-  const [flash, setFlash] = useState(0);
+// The camera is a photo mode: a free flight, a real lens (focus, aperture,
+// focal length, exposure), the hour, a frame in one of five shapes, and a
+// shutter that keeps exactly what the frame holds at full resolution.
+
+const ASPECTS: [string, number][] = [
+  ["3:2", 3 / 2],
+  ["4:3", 4 / 3],
+  ["1:1", 1],
+  ["16:9", 16 / 9],
+  ["9:16", 9 / 16],
+];
+const F_STOPS = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16];
+const FOCUS_NEAR = 0.25;
+const FOCUS_FAR = 120; // the end of the ring: past it the lens is at infinity
+// the film behind the frame: a 36 x 24 negative, cropped to the frame's shape
+const filmHeight = (a: number) => (a >= 1.5 ? 36 / a : a >= 1 ? 24 : a >= 2 / 3 ? 24 / a : 36);
+const ringOfFocus = (m: number) => (m >= FOCUS_FAR ? 1 : Math.min(1, Math.max(0, Math.log(m / FOCUS_NEAR) / Math.log(FOCUS_FAR / FOCUS_NEAR))));
+const focusOfRing = (t: number) => (t >= 0.995 ? 1000 : FOCUS_NEAR * Math.pow(FOCUS_FAR / FOCUS_NEAR, t));
+const fmtFocus = (m: number) => (m >= FOCUS_FAR ? "∞" : m < 1 ? `${Math.round(m * 100)} cm` : m < 10 ? `${m.toFixed(1)} m` : `${Math.round(m)} m`);
+const fmtStop = (n: number) => `ƒ/${n}`;
+const fmtEv = (v: number) => `${v > 0.04 ? "+" : v < -0.04 ? "−" : ""}${Math.abs(v).toFixed(1)}`;
+const FRAME_EASE = "280ms cubic-bezier(0.22, 1, 0.36, 1)";
+
+type Shot = { id: number; thumb: string; url: string | null; name: string; w: number; h: number; saved: boolean };
+type Dial = "focus" | "aperture" | "zoom" | "ev" | "time" | "aspect";
+let shotSeq = 0;
+
+export function CameraUI({
+  mobile,
+  onExit,
+  onShoot,
+  hours,
+  live,
+  onTime,
+  onLive,
+}: {
+  mobile: boolean;
+  onExit: () => void;
+  onShoot: () => Capture | null;
+  hours: number;
+  live: boolean;
+  onTime: (h: number) => void;
+  onLive: () => void;
+}) {
+  const host = useRef<HTMLDivElement>(null);
+  const [vp, setVp] = useState({ w: 0, h: 0 });
+  const [aspect, setAspect] = useState<string | null>(null);
+  const [focus, setFocus] = useState(30);
+  const [stop, setStop] = useState(1); // index into F_STOPS
+  const [focal, setFocal] = useState(28);
+  const [ev, setEv] = useState(0);
+  const [grid, setGrid] = useState(false);
+  const [dial, setDial] = useState<Dial | null>(null);
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [blink, setBlink] = useState(0);
+  const [mark, setMark] = useState<{ x: number; y: number; id: number } | null>(null);
+  const [lens, setLens] = useState(postCtl.level);
+  const [hint, setHint] = useState(true);
+
+  useLayoutEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const read = () => setVp({ w: el.clientWidth, h: el.clientHeight });
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // the frame: as large as the view allows between the bar above and the controls below, centred on the lens
+  const ratioName = aspect ?? (vp.h > vp.w ? "9:16" : "3:2");
+  const ratio = ASPECTS.find((a) => a[0] === ratioName)![1];
+  const narrow = vp.w < 640;
+  const padX = narrow ? 12 : 28;
+  const padY = vp.h < 520 ? 58 : narrow ? 150 : 80;
+  const fw = Math.max(2, Math.round(Math.min(vp.w - padX * 2, (vp.h - padY * 2) * ratio)));
+  const fh = Math.max(2, Math.round(fw / ratio));
+  const fx = Math.round((vp.w - fw) / 2);
+  const fy = Math.round((vp.h - fh) / 2);
+
+  // the dials, handed to the scene
+  useEffect(() => {
+    photoCtl.focus = focus;
+    photoCtl.aperture = F_STOPS[stop];
+    photoCtl.focal = focal;
+    photoCtl.ev = ev;
+  }, [focus, stop, focal, ev]);
+  useEffect(() => {
+    if (!vp.w || !vp.h) return;
+    photoCtl.frame = { x: fx / vp.w, y: fy / vp.h, w: fw / vp.w, h: fh / vp.h };
+    photoCtl.sensorH = filmHeight(ratio);
+  }, [vp.w, vp.h, fx, fy, fw, fh, ratio]);
+  useEffect(() => {
+    photoCtl.onFocus = (x, y, m) => {
+      setFocus(Math.min(1000, Math.max(FOCUS_NEAR, m)));
+      setMark({ x, y, id: Date.now() });
+      setHint(false);
+    };
+    photoCtl.onWheel = (dy) => setFocal((f) => Math.min(135, Math.max(16, f * Math.exp(-dy * 0.0012))));
+    const t = window.setInterval(() => setLens(postCtl.level), 700);
+    const h = window.setTimeout(() => setHint(false), 7000);
+    return () => {
+      photoCtl.onFocus = null;
+      photoCtl.onWheel = null;
+      photoCtl.frame = { x: 0, y: 0, w: 1, h: 1 };
+      window.clearInterval(t);
+      window.clearTimeout(h);
+    };
+  }, []);
+
+  // photographs are kept as PNG files in memory until saved or pushed out by newer ones
+  const urls = useRef(new Set<string>());
+  useEffect(() => {
+    const keep = new Set(shots.map((s) => s.url));
+    urls.current.forEach((u) => {
+      if (!keep.has(u)) {
+        URL.revokeObjectURL(u);
+        urls.current.delete(u);
+      }
+    });
+  }, [shots]);
+  useEffect(() => {
+    const all = urls.current;
+    return () => all.forEach((u) => URL.revokeObjectURL(u));
+  }, []);
+
+  const busy = useRef(false);
   const shoot = () => {
+    if (busy.current) return;
+    busy.current = true;
     play("shutter");
-    const url = onShoot();
-    setFlash((f) => f + 1);
-    if (url) setShots((s) => [url, ...s].slice(0, 6));
+    setBlink((b) => b + 1);
+    setHint(false);
+    // the blink is on screen first; the photograph is drawn under it
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        busy.current = false;
+        const cap = onShoot();
+        if (!cap) return;
+        const c = document.createElement("canvas");
+        c.width = cap.w;
+        c.height = cap.h;
+        c.getContext("2d")!.putImageData(new ImageData(cap.data as Uint8ClampedArray<ArrayBuffer>, cap.w, cap.h), 0, 0);
+        const t = document.createElement("canvas");
+        t.height = 132;
+        t.width = Math.round((132 * cap.w) / cap.h);
+        const g = t.getContext("2d")!;
+        g.imageSmoothingQuality = "high";
+        g.drawImage(c, 0, 0, t.width, t.height);
+        const d = new Date();
+        const p2 = (n: number) => String(n).padStart(2, "0");
+        const name = `augustas-os-photo-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.png`;
+        const id = ++shotSeq;
+        setShots((s) => [{ id, thumb: t.toDataURL("image/jpeg", 0.86), url: null, name, w: cap.w, h: cap.h, saved: false }, ...s].slice(0, mobile ? 2 : 3));
+        c.toBlob((b) => {
+          if (!b) return;
+          const url = URL.createObjectURL(b);
+          urls.current.add(url);
+          setShots((s) => s.map((x) => (x.id === id ? { ...x, url } : x)));
+          if (process.env.NODE_ENV !== "production") Object.assign(window, { __photo: { blob: b, w: cap.w, h: cap.h, name } });
+        }, "image/png");
+      }),
+    );
   };
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
-      if (e.key === " " || e.key === "Enter") {
-        e.preventDefault();
-        shoot();
-      }
+      if (e.key !== " " && e.key !== "Enter") return;
+      // a focused control keeps its own Space and Enter
+      if ((e.target as HTMLElement | null)?.closest?.("button, a, input")) return;
+      e.preventDefault();
+      if (!e.repeat) shoot();
     };
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   });
-  const save = (url: string, i: number) => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `augustas-field-${i + 1}.png`;
-    a.click();
+
+  // a click hands the keyboard back to the camera (Space is the shutter); keyboard focus stays where it was put
+  const release = (e: React.MouseEvent) => {
+    if (e.detail > 0) (document.activeElement as HTMLElement | null)?.blur?.();
   };
+  const chip = (on: boolean, wide = "") => `lg-btn pointer-events-auto h-8 shrink-0 px-2.5 text-[12.5px] font-medium tabular-nums max-sm:px-2 max-sm:text-[12px] ${wide} ${on ? "lg-on" : "text-white/92"}`;
+  const seg = (on: boolean) => `lg-btn pointer-events-auto h-7 flex-1 px-2.5 text-[12.5px] font-medium tabular-nums ${on ? "lg-on" : "text-white/90"}`;
+  const range = "h-1 min-w-0 flex-1 cursor-pointer accent-white";
+  const hasLens = lens >= 1;
+  const dials: [Dial, string, string, string][] = [
+    ...(hasLens
+      ? ([
+          ["focus", "Focus", fmtFocus(focus), "min-w-[52px]"],
+          ["aperture", "Aperture", fmtStop(F_STOPS[stop]), "min-w-[50px]"],
+        ] as [Dial, string, string, string][])
+      : []),
+    ["zoom", "Zoom", `${Math.round(focal)} mm`, "min-w-[58px]"],
+    ...(hasLens ? ([["ev", "Exposure", `${fmtEv(ev)} EV`, "min-w-[62px]"]] as [Dial, string, string, string][]) : []),
+    ["time", "Time of day", fmtH(hours), "min-w-[50px]"],
+    ["aspect", "Frame", ratioName, "min-w-[42px]"],
+  ];
+  const shown = dial && dials.some((d) => d[0] === dial) ? dial : null;
+  const row = "flex h-9 items-center gap-3 px-3 text-[12.5px]";
+  const name = (s: string) => <span className="w-[62px] shrink-0 text-white/70">{s}</span>;
+  const value = (s: string) => <span className="w-[52px] shrink-0 text-right font-medium tabular-nums">{s}</span>;
+
   return (
     <>
-      <TopBar title="Camera" hint="Drag to frame, Space to shoot" onExit={onExit} />
-      {/* viewfinder: frame lines, rule-of-thirds and focus brackets */}
-      <motion.div className="pointer-events-none absolute inset-0 z-20" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-        <div className="absolute inset-[6%] rounded-[6px] border border-white/45" />
-        <div className="absolute inset-[6%]">
-          <div className="absolute inset-y-0 left-1/3 w-px bg-white/15" />
-          <div className="absolute inset-y-0 left-2/3 w-px bg-white/15" />
-          <div className="absolute inset-x-0 top-1/3 h-px bg-white/15" />
-          <div className="absolute inset-x-0 top-2/3 h-px bg-white/15" />
-        </div>
-        <div className="absolute left-1/2 top-1/2 h-16 w-24 -translate-x-1/2 -translate-y-1/2">
-          {["left-0 top-0 border-l border-t", "right-0 top-0 border-r border-t", "left-0 bottom-0 border-l border-b", "right-0 bottom-0 border-r border-b"].map((c) => (
-            <div key={c} className={`absolute h-3 w-3 border-white/90 ${c}`} />
-          ))}
-        </div>
-        <div className="absolute left-[7.5%] top-[7.5%] font-mono text-[11px] text-white/80">ƒ/2.0 · 1/250 · ISO 100</div>
-        <AnimatePresence>
-          {flash > 0 && (
-            <motion.div key={flash} className="absolute inset-0 bg-white" initial={{ opacity: 0.85 }} animate={{ opacity: 0 }} transition={{ duration: 0.35 }} />
-          )}
-        </AnimatePresence>
+      <TopBar title="Camera" hint="Drag to look · W A S D to fly · click to focus" onExit={onExit} />
+      <motion.div ref={host} className="pointer-events-none absolute inset-0 z-20" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45, ease: EASE }}>
+        {vp.w > 0 && (
+          <>
+            {/* everything outside the frame, dimmed: one layer with the frame cut out of it */}
+            <div
+              className="absolute inset-0 bg-black/45"
+              style={{
+                clipPath: `polygon(0px 0px, ${vp.w}px 0px, ${vp.w}px ${vp.h}px, 0px ${vp.h}px, 0px 0px, ${fx}px ${fy}px, ${fx}px ${fy + fh}px, ${fx + fw}px ${fy + fh}px, ${fx + fw}px ${fy}px, ${fx}px ${fy}px)`,
+                transition: `clip-path ${FRAME_EASE}`,
+              }}
+            />
+            {/* the frame itself: a hairline just outside what will be kept */}
+            <div
+              className="absolute"
+              style={{
+                left: fx,
+                top: fy,
+                width: fw,
+                height: fh,
+                outline: "1px solid rgb(255 255 255 / 0.85)",
+                boxShadow: "0 0 0 2px rgb(0 0 0 / 0.16)",
+                transition: `left ${FRAME_EASE}, top ${FRAME_EASE}, width ${FRAME_EASE}, height ${FRAME_EASE}`,
+              }}
+            >
+              <div className="absolute inset-0 transition-opacity duration-200" style={{ opacity: grid ? 1 : 0 }}>
+                {["left-1/3 inset-y-0 w-px", "left-2/3 inset-y-0 w-px", "top-1/3 inset-x-0 h-px", "top-2/3 inset-x-0 h-px"].map((c) => (
+                  <div key={c} className={`absolute bg-white/45 shadow-[0_0_0_0.5px_rgb(0_0_0/0.14)] ${c}`} />
+                ))}
+              </div>
+              <AnimatePresence>
+                {blink > 0 && <motion.div key={blink} className="absolute inset-0 bg-black" initial={{ opacity: 0 }} animate={{ opacity: [0, 0.9, 0] }} transition={{ duration: 0.34, times: [0, 0.2, 1], ease: "easeOut" }} />}
+              </AnimatePresence>
+            </div>
+            {/* where the lens was told to focus */}
+            <AnimatePresence>
+              {mark && (
+                <motion.div
+                  key={mark.id}
+                  className="absolute h-14 w-14 rounded-[12px] border border-white/90 shadow-[0_0_0_1px_rgb(0_0_0/0.18),inset_0_0_0_1px_rgb(0_0_0/0.12)]"
+                  style={{ left: mark.x - 28, top: mark.y - 28 }}
+                  initial={{ opacity: 0, scale: 1.4 }}
+                  animate={{ opacity: [0, 1, 1, 0], scale: [1.4, 1, 1, 1] }}
+                  transition={{ duration: 1.5, times: [0, 0.14, 0.72, 1], ease: EASE }}
+                  onAnimationComplete={() => setMark((m) => (m && m.id === mark.id ? null : m))}
+                />
+              )}
+            </AnimatePresence>
+          </>
+        )}
       </motion.div>
-      <Bottom>
-        <div className="flex w-full max-w-[720px] items-end justify-between gap-3">
-          <div className="pointer-events-auto flex gap-2">
-            {shots.map((s, i) => (
-              <motion.div key={s.slice(-40)} className="group relative" initial={{ opacity: 0, y: 12, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.4, ease: EASE }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s} alt="" className="h-14 w-20 rounded-[6px] object-cover shadow-[0_6px_20px_-8px_rgb(0_0_0/0.6)] ring-1 ring-white/30" />
-                <button type="button" className="absolute inset-x-1 bottom-1 rounded-full bg-black/55 py-0.5 text-[10px] font-semibold text-white opacity-0 backdrop-blur group-hover:opacity-100 max-sm:opacity-100" onClick={(e) => (e.stopPropagation(), save(s, i))}>
-                  Save
-                </button>
+
+      {/* phones have no keys to read about: one line, gone after the first tap */}
+      <AnimatePresence>
+        {mobile && hint && (
+          <motion.div className="pointer-events-none absolute inset-x-0 top-[62px] z-30 flex justify-center px-4" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, ease: EASE }}>
+            <Glass className="px-3.5 py-1.5 text-[12px] font-medium text-white/90">Drag to look · two fingers to move · tap to focus</Glass>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div
+        className="pointer-events-none absolute inset-x-0 bottom-5 z-30 flex items-end justify-center gap-3 px-3 max-sm:bottom-4 max-sm:flex-col max-sm:items-stretch max-sm:gap-2.5"
+        initial={GLASS_IN}
+        animate={GLASS_ON}
+        exit={GLASS_IN}
+        transition={{ ...GLASS_SPRING, delay: 0.06 }}
+      >
+        {/* the last photographs: tap one to save it */}
+        <div className="flex h-12 w-[150px] items-center justify-end gap-2 max-sm:order-2 max-sm:hidden">
+          <Shots shots={shots} onSaved={(id) => setShots((s) => s.map((x) => (x.id === id ? { ...x, saved: true } : x)))} />
+        </div>
+        <Glass radius={24} className="pointer-events-auto flex min-w-0 flex-col p-1 max-sm:order-1" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => (e.stopPropagation(), release(e))} onWheel={(e) => e.stopPropagation()}>
+          <AnimatePresence initial={false}>
+            {shown && (
+              <motion.div key="dial" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
+                <div className="pb-1">
+                  {shown === "focus" && (
+                    <label className={row}>
+                      {name("Focus")}
+                      <input type="range" min={0} max={1} step={0.005} value={ringOfFocus(focus)} onChange={(e) => setFocus(focusOfRing(+e.target.value))} onDoubleClick={() => setFocus(30)} className={range} aria-label="Focus distance" aria-valuetext={fmtFocus(focus)} />
+                      {value(fmtFocus(focus))}
+                    </label>
+                  )}
+                  {shown === "aperture" && (
+                    <label className={row}>
+                      {name("Aperture")}
+                      <input type="range" min={0} max={F_STOPS.length - 1} step={1} value={stop} onChange={(e) => setStop(+e.target.value)} onDoubleClick={() => setStop(1)} className={range} aria-label="Aperture" aria-valuetext={fmtStop(F_STOPS[stop])} />
+                      {value(fmtStop(F_STOPS[stop]))}
+                    </label>
+                  )}
+                  {shown === "zoom" && (
+                    <label className={row}>
+                      {name("Zoom")}
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.005}
+                        value={Math.log(focal / 16) / Math.log(135 / 16)}
+                        onChange={(e) => setFocal(16 * Math.pow(135 / 16, +e.target.value))}
+                        onDoubleClick={() => setFocal(28)}
+                        className={range}
+                        aria-label="Focal length"
+                        aria-valuetext={`${Math.round(focal)} millimetres`}
+                      />
+                      {value(`${Math.round(focal)} mm`)}
+                    </label>
+                  )}
+                  {shown === "ev" && (
+                    <label className={row}>
+                      {name("Exposure")}
+                      <input type="range" min={-2} max={2} step={0.1} value={ev} onChange={(e) => setEv(+e.target.value)} onDoubleClick={() => setEv(0)} className={range} aria-label="Exposure" aria-valuetext={`${fmtEv(ev)} stops`} />
+                      {value(`${fmtEv(ev)} EV`)}
+                    </label>
+                  )}
+                  {shown === "time" && (
+                    <div className={row}>
+                      {name("Time")}
+                      <input type="range" min={0} max={23.98} step={0.05} value={hours} onChange={(e) => onTime(+e.target.value)} className={range} aria-label="Time of day" aria-valuetext={fmtH(hours)} />
+                      <button type="button" className={`lg-btn pointer-events-auto w-[52px] shrink-0 py-0.5 text-[11.5px] font-semibold ${live ? "lg-on" : "lg-chip text-white/90"}`} onClick={onLive}>
+                        {live ? "Live" : "Go live"}
+                      </button>
+                    </div>
+                  )}
+                  {shown === "aspect" && (
+                    <div className="flex h-9 items-center px-1">
+                      <div className="flex w-full rounded-full bg-black/18 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.2)]" role="radiogroup" aria-label="Frame shape">
+                        {ASPECTS.map(([n]) => (
+                          <button key={n} type="button" role="radio" aria-checked={ratioName === n} className={seg(ratioName === n)} onClick={() => setAspect(n)}>
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </motion.div>
+            )}
+          </AnimatePresence>
+          <div className="flex items-center gap-0.5 max-sm:justify-between">
+            {dials.map(([k, label, val, w]) => (
+              <button key={k} type="button" className={chip(shown === k, w)} aria-label={`${label}: ${val}`} aria-expanded={shown === k} title={label} onClick={() => setDial((d) => (d === k ? null : k))}>
+                {val}
+              </button>
             ))}
+            <button type="button" className={`${chip(grid)} grid w-8 place-items-center !px-0`} aria-label="Thirds grid" aria-pressed={grid} title="Grid" onClick={() => setGrid((g) => !g)}>
+              <Grid3x3 size={14} strokeWidth={1.9} />
+            </button>
           </div>
-          <button
-            type="button"
-            aria-label="Take photo"
-            className="press pointer-events-auto grid h-16 w-16 shrink-0 place-items-center rounded-full border-[3px] border-white/90 bg-white/10 backdrop-blur"
-            onClick={(e) => (e.stopPropagation(), shoot())}
-          >
-            <span className="h-12 w-12 rounded-full bg-white" />
-          </button>
-          <div className="w-20" />
-    // ---------- music ----------
+        </Glass>
+        <div className="flex h-12 w-[150px] items-center gap-2 max-sm:order-2 max-sm:h-14 max-sm:w-full">
+          <div className="hidden flex-1 items-center justify-end gap-2 max-sm:flex">
+            <Shots shots={shots} onSaved={(id) => setShots((s) => s.map((x) => (x.id === id ? { ...x, saved: true } : x)))} />
+          </div>
+          <Glass className="pointer-events-auto shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+            <button type="button" aria-label="Take photo" className="group grid h-12 w-12 place-items-center rounded-full max-sm:h-14 max-sm:w-14" onClick={(e) => (e.stopPropagation(), shoot())}>
+              <span className="h-9 w-9 rounded-full bg-white shadow-[0_1px_6px_rgb(0_0_0/0.25)] transition-transform duration-150 ease-out group-active:scale-90 max-sm:h-11 max-sm:w-11" />
+            </button>
+          </Glass>
+          <div className="hidden flex-1 max-sm:block" />
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+// The strip of last photographs. Each is a link to its own PNG: tap to save.
+function Shots({ shots, onSaved }: { shots: Shot[]; onSaved: (id: number) => void }) {
+  return (
+    <AnimatePresence initial={false} mode="popLayout">
+      {[...shots].reverse().map((s) => (
+        <motion.a
+          key={s.id}
+          layout
+          href={s.url ?? undefined}
+          download={s.name}
+          aria-label={s.saved ? "Saved. Save this photo again" : "Save this photo"}
+          title={`${s.w} × ${s.h}`}
+          className="group pointer-events-auto relative block h-11 shrink-0 overflow-hidden rounded-[9px] shadow-[0_8px_20px_-8px_rgb(0_0_0/0.6),0_0_0_1px_rgb(255_255_255/0.4)]"
+          style={{ aspectRatio: `${s.w} / ${s.h}`, cursor: s.url ? "pointer" : "progress" }}
+          initial={{ opacity: 0, y: 10, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          transition={GLASS_SPRING}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!s.url) e.preventDefault();
+            else onSaved(s.id);
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={s.thumb} alt="" className="h-full w-full object-cover" draggable={false} />
+          <span className={`absolute inset-0 grid place-items-center bg-black/40 text-white transition-opacity duration-150 ${s.saved ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 [@media(hover:none)]:opacity-100"}`}>
+            {s.saved ? <Check size={15} strokeWidth={2.4} /> : <Download size={15} strokeWidth={2.2} />}
+          </span>
+        </motion.a>
+      ))}
+    </AnimatePresence>
+  );
+}
+
+// ---------- music ----------
 
 type Track = { id: string; title: string; artist: string; file: string; cover: string; duration: number };
 // The headphones' voice in the audio manager (lib/audio.ts): one element for
