@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
-import { getAnalyser, music, resumeAudio, tapMediaElement } from "@/lib/audio";
+import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { play } from "@/lib/sfx";
 import { STATIONS } from "./flightPath";
@@ -131,17 +131,13 @@ export function CameraUI({ onExit, onShoot }: { onExit: () => void; onShoot: () 
             <span className="h-12 w-12 rounded-full bg-white" />
           </button>
           <div className="w-20" />
-        </div>
-      </Bottom>
-    </>
-  );
-}
-
-// ---------- music ----------
+    // ---------- music ----------
 
 type Track = { id: string; title: string; artist: string; file: string; cover: string; duration: number };
-let media: HTMLAudioElement | null = null;
-let tapped = false;
+// The headphones' voice in the audio manager (lib/audio.ts): one element for
+// the whole session, owner "headphones". Starting it fades any other music
+// out; the manager fades it out when the plane takes off or the OS boots.
+const headphones = () => voice("headphones", { channel: "music", owner: "headphones", scene: true });
 
 // Now playing, as one Liquid Glass capsule: artwork, title, a live waveform,
 // previous / play / next, and a scrubber along the bottom.
@@ -158,31 +154,28 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
       .then((r) => r.json())
       .then((d: Track[]) => setTracks(d))
       .catch(() => {});
-    if (!media) {
-      media = new Audio();
-      media.crossOrigin = "anonymous";
-      media.preload = "auto";
-    }
-    const a = media;
+    const v = headphones();
+    if (!v) return;
+    const a = v.el;
     const tick = () => setT(a.currentTime);
     const end = () => setI((x) => x + 1);
     const meta = () => setLen(Number.isFinite(a.duration) ? a.duration : 0);
-    const on = () => {
-      setPlaying(true);
-      music.playing = true;
-    };
-    const off = () => {
-      setPlaying(false);
-      music.playing = false;
-    };
+    const on = () => setPlaying(true);
+    const off = () => setPlaying(false);
+    setPlaying(!a.paused);
     a.addEventListener("timeupdate", tick);
     a.addEventListener("ended", end);
     a.addEventListener("loadedmetadata", meta);
     a.addEventListener("playing", on);
     a.addEventListener("pause", off);
+    // the mute pill pauses the headphones: nothing plays unheard
+    const unmute = onMuteChange(() => {
+      if (sceneMuted()) voiceStop(v, 0.3);
+    });
     return () => {
-      a.pause();
-      music.playing = false;
+      // put down: fade out, then pause
+      voiceStop(v, 0.9);
+      unmute();
       a.removeEventListener("timeupdate", tick);
       a.removeEventListener("ended", end);
       a.removeEventListener("loadedmetadata", meta);
@@ -193,24 +186,15 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
 
   const track = tracks.length ? tracks[((i % tracks.length) + tracks.length) % tracks.length] : null;
   const start = useCallback(() => {
-    if (!media || !track) return;
-    if (!tapped) {
-      try {
-        tapMediaElement(media);
-        tapped = true;
-      } catch {
-        /* already tapped or unsupported */
-      }
-    }
-    // the element plays through the Web Audio graph, which sleeps until a gesture
-    resumeAudio();
-    if (!media.src.endsWith(track.file)) media.src = track.file;
-    void media.play().catch(() => setPlaying(false));
+    if (!track) return;
+    // the same file carries on where it is; another one is swapped in under a short dip
+    voicePlayUrl(headphones(), track.file, { fade: 0.5 });
   }, [track]);
 
   // start as soon as the headphones are picked up, and on track change
+  // (not while the world is muted: Play asks for sound again)
   useEffect(() => {
-    if (track) start();
+    if (track && !sceneMuted()) start();
   }, [track, start]);
 
   // live waveform: mirrored rounded bars; a slow idle ripple when nothing plays
@@ -262,10 +246,11 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
   const bar = useRef<HTMLDivElement>(null);
   const seek = (clientX: number) => {
     const el = bar.current;
-    if (!el || !media) return;
+    const a = headphones()?.el;
+    if (!el || !a) return;
     const r = el.getBoundingClientRect();
     const to = Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * dur;
-    media.currentTime = to;
+    a.currentTime = to;
     setT(to);
   };
   const icon = "lg-btn pointer-events-auto grid place-items-center text-white";
@@ -318,9 +303,14 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
                 aria-label={playing ? "Pause" : "Play"}
                 className={`${icon} h-11 w-11`}
                 onClick={() => {
-                  if (!media) return;
-                  if (playing) media.pause();
-                  else start();
+                  if (playing) {
+                    // a short fade, then pause
+                    voiceStop(headphones(), 0.18);
+                    setPlaying(false);
+                  } else {
+                    if (sceneMuted()) setSceneMuted(false);
+                    start();
+                  }
                 }}
               >
                 <AnimatePresence mode="popLayout" initial={false}>
@@ -366,6 +356,12 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
             <span className="w-8 text-right">{fmt(dur)}</span>
           </div>
         </Glass>
+      </div>
+    </>
+  );
+}
+
+     </Glass>
       </div>
     </>
   );

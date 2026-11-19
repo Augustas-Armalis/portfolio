@@ -1,113 +1,180 @@
-import { music, resumeAudio, tapMediaElement } from "@/lib/audio";
+import { channel, musicOwner, stopOwner, voice, voicePlay, voiceStop, type Voice } from "@/lib/audio";
 
-// Music for the flight: one track per stretch of the road, cross-faded as the
-// plane passes from one painting's world into the next.
+// Music for the flight: one recording per world, cross-faded as the plane
+// passes from one painting's world into the next ("road" is the stretch
+// between worlds).
 //
-// No recordings of Čiurlionis's own music are in the project yet, so every
-// stretch currently points at the same placeholder (his Nocturne). To give a
-// station its own piece, drop the file in /public/content/music/ and change
-// its entry here: nothing else needs to know.
+//   flightMusicTo(id)   cross-fade to that world's recording (equal power,
+//                       2.5 s). Asking for the recording that is already
+//                       playing does nothing: it is never restarted. Coming
+//                       back to a recording heard earlier in the same flight
+//                       carries on from where it was left.
+//   flightMusicStop()   fade out (2.5 s), pause and let go of the files.
+//
+// No recordings of Čiurlionis's own music are in the project yet, so the
+// table points at the two pieces that exist (both by Augustas). To give a
+// world its own piece, drop the file in /public/content/music/ and change its
+// entry here: nothing else needs to know. A file is only fetched the first
+// time its world is reached.
+//
+// The two decks are voices of the audio manager (lib/audio.ts), owner
+// "flight" on the "flight" channel: taking off fades the headphones out,
+// and the sky hears the flight through the shared analyser.
 
-const PLACEHOLDER = "/content/music/nocturne-for-absent-things.mp3";
+const NOCTURNE = "/content/music/nocturne-for-absent-things.mp3";
+const AFTERLIGHT = "/content/music/afterlight.m4a";
 
 export type FlightTrack = { file: string; title: string; start?: number; gain?: number };
 export const FLIGHT_TRACKS: Record<string, FlightTrack> = {
-  road: { file: PLACEHOLDER, title: "Nocturne for Absent Things" },
-  forest: { file: PLACEHOLDER, title: "Nocturne for Absent Things" }, // e.g. "Miške" (In the Forest), symphonic poem
-  sun: { file: PLACEHOLDER, title: "Nocturne for Absent Things" },
-  stars: { file: PLACEHOLDER, title: "Nocturne for Absent Things" },
-  rex: { file: PLACEHOLDER, title: "Nocturne for Absent Things" },
-  fairy: { file: PLACEHOLDER, title: "Nocturne for Absent Things" },
-  paradise: { file: PLACEHOLDER, title: "Nocturne for Absent Things" },
-  sea: { file: PLACEHOLDER, title: "Nocturne for Absent Things" }, // e.g. "Jūra" (The Sea), symphonic poem
+  road: { file: NOCTURNE, title: "Nocturne for Absent Things" },
+  forest: { file: NOCTURNE, title: "Nocturne for Absent Things" }, // e.g. "Miške" (In the Forest), symphonic poem
+  sun: { file: NOCTURNE, title: "Nocturne for Absent Things" },
+  stars: { file: NOCTURNE, title: "Nocturne for Absent Things" },
+  rex: { file: NOCTURNE, title: "Nocturne for Absent Things" },
+  fairy: { file: NOCTURNE, title: "Nocturne for Absent Things" },
+  paradise: { file: AFTERLIGHT, title: "Afterlight" },
+  sea: { file: AFTERLIGHT, title: "Afterlight" }, // e.g. "Jūra" (The Sea), symphonic poem
 };
 
-const FADE = 2.6; // seconds
-type Deck = { el: HTMLAudioElement; gain: GainNode | null; key: string | null; vol: number; target: number };
-let decks: Deck[] | null = null;
-let live = 0;
-let raf = 0;
-let last = 0;
-let master = 0.85;
+const FADE = 2.5; // seconds
 
-function makeDeck(): Deck {
-  const el = new Audio();
-  el.crossOrigin = "anonymous";
-  el.preload = "auto";
-  el.loop = true;
-  let gain: GainNode | null = null;
-  try {
-    // through a gain of its own into the shared analyser, so the sky can hear it
-    tapMediaElement(el, (ctx) => {
-      gain = ctx.createGain();
-      gain.gain.value = 0;
-      return gain;
-    });
-  } catch {
-    gain = null;
-  }
-  return { el, gain, key: null, vol: 0, target: 0 };
+// Which recording each deck holds. Kept on globalThis with the decks
+// themselves, so a hot reload carries on instead of starting a second copy.
+type Flight = { live: 0 | 1; file: (string | null)[]; key: string | null; pos: Record<string, number>; pending: number; primed: boolean };
+const S: Flight = ((globalThis as typeof globalThis & { __aosFlight?: Flight }).__aosFlight ??= {
+  live: 0,
+  file: [null, null],
+  key: null,
+  pos: {},
+  pending: 0,
+  primed: false,
+});
+
+function decks(): [Voice, Voice] | null {
+  const o = { channel: "flight", owner: "flight", scene: true, loop: true } as const;
+  const a = voice("flight-a", o);
+  const b = voice("flight-b", o);
+  return a && b ? [a, b] : null;
 }
 
-function tick(now: number) {
-  raf = requestAnimationFrame(tick);
-  const dt = Math.min(0.1, (now - last) / 1000);
-  last = now;
-  let any = false;
-  for (const d of decks!) {
-    const step = dt / FADE;
-    d.vol = d.target > d.vol ? Math.min(d.target, d.vol + step) : Math.max(d.target, d.vol - step);
-    const v = d.vol * d.vol * (3 - 2 * d.vol) * master;
-    if (d.gain) d.gain.gain.value = v;
-    else d.el.volume = v;
-    if (d.vol <= 0 && d.target <= 0 && !d.el.paused) d.el.pause();
-    if (d.vol > 0 || d.target > 0) any = true;
+// Safari only lets an element start without a gesture if that element has
+// played during one. Take-off is a gesture: each deck plays a moment of
+// silence then, so later worlds may start their recordings on their own.
+let silence = "";
+function prime(v: Voice) {
+  if (!silence) {
+    const n = 800;
+    const b = new DataView(new ArrayBuffer(44 + n));
+    const str = (o: number, s: string) => [...s].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+    str(0, "RIFF");
+    b.setUint32(4, 36 + n, true);
+    str(8, "WAVEfmt ");
+    b.setUint32(16, 16, true);
+    b.setUint16(20, 1, true);
+    b.setUint16(22, 1, true);
+    b.setUint32(24, 8000, true);
+    b.setUint32(28, 8000, true);
+    b.setUint16(32, 1, true);
+    b.setUint16(34, 8, true);
+    str(36, "data");
+    b.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) b.setUint8(44 + i, 128);
+    silence = URL.createObjectURL(new Blob([b.buffer], { type: "audio/wav" }));
   }
-  music.playing = any && decks!.some((d) => !d.el.paused);
-  if (!any) {
-    cancelAnimationFrame(raf);
-    raf = 0;
-  }
+  v.el.src = silence;
+  void v.el
+    .play()
+    .then(() => v.el.src.startsWith("blob:") && v.el.pause())
+    .catch(() => {});
 }
 
-// Cross-fade to the track for a stretch of the road (a station id, "road" or "sea").
+function load(v: Voice, idx: number, track: FlightTrack) {
+  const at = S.pos[track.file] ?? track.start ?? 0;
+  v.el.src = track.file;
+  if (at > 0)
+    v.el.addEventListener(
+      "loadedmetadata",
+      () => {
+        if (S.file[idx] === track.file && Number.isFinite(v.el.duration)) v.el.currentTime = at % v.el.duration;
+      },
+      { once: true },
+    );
+  voicePlay(v, { fade: FADE, level: track.gain ?? 1 });
+}
+
+// Cross-fade to the recording of a world (a station id, "road" or "sea").
 export function flightMusicTo(key: string) {
-  const track = FLIGHT_TRACKS[key] ?? FLIGHT_TRACKS.road;
   if (typeof window === "undefined") return;
-  resumeAudio();
-  decks ??= [makeDeck(), makeDeck()];
-  const cur = decks[live];
-  if (cur.key !== null && FLIGHT_TRACKS[cur.key]?.file === track.file && cur.target > 0) {
+  const track = FLIGHT_TRACKS[key] ?? FLIGHT_TRACKS.road;
+  const d = decks();
+  if (!d) return;
+  const cur = d[S.live];
+  const other = d[1 - S.live];
+  const next = (1 - S.live) as 0 | 1;
+  S.key = key;
+  if (!S.primed) {
+    S.primed = true;
+    prime(cur);
+  }
+  if (S.file[S.live] === track.file && (cur.want || S.pending)) {
     // the same recording carries on under a new name: no restart, no dip
-    cur.key = key;
+    if (cur.want) voicePlay(cur, { fade: FADE, level: track.gain ?? 1 });
     return;
   }
-  const next = decks[1 - live];
-  cur.target = 0;
-  next.key = key;
-  next.target = track.gain ?? 1;
-  if (!next.el.src.endsWith(track.file)) next.el.src = track.file;
-  if (track.start) next.el.currentTime = track.start;
-  void next.el.play().catch(() => {
-    next.target = 0;
-  });
-  live = 1 - live;
-  if (!raf) {
-    last = performance.now();
-    raf = requestAnimationFrame(tick);
+  window.clearTimeout(S.pending);
+  S.pending = 0;
+  if (cur.want) {
+    const f = S.file[S.live];
+    if (f) S.pos[f] = cur.el.currentTime;
+    voiceStop(cur, FADE);
   }
+  S.live = next;
+  if (S.file[next] === track.file && !other.el.paused) {
+    // we only just left this recording and it is still fading: turn it around
+    voicePlay(other, { fade: FADE, level: track.gain ?? 1 });
+    return;
+  }
+  S.file[next] = track.file;
+  const later = (ms: number) => {
+    S.pending = window.setTimeout(() => {
+      S.pending = 0;
+      load(other, next, track);
+    }, ms);
+  };
+  const owner = musicOwner();
+  if (!other.el.paused && !other.el.src.startsWith("blob:")) {
+    // the deck is still fading something else out: let that go first
+    voiceStop(other, 0.3);
+    later(420);
+  } else if (owner && owner !== "flight") {
+    // the headphones are playing: they leave first, then the flight comes in
+    // (two recordings are never heard on top of each other)
+    stopOwner(owner, 0.7);
+    later(600);
+  } else load(other, next, track);
 }
 
-// Fade everything out (landing).
+// Fade everything out, pause, release (landing).
 export function flightMusicStop() {
-  if (!decks) return;
-  decks.forEach((d) => (d.target = 0));
-  if (!raf) {
-    last = performance.now();
-    raf = requestAnimationFrame(tick);
-  }
+  if (typeof window === "undefined") return;
+  // nothing was started: nothing to stop (and no reason to make the decks)
+  if (!S.file[0] && !S.file[1] && !S.pending) return;
+  window.clearTimeout(S.pending);
+  S.pending = 0;
+  S.file = [null, null];
+  S.key = null;
+  S.pos = {};
+  stopOwner("flight", FADE, true);
 }
 
 export function flightMusicVolume(v: number) {
-  master = v;
+  if (typeof window === "undefined") return;
+  const g = channel("flight");
+  g.gain.setTargetAtTime(v, g.context.currentTime, 0.2);
+}
+
+// Development: window.__flight = { to, stop, state, tracks } for driving the
+// cross-fades from the console.
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+  Object.assign(window, { __flight: { to: flightMusicTo, stop: flightMusicStop, state: S, tracks: FLIGHT_TRACKS } });
 }

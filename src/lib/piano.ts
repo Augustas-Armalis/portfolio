@@ -1,4 +1,4 @@
-import { audioGraph } from "@/lib/audio";
+import { audioGraph, channel, resumeAudio, track } from "@/lib/audio";
 
 // Sampled grand piano (Salamander Grand, CC-BY, see CREDITS.md): one sample
 // every minor third (A, C, D#, F#), pitch-shifted to the nearest note.
@@ -23,8 +23,8 @@ function graph() {
   if (!out) {
     out = g.ctx.createGain();
     out.gain.value = 0.7;
-    // through the analyser so the music visuals react to the piano
-    out.connect(g.analyser);
+    // the piano channel passes the analyser, so the music visuals react to it
+    out.connect(channel("piano"));
   }
   return { ctx: g.ctx, out };
 }
@@ -78,7 +78,7 @@ export function playPiano(
   if (typeof window === "undefined") return false;
   try {
     const { ctx, out } = graph();
-    if (ctx.state === "suspended") void ctx.resume();
+    resumeAudio();
     const m = nearest(midi);
     const p = load(m);
     void p.then((buf) => {
@@ -100,6 +100,7 @@ export function playPiano(
       src.connect(g).connect(to ?? out);
       src.start(t);
       src.stop(t + dur + release + 0.1);
+      track(to ? "ambience" : "piano", src, `note ${midi}`);
     });
     return true;
   } catch {

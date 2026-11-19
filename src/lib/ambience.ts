@@ -1,31 +1,76 @@
-import { audioGraph, music, resumeAudio } from "@/lib/audio";
+import {
+  audioGraph,
+  channel,
+  music,
+  onMuteChange,
+  resumeAudio,
+  sceneMuted,
+  setSceneMuted,
+  track,
+  voice,
+  voicePlay,
+  voiceRoute,
+  voiceStop,
+  type Voice,
+} from "@/lib/audio";
 import { playPiano, preloadPiano } from "@/lib/piano";
 
 // The sound of the place itself, kept very quiet (the whole bed sits around
-// -30 dBFS). Two things only by default:
+// -30 dBFS):
+//   - a recording of the place (CC0, see CREDITS.md): a summer meadow at the
+//     desk (grass, crickets, birds; 48 s, looped without a seam by overlapping
+//     its ends 2.5 s with an equal-power cross-fade), forest birds in wooded
+//     places (5.4 minutes, streamed through two <audio> elements that hand
+//     over to each other the same way; only fetched when a forest is reached).
+//     Lower and a little duller at night.
 //   - wind: pink noise, band-limited to roughly 90-600 Hz, moving in slow
 //     random gusts (level and cutoff drift together). No bright band, no hiss.
 //   - a rare piano note: the real sampled grand, soft and dark, through a
 //     long quiet reverb (the samples themselves are short: the reverb is
 //     the tail).
-// Near the lake and over the sea a low wash is added; in flight the air rises
-// a little. Birds, crickets and the bright "grass" band are gone: synthesised
-// they sounded like a synthesiser, and nothing is better than that.
+//   - water: a low wash that swells slowly, near the lake and over the sea.
+//     In flight the air rises a little.
 // Everything goes through one bus that only ever fades (mute, hidden tab,
-// scene inactive), then a gentle low-pass and a safety limiter.
+// scene inactive), then a gentle low-pass and a safety limiter, into the
+// "ambience" channel of the audio manager (lib/audio.ts).
 // It starts on the first gesture (browsers require one); the mute choice is
 // remembered.
+//
+// What the scene tells it, once a frame, through ambienceScene({...}):
+//   night   0..1   how dark it is (the bed gets lower and duller)
+//   water   0..1   how near open water the listener is
+//   speed   m/s    the plane's speed (0 on foot)
+//   boost   0..1   a streak of speed
+//   active  bool   false while the OS is on screen
+//   place   "meadow" | "forest" | "sea" | "sky" | "none"   (optional)
+//           which bed plays: meadow = the meadow recording (the default),
+//           forest = the forest recording, sea = no recording, the water at
+//           full, sky = no recording, only the air, none = nearly silent
+//           (space, a dream). Places cross-fade over a few seconds.
+//   world   string (optional) a flight world id; used only when `place` is
+//           not given: see WORLD_PLACE below.
+// Fields that are left out keep their last value.
 
-const KEY = "ag-ambience";
-let muted = false;
-try {
-  if (typeof window !== "undefined") muted = window.localStorage.getItem(KEY) === "0";
-} catch {
-  /* storage blocked */
-}
-
-type Scene = { night: number; water: number; speed: number; boost: number; active: boolean };
+export type Place = "meadow" | "forest" | "sea" | "sky" | "none";
+type Scene = { night: number; water: number; speed: number; boost: number; active: boolean; place?: Place; world?: string };
 const scene: Scene = { night: 0, water: 0, speed: 0, boost: 0, active: true };
+
+// Which bed a flight world gets when the scene names the world, not the place.
+const WORLD_PLACE: Record<string, Place> = {
+  desk: "meadow",
+  road: "meadow",
+  forest: "forest",
+  fairy: "forest",
+  rex: "meadow",
+  sun: "sky",
+  paradise: "sky",
+  stars: "none",
+  sea: "sea",
+};
+const placeOf = (s: Scene): Place => s.place ?? (s.world ? WORLD_PLACE[s.world] : undefined) ?? "meadow";
+
+const MEADOW = "/assets/ambience/meadow.mp3";
+const FOREST = "/assets/ambience/forest-birds.mp3";
 
 const DEV = process.env.NODE_ENV !== "production";
 
@@ -36,7 +81,12 @@ const LEVEL = {
   water: 0.12, // at water = 1: about -38 dBFS on its own
   piano: 0.085, // a note peaks near -25 dBFS
   wet: 1, // reverb return for the piano
+  // the recordings are very quiet files (about -49 dBFS RMS both)
+  meadow: 5.6, // +15 dB: about -34 dBFS RMS, 99.99 % of samples under -16
+  forest: 4, // +12 dB: about -38 dBFS RMS; single bird calls reach the limiter
 };
+const BED_X = 2.5; // seconds the meadow loop's ends overlap
+const FOREST_X = 3; // and the forest's
 const FADE_IN = 0.7; // time constants (s) of the bus fade: about 3 s to settle
 const FADE_OUT = 0.28; // about 1.2 s
 const LOOP = 19; // seconds of noise; the loop is cross-faded, so it has no seam
@@ -181,8 +231,14 @@ type Rig = {
   soft: BiquadFilterNode; // the piano after its low-pass (dry)
   wet: GainNode;
   limiter: DynamicsCompressorNode;
+  bed: GainNode; // both recordings: night and flight lower it
+  bedLp: BiquadFilterNode; // and night dulls it
+  meadow: GainNode; // the meadow's share (place)
+  forest: GainNode; // the forest voices arrive here
   drifts: Drift[];
   sources: AudioBufferSourceNode[];
+  meadowNext: number; // context time at which the next pass of the loop starts
+  meadowLive: Set<AudioBufferSourceNode>;
 };
 
 // The whole graph, on any context (the live one, or an OfflineAudioContext
@@ -254,6 +310,15 @@ function build(ctx: BaseAudioContext, dest: AudioNode): Rig {
   soft.connect(out);
   soft.connect(verb).connect(wet).connect(out);
 
+  // the recordings: meadow and forest -> a low-pass that closes at night -> bed
+  const bed = gainNode(ctx, 1);
+  const bedLp = lowpass(ctx, 9000, 0.5);
+  const meadow = gainNode(ctx, 0);
+  const forest = gainNode(ctx, LEVEL.forest);
+  meadow.connect(bedLp);
+  forest.connect(bedLp);
+  bedLp.connect(bed).connect(out);
+
   return {
     ctx,
     out,
@@ -269,8 +334,14 @@ function build(ctx: BaseAudioContext, dest: AudioNode): Rig {
     soft,
     wet,
     limiter,
+    bed,
+    bedLp,
+    meadow,
+    forest,
     drifts: [gusts, swells],
     sources: [windSrc, airSrc, waterSrc],
+    meadowNext: 0,
+    meadowLive: new Set(),
   };
 }
 
@@ -279,21 +350,31 @@ function levels(r: Rig, s: Scene, t: number) {
   const night = Math.min(1, Math.max(0, s.night));
   const fly = Math.min(1, Math.max(0, s.speed) / 16);
   const boost = Math.min(1, Math.max(0, s.boost));
-  // the wind settles a little after dark
-  r.wind.gain.setTargetAtTime(LEVEL.wind * (1 - 0.15 * night), t, 2.5);
+  const place = placeOf(s);
+  const near = Math.min(1, Math.max(0, s.water));
+  const water = place === "sea" ? 1 : place === "none" ? 0 : place === "sky" ? near * 0.4 : near;
+  // the wind settles a little after dark; high up there is more of it
+  const windK = place === "none" ? 0.35 : place === "sky" ? 1.15 : 1;
+  r.wind.gain.setTargetAtTime(LEVEL.wind * windK * (1 - 0.15 * night), t, 2.5);
   // air: rises with speed, swells a touch through a streak
   r.air.gain.setTargetAtTime(LEVEL.air * fly * fly * (1 + 0.5 * boost), t, 0.5);
   const fc = 480 + fly * 520 + boost * 220;
   r.airLp.forEach((f) => f.frequency.setTargetAtTime(fc, t, 0.5));
-  r.water.gain.setTargetAtTime(LEVEL.water * Math.min(1, Math.max(0, s.water)), t, 1.2);
+  r.water.gain.setTargetAtTime(LEVEL.water * water, t, 1.2);
+  // the recordings: lower and duller at night, thinner from a plane; the
+  // meadow gives way to open water
+  r.bed.gain.setTargetAtTime((1 - 0.45 * night) * (1 - 0.5 * fly), t, 1.5);
+  r.bedLp.frequency.setTargetAtTime(9000 - 5200 * night, t, 1.5);
+  r.meadow.gain.setTargetAtTime(place === "meadow" ? LEVEL.meadow * (1 - 0.6 * water) : 0, t, 1.4);
 }
 
 let rig: Rig | null = null;
+let meadowBuf: AudioBuffer | null = null;
+let meadowAsked = false;
 let running = false;
 let timer = 0;
 let nextNote = 0;
 let wasOn = false;
-const listeners = new Set<() => void>();
 
 // D-flat major pentatonic in the octave and a half below middle E. Only this
 // register: the samples from F#4 up are cut short, these ring for seconds.
@@ -317,7 +398,88 @@ function pianoNote() {
   }
 }
 
-const isOn = () => running && !muted && scene.active && document.visibilityState === "visible";
+const isOn = () => running && !sceneMuted() && scene.active && document.visibilityState === "visible";
+
+// The meadow, once decoded. It is the first thing heard, so it is fetched
+// when the ambience starts (the first gesture), not before.
+function loadMeadow(ctx: BaseAudioContext) {
+  if (meadowAsked) return;
+  meadowAsked = true;
+  fetch(MEADOW)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+    .then((b) => ctx.decodeAudioData(b))
+    .then((buf) => (meadowBuf = buf))
+    .catch(() => {
+      meadowAsked = false;
+    });
+}
+
+// One pass of the meadow: the whole recording, fading in over its first
+// BED_X seconds and out over its last (sine and cosine, so the pass before
+// and the pass after always add up to the same loudness).
+function meadowPass(r: Rig, buf: AudioBuffer, at: number) {
+  const src = r.ctx.createBufferSource();
+  src.buffer = buf;
+  const g = r.ctx.createGain();
+  const N = 32;
+  const up = new Float32Array(N);
+  const down = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    up[i] = Math.sin(((i / (N - 1)) * Math.PI) / 2);
+    down[i] = Math.cos(((i / (N - 1)) * Math.PI) / 2);
+  }
+  g.gain.setValueAtTime(0, 0);
+  g.gain.setValueCurveAtTime(up, at, BED_X);
+  g.gain.setValueCurveAtTime(down, at + buf.duration - BED_X, BED_X);
+  src.connect(g).connect(r.meadow);
+  src.start(at);
+  r.meadowLive.add(src);
+  src.addEventListener("ended", () => {
+    r.meadowLive.delete(src);
+    g.disconnect();
+  });
+  track("ambience", src, "meadow");
+  return at + buf.duration - BED_X;
+}
+
+// The forest: two streaming elements taking turns, the next starting FOREST_X
+// seconds before the current one ends. Only created when a forest is reached.
+const forest = { on: false, cur: 0 };
+function forestVoices(r: Rig): [Voice, Voice] | null {
+  const o = { channel: "ambience", scene: true } as const;
+  const a = voice("forest-a", o);
+  const b = voice("forest-b", o);
+  if (!a || !b) return null;
+  voiceRoute(a, r.forest);
+  voiceRoute(b, r.forest);
+  return [a, b];
+}
+function forestTick(r: Rig, want: boolean) {
+  if (!want && !forest.on) return;
+  const v = forestVoices(r);
+  if (!v) return;
+  if (!want) {
+    forest.on = false;
+    v.forEach((x) => voiceStop(x, 2.5));
+    return;
+  }
+  const cur = v[forest.cur];
+  if (!forest.on) {
+    forest.on = true;
+    if (!cur.el.getAttribute("src")) cur.el.src = FOREST;
+    voicePlay(cur, { fade: 3 });
+    return;
+  }
+  const d = cur.el.duration;
+  if (Number.isFinite(d) && d > FOREST_X * 3 && cur.el.currentTime > d - FOREST_X - 0.3) {
+    const next = v[1 - forest.cur];
+    if (!next.el.getAttribute("src")) next.el.src = FOREST;
+    else next.el.currentTime = 0;
+    voicePlay(next, { fade: FOREST_X });
+    voiceStop(cur, FOREST_X);
+    forest.cur = 1 - forest.cur;
+  }
+}
 
 function tick() {
   const r = rig;
@@ -330,6 +492,9 @@ function tick() {
   r.drifts.forEach((d) => {
     if (d.until < t + 30) runDrift(d, t, t + 90);
   });
+  // keep the meadow loop two seconds ahead of the clock
+  if (meadowBuf && running && r.meadowNext < t + 2) r.meadowNext = meadowPass(r, meadowBuf, Math.max(t + 0.05, r.meadowNext));
+  forestTick(r, on && placeOf(scene) === "forest");
   const now = performance.now();
   // coming back from silence: no note until the bed has settled
   if (on && !wasOn) nextNote = Math.max(nextNote, now + 7000 + Math.random() * 5000);
@@ -357,9 +522,10 @@ function dispose() {
   rig = null;
   if (!r) return was;
   delete (window as AmbWindow).__amb;
+  if (forest.on) forestTick(r, false);
   r.out.gain.setTargetAtTime(0, r.ctx.currentTime, 0.1);
   window.setTimeout(() => {
-    r.sources.forEach((s) => {
+    [...r.sources, ...r.meadowLive].forEach((s) => {
       try {
         s.stop();
       } catch {
@@ -380,7 +546,9 @@ export function startAmbience() {
     resumeAudio();
     if (!rig) {
       const { ctx } = audioGraph();
-      rig = build(ctx, ctx.destination);
+      rig = build(ctx, channel("ambience"));
+      rig.sources.forEach((s, i) => track("ambience", s, ["wind", "air", "water"][i]));
+      loadMeadow(ctx);
       preloadPiano(36, 64);
       if (DEV) devHook(rig);
     }
@@ -391,7 +559,8 @@ export function startAmbience() {
     // a hidden tab throttles timers: fade at once when the page is hidden
     document.addEventListener("visibilitychange", onVisibility);
     tick();
-  } catch {
+  } catch (e) {
+    if (DEV) console.warn("ambience failed to start", e);
     rig = null;
     running = false;
   }
@@ -404,6 +573,7 @@ export function stopAmbience() {
   running = false;
   wasOn = false;
   rig?.out.gain.setTargetAtTime(0, rig.ctx.currentTime, FADE_OUT);
+  if (rig) forestTick(rig, false);
 }
 
 if (typeof window !== "undefined") {
@@ -422,22 +592,19 @@ export function ambienceScene(s: Partial<Scene>) {
   if (scene.active !== active) tick();
 }
 
-export const ambienceMuted = () => muted;
+// The mute pill. The choice lives in the audio manager, because it silences
+// the flight's and the headphones' music as well; true also while the OS
+// Sound setting is off.
+export const ambienceMuted = () => sceneMuted();
 export function setAmbienceMuted(m: boolean) {
-  muted = m;
-  try {
-    window.localStorage.setItem(KEY, m ? "0" : "1");
-  } catch {
-    /* ignore */
-  }
+  setSceneMuted(m);
   tick();
-  listeners.forEach((l) => l());
 }
 export function onAmbienceChange(l: () => void) {
-  listeners.add(l);
-  return () => {
-    listeners.delete(l);
-  };
+  return onMuteChange(() => {
+    tick();
+    l();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -450,7 +617,8 @@ export function onAmbienceChange(l: () => void) {
 //   __amb.nodes               the rig's AudioNodes (out = the bus, master = final node)
 //   __amb.analyser            AnalyserNode on the final output (after the limiter)
 //   __amb.taps                AnalyserNodes per layer, before the bus: wind, air, water, piano
-//   await __amb.meter(n?)     n snapshots (0.68 s each) -> { master, wind, air, water, piano }
+//   await __amb.meter(n?)     n snapshots (0.68 s each) -> { master, wind, air, water, piano,
+//                             meadow, forest, bed }
 //                             each { rms, peak } in dBFS
 //   await __amb.render(sec, scene?, opts?)
 //                             the noise layers through the same graph in an
@@ -458,9 +626,11 @@ export function onAmbienceChange(l: () => void) {
 //                             (Float32Array); opts.events = [{ at, on }] fades the
 //                             bus exactly as mute / hide / inactive do, opts.raw
 //                             skips the bus fade-in (bus held at 1)
+//   await __amb.seam()        the meadow loop's seam, rendered offline: RMS per half second
 //   __amb.note(midi?)         play one bed note now (through the reverb)
 //   __amb.mute(bool)          same as the speaker button (setAmbienceMuted)
-//   __amb.scene({...})        same as ambienceScene (Room rewrites all but `active` every frame)
+//   __amb.scene({...})        same as ambienceScene (Room rewrites night, water, speed and
+//                             boost every frame; `place` and `world` stick)
 //   __amb.LEVEL               the calibration constants
 // ---------------------------------------------------------------------------
 function devHook(r: Rig) {
@@ -476,7 +646,7 @@ function devHook(r: Rig) {
   // the piano as it reaches the bus: dry (after the soft low-pass) plus reverb
   r.soft.connect(pianoSum);
   r.wet.connect(pianoSum);
-  const taps = { wind: tap(r.wind), air: tap(r.air), water: tap(r.water), piano: tap(pianoSum) };
+  const taps = { wind: tap(r.wind), air: tap(r.air), water: tap(r.water), piano: tap(pianoSum), meadow: tap(r.meadow), forest: tap(r.forest), bed: tap(r.bed) };
   const db = (v: number) => (v > 0 ? Math.round(200 * Math.log10(v)) / 10 : -Infinity);
   const read = (a: AnalyserNode, acc: { sum: number; n: number; peak: number }) => {
     const d = new Float32Array(a.fftSize);
@@ -494,7 +664,7 @@ function devHook(r: Rig) {
     nodes: r,
     analyser,
     taps,
-    state: () => ({ ctx: ctx.state, running, muted, on: isOn(), scene: { ...scene } }),
+    state: () => ({ ctx: ctx.state, running, muted: sceneMuted(), on: isOn(), place: placeOf(scene), meadow: { loaded: !!meadowBuf, passes: r.meadowLive.size, next: r.meadowNext - ctx.currentTime }, forest: { ...forest }, scene: { ...scene } }),
     gains: () => ({
       out: r.out.gain.value,
       wind: r.wind.gain.value,
@@ -505,6 +675,10 @@ function devHook(r: Rig) {
       water: r.water.gain.value,
       swell: r.swell.gain.value,
       pianoWet: r.wet.gain.value,
+      bed: r.bed.gain.value,
+      bedCutoff: r.bedLp.frequency.value,
+      meadow: r.meadow.gain.value,
+      forest: r.forest.gain.value,
       limiterReduction: r.limiter.reduction,
     }),
     meter: async (n = 4) => {
@@ -538,6 +712,28 @@ function devHook(r: Rig) {
       (opts.events ?? []).forEach((e) => o.out.gain.setTargetAtTime(e.on ? 1 : 0, e.at, e.on ? FADE_IN : FADE_OUT));
       const buf = await off.startRendering();
       return { sampleRate: buf.sampleRate, left: buf.getChannelData(0), right: buf.getChannelData(1) };
+    },
+    // two passes of the meadow loop rendered offline: RMS (dBFS) in half-second
+    // windows from 8 s before the seam to 6 s after it (flat = no seam)
+    seam: async () => {
+      if (!meadowBuf) return null;
+      const D = meadowBuf.duration;
+      const sr = meadowBuf.sampleRate;
+      const off = new OfflineAudioContext(2, Math.floor(sr * (D + 10)), sr);
+      const m = off.createGain();
+      m.connect(off.destination);
+      const fake = { ctx: off, meadow: m, meadowLive: new Set() } as unknown as Rig;
+      meadowPass(fake, meadowBuf, meadowPass(fake, meadowBuf, 0));
+      const d = (await off.startRendering()).getChannelData(0);
+      const win = Math.floor(sr / 2);
+      const res: number[] = [];
+      for (let t = D - BED_X - 8; t < D + 6; t += 0.5) {
+        let sum = 0;
+        const i0 = Math.floor(t * sr);
+        for (let i = i0; i < i0 + win; i++) sum += d[i] * d[i];
+        res.push(db(Math.sqrt(sum / win)));
+      }
+      return { seamAt: D - BED_X, overlap: BED_X, rms: res };
     },
     note: (midi?: number) => (midi ? pianoVoice(midi, 1) : pianoNote()),
     mute: setAmbienceMuted,

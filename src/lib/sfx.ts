@@ -1,4 +1,4 @@
-import { audioGraph } from "@/lib/audio";
+import { audioGraph, channel, track } from "@/lib/audio";
 import { chime, shutdownChord } from "@/lib/piano";
 import { useOS } from "@/store";
 
@@ -84,7 +84,7 @@ export function setSoundEnabled(on: boolean) {
 let out: GainNode | null = null;
 const buffers = new Map<string, Promise<AudioBuffer | null>>();
 
-// out -> gentle low-pass -> speakers, plus a faint short room (two damped
+// out -> gentle low-pass -> the sfx channel, plus a faint short room (two damped
 // feedback delays) so dry clicks sound rounded instead of harsh.
 function graph() {
   const { ctx } = audioGraph();
@@ -95,7 +95,7 @@ function graph() {
     lp.type = "lowpass";
     lp.frequency.value = 7000;
     lp.Q.value = 0.5;
-    out.connect(lp).connect(ctx.destination);
+    out.connect(lp).connect(channel("sfx"));
     const wet = ctx.createGain();
     wet.gain.value = 0.07;
     [0.023, 0.037].forEach((t) => {
@@ -110,7 +110,7 @@ function graph() {
       d.connect(damp).connect(fb).connect(d);
       damp.connect(wet);
     });
-    wet.connect(ctx.destination);
+    wet.connect(channel("sfx"));
   }
   return { ctx, out };
 }
@@ -204,6 +204,7 @@ function air(ctx: AudioContext, dest: AudioNode, dur: number, vol: number) {
   s.connect(bp).connect(g).connect(dest);
   s.start(t);
   s.stop(t + dur + 0.05);
+  track("sfx", s, "air");
 }
 
 const lastAt = new Map<Sfx, number>();
@@ -246,6 +247,7 @@ export function play(name: Sfx, opts?: { volume?: number }) {
         g.gain.linearRampToValueAtTime(0, t + spec.slice);
         src.connect(g).connect(out);
         src.start(t, start, spec.slice);
+        track("sfx", src, name);
       } else {
         // short fade in and out on every file: no clicks at the edges
         const off = spec.trim ? leadingSilence(buf) : 0;
@@ -256,6 +258,7 @@ export function play(name: Sfx, opts?: { volume?: number }) {
         g.gain.linearRampToValueAtTime(0, t + len);
         src.connect(g).connect(out);
         src.start(t, off);
+        track("sfx", src, name);
       }
     });
   } catch {
