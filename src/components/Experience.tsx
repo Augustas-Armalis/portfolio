@@ -8,9 +8,11 @@ import { useOS } from "@/store";
 import Desktop from "./Desktop";
 import Login from "./Login";
 import PhoneOS from "./PhoneOS";
-import { BootVeil, Preloader } from "./scene/Overlays";
+import { BootVeil, Preloader, loader } from "./scene/Overlays";
 
-const Room = dynamic(() => import("./Room"), { ssr: false, loading: () => <Preloader progress={0.12} /> });
+// The loader is part of this component's own markup (it is in the static HTML
+// and paints before any script); the 3D arrives behind it as a separate chunk.
+const Room = dynamic(() => import("./Room"), { ssr: false });
 if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __t: { boot: performance.now() } });
 
 export default function Experience() {
@@ -23,6 +25,10 @@ export default function Experience() {
   const [reduced, setReduced] = useState<boolean | null>(null);
   const [roomOn, setRoomOn] = useState(false);
   const [veil, setVeil] = useState(false);
+  // Until we know better the loader is up: a first visit opens on it. People
+  // who prefer reduced motion never see it on arrival (CSS hides it before
+  // hydration, then it is unmounted) and go straight to the login.
+  const [loaderOn, setLoaderOn] = useState(true);
   const first = useRef(true);
 
   useEffect(() => {
@@ -33,7 +39,10 @@ export default function Experience() {
     const rm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     setReduced(rm);
     // reduced motion: straight to the login, the 3D only loads after a Shut Down
-    if (rm) finishIntro();
+    if (rm) {
+      setLoaderOn(false);
+      finishIntro();
+    }
     return () => mq.removeEventListener("change", set);
   }, [setMobile, finishIntro]);
 
@@ -41,8 +50,16 @@ export default function Experience() {
   // while the OS is up, so Shut Down can power the same scene back down.
   useEffect(() => {
     if (reduced === null) return;
-    if (phase === "room" && !(reduced && first.current)) setRoomOn(true);
+    if (phase === "room" && !(reduced && first.current) && !roomOn) {
+      // the scene loading for the first time after a Shut Down (reduced motion): a plain cover that fades
+      if (!first.current) {
+        loader.reset();
+        setLoaderOn(true);
+      }
+      setRoomOn(true);
+    }
     first.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, reduced]);
 
   const handoff = useCallback(
@@ -53,10 +70,17 @@ export default function Experience() {
     [finishIntro, reduced],
   );
 
-  if (isMobile === null || reduced === null) return <main className="fixed inset-0 bg-page" />;
+  if (isMobile === null || reduced === null)
+    return (
+      <main className="fixed inset-0 bg-page">
+        <Preloader hideForReducedMotion />
+      </main>
+    );
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-page">
+      {/* first child here and in the pre-hydration markup above, so it is one element throughout */}
+      {loaderOn && <Preloader hideForReducedMotion={!roomOn} />}
       {roomOn && (
         <Room active={phase === "room"} introOff={introOff} reduced={reduced} isMobile={isMobile} onHandoff={handoff} onSkip={() => finishIntro()} />
       )}

@@ -70,87 +70,144 @@ export function BootVeil({ onDone }: { onDone: () => void }) {
   );
 }
 
-// First-load preloader. Black, his mark, his name, and one hairline: real
-// loading progress draws it across, a small counter follows. When the world is
-// ready the line runs out to both edges of the screen and becomes the horizon:
-// the black parts along it, up and down, onto the sky the camera starts in.
-let shownProgress = 0; // survives the swap from the chunk-loading fallback to the scene's own loader
+// ---------- the loader ----------
+//
+// Darkness, and one hairline of light on the horizon. Real loading progress
+// draws the line across; his name and the hour sit on it. This DOM layer is in
+// the server-rendered HTML, so it paints before any script runs, and its line
+// runs as a CSS transition on the compositor, so it keeps gliding while the
+// main thread compiles shaders. When the world is ready the canvas is already
+// drawing the very same frame underneath (scene/Loader.tsx: same black, same
+// line, read from this element's own box), this layer lets go, and the rest
+// (the line running out to the edges, first light along it, the dark lifting)
+// happens inside the canvas.
 
-export function Preloader({ progress, done = false, caption }: { progress: number; done?: boolean; caption?: string }) {
-  const target = Math.min(1, Math.max(0, progress));
+type LoaderPhase = "load" | "open" | "fade" | "gone";
+const subs = new Set<() => void>();
+export const loader = {
+  progress: 0,
+  phase: "load" as LoaderPhase,
+  // where the hairline sits, in CSS px: the canvas draws its own from this
+  line: null as { left: number; right: number; top: number; height: number } | null,
+  el: null as HTMLElement | null,
+  measure() {
+    const r = loader.el?.getBoundingClientRect();
+    if (r && r.width > 0) loader.line = { left: r.left, right: r.right, top: r.top, height: r.height };
+    return loader.line;
+  },
+  // progress only ever moves forward
+  set(p: number) {
+    if (p <= loader.progress) return;
+    loader.progress = Math.min(1, p);
+    subs.forEach((f) => f());
+  },
+  // "open": the canvas takes over (cinematic); "fade": a plain dissolve (no intro)
+  finish(how: "open" | "fade") {
+    if (loader.phase !== "load") return;
+    loader.progress = 1;
+    loader.phase = how;
+    subs.forEach((f) => f());
+  },
+  reset() {
+    loader.progress = 0;
+    loader.phase = "load";
+    subs.forEach((f) => f());
+  },
+};
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __loader: loader });
+
+const LOADER_CSS = `
+@keyframes ld-first{from{transform:scaleX(0)}to{transform:scaleX(.08)}}
+.ld-fill{transform-origin:0 50%;transform:scaleX(0);animation:ld-first 1.6s cubic-bezier(.23,1,.32,1) both;transition:transform .7s cubic-bezier(.23,1,.32,1),opacity .28s linear;will-change:transform}
+.ld-type{transition:opacity .7s cubic-bezier(.23,1,.32,1),filter .7s cubic-bezier(.23,1,.32,1),transform .7s cubic-bezier(.23,1,.32,1)}
+`;
+
+function localTime() {
+  const m = /[?&]time=(\d{1,2}):(\d{2})/.exec(window.location.search);
+  const d = new Date();
+  const hh = m ? Math.min(23, +m[1]) : d.getHours();
+  const mm = m ? Math.min(59, +m[2]) : d.getMinutes();
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+export function Preloader({ hideForReducedMotion = false }: { hideForReducedMotion?: boolean }) {
+  const [, bump] = useState(0);
+  const [time, setTime] = useState<string | null>(null);
+  const line = useRef<HTMLDivElement>(null);
   const fill = useRef<HTMLDivElement>(null);
-  const count = useRef<HTMLSpanElement>(null);
-  const goal = useRef(target);
-  goal.current = done ? 1 : target;
-  const [gone, setGone] = useState(false);
+  const taken = useRef(false);
   useEffect(() => {
-    let raf = 0;
-    let last = performance.now();
-    const tick = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000);
-      last = now;
-      // a lagging value, never the raw one: it glides and never steps back
-      shownProgress = Math.max(shownProgress, shownProgress + (goal.current - shownProgress) * (1 - Math.exp(-dt * (goal.current >= 1 ? 9 : 3.2))));
-      if (goal.current - shownProgress < 0.002) shownProgress = goal.current;
-      if (fill.current) fill.current.style.transform = `scaleX(${shownProgress.toFixed(4)})`;
-      if (count.current) count.current.textContent = String(Math.round(shownProgress * 100)).padStart(2, "0");
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const f = () => bump((n) => n + 1);
+    subs.add(f);
+    setTime(localTime());
+    loader.set(0.14); // hydrated
+    return () => void subs.delete(f);
   }, []);
-  if (gone) return null;
-  const OPEN = { duration: 1.5, ease: [0.7, 0, 0.2, 1] as const, delay: 0.55 };
-  const panel = "absolute inset-x-0 bg-[#050506]";
+  // the canvas matches its line to this one, to the pixel (it measures it while the loader is up)
+  useLayoutEffect(() => {
+    loader.el = line.current;
+    loader.measure();
+    return () => {
+      loader.el = null;
+    };
+  });
+  const phase = loader.phase;
+  useEffect(() => {
+    if (phase !== "open" && phase !== "fade") return;
+    const t = window.setTimeout(() => {
+      loader.phase = "gone";
+      subs.forEach((f) => f());
+    }, 1100);
+    return () => window.clearTimeout(t);
+  }, [phase]);
+  // the first sliver of line is a CSS animation (no script yet); once real
+  // progress arrives the transition carries on from wherever it got to
+  useLayoutEffect(() => {
+    const el = fill.current;
+    if (!el || loader.progress <= 0) return;
+    if (!taken.current) {
+      // pin the line where the CSS animation has it, so the hand-over can never step back
+      taken.current = true;
+      const now = getComputedStyle(el).transform;
+      el.style.transition = "none";
+      el.style.animation = "none";
+      el.style.transform = now === "none" ? "scaleX(0)" : now;
+      void el.offsetWidth;
+      el.style.transition = "";
+    }
+    el.style.transform = `scaleX(${Math.max(0.08, loader.progress).toFixed(4)})`;
+  });
+  if (phase === "gone") return null;
+  const open = phase === "open";
+  const out = phase !== "load";
   return (
-    <div className={`${geist.className} pointer-events-none fixed inset-0 z-[50] text-white`} style={{ letterSpacing: TRACK.body }} aria-hidden={done}>
-      {/* the two halves of the dark, meeting on the horizon */}
-      <motion.div
-        className={`${panel} top-0 h-[calc(50%+1px)]`}
-        initial={false}
-        animate={{ y: done ? "-101%" : "0%" }}
-        transition={OPEN}
-        style={{ boxShadow: "0 28px 60px 30px #050506" }}
-      />
-      <motion.div
-        className={`${panel} bottom-0 h-[calc(50%+1px)]`}
-        initial={false}
-        animate={{ y: done ? "101%" : "0%" }}
-        transition={OPEN}
-        style={{ boxShadow: "0 -28px 60px 30px #050506" }}
-        onAnimationComplete={() => done && setGone(true)}
-      />
-      {/* the line: progress first, then the horizon */}
-      <motion.div
-        className="absolute left-1/2 top-1/2 h-px -translate-y-1/2"
-        initial={false}
-        animate={{ width: done ? "100vw" : "min(360px, 64vw)", x: "-50%", opacity: done ? 0 : 1 }}
-        transition={{ width: { duration: 0.75, ease: [0.7, 0, 0.2, 1] }, opacity: { duration: 0.9, delay: 0.9 } }}
-      >
-        <div className="absolute inset-0 bg-white/14" />
-        <div ref={fill} className="absolute inset-0 origin-left bg-white" style={{ transform: `scaleX(${shownProgress})` }} />
-        <div className="absolute inset-x-0 top-1/2 h-10 -translate-y-1/2 bg-[radial-gradient(50%_50%_at_50%_50%,rgb(255_232_196/0.16),transparent)] blur-md" />
-      </motion.div>
-      {/* lockup: mark above the line, name and counter hanging from its ends */}
-      <motion.div
-        className="absolute left-1/2 top-1/2 w-[min(360px,64vw)] -translate-x-1/2"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: done ? 0 : 1, y: done ? 6 : 0 }}
-        transition={{ duration: done ? 0.35 : 0.7, ease: [0.22, 1, 0.36, 1], delay: done ? 0 : 0.1 }}
-      >
-        <svg viewBox="15 13 34 38" className="absolute bottom-5 left-0 h-[26px] w-auto" fill="currentColor" aria-hidden>
-          <path d="M32 13 15.5 51h7.2l3.4-8.3h11.8l3.4 8.3h7.2L32 13Zm-3.6 23.6L32 27.4l3.6 9.2h-7.2Z" />
-        </svg>
-        <div className="flex items-baseline justify-between pt-3.5 text-[13px] font-medium leading-none">
-          <span>
-            Augustas Armalis
-            {caption && <span className="ml-2 font-normal text-white/38 max-sm:hidden">{caption}</span>}
-          </span>
-          <span ref={count} className="tabular-nums text-white/55">
-            00
+    <div
+      className={`${geist.className} pointer-events-none fixed inset-0 z-[50] text-white ${hideForReducedMotion ? "motion-reduce:hidden" : ""}`}
+      style={{
+        letterSpacing: TRACK.body,
+        // open: the canvas is already showing this exact black, so the layer simply lets go
+        background: open ? "transparent" : "#050506",
+        opacity: phase === "fade" ? 0 : 1,
+        transition: phase === "fade" ? "opacity .5s cubic-bezier(.4,0,.2,1)" : undefined,
+      }}
+      aria-hidden={out}
+    >
+      <style dangerouslySetInnerHTML={{ __html: LOADER_CSS }} />
+      <div className="absolute left-1/2 top-1/2 w-[min(360px,64vw)] -translate-x-1/2">
+        <div
+          className="ld-type absolute inset-x-0 bottom-0 flex items-baseline justify-between pb-[14px] text-[13px] font-medium leading-none"
+          style={out ? { opacity: 0, filter: "blur(5px)", transform: "translateY(-5px)", transitionDelay: open ? "0.12s" : "0s" } : undefined}
+        >
+          <span>Augustas Armalis</span>
+          <span className="tabular-nums text-white/50" style={{ opacity: time ? 1 : 0, transition: "opacity .6s cubic-bezier(.23,1,.32,1)" }}>
+            Kaunas · {time ?? "00:00"}
           </span>
         </div>
-      </motion.div>
+        <div ref={line} className="relative h-px">
+          <div className="absolute inset-0 bg-white/[0.14]" style={{ opacity: out ? 0 : 1, transition: "opacity .28s linear" }} />
+          <div ref={fill} className="ld-fill absolute inset-0 bg-white" style={{ opacity: out ? 0 : 1 }} />
+        </div>
+      </div>
     </div>
   );
 }

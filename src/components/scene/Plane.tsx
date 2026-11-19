@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { ROUTE, roadX, roadY } from "./flightPath";
-import { DESK, clamp01, easeInOutCubic, nowS } from "./shared";
+import { DESK, clamp01, easeInOutCubic, nowS, spring } from "./shared";
 import { SKY_U } from "./sky";
 
 // A folded paper plane that lives on the desk. Click it and it takes off down
@@ -352,26 +352,18 @@ export function Plane({
     const g = group.current;
     if (!g) return;
     if (!flying) {
-      // load-in: glides in from the left, flares, and skids to a stop
+      // load-in: like everything else on the desk it waits just above its
+      // place and alights, last and lightest: a short glide down its own
+      // heading, nose a little high, levelling as it touches
       const at = introAt?.current ?? null;
-      const t = instant ? 99 : at === null ? 0 : nowS() - at - introDelay;
-      g.visible = at === null || instant || t > 0;
-      if (!instant && at !== null && t < 1.7) {
-        const k = 1 - Math.pow(1 - clamp01(t / 1.7), 2.4);
-        const p0 = st.tmp.set(rest.x - 2.4, rest.y + 1.3, rest.z + 1.6);
-        const p1 = st.tmp2.set(rest.x - 0.7, rest.y + 0.18, rest.z + 0.5);
-        const q = (a: number, b: number, c: number) => (1 - k) * (1 - k) * a + 2 * (1 - k) * k * b + k * k * c;
-        g.position.set(q(p0.x, p1.x, rest.x), q(p0.y, p1.y, rest.y), q(p0.z, p1.z, rest.z));
-        const dx = 2 * (1 - k) * (p1.x - p0.x) + 2 * k * (rest.x - p1.x);
-        const dy = 2 * (1 - k) * (p1.y - p0.y) + 2 * k * (rest.y - p1.y);
-        const dz = 2 * (1 - k) * (p1.z - p0.z) + 2 * k * (rest.z - p1.z);
-        const yaw = Math.atan2(-dx, -dz);
-        let dyaw = spot.rot - yaw;
-        dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
-        g.rotation.set(0, 0, 0, "YXZ");
-        g.rotation.y = yaw + dyaw * k * k;
-        g.rotation.x = Math.atan2(dy, Math.hypot(dx, dz)) * (1 - k) + k * (1 - k) * 0.5;
-        g.rotation.z = Math.sin(k * Math.PI) * 0.35;
+      const t = instant ? 99 : at === null ? -1 : nowS() - at - introDelay;
+      g.visible = true;
+      if (!instant && t < 3) {
+        const r = 1 - spring(t, 7, 1);
+        const rr = 1 - spring(t - 0.05, 5.6, 1);
+        g.rotation.order = "XYZ";
+        g.position.set(rest.x + Math.sin(spot.rot) * 0.07 * r, rest.y + 0.017 + 0.055 * r, rest.z + Math.cos(spot.rot) * 0.07 * r);
+        g.rotation.set(0.1 * rr, spot.rot + 0.14 * rr, -0.16 * rr);
         return;
       }
       g.rotation.order = "XYZ";

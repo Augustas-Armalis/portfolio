@@ -10,17 +10,18 @@ import { owner, type UserId } from "@/content";
 import { play } from "@/lib/sfx";
 import { useOS } from "@/store";
 import { ambienceMuted, ambienceScene, onAmbienceChange, setAmbienceMuted, startAmbience } from "@/lib/ambience";
-import { music, sampleMusic } from "@/lib/audio";
+import { music, sampleMusic, stopOwner } from "@/lib/audio";
 import { flightMusicStop, flightMusicTo } from "@/lib/flightMusic";
 import { reportFrame, useQuality, type Quality } from "@/lib/quality";
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { DeskModel } from "./scene/glb";
 import { Flowers, Grass } from "./scene/Grass";
-import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone, glint } from "./scene/models";
+import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone } from "./scene/models";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
-import { Preloader } from "./scene/Overlays";
-import { Post, postCtl } from "./scene/Post";
+import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
+import { loader } from "./scene/Overlays";
+import { Post, photoCtl, postCtl, type Capture } from "./scene/Post";
 import { KEYMAP, PianoKeys, strike } from "./scene/Piano";
 import { Plane, type PlaneApi } from "./scene/Plane";
 import { Reader, type ReaderApi, type ReaderInfo } from "./scene/Reader";
@@ -62,99 +63,54 @@ import { Birds, Ground, Lake, MistBands, Mountains, Sky, makeSkyMaterial } from 
 
 type Stage = "idle" | "approach" | "boot" | "done" | "wake" | "focus" | "unfocus" | "fly" | "land";
 export type Mode = "none" | "piano" | "camera" | "music" | "book" | "sketch" | "plane";
-type Input = { dx: number; dy: number; zoom: number; dragging: boolean; last: number; px: number; py: number; moved: boolean; sx: number; sy: number; keys: Set<string> };
+type Input = { dx: number; dy: number; zoom: number; dragging: boolean; last: number; px: number; py: number; moved: boolean; sx: number; sy: number; tx: number; ty: number; pinch: number; keys: Set<string> };
 
 const DUR = { approach: 1.55, push: 1.05, hold: 0.12, wake: 2.3, wakeDelay: 0.35, focus: 1.15 };
 const FOG = 0.016;
-const INTRO = 3.4; // seconds of aerial descent before the desk assembles
-const ARRIVE = INTRO + 1.8; // the camera reaches its home pose
+// The arrival, in seconds from the moment the loader's line becomes the horizon.
+const ARRIVE = 6.0; // the camera reaches its home pose
+const SETTLE = ARRIVE - 1.4; // the things on the desk begin to alight, to land with the camera
+// Where the camera begins, in the orbit rig's own coordinates around the desk:
+// far out and high in the mist, level with the horizon.
+const START = { r: 74, pol: 1.2, az: -0.1, mist: 0.045, fov: 9 };
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __start0: START });
+
+// What three's default loaders are doing (textures, HDRIs), for the loader's line.
+const loads = { busy: false, done: 0, total: 0 };
+THREE.DefaultLoadingManager.onStart = (_u, d, t) => Object.assign(loads, { busy: true, done: d, total: t });
+THREE.DefaultLoadingManager.onProgress = (_u, d, t) => Object.assign(loads, { done: d, total: t });
+THREE.DefaultLoadingManager.onLoad = () => (loads.busy = false);
 const LABELS: Record<ObjKind | "display" | "plane", string> = { keys: "Piano", camera: "Camera", headphones: "Music", book: "Read", sketchbook: "Sketch", plane: "Fly", display: "Start" };
 const MODE_OF: Record<ObjKind, Mode> = { keys: "piano", camera: "camera", headphones: "music", book: "book", sketchbook: "sketch" };
 
 // ---------- load-in motion ----------
 
-type Motion = "rise" | "lower" | "drop" | "slide" | "settle";
-type Land = { at: number; pos: THREE.Vector3 };
-
-// Position offset, rotation offset and vertical squash for a piece t seconds
-// into its entrance. Each kind of object gets its own motion.
-function entrance(kind: Motion, t: number, from: [number, number, number], spin: number) {
-  const out = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, sy: 1, landed: t > 0.6 };
-  if (t >= 4) return out;
-  if (kind === "rise") {
-    const e = spring(t, 8.5, 0.82);
-    out.y = from[1] * (1 - e);
-    out.landed = t > 0.5;
-  } else if (kind === "lower") {
-    // heavy: eases down, a tiny settle, then the glass glints
-    const e = spring(t, 6.5, 0.95);
-    out.y = from[1] * (1 - e);
-    out.landed = t > 0.9;
-  } else if (kind === "slide") {
-    const e = spring(t, 9, 0.72);
-    out.x = from[0] * (1 - e);
-    out.z = from[2] * (1 - e);
-    out.ry = spin * (1 - e);
-    out.landed = t > 0.35;
-  } else {
-    // drop: a short anticipation lift, a gravity fall, then a squash and two small hops
-    const h = from[1];
-    const g = 4.2;
-    const lift = 0.12;
-    const T = Math.sqrt((2 * (h + 0.02)) / g);
-    if (t < lift) {
-      const k = t / lift;
-      out.y = h + 0.02 * Math.sin(k * Math.PI * 0.5);
-      out.x = from[0];
-      out.z = from[2];
-      out.ry = spin;
-      out.rx = spin * 0.35;
-    } else if (t < lift + T) {
-      const tt = t - lift;
-      const k = tt / T;
-      out.y = Math.max(0, h + 0.02 - 0.5 * g * tt * tt);
-      out.x = from[0] * (1 - k) * (1 - k);
-      out.z = from[2] * (1 - k) * (1 - k);
-      out.ry = spin * (1 - smooth(k));
-      out.rx = spin * 0.35 * (1 - k);
-    } else {
-      const tl = t - lift - T;
-      const bounce = Math.abs(Math.sin(tl * 13)) * Math.exp(-tl * 7) * 0.012;
-      out.y = bounce;
-      out.sy = 1 - 0.07 * Math.exp(-tl * 11) * Math.cos(tl * 26);
-      if (kind === "settle") {
-        out.rx = Math.sin(tl * 15) * Math.exp(-tl * 4) * 0.14;
-        out.rz = Math.cos(tl * 13) * Math.exp(-tl * 4) * 0.1;
-      }
-    }
-    out.landed = t > lift + T;
-  }
-  return out;
-}
+// Nothing falls and nothing bounces. The desk and the display are simply there.
+// Everything else waits a few centimetres above its place, turned a little, and
+// as the camera comes in each one alights: a critically damped fall (it starts
+// from rest and never overshoots) with the turn trailing just behind it, its
+// real shadow gathering under it as it lands. Each has its own weight.
+type Settle = { at: number; lift: number; slide?: [number, number]; yaw: number; tilt?: [number, number]; w: number };
 
 function Piece({
   p,
-  motion,
-  delay,
+  settle,
   introAt,
   instant,
   hoverable,
   label,
   onPick,
-  land,
   hidden,
   float,
   children,
 }: {
-  p: { pos: [number, number, number]; rot: number; from: [number, number, number]; spin: number };
-  motion: Motion;
-  delay: number;
+  p: { pos: [number, number, number]; rot: number };
+  settle?: Settle;
   introAt: MutableRefObject<number | null>;
   instant: boolean;
   hoverable: boolean;
   label?: string;
   onPick?: () => void;
-  land?: Land;
   hidden?: boolean;
   float?: MutableRefObject<{ on: boolean; pos: THREE.Vector3; q: THREE.Quaternion } | null>;
   children: ReactNode;
@@ -162,25 +118,31 @@ function Piece({
   const g = useRef<THREE.Group>(null);
   const lift = useRef(0);
   const blend = useRef(0);
-  const landed = useRef(false);
   const [hover, setHover] = useState(false);
   const base = useMemo(() => new THREE.Vector3(), []);
   const q0 = useMemo(() => new THREE.Quaternion(), []);
+  const eul = useMemo(() => new THREE.Euler(), []);
   useFrame((_, dt) => {
     const o = g.current;
     if (!o) return;
-    const at = introAt.current;
-    const t = instant ? 99 : at === null ? 0 : nowS() - at - delay;
-    o.visible = !hidden && (at === null || instant || t > 0);
-    const e = at === null && !instant ? entrance(motion, 0, p.from, p.spin) : entrance(motion, t, p.from, p.spin);
-    if (land && !landed.current && e.landed && at !== null && !instant) {
-      landed.current = true;
-      land.at = nowS();
-      land.pos.set(p.pos[0], p.pos[1] + 0.004, p.pos[2]);
+    // how far from rest: 1 while it waits above the desk, 0 once it has landed
+    let r = 0;
+    let rr = 0;
+    if (settle && !instant) {
+      const at = introAt.current;
+      const t = at === null ? -1 : nowS() - at - settle.at;
+      r = t > 3 ? 0 : 1 - spring(t, settle.w, 1);
+      rr = t > 3 ? 0 : 1 - spring(t - 0.05, settle.w * 0.8, 1);
     }
+    o.visible = !hidden;
     lift.current += ((hover && hoverable ? 0.007 : 0) - lift.current) * Math.min(1, dt * 14);
-    base.set(p.pos[0] + e.x, p.pos[1] + e.y + lift.current, p.pos[2] + e.z);
-    q0.setFromEuler(new THREE.Euler(e.rx, p.rot + e.ry, e.rz));
+    if (settle) {
+      base.set(p.pos[0] + (settle.slide?.[0] ?? 0) * r, p.pos[1] + settle.lift * r + lift.current, p.pos[2] + (settle.slide?.[1] ?? 0) * r);
+      q0.setFromEuler(eul.set((settle.tilt?.[0] ?? 0) * rr, p.rot + settle.yaw * rr, (settle.tilt?.[1] ?? 0) * rr));
+    } else {
+      base.set(p.pos[0], p.pos[1] + lift.current, p.pos[2]);
+      q0.setFromEuler(eul.set(0, p.rot, 0));
+    }
     // music mode: the headphones float up beside the camera
     const f = float?.current;
     blend.current += ((f?.on ? 1 : 0) - blend.current) * (1 - Math.exp(-dt * 3.5));
@@ -192,7 +154,6 @@ function Piece({
       o.position.copy(base);
       o.quaternion.copy(q0);
     }
-    o.scale.set(1, e.sy, 1);
   });
   return (
     <group
@@ -244,75 +205,9 @@ function GlassTag({ label, show }: { label: string; show: boolean }) {
   );
 }
 
-// A soft puff of dust where things land on the desk.
-function DustPuffs({ lands }: { lands: Land[] }) {
-  const { geo, mat } = useMemo(() => {
-    const per = 18;
-    const n = lands.length * per;
-    const idx = new Float32Array(n);
-    const dir = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      idx[i] = Math.floor(i / per);
-      const a = Math.random() * Math.PI * 2;
-      dir[i * 3] = Math.cos(a);
-      dir[i * 3 + 1] = 0.2 + Math.random() * 0.6;
-      dir[i * 3 + 2] = Math.sin(a);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
-    g.setAttribute("aIdx", new THREE.BufferAttribute(idx, 1));
-    g.setAttribute("aDir", new THREE.BufferAttribute(dir, 3));
-    const m = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      uniforms: {
-        ...SKY_U,
-        uNow: { value: 0 },
-        uStart: { value: new Array(8).fill(-99) },
-        uPos: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
-      },
-      vertexShader: /* glsl */ `
-        attribute float aIdx; attribute vec3 aDir;
-        uniform float uNow; uniform float uStart[8]; uniform vec3 uPos[8];
-        varying float vA;
-        void main(){
-          int i = int(aIdx);
-          float t = uNow - uStart[i];
-          float k = clamp(t / 0.9, 0.0, 1.0);
-          float e = 1.0 - pow(1.0 - k, 3.0);
-          vec3 p = uPos[i] + vec3(aDir.x * (0.03 + 0.12 * e), aDir.y * 0.035 * e, aDir.z * (0.03 + 0.12 * e));
-          vec4 mv = modelViewMatrix * vec4(p, 1.0);
-          vA = (t < 0.0 || t > 0.9) ? 0.0 : pow(1.0 - k, 2.0) * 0.45;
-          gl_PointSize = (t < 0.0 || t > 0.9) ? 0.0 : (14.0 + 30.0 * e) / -mv.z;
-          gl_Position = projectionMatrix * mv;
-        }`,
-      fragmentShader: /* glsl */ `
-        uniform vec3 uKeyCol; uniform vec3 uSkyCol;
-        varying float vA;
-        void main(){
-          float d = length(gl_PointCoord - 0.5);
-          float a = smoothstep(0.5, 0.0, d) * vA;
-          vec3 c = vec3(0.9, 0.86, 0.8) * (uSkyCol + uKeyCol * 0.3);
-          gl_FragColor = vec4(c, a);
-          #include <tonemapping_fragment>
-          #include <colorspace_fragment>
-        }`,
-    });
-    return { geo: g, mat: m };
-  }, [lands]);
-  useFrame(() => {
-    mat.uniforms.uNow.value = nowS();
-    lands.forEach((l, i) => {
-      mat.uniforms.uStart.value[i] = l.at;
-      mat.uniforms.uPos.value[i].copy(l.pos);
-    });
-  });
-  return <points geometry={geo} material={mat} frustumCulled={false} />;
-}
-
 // ---------- scene ----------
 
-type SceneApi = { skip: () => void; snap: () => string | null; reader: MutableRefObject<ReaderApi | null>; sketch: MutableRefObject<SketchApi | null> };
+type SceneApi = { skip: () => void; shoot: () => Capture | null; focusAt: (x: number, y: number) => void; reader: MutableRefObject<ReaderApi | null>; sketch: MutableRefObject<SketchApi | null> };
 
 function Scene({
   mobile,
@@ -369,6 +264,12 @@ function Scene({
   // dev only: a fixed time step and a held viewpoint for frame-by-frame stills
   const dev = useRef<{ dt: number | null; view: { pos: [number, number, number]; look: [number, number, number]; fov?: number; focus?: number } | null }>({ dt: null, view: null });
   const cam = camera as THREE.PerspectiveCamera;
+  // dev only: ?post=0..3 pins the lens level whatever Auto decides (the preview pane paints too slowly for Auto)
+  const [devPost] = useState<number | null>(() => {
+    if (process.env.NODE_ENV === "production") return null;
+    const p = new URLSearchParams(window.location.search).get("post");
+    return p === null ? null : Math.max(0, Math.min(3, +p || 0));
+  });
   if (process.env.NODE_ENV !== "production") {
     const w = window as unknown as { __t?: Record<string, number> };
     w.__t = w.__t ?? {};
@@ -395,16 +296,30 @@ function Scene({
   const reader = useRef<ReaderApi | null>(null);
   const sketch = useRef<SketchApi | null>(null);
   const [reading, setReading] = useState(false);
-  const lands = useMemo<Land[]>(() => Array.from({ length: 6 }, () => ({ at: -99, pos: new THREE.Vector3() })), []);
+  // the loader's in-canvas half, drawn over the finished frame until the dark has lifted
+  const veil = useMemo(() => (instant ? null : makeLoaderOverlay()), [instant]);
+  const fast = useRef(false);
+  useEffect(() => {
+    if (!veil) return;
+    postCtl.overlay = veil.mat;
+    return () => {
+      if (postCtl.overlay === veil.mat) postCtl.overlay = null;
+      veil.dispose();
+    };
+  }, [veil]);
   const floatRef = useRef<{ on: boolean; pos: THREE.Vector3; q: THREE.Quaternion } | null>({ on: false, pos: new THREE.Vector3(), q: new THREE.Quaternion() });
 
   const stage = useRef<Stage>("idle");
   const st = useRef(0);
   const handed = useRef(false);
   const rig = useRef({ az: cfg.az, pol: cfg.pol, r: cfg.r, gaz: cfg.az, gpol: cfg.pol, gr: cfg.r });
-  const vf = useRef({ yaw: 0, pitch: 0 });
+  // the camera in the hand: where it is, where it looks (and is turning to), how it is moving
+  const ph = useRef({ pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0, pitch: 0, tyaw: 0, tpitch: 0 });
+  // the move into or out of a desk mode: how long it takes and the lens it started with
+  const tr = useRef({ dur: DUR.focus, fov0: cfg.fov });
   const par = useRef(0);
   const introK = useRef(1);
+  const landedFov = useRef(false);
   const v = useMemo(
     () => ({
       pos: new THREE.Vector3(),
@@ -442,6 +357,8 @@ function Scene({
   const flightSky = useRef({ w: 0, hour: 12, at: -1 });
   const lastH = useRef(-1);
   const lastLabel = useRef("");
+  const veilH = useRef(-2);
+  const v2 = useMemo(() => new THREE.Vector2(), []);
 
   useEffect(() => {
     cam.fov = cfg.fov;
@@ -482,7 +399,13 @@ function Scene({
         fly: () => enterRef.current?.("plane"),
         land: () => exitRef.current?.(),
         warp: (z: number) => planeApi.current?.warp(z),
-        intro: (t: number) => (introAt.current = nowS() - t),
+        // t seconds into the arrival; negative is the loader still up (the in-canvas dark and line; __loader.reset() / .set(p) bring back and draw the DOM layer)
+        intro: (t: number) => {
+          introAt.current = nowS() - t;
+          fast.current = false;
+          landedFov.current = false;
+          if (veil && t < LOADER_T.total) postCtl.overlay = veil.mat;
+        },
         view: (o: typeof dev.current.view) => (dev.current.view = o),
         post: postCtl,
         shot: async (name: string) => {
@@ -496,9 +419,13 @@ function Scene({
     });
   }, [input, cam, v]);
 
-  // compile everything behind the preloader, then report ready. compileAsync
-  // can throw from inside its own polling (a material swapped mid-compile), so
-  // compile synchronously, guarded, and always reveal within 6 s regardless.
+  // Behind the loader: wait for the type, the cover and whatever three is
+  // still fetching (textures, the sky HDRI), upload every texture, compile
+  // every program, draw a few hidden frames, and only then report ready, so
+  // nothing hitches once the dark lifts. Each step moves the loader's line.
+  // compileAsync can throw from inside its own polling (a material swapped
+  // mid-compile), so compile synchronously, guarded; the line itself is a CSS
+  // transition and keeps gliding. Always reveal within 9 s regardless.
   useEffect(() => {
     let dead = false;
     let done = false;
@@ -507,25 +434,67 @@ function Scene({
       done = true;
       onReady();
     };
-    const hard = window.setTimeout(finish, 6000);
+    const hard = window.setTimeout(finish, 9000);
+    const wait = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+    const mark = (k: string) => {
+      if (process.env.NODE_ENV !== "production") (window as unknown as { __t: Record<string, number> }).__t[k] = performance.now();
+    };
     if (process.env.NODE_ENV !== "production") ((window as unknown as { __t: Record<string, number> }).__t.effect = performance.now());
     (async () => {
-      onProgress(0.4);
-      await Promise.race([Promise.all([coverReady(), lock.ready, geistReady()]), new Promise((r) => window.setTimeout(r, 2500))]);
+      onProgress(0.44);
+      await Promise.race([Promise.all([coverReady(), lock.ready, geistReady()]), wait(2500)]);
       if (dead) return;
-      onProgress(0.62);
-      await new Promise((r) => window.setTimeout(r, 30));
+      mark("type");
+      onProgress(0.52);
+      // files: quiet for two looks in a row, or 4 s at most
+      const t0 = performance.now();
+      let quiet = 0;
+      while (!dead && quiet < 2 && performance.now() - t0 < 4000) {
+        quiet = loads.busy ? 0 : quiet + 1;
+        if (loads.total > 0) onProgress(0.52 + 0.2 * (loads.done / loads.total));
+        await wait(90);
+      }
+      if (dead) return;
+      mark("files");
+      onProgress(0.74);
+      try {
+        const seen = new Set<THREE.Texture>();
+        const up = (t: unknown) => {
+          const x = t as THREE.Texture;
+          if (!x || !x.isTexture || seen.has(x) || (x as THREE.WebGLRenderTarget["texture"]).isRenderTargetTexture) return;
+          const im = x.image as { width?: number; complete?: boolean } | null;
+          if (!im || !im.width || im.complete === false) return;
+          seen.add(x);
+          gl.initTexture(x);
+        };
+        scene.traverse((o) => {
+          const ms = (o as THREE.Mesh).material;
+          for (const m of Array.isArray(ms) ? ms : ms ? [ms] : []) {
+            for (const v of Object.values(m)) up(v);
+            const us = (m as THREE.ShaderMaterial).uniforms;
+            if (us) for (const k in us) up(us[k]?.value);
+          }
+        });
+      } catch {
+        /* uploaded on first draw instead */
+      }
+      mark("textures");
+      await wait(30);
+      if (dead) return;
       try {
         gl.compile(scene, cam);
       } catch {
         /* compile on first draw instead */
       }
       if (dead) return;
+      mark("compiled");
       onProgress(0.9);
+      // a few hidden frames with everything compiled (a slow tab is not held to all four)
       let n = 0;
+      const f0 = performance.now();
       const tick = () => {
         if (dead) return;
-        if (++n < 3) requestAnimationFrame(tick);
+        if (++n < 4 && !(n >= 2 && performance.now() - f0 > 700)) requestAnimationFrame(tick);
         else finish();
       };
       requestAnimationFrame(tick);
@@ -609,6 +578,17 @@ function Scene({
   const planeSpot = PLANE_SPOT[mobile ? "mobile" : "desktop"];
   const place = (k: ObjKind) => layout.find((o) => o.kind === k)!;
 
+  const lookDir = (yaw: number, pitch: number, out: THREE.Vector3) => out.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+  // the move into or out of a mode starts here: from this view, with this lens, and a far-off camera is given longer to come home
+  const depart = (far = 0) => {
+    v.fromPos.copy(cam.position);
+    v.fromUp.copy(cam.up);
+    tr.current.fov0 = cam.fov;
+    tr.current.dur = DUR.focus + Math.min(1.2, far * 0.035);
+    const inp = input.current;
+    inp.dx = inp.dy = inp.zoom = inp.tx = inp.ty = inp.pinch = 0;
+  };
+
   // focus pose for a desk object, written into v.toPos / v.toLook / v.toUp
   const focusPose = (m: Mode) => {
     const aspect = size.width / size.height;
@@ -638,10 +618,13 @@ function Scene({
       // pick the camera up: eye height just behind the desk, framed past the
       // display toward the lake and the hills
       const { c } = P("camera");
-      const yaw = Math.atan2(-0.34, -1);
-      vf.current = { yaw, pitch: -0.03 };
+      const F = ph.current;
+      F.yaw = F.tyaw = Math.atan2(0.34, 1);
+      F.pitch = F.tpitch = -0.03;
+      F.vel.set(0, 0, 0);
       v.toPos.set(c.x + 0.06, DESK.top + 0.6, c.z + 0.62);
-      v.toLook.copy(v.toPos).add(new THREE.Vector3(Math.sin(yaw), -0.03, Math.cos(yaw)));
+      F.pos.copy(v.toPos);
+      v.toLook.copy(v.toPos).add(lookDir(F.yaw, F.pitch, v.tmp));
       v.toUp.set(0, 1, 0);
     }
   };
@@ -660,9 +643,8 @@ function Scene({
     play(m === "book" ? "page" : "pop", { volume: 0.7 });
     onMode(m);
     if (m === "music") return; // the view stays; the headphones come to you
-    v.fromPos.copy(cam.position);
+    depart();
     v.fromLook.copy(v.look);
-    v.fromUp.copy(cam.up);
     focusPose(m);
     if (m === "book") setReading(true);
     setStage("focus");
@@ -678,6 +660,8 @@ function Scene({
       return;
     }
     if (mode === "music") {
+      // the music starts fading the moment the headphones go down
+      stopOwner("headphones", 0.9);
       onMode("none");
       play("close", { volume: 0.6 });
       return;
@@ -687,9 +671,8 @@ function Scene({
     if (mode === "book") {
       reader.current?.close();
     }
-    v.fromPos.copy(cam.position);
+    depart(Math.max(0, cam.position.distanceTo(v.tmp.set(...cfg.target)) - cfg.rMax));
     v.fromLook.copy(v.look);
-    v.fromUp.copy(cam.up);
     input.current.last = performance.now();
     onMode("none");
     setStage("unfocus");
@@ -697,18 +680,23 @@ function Scene({
   exitRef.current = exit;
 
   apiRef.current = {
+    // never a cut: the rest of the arrival simply plays through fast
     skip: () => {
-      const a = introAt.current;
-      if (a !== null && nowS() - a < ARRIVE) introAt.current = nowS() - (ARRIVE + 1.6);
+      fast.current = true;
     },
-    snap: () => {
-      if (postCtl.render) postCtl.render();
-      else gl.render(scene, cam);
-      try {
-        return gl.domElement.toDataURL("image/jpeg", 0.92);
-      } catch {
-        return null;
-      }
+    // the photograph: the framed part of the view, drawn again at twice the page's size (or the screen's own density when that is more)
+    shoot: () => {
+      const cv = gl.domElement;
+      const want = Math.max(2, window.devicePixelRatio || 1) / Math.max(0.5, cv.width / Math.max(1, cv.clientWidth));
+      const most = Math.sqrt((mobile ? 5e6 : 9.5e6) / Math.max(1, cv.width * cv.height));
+      return postCtl.capture?.(photoCtl.frame, Math.max(1, Math.min(want, most))) ?? null;
+    },
+    // tap to focus: how far away is whatever is drawn under that point
+    focusAt: (x, y) => {
+      const r = gl.domElement.getBoundingClientRect();
+      const z = postCtl.depthAt?.((x - r.left) / r.width, 1 - (y - r.top) / r.height);
+      if (z == null || !Number.isFinite(z)) return;
+      photoCtl.onFocus?.(x - r.left, y - r.top, z);
     },
     reader,
     sketch,
@@ -725,9 +713,8 @@ function Scene({
     },
     back: () => {
       if (stage.current !== "idle") return;
-      v.fromPos.copy(cam.position);
+      depart(Math.max(0, cam.position.distanceTo(v.tmp.set(...cfg.target)) - cfg.rMax));
       v.fromLook.copy(cam.position).add(new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion));
-      v.fromUp.copy(cam.up);
       input.current.last = performance.now();
       setStage("unfocus");
     },
@@ -759,6 +746,61 @@ function Scene({
     cam.position.lerp(e.pos, a);
     cam.up.copy(v.Y);
     v.look.copy(cam.position).add(fwd);
+    cam.lookAt(v.look);
+  };
+
+  // The camera in the hand: a free flight over the field. Drag turns the view
+  // (the world follows the pointer, as everywhere else), W A S D and Q / E
+  // move, Shift hurries; on touch two fingers slide the world and a pinch
+  // walks in or out. It leaves from rest and glides back to rest, and the
+  // edge of the field gives instead of stopping it dead.
+  const photoFov = () => {
+    const f = photoCtl.frame.h > 0.05 ? photoCtl.frame.h : 1;
+    return Math.min(104, THREE.MathUtils.radToDeg(2 * Math.atan(photoCtl.sensorH / 2 / photoCtl.focal / f)));
+  };
+  const photoStep = (dt: number) => {
+    const P = ph.current;
+    const inp = input.current;
+    const turn = 0.0032 * Math.min(1, cam.fov / 46);
+    P.tyaw += inp.dx * turn;
+    P.tpitch = THREE.MathUtils.clamp(P.tpitch + inp.dy * turn * 0.85, -1.4, 1.4);
+    inp.dx = inp.dy = inp.zoom = 0;
+    const a = 1 - Math.exp(-dt * 22);
+    P.yaw += (P.tyaw - P.yaw) * a;
+    P.pitch += (P.tpitch - P.pitch) * a;
+    const fwd = lookDir(P.yaw, P.pitch, new THREE.Vector3());
+    const right = new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw));
+    const up = new THREE.Vector3().crossVectors(right, fwd);
+    const k = inp.keys;
+    const want = v.tmp.set(0, 0, 0);
+    if (k.has("w") || k.has("arrowup")) want.add(fwd);
+    if (k.has("s") || k.has("arrowdown")) want.sub(fwd);
+    if (k.has("d") || k.has("arrowright")) want.add(right);
+    if (k.has("a") || k.has("arrowleft")) want.sub(right);
+    if (k.has("e")) want.y += 1;
+    if (k.has("q")) want.y -= 1;
+    const moving = want.lengthSq() > 0;
+    if (moving) want.normalize().multiplyScalar(k.has("shift") ? 6.5 : 1.7);
+    P.vel.lerp(want, 1 - Math.exp(-dt * (moving ? 5 : 7)));
+    P.pos.addScaledVector(P.vel, dt);
+    if (inp.tx || inp.ty || inp.pinch) {
+      const perPx = (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * THREE.MathUtils.clamp(photoCtl.focus, 1, 12)) / size.height;
+      P.pos.addScaledVector(right, -inp.tx * perPx).addScaledVector(up, inp.ty * perPx).addScaledVector(fwd, inp.pinch * 0.012);
+      inp.tx = inp.ty = inp.pinch = 0;
+    }
+    const r = Math.hypot(P.pos.x, P.pos.z);
+    const give = 1 - Math.exp(-dt * 4);
+    if (r > 64) {
+      const back = ((r - 64) / r) * give;
+      P.pos.x -= P.pos.x * back;
+      P.pos.z -= P.pos.z * back;
+    }
+    if (P.pos.y < 0.22) P.pos.y += (0.22 - P.pos.y) * (1 - Math.exp(-dt * 12));
+    if (P.pos.y > 36) P.pos.y += (36 - P.pos.y) * give;
+    P.pos.y = Math.max(0.08, P.pos.y);
+    cam.position.copy(P.pos);
+    cam.up.copy(v.Y);
+    v.look.copy(P.pos).add(fwd);
     cam.lookAt(v.look);
   };
 
@@ -805,25 +847,34 @@ function Scene({
     const [tx, ty, tz] = cfg.target;
     v.pos.set(tx + rad * Math.sin(pol) * Math.sin(az), ty + rad * Math.cos(pol), tz + rad * Math.sin(pol) * Math.cos(az));
     v.look.set(tx, ty, tz);
-    // cinematic arrival: from high over the field, looking out at the
-    // mountains, the camera eases down onto the desk
+    // The arrival. It opens far out and high in the mist, level with the
+    // horizon (the loader's line sits exactly on it), and comes down one
+    // unbroken arc in the rig's own coordinates: the distance closes in log
+    // space, so the desk grows at an even rate, and because the path ends on
+    // the live home pose itself there is nothing to hand over when it lands.
+    // The eye tips down from the horizon to the desk early, while the desk is
+    // still a speck in the haze, and stays on it.
     const at = introAt.current;
     if (!instant) {
-      // It opens high in the mist, level with the horizon (the loader's line
-      // sits exactly on it), then sinks through the haze: the eye finds the
-      // desk first and the body follows.
       const k = at === null ? 0 : clamp01((now - at) / ARRIVE);
-      const e = k * k * k * (k * (k * 6 - 15) + 10);
-      const sx = tx - 7;
-      const sy = ty + 37;
-      const sz = tz + 62;
-      v.tmp.set(sx, sy, sz);
-      v.pos.lerpVectors(v.tmp, v.pos, e);
-      v.pos.x += Math.sin(Math.PI * e) * 2.2;
-      const el = clamp01((k - 0.12) / 0.74);
-      const le = el * el * (3 - 2 * el);
-      v.look.lerpVectors(v.tmp.set(sx, sy, sz - 120), v.look.clone(), le);
-      introK.current = e;
+      const u = k * k * k * (k * (k * 6 - 15) + 10);
+      if (u < 1) {
+        const R = Math.exp(THREE.MathUtils.lerp(Math.log(START.r), Math.log(rad), u));
+        const P = THREE.MathUtils.lerp(START.pol, pol, u);
+        const A = THREE.MathUtils.lerp(START.az, az, u);
+        v.pos.set(tx + R * Math.sin(P) * Math.sin(A), ty + R * Math.cos(P), tz + R * Math.sin(P) * Math.cos(A));
+        const el = clamp01((k - 0.07) / 0.46);
+        const le = el * el * el * (el * (el * 6 - 15) + 10);
+        const dx = tx - v.pos.x;
+        const dy = ty - v.pos.y;
+        const dz = tz - v.pos.z;
+        const flat = Math.hypot(dx, dz);
+        // pitch only: level at first, then down the line of sight to the desk
+        const pitch = Math.atan2(dy, flat) * le;
+        const dist = Math.hypot(flat, dy);
+        v.look.set(v.pos.x + (dx / flat) * Math.cos(pitch) * dist, v.pos.y + Math.sin(pitch) * dist, v.pos.z + (dz / flat) * Math.cos(pitch) * dist);
+      }
+      introK.current = u;
     }
   };
 
@@ -902,7 +953,7 @@ function Scene({
   useFrame((_, rawDt) => {
     try {
       frame(dev.current.dt ?? rawDt);
-      lens(Math.min(rawDt, 0.1));
+      lens(Math.min(dev.current.dt ?? rawDt, 0.1));
     } catch (err) {
       if (process.env.NODE_ENV !== "production") Object.assign(window, { __err: String((err as Error)?.stack ?? err) });
       throw err;
@@ -915,14 +966,40 @@ function Scene({
   const lens = (dt: number) => {
     const s = stage.current;
     let focus = cam.position.distanceTo(v.tmp.set(...cfg.target));
-    let dof = 1;
+    // after dark the lens stops down: the stars stay points of light
+    let dof = 1 - 0.85 * SKY_U.uNight.value;
+    let aperture = 2.8;
+    let band = 0.3;
+    let sensor = 24;
+    let look = 1;
+    let exposure = 1;
+    let photo = false;
     if (s === "fly" || s === "land" || s === "approach" || s === "boot" || s === "done") dof = 0;
     else if (s === "focus") {
-      focus = mode === "camera" ? 45 : cam.position.distanceTo(v.look);
-      dof = mode === "camera" ? 0.55 : 0.85;
+      if (mode === "camera") {
+        // the camera's own rings: a thin slice in focus, the paint held back
+        photo = true;
+        focus = photoCtl.focus;
+        aperture = photoCtl.aperture;
+        band = 0.02;
+        sensor = photoCtl.sensorH / (photoCtl.frame.h > 0.05 ? photoCtl.frame.h : 1);
+        dof = 1.5;
+        look = 0.35;
+        exposure = Math.pow(2, photoCtl.ev);
+      } else {
+        focus = cam.position.distanceTo(v.look);
+        dof = 0.9;
+      }
     } else if (s === "idle" && nav === "explore") {
-      focus = Math.max(1.4, focus);
-      dof = 0.6;
+      // walking: focused out in the field, only what brushes past the lens goes soft
+      focus = 12;
+      aperture = 4;
+      dof *= 0.8;
+    }
+    // a phone has depth of field only while the camera is held: it fades with the way home
+    if (postCtl.photo && !photo && s === "unfocus" && postCtl.level < 2) {
+      photo = postCtl.dof > 0.02;
+      dof = 0;
     }
     const d = dev.current.view;
     if (d) {
@@ -936,8 +1013,16 @@ function Scene({
       dof = d.focus ? 1 : 0;
       focus = d.focus ?? focus;
     }
-    postCtl.focus += (focus - postCtl.focus) * (1 - Math.exp(-dt * 6));
+    const e = 1 - Math.exp(-dt * 5);
+    // focus is pulled in stops, not metres: near and far take the same time
+    postCtl.focus = Math.exp(Math.log(postCtl.focus) + (Math.log(Math.max(0.05, focus)) - Math.log(postCtl.focus)) * (1 - Math.exp(-dt * 6)));
     postCtl.dof += (dof - postCtl.dof) * (1 - Math.exp(-dt * (dof < postCtl.dof ? 7 : 2.5)));
+    postCtl.aperture += (aperture - postCtl.aperture) * e;
+    postCtl.band += (band - postCtl.band) * e;
+    postCtl.sensor += (sensor - postCtl.sensor) * e;
+    postCtl.look += (look - postCtl.look) * e;
+    postCtl.exposure += (exposure - postCtl.exposure) * e;
+    postCtl.photo = photo;
   };
 
   const frame = (rawDt: number) => {
@@ -959,16 +1044,26 @@ function Scene({
     const el = now - st.current;
     const reflect = mats.reflect;
 
-    // arrival mist thins out as the camera comes down
+    // a click during the arrival plays the rest of it through at speed
+    const at0 = introAt.current;
+    if (fast.current && at0 !== null) {
+      if (now - at0 < ARRIVE + 1) introAt.current = at0 - dt * 7;
+      else fast.current = false;
+    }
+    // arrival mist thins out, continuously, as the camera comes down
     const at = introAt.current;
-    const mist = instant ? 0 : at === null ? 0.4 : 0.4 * (1 - smooth(clamp01((now - at) / (ARRIVE * 0.82))));
+    const mist = instant ? 0 : at === null ? START.mist : START.mist * (1 - smooth(clamp01((now - at) / (ARRIVE * 0.8))));
     SKY_U.uMist.value = Math.max(mist, (planeApi.current?.landMist() ?? 0) * 0.55);
-    fog.near = 20 * (1 - mist * 2.2) + 0.5;
-    fog.far = 170 * (1 - mist * 2.2) + 6;
-    // display glint once it has settled
-    if (at !== null && !instant) {
-      const tg = now - at - INTRO - 1.25;
-      glint.value = tg > 0 && tg < 1.1 ? tg / 1.1 : -1;
+    // the plain three fog (the desk and its things) keeps pace with the shader fog
+    fog.far = Math.min(176, 3 / (FOG + mist));
+    fog.near = fog.far * (20.5 / 176);
+    // the loader's dark, line and first light, over the finished frame
+    if (veil && postCtl.overlay === veil.mat) {
+      if (lastH.current >= 0 && veilH.current !== lastH.current) {
+        veilH.current = lastH.current;
+        veil.tint(skyState(lastH.current));
+      }
+      if (!veil.update(at === null ? -1 : now - at, cam, size, gl.getDrawingBufferSize(v2))) postCtl.overlay = null;
     }
 
     // headphones float target (music mode)
@@ -1004,43 +1099,50 @@ function Scene({
       cam.up.copy(v.Y);
       cam.lookAt(v.look);
       // a wider lens up high, closing as it lands
-      if (!instant && introK.current < 1) {
-        cam.fov = cfg.fov + 9 * (1 - introK.current);
+      if (!instant && !landedFov.current) {
+        cam.fov = cfg.fov + START.fov * (1 - introK.current);
         cam.updateProjectionMatrix();
-        if (at !== null && now - at >= ARRIVE) {
-          introK.current = 1;
-          cam.fov = cfg.fov;
-          cam.updateProjectionMatrix();
-        }
+        landedFov.current = introK.current >= 1;
       }
       reflect.opacity = 1;
       if (screen.current) screenPose();
       return;
     }
     if (s === "focus" || s === "unfocus") {
+      const T = tr.current;
+      let fovT = cfg.fov;
       if (s === "unfocus") {
-        rigPose(now, dt, true);
-        v.toPos.copy(v.pos);
-        v.toLook.copy(v.look);
+        if (nav === "explore") {
+          // put down while exploring: back to where the walk was left
+          v.toPos.copy(ex.current.pos);
+          v.toLook.copy(v.toPos).add(lookDir(ex.current.yaw, ex.current.pitch, v.tmp));
+        } else {
+          rigPose(now, dt, true);
+          v.toPos.copy(v.pos);
+          v.toLook.copy(v.look);
+        }
         v.toUp.copy(v.Y);
-      } else if (mode === "camera" && el > DUR.focus) {
-        // viewfinder: drag to aim
-        const inp = input.current;
-        vf.current.yaw += inp.dx * 0.003;
-        vf.current.pitch = THREE.MathUtils.clamp(vf.current.pitch + inp.dy * 0.003, -0.5, 0.6);
-        inp.dx = inp.dy = 0;
-        const { yaw, pitch } = vf.current;
-        v.toLook.copy(v.toPos).add(new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)));
+      } else if (mode === "camera") {
+        fovT = photoFov();
+        if (el >= T.dur) {
+          photoStep(dt);
+          cam.fov += (fovT - cam.fov) * (1 - Math.exp(-dt * 9));
+          cam.updateProjectionMatrix();
+          return;
+        }
+        input.current.dx = input.current.dy = 0;
       }
-      const k = easeInOutCubic(clamp01(el / DUR.focus));
+      const k = easeInOutCubic(clamp01(el / T.dur));
       cam.position.lerpVectors(v.fromPos, v.toPos, k);
       v.look.lerpVectors(v.fromLook, v.toLook, k);
       cam.up.lerpVectors(v.fromUp, v.toUp, k).normalize();
       cam.lookAt(v.look);
-      const fovT = mode === "camera" ? 50 : cfg.fov;
-      cam.fov += (fovT - cam.fov) * Math.min(1, dt * 4);
+      cam.fov = THREE.MathUtils.lerp(T.fov0, fovT, k);
       cam.updateProjectionMatrix();
-      if (s === "unfocus" && el >= DUR.focus) {
+      if (s === "unfocus" && el >= T.dur) {
+        // nothing dragged or scrolled inside a mode carries over into the orbit
+        const inp = input.current;
+        inp.dx = inp.dy = inp.zoom = inp.tx = inp.ty = inp.pinch = 0;
         setReading(false);
         setStage("idle");
       }
@@ -1119,8 +1221,16 @@ function Scene({
 
   const shadowMap = Math.min(q.shadows || 512, mobile ? 1024 : 4096);
   const idle = stage.current === "idle" && active;
-  const order: ObjKind[] = ["keys", "book", "sketchbook", "headphones", "camera"];
-  const motionOf: Record<ObjKind, Motion> = { keys: "slide", book: "drop", sketchbook: "slide", headphones: "settle", camera: "drop" };
+  // The keys lead from the centre and the rest follow outward, the gaps
+  // closing as they go; the paper plane is last and lightest. Under a second
+  // from the first leaving its wait to the last at rest.
+  const settleOf: Record<ObjKind, Settle> = {
+    keys: { at: SETTLE, lift: 0.03, yaw: 0.03, tilt: [0.05, 0], w: 8 },
+    book: { at: SETTLE + 0.1, lift: 0.04, yaw: -0.16, tilt: [0, 0.03], w: 9 },
+    sketchbook: { at: SETTLE + 0.19, lift: 0.036, yaw: 0.13, slide: [-0.012, 0.012], w: 9 },
+    headphones: { at: SETTLE + 0.27, lift: 0.05, yaw: 0.26, tilt: [-0.04, 0.03], w: 8.5 },
+    camera: { at: SETTLE + 0.34, lift: 0.044, yaw: -0.22, tilt: [0.03, -0.03], w: 9.5 },
+  };
 
   const objEl = (o: Placement) => {
     if (o.kind === "keys")
@@ -1130,7 +1240,7 @@ function Scene({
         </DeskModel>
       );
     if (o.kind === "book")
-      return <Reader reading={reading && mode === "book"} peekAt={lands[1].at > 0 ? lands[1].at + 0.05 : null} apiRef={reader} onInfo={onReaderInfo} onClosed={() => {}} />;
+      return <Reader reading={reading && mode === "book"} peekAt={null} apiRef={reader} onInfo={onReaderInfo} onClosed={() => {}} />;
     if (o.kind === "sketchbook") return <SketchbookLive open={mode === "sketch"} apiRef={sketch} />;
     if (o.kind === "headphones")
       return (
@@ -1146,9 +1256,11 @@ function Scene({
         </>
       );
     return (
-      <DeskModel name="camera">
-        <CameraBody />
-      </DeskModel>
+      <Held away={mode === "camera"}>
+        <DeskModel name="camera">
+          <CameraBody />
+        </DeskModel>
+      </Held>
     );
   };
 
@@ -1187,13 +1299,12 @@ function Scene({
       <hemisphereLight ref={hemi} />
       <directionalLight ref={fill} position={[2.5, 2.2, 3.5]} color="#e6ebf3" intensity={0.3} />
 
-      <Piece p={{ pos: [0, 0, 0], rot: 0, from: [0, -0.9, 0], spin: 0 }} motion="rise" delay={INTRO} introAt={introAt} instant={instant} hoverable={false}>
+      {/* the desk and the display are there from the first frame, the lock screen lit */}
+      <Piece p={{ pos: [0, 0, 0], rot: 0 }} introAt={introAt} instant={instant} hoverable={false}>
         <Desk />
       </Piece>
       <Piece
-        p={{ pos: [0, 0, 0], rot: 0, from: [0, 0.38, 0], spin: 0 }}
-        motion="lower"
-        delay={INTRO + 0.3}
+        p={{ pos: [0, 0, 0], rot: 0 }}
         introAt={introAt}
         instant={instant}
         hoverable={idle}
@@ -1208,49 +1319,62 @@ function Scene({
           </DeskModel>
         )}
       </Piece>
-      {order.map((kind, i) => {
+      {(Object.keys(settleOf) as ObjKind[]).map((kind) => {
         const o = place(kind);
-        const from: [number, number, number] =
-          motionOf[kind] === "slide" ? [o.from[0] * 0.6, 0, o.from[2] + (kind === "keys" ? 0.35 : 0)] : [o.from[0] * 0.5, 0.42 + i * 0.03, o.from[2] * 0.5];
         return (
           <Piece
             key={kind}
-            p={{ pos: [o.pos[0], DESK.top, o.pos[2]], rot: o.rot, from, spin: o.spin }}
-            motion={motionOf[kind]}
-            delay={INTRO + 0.75 + i * 0.13}
+            p={{ pos: [o.pos[0], DESK.top, o.pos[2]], rot: o.rot }}
+            settle={settleOf[kind]}
             introAt={introAt}
             instant={instant}
             hoverable={idle && mode === "none"}
             label={LABELS[kind]}
             onPick={() => enter(MODE_OF[kind])}
-            land={lands[i]}
-            hidden={kind === "camera" && mode === "camera" && stage.current === "focus" && nowS() - st.current > DUR.focus * 0.8}
             float={kind === "headphones" ? floatRef : undefined}
           >
             {objEl(o)}
           </Piece>
         );
       })}
-      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} free={free} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={INTRO + 1.5} instant={instant} />
-      {idle && mode === "none" && <PlaneLabel spot={planeSpot} />}
-      <DustPuffs lands={lands} />
+      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} free={free} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={SETTLE + 0.4} instant={instant} />
+      {idle && mode === "none" && <PlaneLabel spot={planeSpot} introAt={introAt} instant={instant} />}
       {voyage && <Voyage mobile={mobile || q.trees < 0.7} />}
-      <Post level={mobile ? Math.min(1, q.post) : q.post} />
+      <Post level={devPost ?? (mobile ? Math.min(1, q.post) : q.post)} />
     </>
   );
 }
 
+// Something taken off the desk into the hand: it lifts and is gone, and is set
+// back down the same way, so the desk never shows it popping in or out.
+function Held({ away, children }: { away: boolean; children: ReactNode }) {
+  const g = useRef<THREE.Group>(null);
+  const k = useRef(1);
+  useFrame((_, dt) => {
+    const o = g.current;
+    if (!o) return;
+    k.current += ((away ? 0 : 1) - k.current) * (1 - Math.exp(-Math.min(dt, 0.1) * (away ? 9 : 6)));
+    const e = clamp01(k.current);
+    o.visible = e > 0.004;
+    o.scale.setScalar(Math.max(0.001, e));
+    o.position.y = (1 - e) * 0.07;
+  });
+  return <group ref={g}>{children}</group>;
+}
+
 // "Fly" hint that floats over the paper plane so it's obviously interactive.
-function PlaneLabel({ spot }: { spot: { pos: [number, number, number] } }) {
+function PlaneLabel({ spot, introAt, instant }: { spot: { pos: [number, number, number] }; introAt: MutableRefObject<number | null>; instant: boolean }) {
   const [show, setShow] = useState(false);
-  useEffect(() => {
-    const t = window.setTimeout(() => setShow(true), (INTRO + 4) * 1000);
-    return () => window.clearTimeout(t);
-  }, []);
-  if (!show) return null;
+  // only once the desk has long settled, and it eases in like every other tag
+  useFrame(() => {
+    if (show) return;
+    const at = introAt.current;
+    if (instant ? nowS() - mountedAt.current > 1.5 : at !== null && nowS() - at > ARRIVE + 2.2) setShow(true);
+  });
+  const mountedAt = useRef(nowS());
   return (
     <Html position={[spot.pos[0], DESK.top + 0.1, spot.pos[2]]} center style={{ pointerEvents: "none" }} zIndexRange={[15, 0]}>
-      <GlassTag label="Fly" show />
+      <GlassTag label="Fly" show={show} />
     </Html>
   );
 }
@@ -1316,7 +1440,7 @@ export default function Room({
   const enterRef = useRef<((m: Mode) => void) | null>(null);
   const exitRef = useRef<(() => void) | null>(null);
   const apiRef = useRef<SceneApi | null>(null);
-  const input = useRef<Input>({ dx: 0, dy: 0, zoom: 0, dragging: false, last: 0, px: 0, py: 0, moved: false, sx: 0, sy: 0, keys: new Set() });
+  const input = useRef<Input>({ dx: 0, dy: 0, zoom: 0, dragging: false, last: 0, px: 0, py: 0, moved: false, sx: 0, sy: 0, tx: 0, ty: 0, pinch: 0, keys: new Set() });
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const down = useRef({ x: 0, y: 0, pinch: 0 });
   const [stage, setStage] = useState<Stage>("idle");
@@ -1332,15 +1456,12 @@ export default function Room({
     const t = window.setInterval(() => setHours(clockHours()), 20000);
     return () => window.clearInterval(t);
   }, [liveSky]);
-  const [progress, setProgress] = useState(0.2);
   const [ready, setReady] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [readerInfo, setReaderInfo] = useState<ReaderInfo>({ spread: 0, spreads: 1, ready: false });
   const [sky, setSky] = useState<{ label: string; night: number; hdr: string }>({ label: "", night: 0, hdr: "day" });
   const [skipIntro] = useState(introOff);
-  const mounted = useRef(performance.now());
-  const [caption, setCaption] = useState<string>();
   const q = useQuality();
   const [free, setFree] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -1354,34 +1475,42 @@ export default function Room({
     return () => document.removeEventListener("visibilitychange", v);
   }, []);
   useEffect(() => ambienceScene({ active }), [active]);
+  // the room going away (or being rebuilt by a hot reload) takes its music with it
+  useEffect(
+    () => () => {
+      flightMusicStop();
+      stopOwner("headphones", 0.6);
+    },
+    [],
+  );
   const [station, setStation] = useState(-1);
-  // the far world (stations, gate, sea) is built once the desk has settled
-  const [voyage, setVoyage] = useState(false);
+  // the far world (stations, gate, sea) is built behind the loader with everything
+  // else, so nothing appears on the horizon, or hitches, once the dark has lifted
+  const voyage = true;
 
-  useEffect(() => {
-    const h = clockHours();
-    const hh = Math.floor(h);
-    const mm = Math.floor((h - hh) * 60);
-    setCaption(`Kaunas · ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")} · ${skyState(h).label}`);
-  }, []);
+  // the 3D chunk has arrived
+  useEffect(() => loader.set(0.34), []);
 
   useEffect(() => {
     if (!ready) return;
-    setProgress(1);
-    // never a flash of loader: it holds for a beat even when everything is cached
-    const t = window.setTimeout(() => setRevealed(true), Math.max(650, 1500 - (performance.now() - mounted.current)));
+    loader.set(1);
+    if (process.env.NODE_ENV !== "production") ((window as unknown as { __t: Record<string, number> }).__t.ready = performance.now());
+    // the line finishes drawing before anything opens, and the loader is never
+    // a flash: at least 1.3 s from navigation even when everything is cached
+    const t = window.setTimeout(() => setRevealed(true), Math.max(650, 1300 - performance.now()));
     return () => window.clearTimeout(t);
   }, [ready]);
+  // the DOM layer lets go: into the canvas (which is drawing the same frame), or a plain fade when there is no arrival
+  useEffect(() => {
+    if (revealed) loader.finish(skipIntro || reduced ? "fade" : "open");
+  }, [revealed, skipIntro, reduced]);
 
+  // the glass UI comes in only once the camera has landed and the desk has settled
   const [introDone, setIntroDone] = useState(false);
   useEffect(() => {
     if (!revealed) return;
-    const t = window.setTimeout(() => setIntroDone(true), (skipIntro || reduced ? 0.4 : INTRO + 2.4) * 1000);
-    const t2 = window.setTimeout(() => setVoyage(true), (skipIntro || reduced ? 1.2 : ARRIVE + 1.5) * 1000);
-    return () => {
-      window.clearTimeout(t);
-      window.clearTimeout(t2);
-    };
+    const t = window.setTimeout(() => setIntroDone(true), (skipIntro || reduced ? 0.4 : ARRIVE + 0.7) * 1000);
+    return () => window.clearTimeout(t);
   }, [revealed, skipIntro, reduced]);
   const idle = stage === "idle" && active && revealed && introDone && mode === "none";
   const live = active;
@@ -1401,20 +1530,28 @@ export default function Room({
         if (k === "arrowright") apiRef.current?.reader.current?.next();
         if (k === "arrowleft") apiRef.current?.reader.current?.prev();
       }
-      if (mode === "plane" || (nav === "explore" && mode === "none")) {
+      if (mode === "plane" || mode === "camera" || (nav === "explore" && mode === "none")) {
+        // an arrow pressed on a slider belongs to the slider
+        if (k.startsWith("arrow") && (e.target as HTMLElement | null)?.tagName === "INPUT") return;
         input.current.keys.add(k);
         if (k.startsWith("arrow")) e.preventDefault();
       }
     };
     const ku = (e: KeyboardEvent) => input.current.keys.delete(e.key.toLowerCase());
+    // a key still held when the window loses focus never gets its keyup
+    const drop = () => input.current.keys.clear();
     window.addEventListener("keydown", kd);
     window.addEventListener("keyup", ku);
+    window.addEventListener("blur", drop);
     return () => {
       window.removeEventListener("keydown", kd);
       window.removeEventListener("keyup", ku);
+      window.removeEventListener("blur", drop);
+      drop();
     };
   }, [mode, exit, nav]);
 
+  const tap = useRef(false);
   const onDown = (e: React.PointerEvent) => {
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     down.current.x = e.clientX;
@@ -1422,6 +1559,8 @@ export default function Room({
     input.current.moved = false;
     input.current.dragging = true;
     input.current.last = performance.now();
+    // one finger down and up again without moving, in the camera: focus there
+    tap.current = mode === "camera" && pointers.current.size === 1 && e.button === 0;
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       down.current.pinch = Math.hypot(a.x - b.x, a.y - b.y);
@@ -1449,7 +1588,12 @@ export default function Room({
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y);
-      inp.zoom += (down.current.pinch - d) * 2.2;
+      if (mode === "camera") {
+        // two fingers carry the camera: half of each finger's travel is the pair's, the spread is a step in or out
+        inp.tx += (e.clientX - prev.x) / 2;
+        inp.ty += (e.clientY - prev.y) / 2;
+        inp.pinch += d - down.current.pinch;
+      } else inp.zoom += (down.current.pinch - d) * 2.2;
       down.current.pinch = d;
       inp.moved = true;
     } else {
@@ -1463,8 +1607,11 @@ export default function Room({
     inp.last = performance.now();
   };
   const onUp = (e: React.PointerEvent) => {
-    pointers.current.delete(e.pointerId);
-    if (mode === "book" && Math.abs(e.clientX - down.current.x) > 50 && Math.abs(e.clientX - down.current.x) > Math.abs(e.clientY - down.current.y)) {
+    // a release that began on a control (its press never reached the scene) is not a gesture on the scene
+    const mine = pointers.current.delete(e.pointerId);
+    if (mode === "camera" && mine && tap.current && !input.current.moved && e.type === "pointerup") apiRef.current?.focusAt(e.clientX, e.clientY);
+    tap.current = false;
+    if (mine && mode === "book" && Math.abs(e.clientX - down.current.x) > 50 && Math.abs(e.clientX - down.current.x) > Math.abs(e.clientY - down.current.y)) {
       if (e.clientX < down.current.x) apiRef.current?.reader.current?.next();
       else apiRef.current?.reader.current?.prev();
     }
@@ -1495,7 +1642,7 @@ export default function Room({
   return (
     <div
       className={`${geist.className} absolute inset-0 touch-none select-none`}
-      style={{ letterSpacing: TRACK.body, cursor: mode === "plane" ? "crosshair" : mode !== "none" && mode !== "music" ? "default" : !idle ? "default" : dragging ? "grabbing" : "grab" }}
+      style={{ letterSpacing: TRACK.body, cursor: mode === "plane" ? "crosshair" : mode === "camera" ? (dragging ? "grabbing" : "crosshair") : mode !== "none" && mode !== "music" ? "default" : !idle ? "default" : dragging ? "grabbing" : "grab" }}
       onPointerDown={(e) => {
         // a click during the arrival skips straight to the desk
         if (revealed && !introDone) {
@@ -1510,6 +1657,7 @@ export default function Room({
       onPointerUp={onUp}
       onPointerCancel={onUp}
       onWheel={(e) => {
+        if (mode === "camera") photoCtl.onWheel?.(e.ctrlKey ? e.deltaY * 2.5 : e.deltaY);
         if (!orbiting) return;
         // scroll up (or pinch out, which arrives as ctrl+wheel) moves in
         input.current.zoom += e.ctrlKey ? e.deltaY * 2.5 : e.deltaY;
@@ -1544,7 +1692,7 @@ export default function Room({
           apiRef={apiRef}
           onStage={setStage}
           onMode={setMode}
-          onProgress={(p) => setProgress((q) => Math.max(q, p))}
+          onProgress={(p) => loader.set(p)}
           onReady={() => setReady(true)}
           onHandoff={onHandoff}
           onReaderInfo={setReaderInfo}
@@ -1563,13 +1711,13 @@ export default function Room({
       <div
         className="pointer-events-none absolute inset-0 mix-blend-screen transition-opacity duration-700"
         style={{
-          opacity: stage === "idle" && mode === "none" && sky.hdr === "sunset" ? 1 : 0,
+          opacity: introDone && stage === "idle" && mode === "none" && sky.hdr === "sunset" ? 1 : 0,
           background: "radial-gradient(55% 60% at 0% 28%, rgb(255 190 125 / 0.28), rgb(255 170 110 / 0.06) 55%, transparent 75%)",
         }}
       />
       <div
         className="pointer-events-none absolute inset-0 transition-opacity duration-700"
-        style={{ opacity: q.post === 0 && (stage === "idle" || mode !== "none") ? 1 : 0, background: "radial-gradient(120% 95% at 50% 45%, transparent 55%, rgb(10 10 14 / 0.3) 100%)" }}
+        style={{ opacity: introDone && q.post === 0 && (stage === "idle" || mode !== "none") ? 1 : 0, background: "radial-gradient(120% 95% at 50% 45%, transparent 55%, rgb(10 10 14 / 0.3) 100%)" }}
       />
 
       <div className="pointer-events-none absolute inset-0 transition-opacity duration-500" style={{ opacity: idle ? 1 : 0 }}>
@@ -1613,7 +1761,24 @@ export default function Room({
       </AnimatePresence>
       <AnimatePresence>
         {mode === "piano" && <PianoUI key="piano" onExit={exit} />}
-        {mode === "camera" && <CameraUI key="camera" onExit={exit} onShoot={() => apiRef.current?.snap() ?? null} />}
+        {mode === "camera" && <CameraUI
+            key="camera"
+            mobile={isMobile}
+            onExit={exit}
+            onShoot={() => apiRef.current?.shoot() ?? null}
+            hours={hours}
+            live={liveSky}
+            onTime={(h) => {
+              setLiveSky(false);
+              setHours(h);
+              setTimeOverride(h);
+            }}
+            onLive={() => {
+              setLiveSky(true);
+              setTimeOverride(null);
+              setHours(clockHours());
+            }}
+          />}
         {mode === "music" && <MusicUI key="music" onExit={exit} />}
         {mode === "book" && (
           <BookUI
@@ -1658,7 +1823,6 @@ export default function Room({
         )}
       </AnimatePresence>
       <GlassStyles />
-      <Preloader progress={progress} done={revealed} caption={caption} />
     </div>
   );
 }
