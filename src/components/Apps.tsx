@@ -1287,9 +1287,9 @@ function Queue({ compact }: { compact: boolean }) {
               mac={!compact}
               onClick={() => player.toggle(t.id)}
               icon={
-                <span className="relative shrink-0">
+                <span className={`relative block shrink-0 overflow-hidden shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)] ${compact ? "my-2 h-12 w-12 rounded-[8px]" : "h-9 w-9 rounded-[6px]"}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={t.cover} alt="" className={`${compact ? "my-2 h-12 w-12 rounded-[8px]" : "h-9 w-9 rounded-[6px]"} object-cover shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)]`} />
+                  <img src={t.cover} alt="" width={96} height={96} className="h-full w-full object-cover" />
                   {on && p.playing && (
                     <span className="absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/40">
                       <Bars light />
@@ -1322,6 +1322,12 @@ function Records() {
   const [full, setFull] = useState(false);
   // closing the window quits the app, like Music; on the phone it keeps playing under the Dynamic Island
   useEffect(() => () => void (!useOS.getState().isMobile && player.stop()), []);
+  // Now Playing is dark to the top edge: the status bar turns white over it
+  useEffect(() => {
+    if (!compact) return;
+    useOS.getState().setHeroDark(full);
+    return () => useOS.getState().setHeroDark(false);
+  }, [compact, full]);
   if (!compact)
     return (
       <div className="relative h-full min-h-0">
@@ -1374,8 +1380,17 @@ function Records() {
             onDragEnd={(_, info) => (info.offset.y > 120 || info.velocity.y > 700) && setFull(false)}
             className="fixed inset-0 z-[45] overflow-hidden rounded-t-[24px]"
           >
-            <span className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+50px)] z-10 h-[5px] w-9 -translate-x-1/2 rounded-full bg-white/40" />
+            <span className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+52px)] z-10 h-[5px] w-9 -translate-x-1/2 rounded-full bg-white/40" />
             <NowPlaying compact />
+            <button
+              type="button"
+              aria-label="Close Now Playing"
+              onClick={() => setFull(false)}
+              data-glass=""
+              className={`${glass("btn-dark")} glass-press absolute bottom-[calc(env(safe-area-inset-bottom)+40px)] left-1/2 z-10 -ml-[22px] flex h-11 w-11 items-center justify-center rounded-full text-white/90`}
+            >
+              <ChevronLeft size={22} strokeWidth={2.4} className="-rotate-90" />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -2061,8 +2076,12 @@ function Terminal() {
     'Type "help" to see what you can do.',
   ]);
   const [v, setV] = useState("");
+  const { compact } = useChrome();
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  // what was typed before, for the up and down arrows
+  const past = useRef<string[]>([]);
+  const at = useRef(0);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
   }, [lines]);
@@ -2077,7 +2096,7 @@ function Terminal() {
       case "help":
         out.push(
           "whoami          who runs this machine",
-          "ls              apps in this profile",
+          "ls              apps on this machine",
           "open <app>      open an app",
           "sound on|off    toggle sound",
           "clear           clear the screen",
@@ -2114,7 +2133,7 @@ function Terminal() {
   };
 
   return (
-    <div onClick={() => input.current?.focus()} className="terminal on-dark flex h-full min-h-[260px] flex-col bg-[#1C1D20] text-[12px] leading-[1.6] text-[#E4E6EA]">
+    <div onClick={() => !compact && input.current?.focus()} className={`terminal on-dark flex h-full min-h-[260px] flex-col bg-[#1C1D20] leading-[1.6] text-[#E4E6EA] ${compact ? "pb-24 text-[13px]" : "text-[12px]"}`}>
       <Toolbar title={<span className="text-white/80">Terminal</span>} sub={<span className="text-white/40">zsh</span>} />
       <div className="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono">
         {lines.map((l, i) => (
@@ -2126,6 +2145,8 @@ function Terminal() {
           className="flex items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault();
+            if (v.trim()) past.current.push(v);
+            at.current = past.current.length;
             run(v);
             setV("");
           }}
@@ -2137,6 +2158,15 @@ function Terminal() {
             autoFocus={!isMobile}
             value={v}
             onChange={(e) => setV(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+              e.preventDefault();
+              at.current = Math.max(0, Math.min(past.current.length, at.current + (e.key === "ArrowUp" ? -1 : 1)));
+              setV(past.current[at.current] ?? "");
+            }}
+            aria-label="Command"
+            enterKeyHint="go"
+            autoCorrect="off"
             className="min-w-0 flex-1 bg-transparent text-[16px] text-white caret-[#E4E6EA] outline-none sm:text-[12px]"
             spellCheck={false}
             autoComplete="off"
@@ -2145,6 +2175,24 @@ function Terminal() {
         </form>
         <div ref={end} />
       </div>
+      {/* on the phone the commands are one tap away, above the home indicator */}
+      {compact && (
+        <div data-glass="" className="glass glass-btn-dark no-scrollbar fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+36px)] z-[30] flex h-[52px] items-center gap-1.5 overflow-x-auto overscroll-contain rounded-full px-2">
+          {["help", "whoami", "ls", "open projects", "open records", "sound", "clear"].map((c) => (
+            <button
+              type="button"
+              key={c}
+              onClick={(e) => {
+                e.stopPropagation();
+                run(c);
+              }}
+              className="glass-press h-9 shrink-0 rounded-full bg-white/[0.12] px-3.5 font-mono text-[13px] text-white"
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -19,6 +19,10 @@ export const Chrome = createContext<{ compact: boolean }>({ compact: false });
 export const useChrome = () => useContext(Chrome);
 // Inside a SplitView's detail the traffic lights sit over the sidebar, so the toolbar needs no inset.
 const InSplit = createContext(false);
+// On the phone a pushed screen hands its title and its way back to the app's navigation bar (PhoneOS), so
+// Back sits top-left where iOS puts it and the large title names the screen you are on.
+export type PhoneDetail = { title: string; back: () => void } | null;
+export const PhoneNav = createContext<((d: PhoneDetail) => void) | null>(null);
 
 export function Badge({ children, tone = "grey" }: { children: ReactNode; tone?: "grey" | "ink" | "live" }) {
   const cls =
@@ -568,6 +572,13 @@ export function SplitView({
   const { compact } = useChrome();
   const [pushed, setPushed] = useState(!!startPushed);
   const [folded, setFolded] = useState<string[]>([]);
+  const nav = useContext(PhoneNav);
+  const pushedTitle = sections.flatMap((x) => x.items).find((i) => i.id === selected)?.label ?? "";
+  useEffect(() => {
+    if (!compact || !nav) return;
+    nav(pushed ? { title: pushedTitle, back: () => setPushed(false) } : null);
+    return () => nav(null);
+  }, [compact, nav, pushed, pushedTitle]);
   if (compact) {
     return (
       <div className="relative overflow-hidden">
@@ -581,9 +592,11 @@ export function SplitView({
               transition={{ type: "spring", bounce: 0, duration: 0.4 }}
               className="min-h-[60vh]"
             >
-              <button type="button" onClick={() => setPushed(false)} className="press flex h-11 items-center gap-0.5 pl-2 pr-3 text-[17px] tracking-[-0.02em] text-[var(--accent)]">
-                <ChevronLeft size={24} strokeWidth={2.2} className="-mr-0.5" /> Back
-              </button>
+              {!nav && (
+                <button type="button" onClick={() => setPushed(false)} className="press flex h-11 items-center gap-0.5 pl-2 pr-3 text-[17px] tracking-[-0.02em] text-[var(--accent)]">
+                  <ChevronLeft size={24} strokeWidth={2.2} className="-mr-0.5" /> Back
+                </button>
+              )}
               <InSplit.Provider value>{detail}</InSplit.Provider>
             </motion.div>
           ) : (

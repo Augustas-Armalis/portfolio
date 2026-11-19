@@ -8,8 +8,8 @@ import { AppIcon, AppView, LiveWallpaper, player, usePlayer } from "./Apps";
 import { Bars } from "./Desktop";
 import { Monogram, PowerOverlay } from "./Login";
 import { Glyph, ICONS, iconBackground } from "./icons";
-import { Check, Pause, Play, X } from "lucide-react";
-import { Chrome, EASE_OUT, glass, useGlassScope } from "./ui";
+import { Check, ChevronLeft, Pause, Play, X } from "lucide-react";
+import { Chrome, EASE_OUT, glass, PhoneNav, useGlassScope, type PhoneDetail } from "./ui";
 import { useClock, useDate } from "./useClock";
 
 // iPhone-style OS: lock screen that lifts away, a home screen of icons, and apps
@@ -36,7 +36,7 @@ function Island() {
   useEffect(() => {
     if (!track) setBig(false);
   }, [track]);
-  const size = { idle: [126, 37, 19], music: [196, 37, 19], sent: [184, 37, 19], big: [356, 172, 44] }[mode];
+  const size = { idle: [126, 37, 19], music: [168, 37, 19], sent: [168, 37, 19], big: [356, 172, 44] }[mode];
   const onTap = () => {
     if (held.current) return;
     if (mode === "big") return setBig(false);
@@ -205,6 +205,8 @@ function Lock() {
 // ---------- home ----------
 
 type Origin = { x: number; y: number; w: number; h: number };
+// iOS calls it Settings
+const phoneTitle = (id: AppId) => (id === "settings" ? "Settings" : apps[id].title);
 
 function HomeIcon({ id, label, onOpen }: { id: AppId; label?: string; onOpen: (id: AppId, o: Origin) => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -329,6 +331,10 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
   const { scrollY } = useScroll({ container: ref });
   const bar = useTransform(scrollY, [24, 44], [0, 1]);
   const big = useTransform(scrollY, [0, 36], [1, 0]);
+  // a pushed screen (a Settings pane, a Taste list): Back top-left, and the large title names it
+  const [detail, setDetail] = useState<PhoneDetail>(null);
+  const title = detail?.title ?? phoneTitle(id);
+  const btn = dark ? `${glass("btn-dark")} text-white/90` : `${glass("btn")} text-[#3C3C43]/75`;
   return (
     <div className={`phone-app absolute inset-0 ${ground}`}>
       <motion.div
@@ -336,34 +342,52 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
         data-glass=""
         className={`glass pointer-events-none absolute inset-x-0 top-0 z-20 flex h-[calc(env(safe-area-inset-top)+98px)] items-end justify-center pb-[12px] ${dark ? "ios-bar-dark" : "ios-bar"}`}
       >
-        <span className={`text-[17px] font-semibold tracking-[-0.02em] ${dark ? "text-white" : "text-ink"}`}>{apps[id].title}</span>
+        <span className={`text-[17px] font-semibold tracking-[-0.02em] ${dark ? "text-white" : "text-ink"}`}>{title}</span>
       </motion.div>
       <button
         type="button"
         onClick={onClose}
-        aria-label={`Close ${apps[id].title}`}
+        aria-label={`Close ${phoneTitle(id)}`}
         data-glass=""
-        className={`press absolute right-4 top-[calc(env(safe-area-inset-top)+60px)] z-30 flex h-9 w-9 items-center justify-center rounded-full ${
-          dark ? `${glass("btn-dark")} text-white/90` : `${glass("btn")} text-[#3C3C43]/75`
-        }`}
+        className={`glass-press absolute right-4 top-[calc(env(safe-area-inset-top)+58px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
       >
-        <X size={18} className="bold" />
+        <X size={20} className="bold" />
       </button>
+      <AnimatePresence>
+        {detail && (
+          <motion.button
+            key="back"
+            type="button"
+            onClick={detail.back}
+            aria-label="Back"
+            data-glass=""
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.12 } }}
+            transition={{ type: "spring", bounce: 0.2, duration: 0.35 }}
+            className={`absolute left-4 top-[calc(env(safe-area-inset-top)+58px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
+          >
+            <ChevronLeft size={24} strokeWidth={2.4} className="-ml-0.5" />
+          </motion.button>
+        )}
+      </AnimatePresence>
       <div ref={ref} className="absolute inset-0 overflow-y-auto overscroll-contain pb-12">
         {/* a contact card and an About sheet carry their own big name, so no large title over them */}
-        {id === "contact" || id === "about" || id === "blocks" || id === "projects" || id === "games" || projects[id] ? (
+        {id === "contact" || id === "about" || id === "blocks" || id === "doom" || id === "projects" || id === "games" || projects[id] ? (
           <div className={id === "contact" || id === "about" || (projects[id]?.kind === "code") ? "h-[calc(env(safe-area-inset-top)+104px)]" : "h-[calc(env(safe-area-inset-top)+58px)]"} />
         ) : (
         <motion.h1
           style={{ opacity: big }}
-          className="pb-2 pl-4 pr-16 pt-[calc(env(safe-area-inset-top)+58px)] text-[34px] font-bold leading-[41px] tracking-[0.011em]"
+          className={`pb-2 pl-4 pr-16 text-[34px] font-bold leading-[41px] tracking-[0.011em] ${detail ? "pt-[calc(env(safe-area-inset-top)+110px)]" : "pt-[calc(env(safe-area-inset-top)+60px)]"}`}
         >
-          {apps[id].title}
+          {title}
         </motion.h1>
         )}
-        <Chrome.Provider value={{ compact: true }}>
-          <AppView id={id} />
-        </Chrome.Provider>
+        <PhoneNav.Provider value={setDetail}>
+          <Chrome.Provider value={{ compact: true }}>
+            <AppView id={id} />
+          </Chrome.Provider>
+        </PhoneNav.Provider>
       </div>
     </div>
   );
@@ -447,7 +471,7 @@ function AppWindow({ id, origin, onClosed }: { id: AppId; origin: Origin | null;
 
   const darkApp = id === "terminal" || id === "doom" || id === "blocks";
   // sidebar apps become iOS grouped lists: grey ground, title on the same ground
-  const grouped = ["projects", "games", "taste", "settings", "contact", "records"].includes(id) || projects[id]?.kind === "code";
+  const grouped = ["projects", "games", "taste", "kit", "settings", "contact", "records"].includes(id) || projects[id]?.kind === "code";
   const ground = darkApp ? "bg-[#1C1D20] text-white" : grouped ? "bg-[#F2F2F7] text-ink" : "bg-white text-ink";
   return (
     <motion.div className="phone-app absolute inset-0 z-[60] will-change-transform" style={{ x, y, scale, clipPath }}>
