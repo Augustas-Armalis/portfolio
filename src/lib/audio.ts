@@ -50,6 +50,36 @@ export function tapMediaElement(el: HTMLMediaElement) {
   return src;
 }
 
+// Wake the output (call from a user gesture: play buttons, the plane taking off).
+export function resumeAudio() {
+  if (typeof window === "undefined" || typeof AudioContext === "undefined") return;
+  getAudio();
+}
+
+// What the music is doing right now, for the world to listen to: the sky leans
+// toward evening while something plays and breathes with its energy.
+// `playing` is set by whoever owns the track; `level` and `bass` (0..1) are
+// smoothed here, once a frame, from the shared analyser.
+export const music = { playing: false, level: 0, bass: 0 };
+let fbuf: Uint8Array<ArrayBuffer> | null = null;
+export function sampleMusic(dt: number) {
+  let lvl = 0;
+  let bass = 0;
+  if (music.playing && analyser) {
+    fbuf ??= new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(fbuf);
+    let a = 0;
+    for (let i = 1; i <= 96; i++) a += fbuf[i];
+    let b = 0;
+    for (let i = 1; i <= 8; i++) b += fbuf[i];
+    lvl = Math.min(1, (a / 96 / 255) * 2.2);
+    bass = Math.min(1, (b / 8 / 255) * 1.25);
+  }
+  const k = (cur: number, to: number) => cur + (to - cur) * (1 - Math.exp(-dt * (to > cur ? 14 : 2.4)));
+  music.level = k(music.level, lvl);
+  music.bass = k(music.bass, bass);
+}
+
 export function note(midi: number, when = 0, dur = 1.8, vel = 0.8) {
   if (!useOS.getState().sound) return;
   // real sampled grand (lib/piano.ts); the synth below is only a fallback

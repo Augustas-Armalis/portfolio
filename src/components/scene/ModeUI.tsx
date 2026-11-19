@@ -3,34 +3,36 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
-import { getAnalyser, tapMediaElement } from "@/lib/audio";
+import { getAnalyser, music, resumeAudio, tapMediaElement } from "@/lib/audio";
 import { play } from "@/lib/sfx";
+import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
 
 // DOM controls for the focused desk modes. Quiet, glassy, dark-on-light pills
 // that sit over the 3D scene. Every mode has the same exit: Esc or "Put down".
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-const pill = "rounded-full bg-black/35 text-white backdrop-blur-xl shadow-[0_8px_30px_-12px_rgb(0_0_0/0.5),inset_0_0.5px_0_rgb(255_255_255/0.15)]";
-const btn = "press pointer-events-auto rounded-full px-3.5 h-8 text-[13px] font-medium text-white/90 hov:hover:bg-white/15 hov:hover:text-white";
+const btn = "lg-btn pointer-events-auto h-8 px-3.5 text-[13px] font-medium text-white/92";
 
+// The top capsule every mode shares: what you're holding, a hint, and the way out.
 export function TopBar({ title, hint, exitLabel = "Put down", onExit }: { title: string; hint?: string; exitLabel?: string; onExit: () => void }) {
   return (
-    <motion.div
-      className="pointer-events-none absolute inset-x-0 top-4 z-30 flex justify-center px-4"
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.35, ease: EASE }}
-    >
-      <div className={`${pill} flex items-center gap-1 p-1 pl-4`}>
-        <span className="text-[13px] font-semibold">{title}</span>
-        {hint && <span className="ml-2 hidden text-[12px] text-white/60 sm:inline">{hint}</span>}
-        <button type="button" className={`${btn} ml-2 bg-white/12`} onClick={(e) => (e.stopPropagation(), onExit())}>
+    <div className="pointer-events-none absolute inset-x-0 top-4 z-30 flex justify-center px-4">
+      <Glass
+        className="flex items-center gap-1 p-1 pl-4"
+        initial={{ ...GLASS_IN, y: -10 }}
+        animate={GLASS_ON}
+        exit={{ ...GLASS_IN, y: -10 }}
+        transition={GLASS_SPRING}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <span className="text-[13px] font-semibold tracking-[-0.02em]">{title}</span>
+        {hint && <span className="ml-2 hidden text-[12.5px] text-white/65 sm:inline">{hint}</span>}
+        <button type="button" className={`${btn} lg-chip ml-2`} onClick={(e) => (e.stopPropagation(), onExit())}>
           {exitLabel}
-          <span className="ml-1.5 text-white/45">Esc</span>
+          <span className="ml-1.5 text-white/50">Esc</span>
         </button>
-      </div>
-    </motion.div>
+      </Glass>
+    </div>
   );
 }
 
@@ -38,10 +40,10 @@ function Bottom({ children }: { children: React.ReactNode }) {
   return (
     <motion.div
       className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-4"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 10 }}
-      transition={{ duration: 0.4, ease: EASE, delay: 0.1 }}
+      initial={GLASS_IN}
+      animate={GLASS_ON}
+      exit={GLASS_IN}
+      transition={{ ...GLASS_SPRING, delay: 0.06 }}
     >
       {children}
     </motion.div>
@@ -139,11 +141,14 @@ type Track = { id: string; title: string; artist: string; file: string; cover: s
 let media: HTMLAudioElement | null = null;
 let tapped = false;
 
+// Now playing, as one Liquid Glass capsule: artwork, title, a live waveform,
+// previous / play / next, and a scrubber along the bottom.
 export function MusicUI({ onExit }: { onExit: () => void }) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [i, setI] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [t, setT] = useState(0);
+  const [len, setLen] = useState(0);
   const wave = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -159,12 +164,28 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
     const a = media;
     const tick = () => setT(a.currentTime);
     const end = () => setI((x) => x + 1);
+    const meta = () => setLen(Number.isFinite(a.duration) ? a.duration : 0);
+    const on = () => {
+      setPlaying(true);
+      music.playing = true;
+    };
+    const off = () => {
+      setPlaying(false);
+      music.playing = false;
+    };
     a.addEventListener("timeupdate", tick);
     a.addEventListener("ended", end);
+    a.addEventListener("loadedmetadata", meta);
+    a.addEventListener("playing", on);
+    a.addEventListener("pause", off);
     return () => {
       a.pause();
+      music.playing = false;
       a.removeEventListener("timeupdate", tick);
       a.removeEventListener("ended", end);
+      a.removeEventListener("loadedmetadata", meta);
+      a.removeEventListener("playing", on);
+      a.removeEventListener("pause", off);
     };
   }, []);
 
@@ -179,8 +200,10 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
         /* already tapped or unsupported */
       }
     }
+    // the element plays through the Web Audio graph, which sleeps until a gesture
+    resumeAudio();
     if (!media.src.endsWith(track.file)) media.src = track.file;
-    void media.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+    void media.play().catch(() => setPlaying(false));
   }, [track]);
 
   // start as soon as the headphones are picked up, and on track change
@@ -188,86 +211,105 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
     if (track) start();
   }, [track, start]);
 
-  // live spectrum: soft rounded bars
+  // live waveform: mirrored rounded bars; a slow idle ripple when nothing plays
   useEffect(() => {
     let raf = 0;
     const an = getAnalyser();
     const buf = an ? new Uint8Array(an.frequencyBinCount) : null;
-    const lvl = new Float32Array(18);
-    const draw = () => {
+    const N = 30;
+    const lvl = new Float32Array(N);
+    let cw = 0;
+    let ch = 0;
+    const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
       const c = wave.current;
       if (!c) return;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = Math.round(c.clientWidth * dpr);
+      const h = Math.round(c.clientHeight * dpr);
+      if (!w || !h) return;
+      if (w !== cw || h !== ch) {
+        c.width = cw = w;
+        c.height = ch = h;
+      }
       const g = c.getContext("2d")!;
-      const w = (c.width = c.clientWidth * 2);
-      const h = (c.height = c.clientHeight * 2);
-      if (an && buf) an.getByteFrequencyData(buf);
+      const live = music.playing && an && buf;
+      if (live) an.getByteFrequencyData(buf);
       g.clearRect(0, 0, w, h);
-      const n = lvl.length;
-      const bw = w / n;
-      for (let i = 0; i < n; i++) {
-        const lo = Math.floor(Math.pow(i / n, 1.8) * 120) + 1;
-        const v = buf ? buf[lo] / 255 : 0;
-        lvl[i] += (v - lvl[i]) * (v > lvl[i] ? 0.5 : 0.12);
-        const bh = Math.max(h * 0.12, lvl[i] * h * 0.95);
-        g.fillStyle = "rgba(255,255,255,0.88)";
-        const x = i * bw + bw * 0.22;
-        const r = Math.min(bw * 0.28, bh / 2);
+      const step = w / N;
+      const bw = Math.max(2 * dpr, step * 0.46);
+      for (let k = 0; k < N; k++) {
+        // centre-out: the middle bars carry the low end
+        const m = Math.abs(k - (N - 1) / 2) / ((N - 1) / 2);
+        const bin = 2 + Math.floor(Math.pow(m, 1.5) * 110);
+        const v = live ? Math.pow(buf[bin] / 255, 1.25) * (1 - m * 0.25) : 0.1 + 0.07 * Math.sin(now / 520 + k * 0.55);
+        lvl[k] += (v - lvl[k]) * (v > lvl[k] ? 0.55 : 0.14);
+        const bh = Math.max(bw, lvl[k] * h * 0.96);
+        g.fillStyle = `rgba(255,255,255,${(0.55 + 0.45 * lvl[k]).toFixed(3)})`;
         g.beginPath();
-        g.roundRect(x, (h - bh) / 2, bw * 0.56, bh, r);
+        g.roundRect(k * step + (step - bw) / 2, (h - bh) / 2, bw, bh, bw / 2);
         g.fill();
       }
     };
-    draw();
+    raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, []);
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-  const dur = track?.duration ?? 1;
+  const dur = len || track?.duration || 1;
   const bar = useRef<HTMLDivElement>(null);
   const seek = (clientX: number) => {
     const el = bar.current;
     if (!el || !media) return;
     const r = el.getBoundingClientRect();
-    media.currentTime = Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * dur;
+    const to = Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * dur;
+    media.currentTime = to;
+    setT(to);
   };
-  const glass =
-    "border border-white/30 bg-white/16 shadow-[0_24px_60px_-20px_rgb(0_0_0/0.55),inset_0_1px_0_rgb(255_255_255/0.45),inset_0_-1px_0_rgb(255_255_255/0.08)] backdrop-blur-2xl backdrop-saturate-[1.8]";
-  const icon = "press pointer-events-auto grid place-items-center rounded-full text-white/90 transition-colors hov:hover:bg-white/15 hov:hover:text-white";
+  const icon = "lg-btn pointer-events-auto grid place-items-center text-white";
+  const step = (d: number) => {
+    play("pop", { volume: 0.35 });
+    setI((x) => x + d);
+  };
   return (
     <>
       <TopBar title="Music" hint="Headphones on" onExit={onExit} />
-      <motion.div
-        className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-3"
-        initial={{ opacity: 0, y: 40, scale: 0.94 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 40, scale: 0.94 }}
-        transition={{ type: "spring", stiffness: 300, damping: 28 }}
-      >
-        <div className={`${glass} pointer-events-auto w-full max-w-[600px] rounded-[28px] p-3 text-white`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-3.5">
-            <AnimatePresence mode="popLayout" initial={false}>
-              {track && (
-                <motion.img
-                  key={track.cover}
-                  src={track.cover}
-                  alt=""
-                  className="h-[60px] w-[60px] shrink-0 rounded-[14px] object-cover shadow-[0_10px_24px_-8px_rgb(0_0_0/0.6)]"
-                  initial={{ opacity: 0, scale: 0.85 }}
-                  animate={{ opacity: 1, scale: playing ? 1 : 0.92 }}
-                  exit={{ opacity: 0, scale: 0.85 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 26 }}
-                />
-              )}
-            </AnimatePresence>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] font-semibold tracking-[-0.01em] [text-shadow:0_1px_8px_rgb(0_0_0/0.25)]">{track?.title ?? "Loading…"}</div>
-              <div className="truncate text-[12px] text-white/70">{track?.artist}</div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-3">
+        <Glass
+          radius={34}
+          className="pointer-events-auto w-full max-w-[540px] p-2.5 pb-2"
+          initial={{ opacity: 0, y: 46, scale: 0.9 }}
+          animate={GLASS_ON}
+          exit={{ opacity: 0, y: 46, scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 320, damping: 26, mass: 0.9 }}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-3">
+            <div className="relative h-[58px] w-[58px] shrink-0">
+              <AnimatePresence initial={false}>
+                {track && (
+                  <motion.img
+                    key={track.cover}
+                    src={track.cover}
+                    alt=""
+                    className="absolute inset-0 h-full w-full rounded-[18px] object-cover shadow-[0_10px_22px_-8px_rgb(0_0_0/0.6),inset_0_0_0_0.5px_rgb(255_255_255/0.3)]"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: playing ? 1 : 0.9 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ type: "spring", stiffness: 380, damping: 24 }}
+                  />
+                )}
+              </AnimatePresence>
             </div>
-            <canvas ref={wave} className="h-8 w-[88px] shrink-0" aria-hidden />
-            <div className="flex items-center">
-              <button type="button" aria-label="Previous" className={`${icon} h-9 w-9`} onClick={() => setI((x) => x - 1)}>
-                <SkipBack size={18} fill="currentColor" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[15px] font-semibold leading-tight tracking-[-0.025em]">{track?.title ?? "Loading"}</div>
+              <div className="mt-0.5 truncate text-[12.5px] leading-tight text-white/80">{track?.artist ?? " "}</div>
+            </div>
+            <canvas ref={wave} className="h-9 w-[92px] shrink-0 max-[420px]:hidden" aria-hidden />
+            <div className="flex shrink-0 items-center">
+              <button type="button" aria-label="Previous" className={`${icon} h-9 w-9`} onClick={() => step(-1)}>
+                <SkipBack size={17} fill="currentColor" strokeWidth={0} />
               </button>
               <button
                 type="button"
@@ -275,24 +317,33 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
                 className={`${icon} h-11 w-11`}
                 onClick={() => {
                   if (!media) return;
-                  if (playing) {
-                    media.pause();
-                    setPlaying(false);
-                  } else start();
+                  if (playing) media.pause();
+                  else start();
                 }}
               >
-                {playing ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.span
+                    key={playing ? "pause" : "play"}
+                    className="grid place-items-center"
+                    initial={{ opacity: 0, scale: 0.5, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, scale: 0.5, filter: "blur(4px)" }}
+                    transition={{ type: "spring", stiffness: 520, damping: 30 }}
+                  >
+                    {playing ? <Pause size={24} fill="currentColor" strokeWidth={0} /> : <Play size={24} fill="currentColor" strokeWidth={0} />}
+                  </motion.span>
+                </AnimatePresence>
               </button>
-              <button type="button" aria-label="Next" className={`${icon} h-9 w-9`} onClick={() => setI((x) => x + 1)}>
-                <SkipForward size={18} fill="currentColor" />
+              <button type="button" aria-label="Next" className={`${icon} h-9 w-9`} onClick={() => step(1)}>
+                <SkipForward size={17} fill="currentColor" strokeWidth={0} />
               </button>
             </div>
           </div>
-          <div className="mt-2.5 flex items-center gap-2.5 px-1 text-[10.5px] font-medium tabular-nums text-white/65">
+          <div className="mt-1.5 flex items-center gap-2.5 px-1.5 text-[11px] font-medium tabular-nums text-white/70">
             <span className="w-8">{fmt(t)}</span>
             <div
               ref={bar}
-              className="group relative h-4 flex-1 cursor-pointer"
+              className="group relative h-5 flex-1 cursor-pointer touch-none"
               onPointerDown={(e) => {
                 (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
                 seek(e.clientX);
@@ -303,36 +354,17 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
               role="slider"
               aria-label="Seek"
               aria-valuemin={0}
-              aria-valuemax={dur}
+              aria-valuemax={Math.round(dur)}
               aria-valuenow={Math.round(t)}
             >
-              <div className="absolute inset-x-0 top-1/2 h-[5px] -translate-y-1/2 overflow-hidden rounded-full bg-white/22 transition-[height] group-hover:h-[7px]">
-                <div className="h-full rounded-full bg-white/90" style={{ width: `${Math.min(100, (t / dur) * 100)}%` }} />
+              <div className="absolute inset-x-0 top-1/2 h-[4px] -translate-y-1/2 overflow-hidden rounded-full bg-white/24 shadow-[inset_0_0.5px_1px_rgb(0_0_0/0.25)] transition-[height] duration-200 group-hover:h-[7px] group-active:h-[7px]">
+                <div className="h-full origin-left rounded-full bg-white" style={{ width: `${Math.min(100, (t / dur) * 100)}%` }} />
               </div>
             </div>
             <span className="w-8 text-right">{fmt(dur)}</span>
           </div>
-          {tracks.length > 1 && (
-            <div className="mt-2 flex gap-1.5 px-0.5">
-              {tracks.map((tr, k) => {
-                const on = track?.id === tr.id;
-                return (
-                  <button
-                    key={tr.id}
-                    type="button"
-                    onClick={() => setI(k)}
-                    className={`press pointer-events-auto flex min-w-0 items-center gap-2 rounded-full py-1 pl-1 pr-3 text-[11.5px] font-medium transition-colors ${on ? "bg-white/85 text-black" : "bg-white/10 text-white/80 hov:hover:bg-white/18"}`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={tr.cover} alt="" className="h-5 w-5 rounded-full object-cover" />
-                    <span className="truncate">{tr.title}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </motion.div>
+        </Glass>
+      </div>
     </>
   );
 }
@@ -342,9 +374,9 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
 export function BookUI({ info, onExit, onPrev, onNext, onApp }: { info: { spread: number; spreads: number; ready: boolean }; onExit: () => void; onPrev: () => void; onNext: () => void; onApp: () => void }) {
   return (
     <>
-      <TopBar title="Žiemos naktys šviesesnės" hint="Click a page or use ← →" exitLabel="Close book" onExit={onExit} />
+      <TopBar title="Žiemos naktys šviesesnės" hint="Click or drag a page, or use ← →" exitLabel="Close book" onExit={onExit} />
       <Bottom>
-        <div className={`${pill} pointer-events-auto flex items-center gap-1 p-1`} onClick={(e) => e.stopPropagation()}>
+        <Glass className="pointer-events-auto flex items-center gap-1 p-1" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
           <button type="button" className={btn} onClick={onPrev} aria-label="Previous page">
             ←
           </button>
@@ -352,7 +384,7 @@ export function BookUI({ info, onExit, onPrev, onNext, onApp }: { info: { spread
           <button type="button" className={btn} onClick={onNext} aria-label="Next page">
             →
           </button>
-          <span className="mx-1 h-4 w-px bg-white/20" />
+          <span className="mx-1 h-4 w-px bg-white/25" />
           <button type="button" className={btn} onClick={onApp}>
             Read in the Novel app
           </button>
@@ -362,7 +394,7 @@ export function BookUI({ info, onExit, onPrev, onNext, onApp }: { info: { spread
           <a className={btn + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.pdf" download>
             PDF
           </a>
-        </div>
+        </Glass>
       </Bottom>
     </>
   );
@@ -375,14 +407,14 @@ export function SketchUI({ onExit, onClear, onSave }: { onExit: () => void; onCl
     <>
       <TopBar title="Sketchbook" hint="Draw on the page" onExit={onExit} />
       <Bottom>
-        <div className={`${pill} pointer-events-auto flex items-center gap-1 p-1`} onClick={(e) => e.stopPropagation()}>
+        <Glass className="pointer-events-auto flex items-center gap-1 p-1" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
           <button type="button" className={btn} onClick={onClear}>
             Clear
           </button>
           <button type="button" className={btn} onClick={onSave}>
             Save PNG
           </button>
-        </div>
+        </Glass>
       </Bottom>
     </>
   );
@@ -427,21 +459,21 @@ export function NavBar({
   onLive: () => void;
   label: string;
 }) {
-  const seg = (on: boolean) =>
-    `press pointer-events-auto h-7 rounded-full px-3 text-[12px] font-medium transition-colors ${on ? "bg-white/85 text-black shadow-[0_1px_6px_rgb(0_0_0/0.18)]" : "text-white/85 hov:hover:text-white"}`;
+  const seg = (on: boolean) => `lg-btn pointer-events-auto h-7 px-3 text-[12.5px] font-medium ${on ? "lg-on" : "text-white/90"}`;
   return (
-    <motion.div
-      className="pointer-events-none absolute bottom-5 left-4 z-30 max-sm:bottom-auto max-sm:left-3 max-sm:top-14"
-      initial={{ opacity: 0, y: 12, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 12, scale: 0.97 }}
-      transition={{ type: "spring", stiffness: 380, damping: 32 }}
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="pointer-events-auto flex flex-col gap-1.5 rounded-[18px] border border-white/25 bg-white/14 p-1.5 text-white shadow-[0_10px_40px_-12px_rgb(0_0_0/0.45),inset_0_1px_0_rgb(255_255_255/0.35)] backdrop-blur-2xl backdrop-saturate-150">
+    <div className="pointer-events-none absolute bottom-5 left-4 z-30 max-sm:bottom-auto max-sm:left-3 max-sm:top-14">
+      <Glass
+        radius={22}
+        className="pointer-events-auto flex flex-col gap-1.5 p-1.5"
+        initial={GLASS_IN}
+        animate={GLASS_ON}
+        exit={GLASS_IN}
+        transition={GLASS_SPRING}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center gap-1">
-          <div className="flex rounded-full bg-black/20 p-0.5">
+          <div className="flex rounded-full bg-black/18 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.2)]">
             <button type="button" className={seg(nav === "orbit")} onClick={() => onNav("orbit")}>
               Orbit
             </button>
@@ -453,10 +485,11 @@ export function NavBar({
             {nav === "explore" && (
               <motion.button
                 type="button"
-                className="press pointer-events-auto h-7 rounded-full bg-black/20 px-3 text-[12px] font-medium text-white/90 hov:hover:text-white"
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -6 }}
+                className="lg-btn lg-chip pointer-events-auto h-7 px-3 text-[12.5px] font-medium text-white/92"
+                initial={{ opacity: 0, x: -6, scale: 0.94 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -6, scale: 0.94 }}
+                transition={GLASS_SPRING}
                 onClick={onBack}
               >
                 Back to desk
@@ -465,7 +498,7 @@ export function NavBar({
           </AnimatePresence>
         </div>
         <div className="flex items-center gap-2 px-1.5 pb-0.5">
-          <span className="w-10 text-[11px] font-semibold tabular-nums">{fmtH(hours)}</span>
+          <span className="w-10 text-[12px] font-semibold tabular-nums">{fmtH(hours)}</span>
           <input
             type="range"
             min={0}
@@ -478,14 +511,14 @@ export function NavBar({
           />
           <button
             type="button"
-            className={`press pointer-events-auto rounded-full px-2 py-0.5 text-[11px] font-semibold ${live ? "bg-white/85 text-black" : "bg-black/25 text-white/85 hov:hover:text-white"}`}
+            className={`lg-btn pointer-events-auto px-2 py-0.5 text-[11.5px] font-semibold ${live ? "lg-on" : "lg-chip text-white/90"}`}
             onClick={onLive}
           >
             {live ? "Live" : "Go live"}
           </button>
         </div>
-        <div className="px-2 pb-0.5 text-[10px] text-white/60">{nav === "explore" ? "Drag to look · W A S D to move · scroll to fly forward" : label}</div>
-      </div>
-    </motion.div>
+        <div className="px-2 pb-0.5 text-[11px] text-white/65">{nav === "explore" ? "Drag to look · W A S D to move · scroll to fly forward" : label}</div>
+      </Glass>
+    </div>
   );
 }

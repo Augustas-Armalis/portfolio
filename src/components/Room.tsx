@@ -9,6 +9,8 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type Mutab
 import { owner, type UserId } from "@/content";
 import { play } from "@/lib/sfx";
 import { useOS } from "@/store";
+import { music, sampleMusic } from "@/lib/audio";
+import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { Flowers, Grass } from "./scene/Grass";
 import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone, glint } from "./scene/models";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
@@ -216,19 +218,19 @@ function Piece({
 
 const ICONS: Record<string, LucideIcon> = { Piano: Piano, Camera: CameraIcon, Music: Headphones2, Read: BookOpen, Sketch: PenLine, Fly: Send, Start: Power };
 
-// Liquid Glass hover tag: a small frosted capsule with an icon, springing in.
+// Liquid Glass hover tag: a small capsule with an icon, springing in.
 function GlassTag({ label, show }: { label: string; show: boolean }) {
   const I = ICONS[label];
   return (
-    <motion.div
+    <Glass
       initial={false}
-      animate={{ opacity: show ? 1 : 0, y: show ? 0 : 6, scale: show ? 1 : 0.92 }}
-      transition={{ type: "spring", stiffness: 520, damping: 30 }}
-      className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/40 bg-white/22 py-1 pl-2 pr-2.5 text-[12px] font-semibold text-white shadow-[0_8px_24px_-8px_rgb(0_0_0/0.45),inset_0_1px_0_rgb(255_255_255/0.5)] backdrop-blur-xl backdrop-saturate-150 [text-shadow:0_1px_6px_rgb(0_0_0/0.35)]"
+      animate={{ opacity: show ? 1 : 0, y: show ? 0 : 6, scale: show ? 1 : 0.9 }}
+      transition={GLASS_SPRING}
+      className="flex h-7 items-center gap-1.5 whitespace-nowrap pl-2.5 pr-3 text-[12.5px] font-semibold tracking-[-0.02em]"
     >
       {I && <I size={13} strokeWidth={2.2} />}
       {label}
-    </motion.div>
+    </Glass>
   );
 }
 
@@ -415,6 +417,8 @@ function Scene({
     return o;
   }, []);
   const skyTick = useRef(-1);
+  const musicClock = useRef(nowS());
+  const musicDrift = useRef({ t: 0 });
   const lastH = useRef(-1);
   const lastLabel = useRef("");
 
@@ -766,18 +770,33 @@ function Scene({
 
   const updateSky = (now: number) => {
     SKY_U.uTime.value = now;
-    const h = clockHours();
-    if (now - skyTick.current < 1 && skyTick.current > 0 && Math.abs(h - lastH.current) < 0.003) return;
+    // While music plays the day leans toward evening and on into night, a slow
+    // time-lapse; when it stops the sky eases back to the real hour. The
+    // music's energy breathes in the stars, the glow and the light.
+    const dtS = Math.min(0.1, Math.max(0, now - musicClock.current));
+    musicClock.current = now;
+    sampleMusic(dtS);
+    const md = musicDrift.current;
+    md.t = Math.max(0, md.t + (music.playing ? dtS : -dtS * 5));
+    md.t = Math.min(md.t, 90);
+    const lean = 1 - Math.exp(-md.t / 22);
+    SKY_U.uPulse.value = music.level * 0.7 + music.bass * 0.5;
+    let h = clockHours();
+    const DUSK = 21.6;
+    if (lean > 0.0005 && h > 5 && h < DUSK) h += (DUSK - h) * lean;
+    const pulsing = SKY_U.uPulse.value > 0.004 || md.t > 0;
+    if (!pulsing && now - skyTick.current < 1 && skyTick.current > 0 && Math.abs(h - lastH.current) < 0.003) return;
     skyTick.current = now;
     lastH.current = h;
     const s = skyState(h);
     applySky(s);
-    gl.toneMappingExposure = s.exposure;
+    const beat = SKY_U.uPulse.value;
+    gl.toneMappingExposure = s.exposure * (1 + beat * 0.07);
     fog.color.copy(s.horizon);
     if (sun.current) {
       sun.current.position.copy(s.keyDir).multiplyScalar(6).add(sunTarget.position);
       sun.current.color.copy(s.keyCol);
-      sun.current.intensity = s.keyI * 0.85;
+      sun.current.intensity = s.keyI * 0.85 * (1 + beat * 0.25);
     }
     if (hemi.current) {
       hemi.current.color.copy(s.amb).multiplyScalar(1.6);
@@ -983,6 +1002,10 @@ function Scene({
         <>
           <Headphones />
           {mode !== "music" && <HeadphonesBlob />}
+          {/* the band is thin and mostly air: the whole silhouette takes the click */}
+          <mesh visible={false} position={[0, 0.1, 0]}>
+            <boxGeometry args={[0.19, 0.2, 0.085]} />
+          </mesh>
         </>
       );
     return <CameraBody />;
@@ -1370,12 +1393,12 @@ export default function Room({
 
       <div className="pointer-events-none absolute inset-0 transition-opacity duration-500" style={{ opacity: idle ? 1 : 0 }}>
         <div className="absolute left-5 top-5 text-[13px] leading-tight text-white [text-shadow:0_1px_12px_rgb(20_14_8/0.45)]">
-          <div className="font-semibold">{owner.name}</div>
+          <div className="font-semibold tracking-[-0.02em]">{owner.name}</div>
           <div className="text-white/70">{owner.role}</div>
         </div>
         <button
           type="button"
-          className="pointer-events-auto absolute right-4 top-4 rounded-[8px] px-2.5 py-1 text-[13px] font-medium text-white/80 [text-shadow:0_1px_12px_rgb(20_14_8/0.4)] hov:hover:bg-white/10 hov:hover:text-white"
+          className="lg lg-btn pointer-events-auto absolute right-4 top-4 h-8 px-3.5 text-[13px] font-medium text-white/92"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
@@ -1385,10 +1408,10 @@ export default function Room({
           Skip
         </button>
         <div className="absolute inset-x-0 bottom-8 flex justify-center px-4">
-          <div className="flex items-center gap-2 rounded-full bg-black/30 px-3.5 py-1.5 text-[13px] font-medium text-white backdrop-blur-md">
+          <Glass className="flex h-9 items-center gap-2 px-4 text-[13px] font-medium">
             <span>{introOff ? (isMobile ? "Tap the phone to power on" : "Click the display to power on") : isMobile ? "Tap the phone to start" : "Click the display to start"}</span>
-            <span className="hidden text-white/55 sm:inline">or try anything on the desk</span>
-          </div>
+            <span className="hidden text-white/65 sm:inline">or try anything on the desk</span>
+          </Glass>
         </div>
       </div>
 
@@ -1440,6 +1463,7 @@ export default function Room({
         {mode === "plane" && <FlightUI key="plane" onLand={exit} mobile={isMobile} />}
       </AnimatePresence>
 
+      <GlassStyles />
       <Preloader progress={progress} done={revealed} caption={caption} />
     </div>
   );
