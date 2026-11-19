@@ -39,7 +39,7 @@ export const postCtl = {
 const VERT = /* glsl */ `varying vec2 vUv; void main(){ vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
 function pass(frag: string, uniforms: Record<string, THREE.IUniform>, defines: Record<string, number> = {}) {
-  return new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: frag, uniforms, defines, depthTest: false, depthWrite: false });
+  return new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: frag, uniforms, defines, depthTest: false, depthWrite: false, toneMapped: false });
 }
 
 const GLSL_DEPTH = /* glsl */ `

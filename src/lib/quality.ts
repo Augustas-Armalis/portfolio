@@ -21,13 +21,14 @@ export type Quality = {
   shadows: number; // shadow map size, 0 = off
   effects: number; // 0..1: mist bands, particles, glow
   far: number; // draw distance multiplier for the flight
+  post: number; // the lens: 0 off, 1 bloom and grade, 2 + depth of field, god rays, painterly pass, 3 more taps
 };
 
 export const PRESETS: Record<Preset, Quality> = {
-  low: { preset: "low", dpr: 1, grass: 0.3, trees: 0.5, shadows: 512, effects: 0.3, far: 0.6 },
-  medium: { preset: "medium", dpr: 1.25, grass: 0.6, trees: 0.75, shadows: 1024, effects: 0.6, far: 0.8 },
-  high: { preset: "high", dpr: 1.5, grass: 1, trees: 1, shadows: 2048, effects: 1, far: 1 },
-  ultra: { preset: "ultra", dpr: 2, grass: 1.5, trees: 1, shadows: 4096, effects: 1, far: 1.25 },
+  low: { preset: "low", dpr: 1, grass: 0.3, trees: 0.5, shadows: 512, effects: 0.3, far: 0.6, post: 0 },
+  medium: { preset: "medium", dpr: 1.25, grass: 0.6, trees: 0.75, shadows: 1024, effects: 0.6, far: 0.8, post: 1 },
+  high: { preset: "high", dpr: 1.5, grass: 1, trees: 1, shadows: 2048, effects: 1, far: 1, post: 2 },
+  ultra: { preset: "ultra", dpr: 2, grass: 1.5, trees: 1, shadows: 4096, effects: 1, far: 1.25, post: 3 },
 };
 const ORDER: Preset[] = ["low", "medium", "high", "ultra"];
 export const QUALITY_LABELS: Record<QualityChoice, string> = { auto: "Auto", low: "Low", medium: "Medium", high: "High", ultra: "Ultra" };
