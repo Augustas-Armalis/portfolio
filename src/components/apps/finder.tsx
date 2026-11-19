@@ -2,7 +2,7 @@
 
 // Finder: Projects, Games, Music, Photos, Documents.
 
-import { ArrowDownUp, ChevronRight, FileText, Folder, Gamepad2, Image as ImageIcon, Music2 } from "lucide-react";
+import { ArrowDownToLine, ArrowDownUp, ChevronRight, FileText, Folder, Gamepad2, Image as ImageIcon, Music2 } from "lucide-react";
 import { useState } from "react";
 import { owner, places, type AppId, type FinderItem, type PlaceId } from "@/content";
 import { Resume } from "../Desktop";
@@ -21,6 +21,7 @@ const PLACE_ICON: Record<PlaceId, React.ReactNode> = {
 
 function FinderIcon({ it, size }: { it: FinderItem; size: number }) {
   if (it.look?.type === "resume") return <DocArt size={size} />;
+  if (it.ext) return <DocArt size={size} label={it.ext} />;
   if (it.art)
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={it.art} alt="" draggable={false} data-sq="" className="object-cover shadow-[0_0_0_0.5px_rgb(0_0_0/0.12),0_2px_6px_rgb(0_0_0/0.14)]" style={{ width: size * 0.86, height: size * 0.86, borderRadius: size * 0.16 }} />;
@@ -58,6 +59,15 @@ export function Finder({ start }: { start: PlaceId }) {
     if (it.track) {
       openAny("records");
       player.play(it.track);
+    } else if (it.note) {
+      useOS.getState().setNote(it.note);
+      openAny("notes");
+    } else if (it.download) {
+      // a real file: the browser saves it
+      const a = document.createElement("a");
+      a.href = it.download;
+      a.download = it.name;
+      a.click();
     } else if (it.app) openAny(it.app);
     else if (it.look) setLook(it.look.type === "resume" ? { title: it.name, node: <Resume /> } : { title: it.name, src: it.look.src });
   };
@@ -75,7 +85,7 @@ export function Finder({ start }: { start: PlaceId }) {
           {g.title && <SectionHeader>{g.title}</SectionHeader>}
           <List>
             {g.items.map((it) => (
-              <ListRow key={it.id} onClick={() => run(it)} icon={<span className="my-1.5 flex h-11 w-11 shrink-0 items-center justify-center"><FinderIcon it={it} size={44} /></span>} title={it.name} sub={it.kind} chevron />
+              <ListRow key={it.id} onClick={() => run(it)} icon={<span className="my-1.5 flex h-11 w-11 shrink-0 items-center justify-center"><FinderIcon it={it} size={44} /></span>} title={it.name} sub={it.kind} chevron={!it.download} detail={it.download ? <ArrowDownToLine size={18} className="text-[var(--accent)]" /> : undefined} />
             ))}
           </List>
         </div>
@@ -166,6 +176,7 @@ export function Finder({ start }: { start: PlaceId }) {
       <div className="flex h-9 shrink-0 items-center gap-1.5 px-4 text-ink-2 shadow-[inset_0_0.5px_0_var(--separator-opaque)]" onPointerDown={(e) => e.stopPropagation()}>
         <span className="m-sub">{owner.name}</span>
         <ChevronRight size={11} className="text-ink-3" />
+        <FolderArt size={16} glyph={cur.id} />
         <span className="m-sub">{cur.title}</span>
         {picked && (
           <>
@@ -176,7 +187,7 @@ export function Finder({ start }: { start: PlaceId }) {
         <span className="flex-1" />
         {picked ? (
           <Btn size="sm" variant="tinted" capsule onClick={() => run(picked)}>
-            Open
+            {picked.download ? "Download" : "Open"}
           </Btn>
         ) : (
           <span className="m-sub text-ink-3">Double-click to open</span>

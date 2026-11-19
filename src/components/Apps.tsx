@@ -20,6 +20,7 @@ const loaders = {
   contact: () => import("./apps/contact"),
   system: () => import("./apps/system"),
   finder: () => import("./apps/finder"),
+  notes: () => import("./apps/notes"),
 };
 // Fetch every app's code once the machine is idle (not on a data-saver connection), so the first open is instant.
 let warmed = false;
@@ -49,6 +50,7 @@ const Terminal = lazy(() => loaders.system().then((x) => x.Terminal));
 const Game = lazy(() => loaders.system().then((x) => x.Game));
 const SettingsApp = lazy(() => loaders.system().then((x) => x.SettingsApp));
 const Finder = lazy(() => loaders.finder().then((x) => x.Finder));
+const Notes = lazy(() => loaders.notes().then((x) => x.Notes));
 
 // The live shader, with a still photo under it: if WebGL is missing or its context is lost, the photo shows
 // instead of a blank canvas.
@@ -117,6 +119,8 @@ export function AppView({ id }: { id: AppId }) {
       return <PianoApp />;
     case "novel":
       return <Novel />;
+    case "notes":
+      return <Notes />;
     case "gallery":
       return <Gallery />;
     case "about":

@@ -7,7 +7,7 @@ import { useOS, useWallpaper } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, player, usePlayer, warmApps } from "./Apps";
 import { Bars } from "./Desktop";
 import { Monogram, PowerOverlay } from "./Login";
-import { Glyph, ICONS, iconBackground } from "./icons";
+import { IconFace } from "./icons";
 import { Check, ChevronLeft, Pause, Play, X } from "lucide-react";
 import { Chrome, EASE_OUT, glass, PhoneNav, SPRING_GLASS, useGlassScope, type PhoneDetail } from "./ui";
 import { useClock, useDate } from "./useClock";
@@ -481,12 +481,7 @@ function AppWindow({ id, origin, onClosed }: { id: AppId; origin: Origin | null;
       </motion.div>
       {/* the icon the app grows out of */}
       <motion.div style={{ opacity: iconOpacity, top: inset, height: vw }} className="pointer-events-none absolute inset-x-0">
-        <div
-          className={`icon-glyph ${ICONS[id].fg === "light" ? "is-light" : "is-dark"}`}
-          style={{ position: "relative", height: "100%", background: iconBackground(id) }}
-        >
-          <Glyph id={id} size={Math.round(vw * 0.48)} />
-        </div>
+        <IconFace id={id} />
       </motion.div>
       {/* home indicator */}
       <div

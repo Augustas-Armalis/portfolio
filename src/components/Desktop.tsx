@@ -15,7 +15,7 @@ import {
 import { Lock, Search, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, sharedApps, type AppId, type DeskItem, type UserId } from "@/content";
+import { allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, sharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
 import { focusedApp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
@@ -160,6 +160,9 @@ function Widget({ children, className = "", onClick }: { children: ReactNode; cl
   );
 }
 
+// the four that matter most, newest last
+const milestones = timeline.filter((m) => m.key);
+
 function NotificationCenter({ close }: { close: () => void }) {
   const { playing, open } = useOS();
   const [now, setNow] = useState(() => new Date());
@@ -212,6 +215,29 @@ function NotificationCenter({ close }: { close: () => void }) {
             </div>
           </div>
         </div>
+      </Widget>
+      <Widget
+        onClick={() => {
+          useOS.getState().setSettingsPane("about");
+          go("settings")();
+        }}
+      >
+        <div className="eyebrow !text-[11px] text-ink-3">Milestones</div>
+        <ol className="mt-2.5">
+          {milestones.map((m, i) => (
+            <li key={m.title} className="relative flex gap-3 pb-2.5 last:pb-0">
+              {/* the rail: a dot per milestone, joined by a hairline */}
+              <span className="relative flex w-[7px] shrink-0 justify-center">
+                {i < milestones.length - 1 && <span className="absolute bottom-[-10px] top-[9px] w-px bg-[var(--separator-opaque)]" />}
+                <span className={`relative mt-[5px] h-[7px] w-[7px] rounded-full ${i === milestones.length - 1 ? "bg-[var(--accent)]" : "bg-[var(--label-3s)]"}`} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="m-headline block truncate text-ink">{m.title}</span>
+                <span className="m-sub block text-ink-2">{m.when}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
       </Widget>
       {playing && (
         <Widget onClick={go("records")} className="flex items-center gap-3">
@@ -1124,7 +1150,7 @@ export function DeskArt({ item }: { item: DeskItem }) {
         <img src={item.art} alt="" draggable={false} className="h-[58px] w-[58px] rounded-[8px] bg-white object-contain p-[3px] shadow-[0_1px_3px_rgb(0_0_0/0.3),0_0_0_0.5px_rgb(0_0_0/0.1)]" />
       </span>
     );
-  if (item.kind === "folder") return <FolderArt size={64} />;
+  if (item.kind === "folder") return <FolderArt size={64} glyph={item.id === "projects" || item.id === "games" || item.id === "documents" ? item.id : undefined} />;
   if (item.kind === "doc") return <DocArt size={64} />;
   if (item.kind === "image" && "src" in item.open)
     return (

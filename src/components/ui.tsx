@@ -1,8 +1,8 @@
 "use client";
 
 import { AnimatePresence, animate, motion, useDragControls, useMotionValue, useTransform } from "motion/react";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, PanelLeft, Search, X } from "lucide-react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { apps, type AppId } from "@/content";
 import { useOS } from "@/store";
@@ -18,7 +18,8 @@ export const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 export const Chrome = createContext<{ compact: boolean }>({ compact: false });
 export const useChrome = () => useContext(Chrome);
 // Inside a SplitView's detail the traffic lights sit over the sidebar, so the toolbar needs no inset.
-const InSplit = createContext(false);
+// inside a SplitView: `toggle` shows or hides its sidebar while the window is too narrow to keep it in view
+const InSplit = createContext<{ open: boolean; toggle: () => void } | null>(null);
 // On the phone a pushed screen hands its title and its way back to the app's navigation bar (PhoneOS), so
 // Back sits top-left where iOS puts it and the large title names the screen you are on.
 export type PhoneDetail = { title: string; back: () => void } | null;
@@ -212,8 +213,12 @@ export function Toolbar({ title, sub, children, inset }: { title?: ReactNode; su
   return (
     <div
       data-drag
-      className={`toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-black/[0.06] pr-3 ${pad ? "pl-[84px]" : "pl-5"}`}
+      className={`toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-black/[0.06] pr-3 ${pad ? "pl-[84px]" : "pl-5 @max-[619px]/split:pl-[84px]"}`}
     >
+      {inSplit && (
+        // only while the sidebar is tucked away (the window is narrow): brings it back over the content
+        <Btn variant="plain" size="sm" iconOnly label={inSplit.open ? "Hide sidebar" : "Show sidebar"} icon={<PanelLeft size={15} />} onClick={inSplit.toggle} className="split-toggle -ml-1 !hidden @max-[619px]/split:!inline-flex" />
+      )}
       <div className="min-w-0 flex-1">
         {title && <div className="toolbar-title truncate text-ink">{title}</div>}
         {sub && <div className="truncate text-[11px] leading-[14px] text-ink-2">{sub}</div>}
@@ -568,7 +573,7 @@ function LookWindow({ it, index, count, onIndex, onClose }: { it: LookItem; inde
   );
 }
 
-export type SideItem = { id: string; label: string; icon?: ReactNode; meta?: ReactNode };
+export type SideItem = { id: string; label: string; icon?: ReactNode; meta?: ReactNode; sub?: ReactNode };
 
 // Sidebar + detail. On a phone it becomes list -> detail with a back button.
 export function SplitView({
@@ -578,6 +583,7 @@ export function SplitView({
   detail,
   width = 200,
   header,
+  footer,
   startPushed,
 }: {
   sections: { title?: string; items: SideItem[] }[];
@@ -587,12 +593,17 @@ export function SplitView({
   width?: number;
   // sits above the source list (System Settings' account row); on the phone it leads the list
   header?: ReactNode;
+  // the phone only: rows after the list (Settings' Shut Down)
+  footer?: ReactNode;
   // on the phone, open on the selected item's detail (a folder opens on its contents, with Back to the list)
   startPushed?: boolean;
 }) {
   const { compact } = useChrome();
   const [pushed, setPushed] = useState(!!startPushed);
   const [folded, setFolded] = useState<string[]>([]);
+  // the Mac, in a narrow window: whether the tucked-away sidebar is showing
+  const [shown, setShown] = useState(false);
+  const split = useMemo(() => ({ open: shown, toggle: () => setShown((v) => !v) }), [shown]);
   const nav = useContext(PhoneNav);
   const pushedTitle = sections.flatMap((x) => x.items).find((i) => i.id === selected)?.label ?? "";
   useEffect(() => {
@@ -618,7 +629,7 @@ export function SplitView({
                   <ChevronLeft size={24} strokeWidth={2.2} className="-mr-0.5" /> Back
                 </button>
               )}
-              <InSplit.Provider value>{detail}</InSplit.Provider>
+              {detail}
             </motion.div>
           ) : (
             <motion.div
@@ -645,8 +656,11 @@ export function SplitView({
                         className="press-row flex min-h-[44px] w-full items-center gap-3 pl-4 text-left"
                       >
                         {it.icon && <span className="flex h-7 w-7 shrink-0 items-center justify-center text-ink-2">{it.icon}</span>}
-                        <span className={`flex min-h-[44px] flex-1 items-center gap-2 pr-4 ${j ? "border-t-[0.5px] border-[#C6C6C8]" : ""}`}>
-                          <span className="flex-1 text-[17px] tracking-[-0.02em] text-ink">{it.label}</span>
+                        <span className={`flex min-h-[44px] min-w-0 flex-1 items-center gap-2 pr-4 ${it.sub ? "py-2" : ""} ${j ? "border-t-[0.5px] border-[#C6C6C8]" : ""}`}>
+                          <span className="min-w-0 flex-1">
+                            <span className={`block text-[17px] tracking-[-0.02em] text-ink ${it.sub ? "font-semibold" : ""}`}>{it.label}</span>
+                            {it.sub && <span className="t-sub block truncate text-ink-2">{it.sub}</span>}
+                          </span>
                           {it.meta}
                           <ChevronRight size={17} strokeWidth={2.4} className="-mr-1 text-[#C4C4C7]" />
                         </span>
@@ -655,6 +669,7 @@ export function SplitView({
                   </div>
                 </div>
               ))}
+              {footer}
             </motion.div>
           )}
         </AnimatePresence>
@@ -662,9 +677,11 @@ export function SplitView({
     );
   }
   return (
-    <div className="flex h-full min-h-0">
+    <div className="@container/split relative flex h-full min-h-0">
+      {shown && <button type="button" aria-label="Hide sidebar" tabIndex={-1} onClick={() => setShown(false)} className="absolute inset-0 z-[19] hidden cursor-default @max-[619px]/split:block" />}
       <aside
         data-drag
+        data-shown={shown}
         onKeyDown={(e) => {
           // arrow keys walk the sidebar like a real source list
           if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -677,7 +694,7 @@ export function SplitView({
             (e.currentTarget.querySelector(`[data-id="${next}"]`) as HTMLElement | null)?.focus();
           }
         }}
-        className="flex shrink-0 flex-col gap-3 overflow-auto border-r border-black/[0.06] bg-[#F4F4F6] px-2.5 pb-3 pt-[52px]"
+        className="split-side flex shrink-0 flex-col gap-3 overflow-auto border-r border-black/[0.06] bg-[#F4F4F6] px-2.5 pb-3 pt-[52px]"
         style={{ width }}
       >
         {header}
@@ -707,13 +724,19 @@ export function SplitView({
                     type="button"
                     key={it.id}
                     data-id={it.id}
-                    onClick={() => onSelect(it.id)}
-                    className={`flex h-[28px] items-center gap-2 rounded-[8px] px-2 text-left text-[13px] tracking-[-0.003em] ${
+                    onClick={() => {
+                      onSelect(it.id);
+                      setShown(false);
+                    }}
+                    className={`flex shrink-0 items-center gap-2 rounded-[8px] px-2 text-left text-[13px] tracking-[-0.003em] ${it.sub ? "h-[46px] rounded-[10px]" : "h-[28px]"} ${
                       on ? "bg-black/[0.08] text-ink" : "text-ink hov:hover:bg-black/[0.035]"
                     }`}
                   >
                     {it.icon && <span className={`flex h-4 w-4 shrink-0 items-center justify-center ${on ? "text-ink" : "text-ink-2"}`}>{it.icon}</span>}
-                    <span className="min-w-0 flex-1 truncate">{it.label}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className={`block truncate ${it.sub ? "font-semibold" : ""}`}>{it.label}</span>
+                      {it.sub && <span className="m-sub block truncate text-ink-2">{it.sub}</span>}
+                    </span>
                     {it.meta}
                   </button>
                 );
@@ -724,7 +747,7 @@ export function SplitView({
         ))}
       </aside>
       <div className="min-w-0 flex-1 overflow-auto bg-white">
-        <InSplit.Provider value>{detail}</InSplit.Provider>
+        <InSplit.Provider value={split}>{detail}</InSplit.Provider>
       </div>
     </div>
   );

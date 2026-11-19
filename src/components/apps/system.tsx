@@ -3,15 +3,15 @@
 // Trash, About, Terminal, Catch and System Settings.
 
 import { motion } from "motion/react";
-import { ArrowUpRight, Check, Gauge, Send, Trash2, Undo2, Volume2, Wallpaper, Contrast, Palette } from "lucide-react";
+import { Check, Gauge, Info, Power, Send, Trash2, Undo2, UserRound, Volume2, Wallpaper, Contrast, Palette } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { apps, desktopItems, allApps, owner, projectApps, spec, wallpapers, type AppId } from "@/content";
+import { about, apps, desktopItems, allApps, owner, projectApps, timeline, wallpapers, type AppId } from "@/content";
 import MusicShader from "../scene/MusicShader";
 import { DeskArt } from "../Desktop";
 import { Monogram } from "../Login";
 import { useOS, useWallpaperIndex } from "@/store";
 import { QUALITY_LABELS, setQualityChoice, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
-import { Btn, Button, IconTile, List, ListRow, SectionHeader, Squircle, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
+import { Btn, Button, IconTile, List, ListRow, SectionHeader, Squircle, sfx, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
 import { Empty, useOpenApp } from "./shared";
 
 export function TrashApp() {
@@ -67,16 +67,20 @@ export function TrashApp() {
 export function About() {
   const { compact } = useChrome();
   const openContact = useOpenApp("contact");
+  const openSettings = useOpenApp("settings");
+  const moreInfo = () => {
+    useOS.getState().setSettingsPane("about");
+    openSettings();
+  };
   return (
     // laid out like About This Mac: the machine (here, the person), its name, a short spec sheet, two buttons, the fine print
     <div data-drag className={`flex h-full flex-col items-center overflow-auto bg-[var(--bg)] px-6 text-center ${compact ? "pb-14 pt-2" : "pb-5 pt-11"}`}>
-      <div className="relative flex h-[112px] w-[112px] items-center justify-center rounded-full bg-[radial-gradient(120%_120%_at_30%_15%,#ffffff_0%,#e9eaee_45%,#c9ccd3_100%)] text-[46px] font-semibold tracking-[-0.03em] text-[#17181b] shadow-[0_14px_34px_-14px_rgb(16_18_24/0.45),inset_0_-2px_6px_rgb(0_0_0/0.06),0_0_0_0.5px_rgb(0_0_0/0.08)]">
-        A
-      </div>
+      <Monogram size={96} />
       <h1 className={`mt-5 text-ink ${compact ? "t-large" : "m-large"}`}>{owner.name}</h1>
       <p className={`mt-1 text-ink-2 ${compact ? "t-sub" : "m-body"}`}>{owner.role}</p>
-      <dl className={`mt-6 grid w-full max-w-[290px] grid-cols-[96px_1fr] gap-x-3 gap-y-[6px] ${compact ? "t-foot" : "text-[12px] leading-[16px]"}`}>
-        {spec.map((r) => (
+      <p className={`mt-4 max-w-[290px] text-ink-2 [text-wrap:pretty] ${compact ? "t-foot" : "text-[12px] leading-[17px]"}`}>{about.intro}</p>
+      <dl className={`mt-5 grid w-full max-w-[290px] grid-cols-[88px_1fr] gap-x-3 gap-y-[6px] ${compact ? "t-foot" : "text-[12px] leading-[16px]"}`}>
+        {about.facts.map((r) => (
           <div key={r.label} className="contents">
             <dt className="text-right font-medium text-ink">{r.label}</dt>
             <dd className="text-left text-ink-2">{r.value}</dd>
@@ -85,20 +89,20 @@ export function About() {
       </dl>
       {compact ? (
         <div className="mt-8 flex w-full max-w-[320px] flex-col gap-2.5">
-          <Btn variant="prominent" size="lg" capsule onClick={openContact} icon={<Send size={16} />}>
-            Get in Touch
+          <Btn variant="prominent" size="lg" capsule onClick={moreInfo} icon={<Info size={17} />}>
+            More Info
           </Btn>
-          <Btn variant="tinted" size="lg" capsule href={owner.studio.href} icon={<ArrowUpRight size={17} />}>
-            {owner.studio.label}
+          <Btn variant="tinted" size="lg" capsule onClick={openContact} icon={<Send size={16} />}>
+            Get in Touch
           </Btn>
         </div>
       ) : (
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <Button size="sm" onClick={openContact} icon={<Send size={13} />}>
-            Get in Touch…
-          </Button>
-          <Button size="sm" href={owner.studio.href} icon={<ArrowUpRight size={14} />}>
+          <Button size="sm" onClick={moreInfo}>
             More Info…
+          </Button>
+          <Button size="sm" onClick={openContact}>
+            Get in Touch…
           </Button>
         </div>
       )}
@@ -107,6 +111,73 @@ export function About() {
         <br />
         All rights reserved.
       </p>
+    </div>
+  );
+}
+
+// More Info: Settings' About pane. Who he is, the facts, the tools, and the timeline.
+function AboutPane() {
+  const { compact } = useChrome();
+  const openAny = (id: AppId) => {
+    const st = useOS.getState();
+    if (st.isMobile) st.openPhoneApp(id);
+    else st.open(id);
+  };
+  const rows = (list: { label: string; value: string }[]) => (
+    <List mac={!compact}>
+      {list.map((r) => (
+        <ListRow mac={!compact} key={r.label} title={r.label} detail={<span className="block max-w-[26ch] truncate @md:max-w-[44ch]">{r.value}</span>} />
+      ))}
+    </List>
+  );
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col items-center px-4 pb-1 text-center">
+        <Monogram size={compact ? 84 : 72} />
+        <h2 className={`mt-3 text-ink ${compact ? "t-title3" : "text-[20px] font-semibold leading-6 tracking-[-0.02em]"}`}>{about.name}</h2>
+        <p className={`mt-0.5 text-ink-2 ${compact ? "t-sub" : "m-body"}`}>
+          {owner.role}. {owner.city}.
+        </p>
+        <p className={`mt-3 max-w-[52ch] text-ink-2 [text-wrap:pretty] ${compact ? "t-sub" : "text-[13px] leading-[19px]"}`}>{about.intro}</p>
+      </div>
+      {rows(about.facts)}
+      <div>
+        <SectionHeader mac={!compact}>Tools</SectionHeader>
+        {rows(about.tools)}
+      </div>
+      <div>
+        <SectionHeader mac={!compact}>Timeline</SectionHeader>
+        <List mac={!compact} className={compact ? "px-4 py-3" : "px-4 py-3.5"}>
+          <ol>
+            {timeline.map((m, i) => {
+              const last = i === timeline.length - 1;
+              const body = (
+                <>
+                  <span className={`block text-ink-3 ${compact ? "t-foot" : "m-sub"} tabular-nums`}>{m.when}</span>
+                  <span className={`block text-ink ${compact ? "t-headline" : "m-headline"} mt-0.5`}>{m.title}</span>
+                  {m.body && <span className={`mt-0.5 block text-ink-2 [text-wrap:pretty] ${compact ? "t-sub" : "text-[12px] leading-[17px]"}`}>{m.body}</span>}
+                </>
+              );
+              return (
+                <li key={m.title} className="relative flex gap-3.5">
+                  {/* the rail */}
+                  <span className="relative flex w-[9px] shrink-0 justify-center">
+                    {!last && <span className="absolute bottom-0 top-[14px] w-px bg-[var(--separator-opaque)]" />}
+                    <span className={`relative mt-[5px] h-[9px] w-[9px] rounded-full ${m.key ? "bg-[var(--accent)]" : "bg-[var(--bg-elevated)] shadow-[inset_0_0_0_1.5px_var(--label-3s)]"}`} />
+                  </span>
+                  {m.app ? (
+                    <button type="button" onClick={() => openAny(m.app!)} className={`press-row -mx-2 min-w-0 flex-1 rounded-[10px] px-2 text-left ${last ? "" : "mb-4"}`}>
+                      {body}
+                    </button>
+                  ) : (
+                    <span className={`min-w-0 flex-1 ${last ? "" : "mb-4"}`}>{body}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </List>
+      </div>
     </div>
   );
 }
@@ -296,9 +367,12 @@ export function Game() {
 
 export function SettingsApp() {
   const wallpaper = useWallpaperIndex();
-  const { sound, setSound, setWallpaper, appearance, setAppearance, tintedIcons, setTintedIcons, reduceEffects, setReduceEffects } = useOS();
+  const { sound, setSound, setWallpaper, appearance, setAppearance, reduceEffects, setReduceEffects, shutdown } = useOS();
   const { compact } = useChrome();
-  const [sel, setSel] = useState("appearance");
+  const sel = useOS((s) => s.settingsPane);
+  const setSel = useOS((s) => s.setSettingsPane);
+  // opened from About's More Info: the phone starts on the pane, not the list
+  const [startPushed] = useState(sel === "about");
   const choice = useQualityChoice();
   const quality = useQuality();
   const tile = (color: string, icon: React.ReactNode) => (
@@ -313,7 +387,9 @@ export function SettingsApp() {
     { v: "auto", label: "Auto" },
   ];
   const pane =
-    sel === "appearance" ? (
+    sel === "about" ? (
+      <AboutPane />
+    ) : sel === "appearance" ? (
       <div className="space-y-6">
         <div>
           <SectionHeader mac={!compact}>Appearance</SectionHeader>
@@ -351,7 +427,6 @@ export function SettingsApp() {
           </List>
         </div>
         <List mac={!compact}>
-          <ListRow mac={!compact} icon={tile("#5856D6", <Palette size={sz} />)} title="Tinted app icons" sub="Icons take the accent colour" detail={<Switch on={tintedIcons} onChange={setTintedIcons} label="Tinted app icons" />} />
           <ListRow mac={!compact} icon={tile("#8E8E93", <Contrast size={sz} />)} title="Reduce effects" sub="Solid surfaces instead of glass, gentler motion" detail={<Switch on={reduceEffects} onChange={setReduceEffects} label="Reduce effects" />} />
         </List>
       </div>
@@ -406,11 +481,25 @@ export function SettingsApp() {
         <p className={`mt-2 px-1 text-ink-3 ${compact ? "t-foot px-4" : "m-sub"}`}>Applies to the desk and the field around it. Lower settings draw less grass, fewer effects and a softer picture.</p>
       </div>
     );
-  const title = { appearance: "Appearance", wallpaper: "Wallpaper", sound: "Sound", graphics: "Graphics" }[sel] ?? "";
+  const title = { about: "About", appearance: "Appearance", wallpaper: "Wallpaper", sound: "Sound", graphics: "Graphics" }[sel] ?? "";
   return (
     <SplitView
       selected={sel}
       onSelect={setSel}
+      startPushed={startPushed}
+      footer={
+        // the phone's power control: back to the desk, with the screen off
+        <List className="mt-8">
+          <ListRow
+            icon={tile("#FF3B30", <Power size={sz} />)}
+            title="Shut Down"
+            onClick={() => {
+              sfx("shutdown");
+              shutdown();
+            }}
+          />
+        </List>
+      }
       header={
         // the account row System Settings opens with
         compact ? (
@@ -430,6 +519,7 @@ export function SettingsApp() {
       sections={[
         {
           items: [
+            { id: "about", label: "About", icon: tile("#8E8E93", <UserRound size={sz} />) },
             { id: "appearance", label: "Appearance", icon: tile("#48484A", <Contrast size={sz} />) },
             { id: "wallpaper", label: "Wallpaper", icon: tile("#32ADE6", <Wallpaper size={sz} />) },
             { id: "sound", label: "Sound", icon: tile("#FF2D55", <Volume2 size={sz} />) },

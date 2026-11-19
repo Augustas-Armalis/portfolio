@@ -60,6 +60,13 @@ type OS = {
   putBack: (ids: string[]) => void;
   emptyTrash: () => void;
 
+  // the note Notes shows (set before opening it, so a file in Documents can open on its note)
+  note: string;
+  setNote: (id: string) => void;
+  // the pane System Settings shows (About's More Info opens it on "about")
+  settingsPane: string;
+  setSettingsPane: (id: string) => void;
+
   setMobile: (m: boolean) => void;
   finishIntro: (target?: UserId) => void;
   login: (u?: UserId) => void;
@@ -139,6 +146,11 @@ export const useOS = create<OS>((set, get) => ({
   trashed: (ids) => set({ trash: [...get().trash.filter((x) => !ids.includes(x)), ...ids] }),
   putBack: (ids) => set({ trash: get().trash.filter((x) => !ids.includes(x)) }),
   emptyTrash: () => set({ deleted: [...get().deleted, ...get().trash], trash: [] }),
+
+  note: "now",
+  setNote: (id) => set({ note: id }),
+  settingsPane: "appearance",
+  setSettingsPane: (id) => set({ settingsPane: id }),
 
   setMobile: (m) => set({ isMobile: m }),
   finishIntro: (target) => {

@@ -18,7 +18,7 @@ export type AppId =
   // Games
   | "doom" | "blocks"
   // Music, writing, pictures
-  | "records" | "piano" | "novel" | "gallery"
+  | "records" | "piano" | "novel" | "gallery" | "notes"
   // System
   | "about" | "contact" | "terminal" | "game" | "settings" | "trash" | "launchpad";
 
@@ -54,7 +54,7 @@ export const wallpapers: Wallpaper[] = [
 export const loginWallpaper = wallpapers[0];
 
 // The Dock, left to right: his apps, then the system ones after the divider.
-export const dockApps: AppId[] = ["projects", "games", "records", "novel", "shots", "gallery", "piano"];
+export const dockApps: AppId[] = ["projects", "games", "records", "novel", "notes", "shots", "gallery", "piano"];
 export const sharedApps: AppId[] = ["contact", "terminal", "settings"];
 // Everything that can be opened by name (Apps grid, Spotlight, Terminal).
 export const allApps: AppId[] = [...dockApps, "doom", "blocks", "taste", "kit", ...sharedApps, "about"];
@@ -87,7 +87,8 @@ const MIN_SIZE: Partial<Record<AppId, Size>> = {
   terminal: { w: 440, h: 280 },
   doom: { w: 560, h: 420 },
   blocks: { w: 600, h: 420 },
-  about: { w: 300, h: 470 },
+  about: { w: 300, h: 480 },
+  notes: { w: 420, h: 380 },
   trash: { w: 460, h: 320 },
   game: { w: 380, h: 340 },
 };
@@ -126,7 +127,8 @@ export const apps: Record<AppId, { title: string; size: Size }> = {
   piano: { title: "Piano", size: { w: 760, h: 320 } },
   novel: { title: "Novel", size: { w: 1040, h: 700 } },
   gallery: { title: "Gallery", size: { w: 760, h: 540 } },
-  about: { title: "About Augustas", size: { w: 300, h: 470 } },
+  about: { title: "About Augustas", size: { w: 320, h: 610 } },
+  notes: { title: "Notes", size: { w: 760, h: 520 } },
   contact: { title: "Get in Touch", size: { w: 720, h: 640 } },
   terminal: { title: "Terminal", size: { w: 680, h: 440 } },
   game: { title: "Catch", size: { w: 460, h: 400 } },
@@ -255,7 +257,8 @@ export const projects: Partial<Record<AppId, Project>> = {
     name: "Contles",
     what: "Brands book creators for paid campaigns.",
     role: "Design and front end",
-    status: "Live",
+    status: "Closed",
+    years: "2025 – 2026",
     numbers: [],
   },
   filzy: {
@@ -376,6 +379,9 @@ export const novel = {
   logo: "/content/novel/logo.png",
   // the full text is large, so the app fetches it when it opens
   src: "/content/novel.json",
+  // the finished book, as files to take away (Documents)
+  epub: "/content/novel/Ziemos_Naktys_Sviesesnes.epub",
+  pdf: "/content/novel/Ziemos_Naktys_Sviesesnes.pdf",
 };
 
 // ---------- About ----------
@@ -386,6 +392,110 @@ export const spec: { label: string; value: string }[] = [
   { label: "Studio", value: "Larpo" },
   { label: "Piano", value: "11 years" },
   { label: "X", value: "@augustasdesign" },
+];
+
+// The longer About ("More Info"). Facts only, from the content dossier; nothing private (no age, school, email).
+export const about = {
+  name: "Augustas Armalis",
+  intro: "I design and build products for SaaS and AI teams, and run Larpo, a design studio. I also play the piano and write: one novel so far, and music to go with it.",
+  facts: [
+    { label: "Based in", value: "Kaunas, Lithuania" },
+    { label: "Does", value: "Product design, front end, brand" },
+    { label: "Studio", value: "Larpo" },
+    { label: "Clients", value: "Sellify, Acquisity, Kaching" },
+    { label: "Piano", value: "11 years" },
+    { label: "Novel", value: "Žiemos naktys šviesesnės" },
+  ],
+  tools: [
+    { label: "Design", value: "Figma, design systems, brand identity" },
+    { label: "Code", value: "React, Next.js, Tailwind, Motion, Three.js" },
+    { label: "Ships on", value: "Cloudflare, Vercel, Supabase" },
+    { label: "Music", value: "MuseScore 4, Logic Pro" },
+    { label: "Agents", value: "Claude Code, Codex" },
+  ],
+};
+
+// The timeline, oldest first. `when` is shown as written; dates come from the dossier.
+// TODO(Augustas): Capto has only a year (month unknown). The start dates of the Sellify and Acquisity work are
+// unknown beyond "2025" for Sellify, so they share one undated-by-month entry. Add the Shark Tank LT line once
+// the episode has aired.
+export type Milestone = { when: string; title: string; body: string; app?: AppId; key?: boolean };
+export const timeline: Milestone[] = [
+  { when: "May 2025", title: "First portfolio site", body: "" },
+  { when: "2025", title: "Sellify and Acquisity", body: "Product design and front end for AI and SaaS teams, as a freelance design engineer.", app: "sellify" },
+  { when: "Oct 2025", title: "Lunor", body: "A library of editable designs.", app: "lunor" },
+  { when: "Dec 2025", title: "Contles begins", body: "A platform where brands book creators. Public launch on 21 April 2026; closed that autumn.", app: "contles", key: true },
+  { when: "2026", title: "Capto", body: "Captions for short video, made in the browser.", app: "capto" },
+  { when: "11 Aug 2026", title: "The novel is finished", body: "Žiemos naktys šviesesnės: twenty chapters, illustrated by Motiejus Varnauskas.", app: "novel", key: true },
+  { when: "12 Aug 2026", title: "Nocturne for Absent Things", body: "The first release: an orchestral nocturne written for the novel.", app: "records", key: true },
+  { when: "22 Aug 2026", title: "Larpo launches", body: "The studio's site goes live: brand and website, from zero to launch.", app: "larpo", key: true },
+  { when: "Oct 2026", title: "The Larpo design engine", body: "Taste written down as rules a machine can follow. A home studio, and a first song." },
+];
+
+// Notes: short, his own voice. Facts from the dossier and from the rules above.
+export type Note = { id: string; title: string; date: string; blocks: ({ h: string } | { p: string } | { list: string[] })[] };
+export const notes: Note[] = [
+  {
+    id: "now",
+    title: "Now",
+    date: "November 2026",
+    blocks: [
+      { p: "Larpo is the main thing. Brand and website for SaaS and AI teams, built from zero to launch." },
+      { p: "Product design for Sellify, most weeks." },
+      { h: "On the side" },
+      { list: ["Writing songs: a voice, a piano, very light strings.", "Learning Logic Pro.", "Teaching the Larpo engine my taste, one rule at a time."] },
+    ],
+  },
+  {
+    id: "taste",
+    title: "Taste",
+    date: "Brand rules",
+    blocks: [
+      { p: "I judge by eye, at real size, on the real page." },
+      { h: "Rules" },
+      {
+        list: [
+          "Cool greys only.",
+          "Light first.",
+          "Crisp, short shadows.",
+          "Hovers you can barely see.",
+          "Leading icons sit inset evenly.",
+          "Nothing clipped.",
+          "Centre by eye, not by box.",
+          "Motion needs a reason.",
+          "Measure. 4px matters.",
+        ],
+      },
+      { h: "Never" },
+      { list: ["Blobs.", "Glows.", "Eyebrow pills.", "Fake metrics."] },
+    ],
+  },
+  {
+    id: "influences",
+    title: "Influences",
+    date: "A running list",
+    blocks: [
+      { h: "Music" },
+      { p: "Max Richter first, On the Nature of Daylight above all. Arvo Pärt, Górecki, Rachmaninoff, Chopin, Ólafur Arnalds, Sebastian Plano, Laufey, Billie Eilish." },
+      { h: "Design" },
+      { p: "Linear, Vercel, Raycast, Stripe, Attio." },
+      { h: "Film" },
+      { p: "Aftersun, Past Lives, Waves, Moonlight, Normal People, Dune." },
+    ],
+  },
+  {
+    id: "tools",
+    title: "Tools",
+    date: "What's on the desk",
+    blocks: [
+      { h: "Design" },
+      { p: "Figma. Geist, Host Grotesk and Aspekta for type. Lucide for icons." },
+      { h: "Code" },
+      { p: "React, Next.js, Tailwind, Motion, Three.js. Cloudflare, Vercel and Supabase underneath. Claude Code and Codex alongside." },
+      { h: "Music" },
+      { p: "MuseScore 4 for scores, Logic Pro for the rest. A Rode NT1 into an Audient iD14." },
+    ],
+  },
 ];
 
 // ---------- Contact ----------
@@ -446,6 +556,11 @@ export type FinderItem = {
   app?: AppId;
   look?: { type: "resume" | "image"; src?: string };
   track?: string;
+  // a file that downloads, or a note that opens in Notes
+  download?: string;
+  note?: string;
+  // the badge on a document icon
+  ext?: string;
   // artwork in place of an app icon
   art?: string;
 };
@@ -478,6 +593,9 @@ export const places: { id: PlaceId; title: string; groups: { title?: string; ite
         items: [
           { id: "resume", name: "Résumé.pdf", kind: "PDF document", look: { type: "resume" } },
           { id: "novel", name: novel.title, kind: "Book", app: "novel", art: novel.logo },
+          { id: "novel-epub", name: "Žiemos naktys šviesesnės.epub", kind: "EPUB, 4.4 MB", download: novel.epub, ext: "EPUB" },
+          { id: "novel-pdf", name: "Žiemos naktys šviesesnės.pdf", kind: "PDF, 9.7 MB", download: novel.pdf, ext: "PDF" },
+          { id: "brand-rules", name: "Brand rules", kind: "Note", note: "taste", ext: "TXT" },
           { id: "cover", name: "Cover.jpg", kind: "JPEG image", look: { type: "image", src: novel.cover }, art: novel.cover },
         ],
       },
