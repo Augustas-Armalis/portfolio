@@ -14,7 +14,10 @@ import RexWorld from "./Rex";
 import SeaWorld from "./Sea";
 import StarsWorld from "./Stars";
 import SunWorld from "./Sun";
-import { ORIGIN, WORLDS, useWorld, voyage, type WorldId } from "./voyage";
+import { ORIGIN, WORLDS, entryOf, gateOf, groundAt, pathOf, useWorld, voyage, type WorldId } from "./voyage";
+
+// dev: the map, for framing stills from the console
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") Object.assign(window, { __worlds: { WORLDS, ORIGIN, groundAt, gateOf, pathOf, entryOf } });
 
 // Which world stands: the desk's own field, or one of the painted worlds at
 // its far centre. Exactly one is drawn. The cloud that covers the change is

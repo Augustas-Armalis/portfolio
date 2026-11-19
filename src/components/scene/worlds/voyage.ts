@@ -302,7 +302,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -27.3, z: 102.9, r: 5.5, h: 64 },
       { x: 3.3, z: 89.1, r: 5.5, h: 64 },
     ],
-    canvases: [{ painting: "sun-allegro", x: -44, z: 300, yaw: 0.62 }],
+    canvases: [{ painting: "sun-allegro", x: -31, z: 302, yaw: 0.65 }],
   },
   stars: {
     id: "stars",
@@ -332,8 +332,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // in past the Allegro, by the globe of the Andante, through the veil of the pyramid and up into the river of stars
     path: [
       [0, 470, 22],
-      [6, 380, 20],
-      [-10, 300, 22],
+      [6, 380, 16],
+      [-10, 300, 16],
       [-60, 210, 28],
       [-130, 130, 40],
       [-150, 10, 62],
@@ -350,8 +350,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     ],
     obstacles: [{ x: -250, z: 90, r: 96, h: 150, bell: true }],
     canvases: [
-      { painting: "stars-allegro", x: -66, z: 300, yaw: 0.72 },
-      { painting: "stars-andante", x: -30, z: 122, yaw: -0.66 },
+      { painting: "stars-allegro", x: -56, z: 295, yaw: 1.1 },
+      { painting: "stars-andante", x: -59, z: 152, yaw: 0.02 },
     ],
   },
   rex: {
@@ -369,7 +369,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
         [-0.014, 0.027, 1.4, 0.6],
       ],
       bumps: [
-        [-44, 334, 64, 14.5],
+        [-26, 338, 64, 14.5],
         [-150, 250, 60, 11],
         [170, 300, 70, 12],
         [-250, 60, 60, 10],
@@ -411,7 +411,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: 0, z: -60, r: 92, h: 150 },
       { x: 0, z: -60, r: 60, h: 430 },
     ],
-    canvases: [{ painting: "rex", x: -44, z: 334, yaw: 0.66 }],
+    canvases: [{ painting: "rex", x: -22, z: 339, yaw: 0.54 }],
   },
   fairy: {
     id: "fairy",
@@ -445,9 +445,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // in past the painting, then round the mountain the way its own road winds, climbing to the castle, and down again to the gate
     path: [
       [0, 480, 26],
-      [8, 400, 22],
-      [-14, 320, 22],
-      [-80, 220, 34],
+      [8, 400, 17],
+      [-14, 320, 15],
+      [-80, 220, 30],
       [-190, 100, 62],
       [-232, -70, 104],
       [-150, -240, 150],
@@ -467,7 +467,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: 0, z: -80, r: 86, h: 170 },
       { x: 0, z: -80, r: 52, h: 300 },
     ],
-    canvases: [{ painting: "fairy-tale", x: 64, z: 316, yaw: -0.66 }],
+    canvases: [{ painting: "fairy-tale", x: 32, z: 328, yaw: -0.43 }],
   },
   paradise: {
     id: "paradise",
@@ -515,7 +515,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [-36, -502, 22],
     ],
     obstacles: [],
-    canvases: [{ painting: "paradise", x: 118, z: 318, yaw: -0.7 }],
+    canvases: [{ painting: "paradise", x: 96, z: 320, yaw: -0.64 }],
   },
   gate: {
     id: "gate",
@@ -564,7 +564,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -100, z: -152, r: 44, h: 66 },
       { x: 74, z: -236, r: 14, h: 24 },
     ],
-    canvases: [{ painting: "offering", x: -46, z: 262, yaw: 0.66 }],
+    canvases: [{ painting: "offering", x: -30, z: 268, yaw: 0.42 }],
   },
   sea: {
     id: "sea",
@@ -578,8 +578,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       base: -8,
       sines: [],
       bumps: [
-        [-34, 330, 74, 10.6],
-        [-80, 300, 40, 2.4],
+        [-16, 330, 74, 10.6],
+        [-62, 300, 40, 2.4],
       ],
       rim: [1, 2, 0],
     },
@@ -619,9 +619,12 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: 20, z: -260, r: 30, h: 30, bell: true },
       { x: -60, z: -260, r: 22, h: 22, bell: true },
     ],
-    canvases: [{ painting: "tranquility", x: -40, z: 326, yaw: 0.72 }],
+    canvases: [{ painting: "tranquility", x: -15, z: 327, yaw: 0.69 }],
   },
 };
+
+// a painting's standing wall is a thing to fly round, like any other
+for (const def of Object.values(WORLDS)) for (const c of def.canvases) def.obstacles.push({ x: c.x, z: c.z, r: 15, h: 36 });
 
 export const originOf = (id: WorldId) => (id === "home" ? ZERO : ORIGIN);
 const ZERO = new THREE.Vector3();

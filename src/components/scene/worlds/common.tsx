@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { GEIST, geistReady } from "../font";
+import { POST_U } from "../Post";
 import { WorldGrass } from "../Grass";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
@@ -295,36 +296,35 @@ const WORLD_OF: [RegExp, WorldId][] = [
 ];
 const worldOfPainting = (id: string) => WORLD_OF.find(([re]) => re.test(id))?.[1] ?? null;
 
-function captionTexture(title: string, year: string) {
+// The label: title, painter, year, set small in Geist. Dark ink on a pale wall, pale on a dark one.
+function captionTexture(title: string, year: string, ink: "dark" | "light") {
   const c = document.createElement("canvas");
   c.width = 1536;
-  c.height = 300;
+  c.height = 384;
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
+  const rgb = ink === "dark" ? "34,28,22" : "255,250,238";
   const draw = () => {
     const g = c.getContext("2d")!;
     g.clearRect(0, 0, c.width, c.height);
     g.textBaseline = "alphabetic";
-    g.fillStyle = "rgba(255,252,244,0.96)";
-    g.font = `600 84px ${GEIST}`;
-    (g as unknown as { letterSpacing: string }).letterSpacing = "-3.2px";
-    // a long title steps down a size rather than running off the stone
-    let size = 84;
-    while (g.measureText(title).width > c.width - 16 && size > 44) {
+    const spaced = g as unknown as { letterSpacing: string };
+    g.fillStyle = `rgba(${rgb},0.94)`;
+    // a long title steps down a size rather than running off the wall
+    let size = 104;
+    do {
+      g.font = `500 ${size}px ${GEIST}`;
+      spaced.letterSpacing = `${(-size * 0.03).toFixed(1)}px`;
       size -= 4;
-      g.font = `600 ${size}px ${GEIST}`;
-      (g as unknown as { letterSpacing: string }).letterSpacing = `${(-size * 0.038).toFixed(1)}px`;
-    }
-    g.fillText(title, 6, 96);
-    g.font = `400 58px ${GEIST}`;
-    (g as unknown as { letterSpacing: string }).letterSpacing = "-1px";
-    g.fillStyle = "rgba(255,250,240,0.66)";
-    g.fillText("M. K. Čiurlionis", 6, 186);
-    if (year) {
-      g.fillStyle = "rgba(255,250,240,0.46)";
-      g.fillText(year, 6, 262);
-    }
+    } while (g.measureText(title).width > c.width - 16 && size > 52);
+    g.fillText(title, 6, 112);
+    g.font = `400 68px ${GEIST}`;
+    spaced.letterSpacing = "-0.6px";
+    g.fillStyle = `rgba(${rgb},0.8)`;
+    g.fillText("M. K. Čiurlionis", 6, 222);
+    g.fillStyle = `rgba(${rgb},0.6)`;
+    if (year) g.fillText(year, 6, 318);
     tex.needsUpdate = true;
   };
   draw();
@@ -332,59 +332,136 @@ function captionTexture(title: string, year: string) {
   return tex;
 }
 
+// The light a painting stands in: a soft wash down the wall from a lamp held
+// out above the frame, and the pool it leaves on the floor. Added to what is
+// there, and never over the canvas itself, which keeps its own colours.
+function makePoolMaterial(kind: "wall" | "floor", size: [number, number], hole: [number, number, number, number]) {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneFactor,
+    blendSrcAlpha: THREE.ZeroFactor,
+    blendDstAlpha: THREE.OneFactor,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -40,
+    uniforms: { ...SKY_U, ...WORLD_U, uLinearOut: POST_U.uLinearOut, uSize: { value: new THREE.Vector2(...size) }, uHole: { value: new THREE.Vector4(...hole) } },
+    vertexShader: /* glsl */ `
+      varying vec2 vP; varying vec3 vWorld;
+      uniform vec2 uSize;
+      void main(){ vP = uv * uSize - vec2(uSize.x * 0.5, 0.0); vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform vec2 uSize; uniform vec4 uHole; uniform float uLinearOut;
+      varying vec2 vP; varying vec3 vWorld;
+      ${GLSL_SKY}
+      ${GLSL_AIR}
+      void main(){
+        float a;
+        ${
+          kind === "wall"
+            ? `// uHole: the canvas (x half-width, y0, y1), w: the lamp's height
+               float dx = vP.x / (uHole.x * 1.5);
+               float below = max(uHole.w - vP.y, 0.0);
+               float above = max(vP.y - uHole.w, 0.0);
+               a = exp(-dx * dx * (1.0 + below * 0.012)) * exp(-below / (uHole.w * 0.62)) * exp(-above * above * 0.22);
+               a *= smoothstep(0.5, 0.36, abs(vP.x) / uSize.x) * smoothstep(0.0, 0.08, vP.y / uSize.y);
+               // the canvas itself is left alone
+               a *= 1.0 - step(abs(vP.x), uHole.x) * step(uHole.y, vP.y) * step(vP.y, uHole.z);`
+            : `vec2 q = vec2(vP.x / (uSize.x * 0.42), (vP.y - uSize.y * 0.16) / (uSize.y * 0.6));
+               a = exp(-dot(q, q) * 2.2) * 0.62 * smoothstep(0.5, 0.3, abs(vP.x) / uSize.x) * smoothstep(1.0, 0.7, vP.y / uSize.y);`
+        }
+        float dist = length(vWorld - cameraPosition);
+        // by day a breath of warmth, at night a lamp
+        // (without the lens the light is added after the tone curve, where a little goes a long way)
+        float k = mix(0.36, 0.3, uNight) * mix(0.3, 1.0, uLinearOut) * (1.0 - 0.7 * airAmt(vWorld)) * exp(-dist * uMist * 1.5);
+        gl_FragColor = vec4(vec3(1.0, 0.86, 0.64) * a * k, 0.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
+// How each world hangs its painting: the stone of the wall (it is lit by that
+// world's own sky, so it belongs there) and the ink of the label.
+const HANG: Record<WorldId, { wall: V3; ink: "dark" | "light" }> = {
+  home: { wall: [0.6, 0.58, 0.54], ink: "dark" },
+  sun: { wall: [0.62, 0.64, 0.68], ink: "dark" },
+  stars: { wall: [0.2, 0.19, 0.25], ink: "light" },
+  rex: { wall: [0.3, 0.25, 0.22], ink: "light" },
+  fairy: { wall: [1.0, 0.8, 0.56], ink: "dark" },
+  paradise: { wall: [0.86, 0.78, 0.5], ink: "dark" },
+  gate: { wall: [0.3, 0.26, 0.26], ink: "light" },
+  sea: { wall: [0.28, 0.28, 0.22], ink: "light" },
+};
+
 const CANVAS_H = 18;
-function CanvasStand({ p, x, z, y, yaw }: { p: PaintingInfo; x: number; z: number; y: number; yaw: number }) {
+function CanvasStand({ p, x, z, y, yaw, world, lift }: { p: PaintingInfo; x: number; z: number; y: number; yaw: number; world: WorldId; lift: number }) {
   const aspect = p.width / p.height;
-  const H = aspect > 1.25 ? CANVAS_H * 0.8 : CANVAS_H;
+  const H = aspect > 1.25 ? CANVAS_H * 0.84 : CANVAS_H;
   const W = H * aspect;
   const m = /^(.*?)\s*\((\d{4})\)\s*$/.exec(p.title);
   const title = m ? m[1] : p.title;
   const year = m ? m[2] : "";
   const b = useDisposable(() => {
+    const state = { loaded: false };
     const map = new THREE.TextureLoader().load(p.file, () => (state.loaded = true));
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 8;
-    const state = { loaded: false };
     const k = new Kit();
-    const wall: V3 = [0.1, 0.088, 0.078];
-    const wallTop: V3 = [0.15, 0.132, 0.116];
-    const wood: V3 = [0.05, 0.034, 0.024];
-    const gilt: V3 = [0.86, 0.62, 0.26];
-    const WW = W + 8;
-    const base = 7.4; // the painting's lower edge above the ground
-    const WH = base + H + 4.2;
-    // the wall: a tall slab of dark stone on a low plinth, its foot well down in the ground
-    k.box(WW, WH + 6, 1.1, [0, WH / 2 - 3, -0.75], wall, { top: wallTop });
-    k.box(WW + 3, 1.3, 3.2, [0, 0.2, -0.3], wall, { top: wallTop });
-    k.box(WW + 0.9, 0.5, 1.5, [0, WH + 0.05, -0.75], wallTop);
-    // the frame: dark wood, a deep step, and a thin gilt lip against the canvas
+    const hang = HANG[world];
+    const wall = hang.wall;
+    const mul = (c: V3, f: number): V3 => [c[0] * f, c[1] * f, c[2] * f];
+    const gilt: V3 = [0.8, 0.58, 0.25];
+    const mat: V3 = [0.86, 0.82, 0.72];
+    const MAT = 1.15; // the mat round the canvas
+    const BAR = 0.3; // the gilt moulding round the mat
+    const side = 4.4; // bare wall either side of the frame
+    const base = lift; // the canvas' lower edge above the floor
+    const WW = W + (MAT + BAR + side) * 2;
+    const WH = base + H + MAT + BAR + 5.2;
     const cy = base + H / 2;
-    const bar = 0.62;
+    // the floor: one broad low step of the same stone, its foot well down in the ground
+    const FD = 12;
+    k.box(WW + 9, 7, FD, [0, -3.2, FD / 2 - 3.2], mul(wall, 0.8), { top: mul(wall, 0.94) });
+    // the wall: a plain standing slab, a shadow gap where it meets the floor
+    k.box(WW - 0.5, 0.5, 1.0, [0, 0.55, -0.7], mul(wall, 0.3));
+    k.box(WW, WH - 0.8, 1.5, [0, 0.8 + (WH - 0.8) / 2, -0.75], mul(wall, 0.9), { top: wall });
+    // the frame: a thin gilt moulding, a broad pale mat set back in it, a fine gilt fillet against the canvas
+    const fw = W + (MAT + BAR) * 2;
+    const fh = H + (MAT + BAR) * 2;
     for (const sy of [-1, 1]) {
-      k.box(W + bar * 2, bar, 0.5, [0, cy + sy * (H / 2 + bar / 2), 0.02], wood);
-      k.box(W + 0.16, 0.08, 0.2, [0, cy + sy * (H / 2 + 0.04), 0.3], gilt, { glow: 0.16 });
+      k.box(fw, BAR, 0.46, [0, cy + sy * (fh / 2 - BAR / 2), 0.23], gilt, { glow: 0.1, top: mul(gilt, 1.15) });
+      k.box(W + 0.14, 0.07, 0.12, [0, cy + sy * (H / 2 + 0.035), 0.2], gilt, { glow: 0.14 });
     }
     for (const sx of [-1, 1]) {
-      k.box(bar, H + bar * 2, 0.5, [sx * (W / 2 + bar / 2), cy, 0.02], wood);
-      k.box(0.08, H + 0.16, 0.2, [sx * (W / 2 + 0.04), cy, 0.3], gilt, { glow: 0.16 });
+      k.box(BAR, fh, 0.46, [sx * (fw / 2 - BAR / 2), cy, 0.23], gilt, { glow: 0.1 });
+      k.box(0.07, H + 0.14, 0.12, [sx * (W / 2 + 0.035), cy, 0.2], gilt, { glow: 0.14 });
     }
-    // a picture light: a slim bar held out over the frame
-    k.box(W * 0.56, 0.16, 0.16, [0, cy + H / 2 + bar + 1.0, 1.5], [1, 0.9, 0.7], { glow: 2.4 });
-    for (const sx of [-1, 1]) k.box(0.07, 0.07, 1.6, [sx * W * 0.2, cy + H / 2 + bar + 1.0, 0.7], wood);
+    k.box(W + MAT * 2, H + MAT * 2, 0.16, [0, cy, 0.08], mat);
+    // the lamp: a slim bar held out over the frame on two fine arms
+    const ly = cy + fh / 2 + 1.5;
+    k.box(W * 0.5, 0.12, 0.2, [0, ly, 1.9], [1, 0.9, 0.72], { glow: 1.1 });
+    k.box(W * 0.5 + 0.3, 0.07, 0.3, [0, ly + 0.1, 1.9], mul(gilt, 0.5));
+    for (const sx of [-1, 1]) k.box(0.06, 0.06, 1.9, [sx * W * 0.17, ly + 0.08, 0.95], mul(gilt, 0.5));
     return {
       map,
       state,
       canvas: makeCanvasMaterial(map),
-      cap: captionTexture(title, year),
+      cap: captionTexture(title, year, hang.ink),
       stand: k.build(),
-      tempera: makeTempera({ amb: 1, key: 0.3, dab: 0.6 }),
-      halo: haloGeometry([{ p: [0, cy + H / 2 + bar + 1.0, 1.6], size: 5.5, col: [1, 0.86, 0.6], k: 0.4 }]),
-      haloMat: makeHaloMaterial(0),
+      tempera: makeTempera({ amb: 1, key: 0.34, dab: 0.5 }),
+      wallPool: makePoolMaterial("wall", [WW, WH], [W / 2, base, base + H, ly]),
+      floorPool: makePoolMaterial("floor", [WW + 9, FD - 2.6], [0, 0, 0, 0]),
       cy,
       WW,
-      base,
+      WH,
+      FD,
+      capX: -fw / 2 + 6,
+      capY: base - (MAT + BAR) - 2.3,
     };
-  }, [p.file]);
+  }, [p.file, world, lift]);
   useFrame((_, dt) => {
     const u = b.canvas.uniforms.uShow;
     if (b.state.loaded && u.value < 1) u.value = Math.min(1, u.value + Math.min(dt, 0.1) / 0.9);
@@ -392,16 +469,51 @@ function CanvasStand({ p, x, z, y, yaw }: { p: PaintingInfo; x: number; z: numbe
   return (
     <group position={[x, y, z]} rotation={[0, yaw, 0]}>
       <mesh geometry={b.stand} material={b.tempera} />
-      <mesh position={[0, b.cy, 0.24]} material={b.canvas}>
+      <mesh position={[0, b.cy, 0.2]} material={b.canvas}>
         <planeGeometry args={[W, H]} />
       </mesh>
-      <mesh position={[-W / 2 - 0.62 + 7, b.base - 3.0, 0.1]}>
-        <planeGeometry args={[14, 2.73]} />
+      <mesh position={[b.capX, b.capY, 0.02]} renderOrder={2}>
+        <planeGeometry args={[12, 3]} />
         <meshBasicMaterial map={b.cap} transparent toneMapped={false} depthWrite={false} fog={false} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-80} />
       </mesh>
-      <mesh geometry={b.halo} material={b.haloMat} renderOrder={6} />
+      <mesh position={[0, b.WH / 2, 0.5]} material={b.wallPool} renderOrder={3}>
+        <planeGeometry args={[b.WW, b.WH]} />
+      </mesh>
+      <mesh position={[0, 0.32, (b.FD - 2.6) / 2 + 0.05]} rotation={[-Math.PI / 2, 0, 0]} material={b.floorPool} renderOrder={3}>
+        <planeGeometry args={[b.WW + 9, b.FD - 2.6]} />
+      </mesh>
     </group>
   );
+}
+
+// the floor a painting stands on clears the ground under the whole of it, so no grass comes up through the stone
+function floorAt(def: WorldDef, x: number, z: number, yaw = 0) {
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+  let h = groundAt(def, x, z);
+  for (const [u, v] of [
+    [-18, -3],
+    [18, -3],
+    [-18, 9],
+    [18, 9],
+    [0, 9],
+  ])
+    h = Math.max(h, groundAt(def, x + c * u + s * v, z - s * u + c * v));
+  return Math.max(h, (def.water ?? -99) + 0.4);
+}
+// The canvas hangs so that its middle is level with the eye of whoever passes on the path of light.
+function liftOf(def: WorldDef, x: number, z: number, yaw: number, p: PaintingInfo) {
+  const H = p.width / p.height > 1.25 ? CANVAS_H * 0.84 : CANVAS_H;
+  let eye = 0;
+  let best = 1e9;
+  for (const q of pathOf(def.id).pts) {
+    const d = Math.hypot(q.x - x, q.z - z);
+    if (d < best) {
+      best = d;
+      eye = q.y;
+    }
+  }
+  return THREE.MathUtils.clamp(eye - 1 - floorAt(def, x, z, yaw) - H / 2, 5.6, 10.5);
 }
 
 export function Gallery({ def }: { def: WorldDef }) {
@@ -437,7 +549,7 @@ export function Gallery({ def }: { def: WorldDef }) {
   return (
     <>
       {stands.map((s) => (
-        <CanvasStand key={s.p.id} p={s.p} x={s.x} z={s.z} y={Math.max(groundAt(def, s.x, s.z), (def.water ?? -99) + 0.4) - 0.4} yaw={s.yaw} />
+        <CanvasStand key={s.p.id} p={s.p} x={s.x} z={s.z} y={floorAt(def, s.x, s.z, s.yaw)} yaw={s.yaw} world={def.id} lift={liftOf(def, s.x, s.z, s.yaw, s.p)} />
       ))}
     </>
   );
