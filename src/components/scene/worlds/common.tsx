@@ -135,12 +135,14 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
       if (angels && n % 4 === 1 && effects > 0.25) {
         tan.subVectors(pts[i + 1], pts[i - 1]).normalize();
         const s = n % 8 === 1 ? 1 : -1;
-        const ax = p.x - tan.z * s * 8.5;
-        const az = p.z + tan.x * s * 8.5;
+        // in the home wood they stand at the roadside, inside the lane the trees keep clear
+        const aside = id === "home" ? 4.8 : 8.5;
+        const ax = p.x - tan.z * s * aside;
+        const az = p.z + tan.x * s * aside;
         const gy = id === "home" ? 0 : groundAt(def, ax, az);
         // on open water they stand on the path itself, small and far-seen
         const onWater = def.water !== null && gy <= def.water + 0.05;
-        const size = onWater ? 2.2 : 3.0 + r() * 0.8;
+        const size = id === "home" ? 1.5 + r() * 0.3 : onWater ? 2.2 : 3.0 + r() * 0.8;
         const robes: V3[] = [
           [0.85, 0.82, 0.74],
           [0.62, 0.7, 0.82],

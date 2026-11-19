@@ -120,16 +120,18 @@ export function buildPine(seed: number, detail: number) {
     const o = at(k);
     parts.push({ geo: limb([o, o.clone().add(new THREE.Vector3(Math.cos(a) * 0.5, 0.12, Math.sin(a) * 0.5)), o.clone().add(new THREE.Vector3(Math.cos(a) * 0.95, 0.05, Math.sin(a) * 0.95))], 0.03, 0.008, 4, 2), col: [0.2, 0.14, 0.1], fol: 0 });
   }
-  // the crown: flat tiers stepping up and narrowing, each pushed to one side
-  const tiers = 5 + Math.floor(r() * 2);
+  // the crown: a few broad soft layers that overlap, each pushed to one side, under a rounded cap
+  // (many thin ones read as a stack of plates)
+  const tiers = 3 + Math.floor(r() * 2);
   for (let i = 0; i < tiers; i++) {
-    const k = 0.62 + (i / (tiers - 1)) * 0.38;
+    const t = i / (tiers - 1);
+    const k = 0.68 + t * 0.32;
     const o = at(k);
-    const w = (1.9 - (i / (tiers - 1)) * 1.25) * (0.85 + r() * 0.3);
+    const w = (2.35 - t * 1.15) * (0.85 + r() * 0.3);
     const a = i * 2.4 + r();
-    const off = i === tiers - 1 ? 0 : w * 0.45;
-    const c = new THREE.Vector3(o.x + Math.cos(a) * off, o.y + (i === tiers - 1 ? 0.25 : 0), o.z + Math.sin(a) * off);
-    parts.push({ geo: blob(c, w, w * (0.26 + r() * 0.08), w * (0.8 + r() * 0.25), seed + i * 3.3, detail), col: [0.05, 0.105, 0.085], col2: [0.13, 0.2, 0.115], fol: 1 });
+    const off = i === tiers - 1 ? 0 : w * 0.36;
+    const c = new THREE.Vector3(o.x + Math.cos(a) * off, o.y + (i === tiers - 1 ? 0.3 : 0), o.z + Math.sin(a) * off);
+    parts.push({ geo: blob(c, w, w * (i === tiers - 1 ? 0.56 : 0.36 + r() * 0.1), w * (0.8 + r() * 0.25), seed + i * 3.3, detail), col: [0.05, 0.105, 0.085], col2: [0.13, 0.2, 0.115], fol: 1 });
     // the branch that carries it
     if (off > 0) parts.push({ geo: limb([o.clone().setY(o.y - 0.5), c.clone().setY(c.y - 0.15)], 0.035, 0.012, 4, 2), col: [0.34, 0.2, 0.11], fol: 0 });
   }
