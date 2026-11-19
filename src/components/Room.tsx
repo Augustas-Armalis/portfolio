@@ -963,7 +963,10 @@ function Scene({
         focus = cam.position.distanceTo(v.look);
         dof = 0.9;
       }
-    } else if (s === "idle" && nav === "explore") {
+    } else if (s === "unfocus" && nav !== "explore") {
+      // on the way home the focus stays on what the eye is travelling over, and arrives on the desk with it
+      focus = cam.position.distanceTo(v.look);
+    } else if ((s === "idle" || s === "unfocus") && nav === "explore") {
       // walking: focused out in the field, only what brushes past the lens goes soft
       focus = 12;
       aperture = 4;

@@ -72,7 +72,9 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
     save: () => {
       const a = document.createElement("a");
       a.href = canvas.toDataURL("image/png");
-      a.download = "sketch.png";
+      const d = new Date();
+      const p2 = (n: number) => String(n).padStart(2, "0");
+      a.download = `augustas-os-sketch-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.png`;
       a.click();
     },
   };
@@ -85,9 +87,10 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
     const now = performance.now();
     const dist = Math.hypot(p.x - last.x, p.y - last.y);
     const speed = dist / Math.max(1, now - last.t);
-    const w = THREE.MathUtils.lerp(last.w, THREE.MathUtils.clamp(5.2 - speed * 2.2, 1.4, 5.2), 0.35);
+    // a soft pencil: a quick line thins but never to a scratch
+    const w = THREE.MathUtils.lerp(last.w, THREE.MathUtils.clamp(6.4 - speed * 1.5, 3, 6.4), 0.35);
     const g = canvas.getContext("2d")!;
-    g.strokeStyle = "rgba(38,38,44,0.88)";
+    g.strokeStyle = "rgba(30,30,36,0.92)";
     g.lineCap = "round";
     g.lineJoin = "round";
     g.lineWidth = w;
@@ -137,8 +140,15 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
             e.stopPropagation();
             const p = toPx(e);
             if (p) {
-              stroke.current = { ...p, t: performance.now(), w: 3 };
+              stroke.current = { ...p, t: performance.now(), w: 4.5 };
               mid.current = null;
+              // the point of the pencil touching down: a dot, so a tap (the dot of an i, a full stop) leaves its mark
+              const g = canvas.getContext("2d")!;
+              g.fillStyle = "rgba(30,30,36,0.92)";
+              g.beginPath();
+              g.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+              g.fill();
+              tex.needsUpdate = true;
               (e.target as Element | null)?.setPointerCapture?.(e.pointerId);
             }
           }}

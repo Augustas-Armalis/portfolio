@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { play } from "@/lib/sfx";
 import { getMats } from "./materials";
+import { POST_U } from "./Post";
 import { clamp01, easeInOutCubic, nowS } from "./shared";
 
 // The novel as a physical book. Closed it sits on the desk; in reading mode
@@ -173,6 +174,7 @@ function makePageMaterial() {
       uCurl: { value: 0 },
       uDir: { value: 1 },
       uLight: { value: 1 },
+      ...POST_U,
     },
     vertexShader: /* glsl */ `
       uniform float uP; uniform float uCurl; uniform float uDir;
@@ -199,14 +201,25 @@ function makePageMaterial() {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
       }`,
     fragmentShader: /* glsl */ `
-      uniform sampler2D uFront; uniform sampler2D uBack; uniform float uLight;
+      uniform sampler2D uFront; uniform sampler2D uBack; uniform float uLight; uniform float uLinearOut;
       varying vec2 vUv; varying float vShade;
       void main(){
         vec4 c = gl_FrontFacing ? texture2D(uFront, vUv) : texture2D(uBack, vec2(1.0 - vUv.x, vUv.y));
-        gl_FragColor = vec4(c.rgb * vShade * uLight, 1.0);
+        // a printed page is display-referred: through the lens it keeps its own paper white and ink (alpha 0, see Post)
+        gl_FragColor = vec4(c.rgb * vShade * uLight, 1.0 - uLinearOut);
         #include <colorspace_fragment>
       }`,
   });
+}
+
+// the page lying flat: the same paper, and like the turning leaf it passes through the lens untouched
+function pageSurface(color: string) {
+  const m = new THREE.MeshBasicMaterial({ color, toneMapped: false });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uLinearOut = POST_U.uLinearOut;
+    sh.fragmentShader = sh.fragmentShader.replace("void main() {", "uniform float uLinearOut;\nvoid main() {").replace("#include <dithering_fragment>", "#include <dithering_fragment>\n  gl_FragColor.a = 1.0 - uLinearOut;");
+  };
+  return m;
 }
 
 function pageGeometry() {
@@ -236,7 +249,7 @@ export function Reader({
   const cover = useRef<THREE.Group>(null);
   const novel = useRef<Novel | null>(null);
   const pages = useRef<Page[]>([]);
-  const st = useRef({ spread: 0, open: 0, openTarget: 0, turn: null as null | { dir: 1 | -1; t0: number; from: number; to: number; drag: boolean }, closing: false });
+  const st = useRef({ spread: 0, open: 0, openTarget: 0, turn: null as null | { dir: 1 | -1; t0: number; from: number; to: number; drag: boolean; hand: boolean }, closing: false });
   const root = useRef<THREE.Group>(null);
   // soft contact shadow under the lifted page: darkest along the spine side
   const shadowMat = useMemo(() => {
@@ -273,6 +286,7 @@ export function Reader({
   const gutter = useRef<THREE.Mesh>(null);
   const geom = useRef({ top: BT });
   const drag = useRef({ x: 0, y: 0, travel: 0, target: 0 });
+  const queued = useRef(0); // turns asked for while one is still in the air
   const { inv, ro, rd } = useMemo(() => ({ inv: new THREE.Matrix4(), ro: new THREE.Vector3(), rd: new THREE.Vector3() }), []);
   const gutterMat = useMemo(() => {
     const c = document.createElement("canvas");
@@ -293,8 +307,8 @@ export function Reader({
   }, []);
   const texCache = useRef(new Map<string, THREE.CanvasTexture>());
   // pages are lit like under a reading lamp, so they read at any time of day
-  const left = useMemo(() => new THREE.MeshBasicMaterial({ color: "#f3efe6", toneMapped: false }), []);
-  const right = useMemo(() => new THREE.MeshBasicMaterial({ color: "#f6f2e9", toneMapped: false }), []);
+  const left = useMemo(() => pageSurface("#f3efe6"), []);
+  const right = useMemo(() => pageSurface("#f6f2e9"), []);
   const turnMat = useMemo(makePageMaterial, []);
   const turnGeo = useMemo(pageGeometry, []);
   const blank = useMemo(() => {
@@ -382,7 +396,7 @@ export function Reader({
     const p0 = dir === 1 ? 0 : 1;
     turnMat.uniforms.uP.value = p0;
     turnMat.uniforms.uDir.value = dir;
-    s.turn = { dir, t0: nowS(), from: p0, to: drag ? p0 : 1 - p0, drag };
+    s.turn = { dir, t0: nowS(), from: p0, to: drag ? p0 : 1 - p0, drag, hand: drag };
     if (dir === 1) {
       turnMat.uniforms.uFront.value = tex(2 * s.spread, false);
       turnMat.uniforms.uBack.value = tex(2 * s.spread + 1, true);
@@ -397,7 +411,16 @@ export function Reader({
     return true;
   };
   const turn = (dir: 1 | -1) => {
-    if (begin(dir, false)) play("page");
+    if (begin(dir, false)) {
+      queued.current = 0;
+      play("page");
+      return;
+    }
+    // pressed again mid-turn: the next leaf follows as soon as this one lands
+    const t = st.current.turn;
+    // (a leaf turned by hand is its own gesture: the swipe that comes with it asks for nothing more)
+    if (t && !t.hand && t.dir === dir && t.to === (dir === 1 ? 1 : 0)) queued.current = Math.min(3, Math.abs(queued.current) + 1) * dir;
+    else queued.current = 0;
   };
   // let go of a dragged page: a plain click turns it, a drag finishes the turn
   // past the middle and falls back otherwise
@@ -456,6 +479,7 @@ export function Reader({
       const s = st.current;
       s.openTarget = 0;
       s.closing = true;
+      queued.current = 0;
       play("page", { volume: 0.6 });
     },
   };
@@ -532,6 +556,12 @@ export function Reader({
           s.turn = null;
           if (turnMesh.current) turnMesh.current.visible = false;
           show(s.spread);
+          if (queued.current !== 0) {
+            const dir = queued.current > 0 ? 1 : -1;
+            queued.current -= dir;
+            if (begin(dir, false)) play("page");
+            else queued.current = 0;
+          }
         }
       }
       // the lifted page throws a soft shadow onto the page beneath
