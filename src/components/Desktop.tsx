@@ -1461,7 +1461,8 @@ function Welcome() {
             <Btn variant="prominent" capsule onClick={() => open("projects")}>
               Open Projects
             </Btn>
-            <Btn variant={dark ? "glass-dark" : "glass"} capsule onClick={() => open("contact")}>
+            {/* no glass on glass: the second action is a plain tint */}
+            <Btn variant="plain" capsule onClick={() => open("contact")} className={dark ? "!bg-white/15 !text-white" : "!bg-black/[0.06]"}>
               Get in Touch
             </Btn>
           </div>

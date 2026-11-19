@@ -67,7 +67,7 @@ export function Segmented<T extends string>({ value, options, onChange, id }: { 
             <motion.span
               layoutId={`seg-${id}`}
               className="seg-thumb absolute inset-0 rounded-[6px]"
-              transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+              transition={{ type: "spring", bounce: 0.26, duration: 0.5 }}
             />
           )}
           <span className={`relative ${value === o.value ? "text-ink" : "text-ink-2"}`}>{o.label}</span>
@@ -756,6 +756,8 @@ function filterFor(id: string, w: number, h: number, map: string, max: number) {
 
 // Elements bigger than this stay frosted: their glass would be mostly flat middle and cost a large filter.
 const MAX_AREA = 420_000;
+// and no more than this many refracting surfaces at once; the rest stay plain frosted glass
+const MAX_GLASS = 36;
 const idle = (fn: () => void) => {
   const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
   if (w.requestIdleCallback) w.requestIdleCallback(fn, { timeout: 300 });
@@ -797,6 +799,15 @@ function attachGlass(el: HTMLElement) {
     f = next as unknown as SVGFilterElement;
     el.style.setProperty("--lg", `url(#${id})`);
     el.setAttribute("data-lg", "");
+    light();
+  };
+  // the specular edge follows the element's place on screen: the light sits above the middle of the display, so
+  // glass on the left catches it on its right-hand rim and glass at the bottom along its top
+  const light = () => {
+    const b = el.getBoundingClientRect();
+    const lx = ((b.left + b.width / 2) / Math.max(1, window.innerWidth) - 0.5) * -2;
+    el.style.setProperty("--lx", `${(lx * 1.1).toFixed(2)}px`);
+    el.style.setProperty("--ly", `${(0.6 + ((b.top + b.height / 2) / Math.max(1, window.innerHeight)) * 0.7).toFixed(2)}px`);
   };
   // drawn a moment later, off the frame that mounts it, so opening a menu never waits on a canvas
   let gone = false;
@@ -829,8 +840,9 @@ function installGlass() {
   let raf = 0;
   const scan = () => {
     raf = 0;
-    document.querySelectorAll<HTMLElement>("[data-glass]").forEach((el) => {
-      if (!tracked.has(el)) tracked.set(el, attachGlass(el));
+    // toolbar controls are glass capsules too; the cap keeps the number of live refraction filters sane
+    document.querySelectorAll<HTMLElement>("[data-glass], .toolbar .btn-bordered, .toolbar .btn-plain, .toolbar .seg, .toolbar .search").forEach((el) => {
+      if (!tracked.has(el) && tracked.size < MAX_GLASS) tracked.set(el, attachGlass(el));
     });
     tracked.forEach((stop, el) => {
       if (!el.isConnected) {
@@ -993,6 +1005,8 @@ export function sfx(name: SfxName) {
 
 export const SPRING = { type: "spring", bounce: 0, duration: 0.42 } as const;
 export const SPRING_SOFT = { type: "spring", bounce: 0.12, duration: 0.55 } as const;
+// glass morphs (a capsule growing into a menu, the segmented thumb, the Dynamic Island): a little elastic
+export const SPRING_GLASS = { type: "spring", bounce: 0.26, duration: 0.5 } as const;
 
 // ---------- Squircle: Figma-style smoothed corners (smoothing 0.6) ----------
 // The path math follows figma-squircle (MIT): each corner is a straight run, a cubic into a short circular arc,
@@ -1078,6 +1092,69 @@ export function Squircle({ radius = 12, className = "", style, children, ...rest
   return (
     <div ref={ref} className={className} style={{ borderRadius: radius, ...style }} {...rest}>
       {children}
+    </div>
+  );
+}
+
+// ---------- GlassMenu: a capsule that grows into its menu ----------
+// Liquid Glass controls morph: the button doesn't open a separate popover, it becomes one. The same surface
+// stretches from the capsule to the list (a layout spring) and the rows fade in once there is room.
+export function GlassMenu<T extends string>({ label, icon, value, options, onChange, align = "right" }: { label: string; icon?: ReactNode; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; align?: "left" | "right" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("pointerdown", off);
+    window.addEventListener("keydown", esc);
+    return () => {
+      window.removeEventListener("pointerdown", off);
+      window.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const cur = options.find((o) => o.value === value);
+  return (
+    <div ref={ref} className="relative h-8 shrink-0">
+      {/* an invisible twin holds the capsule's place in the toolbar; the glass itself is free to grow over the content */}
+      <span aria-hidden className="m-body invisible flex h-8 items-center gap-1.5 whitespace-nowrap px-3 font-medium">
+        {icon}
+        {cur?.label ?? label}
+      </span>
+      <motion.div
+        layout
+        transition={SPRING_GLASS}
+        style={{ borderRadius: 16 }}
+        data-glass=""
+        className={`glass glass-pop glass-menu absolute top-0 z-[80] overflow-hidden ${align === "right" ? "right-0" : "left-0"} ${open ? "is-open w-[184px] p-[5px]" : "w-max"}`}
+      >
+        {open ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16, delay: 0.06 }} role="menu" aria-label={label}>
+            <div className="m-sub flex h-6 items-center px-2.5 font-semibold text-ink-3">{label}</div>
+            {options.map((o) => (
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={o.value === value}
+                key={o.value}
+                onClick={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+                className="m-body flex h-7 w-full items-center gap-2 rounded-[8px] px-2.5 text-left text-ink hov:hover:bg-[var(--accent)] hov:hover:text-white"
+              >
+                <span className="w-3 shrink-0 text-[11px]">{o.value === value ? "✓" : ""}</span>
+                {o.label}
+              </button>
+            ))}
+          </motion.div>
+        ) : (
+          <motion.button layout="position" type="button" aria-haspopup="menu" aria-expanded={false} aria-label={`${label}: ${cur?.label ?? ""}`} onClick={() => setOpen(true)} className="m-body flex h-8 items-center gap-1.5 whitespace-nowrap px-3 font-medium text-ink">
+            {icon}
+            {cur?.label ?? label}
+          </motion.button>
+        )}
+      </motion.div>
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { AnimatePresence, motion, useMotionValue, useTransform } from "motion/react";
 import {
   Aperture,
+  ArrowDownUp,
   ArrowUpRight,
   BookOpen,
   CalendarDays,
@@ -79,7 +80,7 @@ import { Monogram } from "./Login";
 import { useOS } from "@/store";
 import { QUALITY_LABELS, setQualityChoice, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { AppIcon, DocArt, FolderArt } from "./icons";
-import { Badge, Btn, Button, dragFile, glass, Group, IconTile, InfoGrid, List, ListRow, SectionHeader, Squircle, StatsRow, useContextMenu, QuickLook, Row, SearchField, Segmented, SplitView, Switch, Toolbar, Visual, useChrome, type LookItem } from "./ui";
+import { Badge, Btn, Button, dragFile, glass, GlassMenu, Group, IconTile, InfoGrid, List, ListRow, SectionHeader, Squircle, StatsRow, useContextMenu, QuickLook, Row, SearchField, Segmented, SplitView, Switch, Toolbar, Visual, useChrome, type LookItem } from "./ui";
 
 const Eyebrow = ({ children }: { children: React.ReactNode }) => (
   <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">{children}</div>
@@ -611,6 +612,11 @@ function Inspector({ it }: { it: StoryItem }) {
       </div>
       {p.what && <p className="t-sub text-ink-2">{p.what}</p>}
       <InfoGrid rows={rows} cols={1} />
+      {p.link && (
+        <Btn variant="tinted" capsule href={p.link.href} icon={<ArrowUpRight size={14} />} className="w-full">
+          {p.link.href.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+        </Btn>
+      )}
     </div>
   );
 }
@@ -2304,7 +2310,15 @@ function Finder({ start }: { start: PlaceId }) {
   const [look, setLook] = useState<LookItem | null>(null);
   const cur = places.find((p) => p.id === place) ?? places[0];
   const needle = q.trim().toLowerCase();
-  const groups = cur.groups.map((g) => ({ ...g, items: g.items.filter((it) => it.name.toLowerCase().includes(needle)) })).filter((g) => g.items.length);
+  const [sort, setSort] = useState<"default" | "name" | "kind">("default");
+  const groups = cur.groups
+    .map((g) => ({
+      ...g,
+      items: g.items
+        .filter((it) => it.name.toLowerCase().includes(needle))
+        .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : sort === "kind" ? a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name) : 0)),
+    }))
+    .filter((g) => g.items.length);
   const count = groups.reduce((a, g) => a + g.items.length, 0);
   const picked = groups.flatMap((g) => g.items).find((it) => it.id === sel) ?? null;
   const run = (it: FinderItem) => {
@@ -2347,6 +2361,17 @@ function Finder({ start }: { start: PlaceId }) {
           options={[
             { value: "icons", label: "Icons" },
             { value: "list", label: "List" },
+          ]}
+        />
+        <GlassMenu
+          label="Sort by"
+          icon={<ArrowDownUp size={13} />}
+          value={sort}
+          onChange={setSort}
+          options={[
+            { value: "default", label: "Sort" },
+            { value: "name", label: "Name" },
+            { value: "kind", label: "Kind" },
           ]}
         />
         <SearchField id={`finder-q-${start}`} value={q} onChange={setQ} />
