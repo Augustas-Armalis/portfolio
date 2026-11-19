@@ -86,7 +86,7 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boo
       aria-checked={on}
       aria-label={label}
       onClick={() => onChange(!on)}
-      className={`relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors duration-200 ${on ? "bg-[#34C759]" : "bg-black/[0.12]"}`}
+      className={`relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors duration-200 ${on ? "bg-[#34C759]" : "bg-[var(--fill)]"}`}
     >
       <motion.span
         animate={{ x: on ? 16 : 0 }}

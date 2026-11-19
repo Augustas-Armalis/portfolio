@@ -1210,3 +1210,8 @@ a.list-row:active {
     background-color: var(--surface-2) !important;
   }
 }
+
+/* iOS list rows with a second line get room above and below it */
+.list:not(.m-list) .list-row > .list-body {
+  padding-block: 7px;
+}
