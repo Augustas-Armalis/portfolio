@@ -785,18 +785,33 @@ function Doom() {
     };
   }, [started]);
   return (
-    <div className="relative flex h-full min-h-[320px] flex-col bg-black">
+    <div className="on-dark relative flex h-full min-h-[320px] flex-col bg-black">
       <Toolbar title={<span className="text-white/85">DOOM</span>} sub={<span className="text-white/40">Shareware v1.9</span>} />
       <div className="relative min-h-[280px] flex-1">
         <div ref={ref} className="absolute inset-0" />
         {!started && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center">
-            <Skull size={36} strokeWidth={1.5} className="text-[#e0412f]" />
-            <div className="text-[15px] font-semibold text-white">DOOM</div>
-            <div className="text-[12px] text-white/50">Episode 1, Knee-Deep in the Dead</div>
-            <Button size="sm" variant="primary" onClick={() => setStarted(true)}>
-              Play
-            </Button>
+          // a title card: the icon, the name in heavy type, the episode, one clear button and the keys
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[radial-gradient(70%_60%_at_50%_42%,#3a0d08_0%,#120403_55%,#000_100%)] px-6 text-center">
+            <AppIcon id="doom" size={88} />
+            <div className="mt-6 text-[44px] font-black leading-none tracking-[0.08em] text-white">DOOM</div>
+            <div className="t-sub mt-2 text-white/60">Episode 1 · Knee-Deep in the Dead</div>
+            <div className="mt-6">
+              <Btn variant="prominent" capsule size="lg" onClick={() => setStarted(true)} icon={<Play size={16} fill="currentColor" />} className="!h-10 !bg-[#e0412f] !px-6 !text-[15px]">
+                Play
+              </Btn>
+            </div>
+            <div className="m-sub mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-white/45">
+              {[
+                ["Arrows", "move"],
+                ["Ctrl", "fire"],
+                ["Space", "open"],
+              ].map(([k, v]) => (
+                <span key={k} className="flex items-center gap-1.5">
+                  <kbd className="rounded-[5px] bg-white/10 px-1.5 py-0.5 font-sans text-white/75 shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.18)]">{k}</kbd>
+                  {v}
+                </span>
+              ))}
+            </div>
           </div>
         )}
         {state === "loading" && <div className="pointer-events-none absolute bottom-3 left-3 text-[11px] text-white/50">Loading…</div>}
@@ -1114,7 +1129,7 @@ function NowPlaying({ compact }: { compact: boolean }) {
             <Scrubber />
           </div>
           <div className="mt-3">
-            <Transport size={compact ? 1 : 0.85} />
+            <Transport size={compact ? 1 : 0.9} />
           </div>
           <VolumeSlider />
         </div>
@@ -1151,7 +1166,7 @@ function VolumeSlider() {
 function GlassQueue() {
   const p = usePlayer();
   return (
-    <div data-drag className="relative flex h-full flex-col overflow-auto border-l border-white/10 bg-white/[0.07] px-6 pb-6 pt-[60px] text-white [backdrop-filter:blur(30px)_saturate(1.6)]">
+    <div data-drag className="on-dark relative flex h-full flex-col overflow-auto border-l border-white/10 bg-white/[0.07] px-6 pb-6 pt-[60px] text-white [backdrop-filter:blur(30px)_saturate(1.6)]">
       <div className="eyebrow mb-3 text-white/50">Up Next</div>
       <div className="space-y-1">
         {tracks.map((t) => {
@@ -1377,10 +1392,10 @@ function Novel() {
           <p className="t-sub mt-2 text-ink-2">{novel.author}</p>
           <p className="t-foot text-ink-3">Iliustracijos: {novel.illustrator}</p>
           <div className={`mt-4 flex items-center gap-3 ${compact ? "justify-center" : ""}`}>
-            <Button variant="primary" size="sm" onClick={() => book && setCh(saved?.ch ?? 0)} icon={<BookOpen size={14} />}>
+            <Btn variant="prominent" capsule size="md" onClick={() => book && setCh(saved?.ch ?? 0)} icon={<BookOpen size={14} />} className="!px-4">
               {saved ? "Continue" : "Read"}
-            </Button>
-            {book && <span className="text-[12px] tabular-nums text-ink-3">{saved ? `${pct}% read` : `${book.chapters.length} chapters, ${Math.round(total / 1000)}k words`}</span>}
+            </Btn>
+            {book && <span className="m-body tabular-nums text-ink-2">{saved ? `${pct}% read` : `${book.chapters.length} chapters, ${Math.round(total / 1000)}k words`}</span>}
           </div>
         </div>
       </div>
@@ -1523,14 +1538,8 @@ function ScrollReader({ book, ch, setCh, start, onPos }: { book: Book; ch: numbe
   return (
     <div className="flex h-full flex-col">
       <Toolbar title={c.title} sub={`${ch + 1} of ${book.chapters.length}, ${minutes(c.words)}`}>
-        <div className="flex">
-          <button type="button" aria-label="Previous chapter" disabled={ch === 0} onClick={() => setCh(ch - 1)} className="flex h-7 w-8 items-center justify-center rounded-[6px] text-ink-2 hov:hover:bg-black/[0.05] disabled:opacity-30">
-            <ChevronLeft size={17} />
-          </button>
-          <button type="button" aria-label="Next chapter" disabled={ch === last} onClick={() => setCh(ch + 1)} className="flex h-7 w-8 items-center justify-center rounded-[6px] text-ink-2 hov:hover:bg-black/[0.05] disabled:opacity-30">
-            <ChevronRight size={17} />
-          </button>
-        </div>
+        <Btn variant="plain" size="sm" iconOnly label="Previous chapter" disabled={ch === 0} onClick={() => setCh(ch - 1)} icon={<ChevronLeft size={16} />} />
+        <Btn variant="plain" size="sm" iconOnly label="Next chapter" disabled={ch === last} onClick={() => setCh(ch + 1)} icon={<ChevronRight size={16} />} />
       </Toolbar>
       <div className="relative h-[2px] shrink-0 bg-black/[0.04]">
         <div ref={bar} className="absolute inset-0 origin-left bg-[#0A84FF]/70" style={{ transform: "scaleX(0)" }} />
@@ -1539,7 +1548,7 @@ function ScrollReader({ book, ch, setCh, start, onPos }: { book: Book; ch: numbe
         <article className="mx-auto max-w-[66ch] px-8 pb-16 pt-10">
           <ChapterBody c={c} />
           {ch < last && (
-            <button type="button" onClick={() => setCh(ch + 1)} className="press mx-auto mt-12 flex h-9 items-center gap-1 rounded-[8px] px-3 text-[13px] font-medium text-[#0A84FF] hov:hover:bg-[#0A84FF]/[0.06]">
+            <button type="button" onClick={() => setCh(ch + 1)} className="press mx-auto mt-12 flex h-9 items-center gap-1 rounded-full bg-[var(--accent-tint)] px-4 text-[13px] font-semibold text-[var(--accent)]">
               {book.chapters[ch + 1].title} <ChevronRight size={15} />
             </button>
           )}
@@ -1733,7 +1742,7 @@ function Contact() {
           {contactList.map((c, j) => (
             <a key={c.id} href={hrefOf(c)} target={c.href?.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="press-row flex min-h-[56px] items-center pl-4">
               <span className={`flex min-h-[56px] flex-1 flex-col justify-center pr-4 ${j ? "border-t-[0.5px] border-[#C6C6C8]" : ""}`}>
-                <span className="text-[13px] text-ink">{c.label}</span>
+                {c.value !== c.label && <span className="text-[13px] text-ink">{c.label}</span>}
                 <span className="text-[17px] tracking-[-0.02em] text-[#0A84FF]">{c.value}</span>
               </span>
             </a>
@@ -1848,7 +1857,7 @@ function Contact() {
                 >
                   <span className="flex h-4 w-4 items-center justify-center text-ink-2">{channelIcon[c.id]}</span>
                   <span className="text-ink">{c.label}</span>
-                  <span className="min-w-0 flex-1 truncate text-right text-ink-3">{c.value}</span>
+                  <span className="min-w-0 flex-1 truncate text-right text-ink-3">{c.value !== c.label ? c.value : ""}</span>
                 </a>
               ))}
           </div>
@@ -2041,7 +2050,7 @@ function Terminal() {
   };
 
   return (
-    <div onClick={() => input.current?.focus()} className="terminal flex h-full min-h-[260px] flex-col bg-[#1C1D20] text-[12px] leading-[1.6] text-[#E4E6EA]">
+    <div onClick={() => input.current?.focus()} className="terminal on-dark flex h-full min-h-[260px] flex-col bg-[#1C1D20] text-[12px] leading-[1.6] text-[#E4E6EA]">
       <Toolbar title={<span className="text-white/80">Terminal</span>} sub={<span className="text-white/40">zsh</span>} />
       <div className="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono">
         {lines.map((l, i) => (
@@ -2192,7 +2201,7 @@ function SettingsApp() {
       <div>
         <SectionHeader mac={!compact}>{`Wallpaper for ${users[me].name}`}</SectionHeader>
         <List mac={!compact} className="p-3">
-          <div className="grid grid-cols-2 gap-3 @md:grid-cols-3">
+          <div className={`grid grid-cols-2 gap-3 ${users[me].wallpapers.length % 4 === 0 ? "@xl:grid-cols-4" : "@md:grid-cols-3"}`}>
             {users[me].wallpapers.map((w, i) => {
               const on = wallpaper[me] === i;
               const live = w.src.startsWith("live:");
@@ -2251,13 +2260,33 @@ function SettingsApp() {
     <SplitView
       selected={sel}
       onSelect={setSel}
+      header={
+        // the account row System Settings opens with: who is logged in
+        compact ? (
+          <List className="mt-2">
+            <ListRow
+              icon={<span className="my-2 h-14 w-14 shrink-0 rounded-full bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" style={{ backgroundImage: `url(${users[me].avatar})` }} />}
+              title={<span className="t-title3">{owner.name}</span>}
+              sub={users[me].name}
+            />
+          </List>
+        ) : (
+          <div className="flex items-center gap-2.5 px-2 pb-1">
+            <span className="h-9 w-9 shrink-0 rounded-full bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" style={{ backgroundImage: `url(${users[me].avatar})` }} />
+            <span className="min-w-0">
+              <span className="m-headline block truncate text-ink">{owner.name}</span>
+              <span className="m-sub block truncate text-ink-2">{users[me].name}</span>
+            </span>
+          </div>
+        )
+      }
       sections={[
         {
           items: [
             { id: "appearance", label: "Appearance", icon: tile("#48484A", <Contrast size={sz} />) },
             { id: "wallpaper", label: "Wallpaper", icon: tile("#32ADE6", <Wallpaper size={sz} />) },
             { id: "sound", label: "Sound", icon: tile("#FF2D55", <Volume2 size={sz} />) },
-            { id: "users", label: "Users", icon: tile("#8E8E93", <Users size={sz} />) },
+            { id: "users", label: "Users", icon: tile("#007AFF", <Users size={sz} />) },
           ],
         },
       ]}

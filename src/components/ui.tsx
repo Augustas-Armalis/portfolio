@@ -482,12 +482,15 @@ export function SplitView({
   onSelect,
   detail,
   width = 200,
+  header,
 }: {
   sections: { title?: string; items: SideItem[] }[];
   selected: string;
   onSelect: (id: string) => void;
   detail: ReactNode;
   width?: number;
+  // sits above the source list (System Settings' account row); on the phone it leads the list
+  header?: ReactNode;
 }) {
   const { compact } = useChrome();
   const [pushed, setPushed] = useState(false);
@@ -519,6 +522,7 @@ export function SplitView({
               transition={{ type: "spring", bounce: 0, duration: 0.4 }}
               className="px-4 pb-8"
             >
+              {header}
               {sections.map((s, i) => (
                 <div key={i} className="mt-4">
                   {s.title && <div className="mb-[7px] px-4 text-[13px] uppercase tracking-[-0.005em] text-[#6D6D72]">{s.title}</div>}
@@ -569,6 +573,7 @@ export function SplitView({
         className="flex shrink-0 flex-col gap-3 overflow-auto border-r border-black/[0.06] bg-[#F4F4F6] px-2.5 pb-3 pt-[52px]"
         style={{ width }}
       >
+        {header}
         {sections.map((s, i) => (
           <div key={i}>
             {s.title && (
