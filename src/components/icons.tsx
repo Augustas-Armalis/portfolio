@@ -20,7 +20,6 @@ import {
   MousePointer2,
   Music2,
   Palette,
-  Piano,
   Settings,
   Trash2,
   SkipForward,
@@ -35,7 +34,7 @@ import { marks } from "./marks";
 
 // One icon family: a squircle base (two-stop gradient), a glass glyph with a soft
 // drop, a specular sheen across the top, and a depth shadow under the tile.
-type Spec = { bg: [string, string]; glyph: LucideIcon | `mark:${string}`; fg: "light" | "dark" };
+type Spec = { bg: [string, string]; glyph: LucideIcon | `mark:${string}` | "art:piano"; fg: "light" | "dark" };
 
 export const ICONS: Record<AppId, Spec> = {
   projects: { bg: ["#7ccbff", "#2f8fe8"], glyph: Folder, fg: "light" },
@@ -60,7 +59,7 @@ export const ICONS: Record<AppId, Spec> = {
   blocks: { bg: ["#7fd88a", "#2f9c5c"], glyph: Box, fg: "light" },
   games: { bg: ["#7ccbff", "#2f8fe8"], glyph: Gamepad2, fg: "light" },
   records: { bg: ["#ff5f7a", "#e5203f"], glyph: Music, fg: "light" },
-  piano: { bg: ["#ffffff", "#dfe2e8"], glyph: Piano, fg: "dark" },
+  piano: { bg: ["#50535e", "#15161a"], glyph: "art:piano", fg: "light" },
   novel: { bg: ["#ffb057", "#e8721f"], glyph: BookOpen, fg: "light" },
   gallery: { bg: ["#5cdcd0", "#0e9fa6"], glyph: Flower2, fg: "light" },
   about: { bg: ["#8eaad4", "#48649a"], glyph: UserRound, fg: "light" },
@@ -99,6 +98,16 @@ export function GlyphDefs() {
 export function Glyph({ id, size }: { id: AppId; size: number }) {
   const g = ICONS[id].glyph;
   const paint = GLASS[ICONS[id].fg];
+  // the piano is drawn here: three ivory keys with the black keys cut out of them
+  if (g === "art:piano") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden fill={paint} className="glyph-mark">
+        <path d="M4.5 5h2v7.5H8V19H4.5A2.5 2.5 0 0 1 2 16.5v-9A2.5 2.5 0 0 1 4.5 5z" />
+        <path d="M10.5 5h3v7.5H15V19H9v-6.5h1.5z" />
+        <path d="M17.5 5h2A2.5 2.5 0 0 1 22 7.5v9a2.5 2.5 0 0 1-2.5 2.5H16v-6.5h1.5z" />
+      </svg>
+    );
+  }
   if (typeof g === "string") {
     const m = marks[g.slice(5)];
     return (

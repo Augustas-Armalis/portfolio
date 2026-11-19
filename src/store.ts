@@ -77,6 +77,8 @@ type OS = {
   setWallpaper: (i: number) => void;
 };
 
+const PHONE_WALLPAPER = Math.max(0, wallpapers.findIndex((w) => w.src.includes("mountain-glow")));
+
 // the desktop opens already in use: his music is up
 const firstWindows = (): Win[] => [{ id: "records", z: 11, min: false, max: false }];
 
@@ -132,7 +134,8 @@ export const useOS = create<OS>((set, get) => ({
   putBack: (ids) => set({ trash: get().trash.filter((x) => !ids.includes(x)) }),
   emptyTrash: () => set({ deleted: [...get().deleted, ...get().trash], trash: [] }),
 
-  setMobile: (m) => set({ isMobile: m }),
+  // the phone starts on a calmer picture than the desktop: icon labels have to read over it
+  setMobile: (m) => set(m && get().wallpaper === 0 ? { isMobile: m, wallpaper: PHONE_WALLPAPER } : { isMobile: m }),
   finishIntro: (target) => {
     set({ seamless: true, introOff: false });
     if (target) get().login(target);

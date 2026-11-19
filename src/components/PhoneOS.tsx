@@ -6,7 +6,7 @@ import { apps, dockApps, mainWork, owner, projects, sharedApps, tracks, type App
 import { useOS, useWallpaper } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, player, usePlayer } from "./Apps";
 import { Bars } from "./Desktop";
-import { Monogram, LoginBackdrop, PowerOverlay } from "./Login";
+import { Monogram, PowerOverlay } from "./Login";
 import { Glyph, ICONS, iconBackground } from "./icons";
 import { Check, Pause, Play, X } from "lucide-react";
 import { Chrome, EASE_OUT, glass, useGlassScope } from "./ui";
@@ -143,50 +143,60 @@ function StatusBar({ light }: { light?: boolean }) {
 function Lock() {
   const login = useOS((s) => s.login);
   const seamless = useOS((s) => s.seamless);
+  const wp = useWallpaper();
   const time = useClock(false);
   const date = useDate();
+  // the same picture as the home screen, sharp, with the clock in white over it (the home screen appears behind
+  // it as it lifts away, so the picture never changes)
   return (
-    <div className="absolute inset-0 flex flex-col items-center text-ink" role="button" tabIndex={0} aria-label="Open" onClick={() => login()} onKeyDown={(e) => e.key === "Enter" && login()}>
-      <LoginBackdrop />
+    <div
+      className="wp-photo absolute inset-0 flex flex-col items-center bg-black text-white"
+      style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}
+      role="button"
+      tabIndex={0}
+      aria-label="Open"
+      onClick={() => login()}
+      onKeyDown={(e) => e.key === "Enter" && login()}
+    >
+      {wp.src.startsWith("live:") && <LiveWallpaper />}
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.3),rgb(0_0_0/0.08)_38%,rgb(0_0_0/0.12)_62%,rgb(0_0_0/0.42))]" />
       <motion.div
         initial={{ opacity: 0, y: -10, filter: "blur(8px)" }}
         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
         transition={{ duration: 0.7, ease: EASE_OUT, delay: seamless ? 0.35 : 0.2 }}
-        className="relative mt-[90px] text-center"
+        className="relative mt-[calc(env(safe-area-inset-top)+84px)] text-center [text-shadow:0_1px_12px_rgb(0_0_0/0.25)]"
       >
-        <div className="text-[17px] font-semibold text-ink-2">{date}</div>
-        <div className="text-[88px] font-semibold leading-[0.95] tracking-[-0.04em] tabular-nums">{time}</div>
+        <div className="text-[20px] font-semibold tracking-[-0.01em] text-white/85">{date}</div>
+        <div className="text-[92px] font-semibold leading-[0.95] tracking-[-0.045em] tabular-nums">{time}</div>
       </motion.div>
-      {/* lock screen widgets: what he's working on, and the studio */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: EASE_OUT, delay: 0.45 }}
-        className="relative mt-5 grid w-full grid-cols-2 gap-2.5 px-5"
-      >
-        {[
-          { k: "Working on", v: mainWork.name, s: mainWork.role ?? "" },
-          { k: "Studio", v: "Larpo", s: owner.city },
-        ].map((w) => (
-          <div key={w.k} data-glass="" className={`${glass("lock")} rounded-[18px] px-3.5 py-3 text-left`}>
-            <div className="t-cap2 font-semibold uppercase text-ink-2">{w.k}</div>
-            <div className="t-headline mt-0.5 truncate text-ink">{w.v}</div>
-            <div className="t-foot truncate text-ink-2">{w.s}</div>
-          </div>
-        ))}
-      </motion.div>
-      <div className="relative mt-auto flex w-full flex-col items-center px-5 pb-[max(20px,env(safe-area-inset-bottom))]">
+      <div className="relative mt-auto flex w-full flex-col items-center px-4 pb-[max(10px,env(safe-area-inset-bottom))]">
+        {/* lock screen widgets, at the bottom like iOS 26: what he's working on, and the studio */}
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: EASE_OUT, delay: seamless ? 0.55 : 0.4 }}
-          className="flex flex-col items-center"
+          transition={{ duration: 0.6, ease: EASE_OUT, delay: 0.45 }}
+          className="grid w-full grid-cols-2 gap-2.5"
         >
-          <Monogram size={56} />
-          <div className="mt-2.5 text-[17px] font-semibold tracking-[-0.01em] text-ink">{owner.name}</div>
-          <div className="mt-6 text-[15px] font-medium text-ink-2">Tap to open</div>
+          {[
+            { k: "Working on", v: mainWork.name, s: mainWork.role ?? "" },
+            { k: "Studio", v: "Larpo", s: owner.city },
+          ].map((w) => (
+            <div key={w.k} data-glass="" className={`${glass("widget-dark")} rounded-[22px] px-4 py-3 text-left`}>
+              <div className="t-cap2 font-semibold uppercase tracking-[0.04em] text-white/60">{w.k}</div>
+              <div className="t-headline mt-0.5 truncate text-white">{w.v}</div>
+              <div className="t-foot truncate text-white/65">{w.s}</div>
+            </div>
+          ))}
         </motion.div>
-        <div className="mt-4 h-[5px] w-[134px] rounded-full bg-ink/80" />
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.55, ease: EASE_OUT, delay: seamless ? 0.55 : 0.4 }}
+          className="mt-7 text-[15px] font-medium text-white/80 [text-shadow:0_1px_6px_rgb(0_0_0/0.3)]"
+        >
+          Tap to open
+        </motion.div>
+        <div className="mt-3 h-[5px] w-[134px] rounded-full bg-white/90" />
       </div>
     </div>
   );
@@ -196,7 +206,7 @@ function Lock() {
 
 type Origin = { x: number; y: number; w: number; h: number };
 
-function HomeIcon({ id, label, onOpen, light }: { id: AppId; label?: string; onOpen: (id: AppId, o: Origin) => void; light: boolean }) {
+function HomeIcon({ id, label, onOpen }: { id: AppId; label?: string; onOpen: (id: AppId, o: Origin) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [held, setHeld] = useState(false);
   const timer = useRef<number | undefined>(undefined);
@@ -224,7 +234,7 @@ function HomeIcon({ id, label, onOpen, light }: { id: AppId; label?: string; onO
         </div>
       </motion.button>
       {label !== "" && (
-        <span className={`w-[76px] truncate text-center text-[11px] font-medium leading-[13px] tracking-[0.005em] ${light ? "text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]" : "text-ink"}`}>
+        <span className={`w-[76px] truncate text-center text-[11px] font-medium leading-[13px] tracking-[0.005em] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.5),0_0_10px_rgb(0_0_0/0.28)]`}>
           {label ?? apps[id].title}
         </span>
       )}
@@ -269,6 +279,8 @@ function Home({ onOpen }: { onOpen: (id: AppId, o: Origin) => void }) {
   return (
     <div className="wp-photo absolute inset-0 flex flex-col" style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}>
       {wp.src.startsWith("live:") && <LiveWallpaper />}
+      {/* labels are white, as on iOS: a light picture is toned down so they still read */}
+      <div aria-hidden className={`pointer-events-none absolute inset-0 ${dark ? "bg-[linear-gradient(180deg,rgb(0_0_0/0.18),transparent_22%,transparent_70%,rgb(0_0_0/0.22))]" : "bg-black/25"}`} />
       <div className="relative px-5 pt-[calc(env(safe-area-inset-top)+64px)]">
         <button
           type="button"
@@ -278,12 +290,12 @@ function Home({ onOpen }: { onOpen: (id: AppId, o: Origin) => void }) {
             onOpen("about", { x: r.x, y: r.y, w: r.width, h: r.height });
           }}
           data-glass=""
-          className={`glass-press flex w-full items-center gap-3.5 rounded-[24px] p-4 text-left ${dark ? `${glass("widget-dark")} text-white` : `${glass("widget")} text-ink`}`}
+          className={`glass-press flex w-full items-center gap-3.5 rounded-[24px] p-4 text-left ${glass("widget-dark")} text-white`}
         >
           <Monogram size={48} />
           <span className="min-w-0 flex-1">
             <span className="block text-[17px] font-semibold leading-tight tracking-[-0.01em]">{owner.name}</span>
-            <span className={`mt-0.5 block text-[13px] leading-[17px] ${dark ? "text-white/70" : "text-ink-2"}`}>
+            <span className={`mt-0.5 block text-[13px] leading-[17px] text-white/75`}>
               {owner.role}. The work is in Projects.
             </span>
           </span>
@@ -292,17 +304,17 @@ function Home({ onOpen }: { onOpen: (id: AppId, o: Origin) => void }) {
       <div className="relative grid grid-cols-4 gap-x-2 gap-y-[22px] px-5 pt-7">
         {HOME_APPS.map((id, i) => (
           <motion.div key={id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.04 + i * 0.03 }}>
-            <HomeIcon id={id} onOpen={onOpen} light={dark} />
+            <HomeIcon id={id} onOpen={onOpen} />
           </motion.div>
         ))}
       </div>
       <div className="relative mt-auto px-3 pb-[max(10px,env(safe-area-inset-bottom))]">
         <div className="mb-3 flex justify-center gap-1.5" aria-hidden>
-          <span className={`h-[7px] w-[7px] rounded-full ${dark ? "bg-white" : "bg-ink/80"}`} />
+          <span className="h-[7px] w-[7px] rounded-full bg-white" />
         </div>
         <div data-glass="" className={`${glass("dock")} flex justify-around rounded-[34px] px-2 py-4`}>
           {dock.map((id) => (
-            <HomeIcon key={id} id={id} label="" onOpen={onOpen} light={dark} />
+            <HomeIcon key={id} id={id} label="" onOpen={onOpen} />
           ))}
         </div>
       </div>
@@ -475,9 +487,8 @@ export default function PhoneOS() {
   const phoneApp = useOS((s) => s.phoneApp);
   const origin = useOS((s) => s.phoneOrigin);
   const openPhoneApp = useOS((s) => s.openPhoneApp);
-  const homeDark = useWallpaper().dark;
   const heroDark = useOS((s) => s.heroDark);
-  const lightBar = (phase === "os" && !!user && homeDark && !phoneApp) || phoneApp === "terminal" || phoneApp === "doom" || phoneApp === "blocks" || (!!phoneApp && heroDark);
+  const lightBar = !(phase === "os" && !!user) || !phoneApp || phoneApp === "terminal" || phoneApp === "doom" || phoneApp === "blocks" || (!!phoneApp && heroDark);
 
   return (
     <div className="no-callout absolute inset-0 overflow-hidden bg-page">
