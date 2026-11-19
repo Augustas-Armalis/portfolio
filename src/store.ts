@@ -1,0 +1,195 @@
+import { create } from "zustand";
+import { users, type AppId, type UserId } from "@/content";
+
+export type Phase = "room" | "login" | "os";
+export type Win = { id: AppId; z: number; min: boolean; max: boolean };
+type Origin = { x: number; y: number; w: number; h: number };
+
+type OS = {
+  phase: Phase;
+  isMobile: boolean | null;
+  user: UserId | null;
+  windows: Win[];
+  topZ: number;
+  sound: boolean;
+  playing: string | null;
+  palette: boolean;
+  phoneApp: AppId | null;
+  // where the tapped phone icon sits, so the app can grow out of it and shrink back into it
+  phoneOrigin: Origin | null;
+  // last dock launch, so the dock icon can bounce
+  launch: { id: AppId; t: number } | null;
+  // whether the first OS frame should appear without its own entrance (the 3D screen already showed it)
+  seamless: boolean;
+  // power states
+  sleeping: boolean;
+  restarting: boolean;
+  locked: boolean;
+  // Shut Down returns to the 3D intro with the screen off (read by the intro)
+  introOff: boolean;
+  // chosen wallpaper per user (index into users[u].wallpapers)
+  wallpaper: Record<UserId, number>;
+  // Light, Dark or Auto (follows the system); icons can be tinted
+  appearance: "light" | "dark" | "auto";
+  tintedIcons: boolean;
+  setAppearance: (a: "light" | "dark" | "auto") => void;
+  setTintedIcons: (on: boolean) => void;
+  // live activity in the Dynamic Island (besides music, which it reads from the player)
+  activity: { kind: "sent" | "shutdown"; t: number } | null;
+  setActivity: (a: { kind: "sent" | "shutdown" } | null) => void;
+  // a dark hero sits under the phone status bar: its text turns white
+  heroDark: boolean;
+  setHeroDark: (on: boolean) => void;
+  // image files dropped onto the desktop (from Shots, Gallery, project previews)
+  files: { id: string; name: string; src: string; user: UserId }[];
+  addFile: (f: { name: string; src: string; user: UserId }) => string;
+  // desktop items dragged to the Trash (ids from desktopItems), in the order they went in
+  trash: string[];
+  // emptied from the Trash: gone for this visit
+  deleted: string[];
+  trashed: (ids: string[]) => void;
+  putBack: (ids: string[]) => void;
+  emptyTrash: () => void;
+
+  setMobile: (m: boolean) => void;
+  finishIntro: (target?: UserId) => void;
+  login: (u: UserId) => void;
+  logout: () => void;
+  lockScreen: () => void;
+  sleep: (on: boolean) => void;
+  restart: () => void;
+  shutdown: () => void;
+  open: (id: AppId) => void;
+  close: (id: AppId) => void;
+  focus: (id: AppId) => void;
+  toggleMin: (id: AppId) => void;
+  toggleMax: (id: AppId) => void;
+  setSound: (on: boolean) => void;
+  setPlaying: (what: string | null) => void;
+  setPalette: (open: boolean) => void;
+  openPhoneApp: (id: AppId | null, origin?: Origin) => void;
+  setWallpaper: (u: UserId, i: number) => void;
+};
+
+const firstWindows = (u: UserId): Win[] => [{ id: users[u].apps[0], z: 11, min: false, max: false }];
+
+export const useOS = create<OS>((set, get) => ({
+  phase: "room",
+  isMobile: null,
+  user: null,
+  windows: [],
+  topZ: 10,
+  sound: true,
+  playing: null,
+  palette: false,
+  phoneApp: null,
+  phoneOrigin: null,
+  launch: null,
+  seamless: false,
+  sleeping: false,
+  restarting: false,
+  locked: false,
+  introOff: false,
+  wallpaper: { engineer: 0, founder: 0, art: 0 },
+  appearance: "light",
+  tintedIcons: false,
+  setAppearance: (a) => {
+    set({ appearance: a });
+    try {
+      localStorage.setItem("aos.appearance", a);
+    } catch {}
+  },
+  setTintedIcons: (on) => set({ tintedIcons: on }),
+  activity: null,
+  setActivity: (a) => set({ activity: a ? { ...a, t: Date.now() } : null }),
+  heroDark: false,
+  setHeroDark: (on) => set({ heroDark: on }),
+  files: [],
+  addFile: (f) => {
+    const id = `file-${Date.now().toString(36)}`;
+    set({ files: [...get().files, { ...f, id }] });
+    return id;
+  },
+  trash: [],
+  deleted: [],
+  trashed: (ids) => set({ trash: [...get().trash.filter((x) => !ids.includes(x)), ...ids] }),
+  putBack: (ids) => set({ trash: get().trash.filter((x) => !ids.includes(x)) }),
+  emptyTrash: () => set({ deleted: [...get().deleted, ...get().trash], trash: [] }),
+
+  setMobile: (m) => set({ isMobile: m }),
+  finishIntro: (target) => {
+    set({ seamless: true, introOff: false });
+    if (target) get().login(target);
+    else set({ phase: "login" });
+  },
+  login: (u) => {
+    const { locked, user } = get();
+    // unlocking the same user brings their windows back
+    if (locked && user === u) return set({ phase: "os", locked: false });
+    set({ user: u, phase: "os", locked: false, phoneApp: null, topZ: 11, windows: firstWindows(u) });
+  },
+  logout: () => set({ user: null, phase: "login", windows: [], phoneApp: null, palette: false, seamless: false, locked: false }),
+  lockScreen: () => set({ phase: "login", locked: true, palette: false, phoneApp: null, seamless: false }),
+  sleep: (on) => set({ sleeping: on }),
+  restart: () => {
+    set({ restarting: true, user: null, windows: [], phoneApp: null, palette: false, playing: null, locked: false, seamless: false });
+    window.setTimeout(() => set({ phase: "login" }), 900);
+    window.setTimeout(() => set({ restarting: false }), 2600);
+  },
+  shutdown: () =>
+    set({ user: null, phase: "room", windows: [], phoneApp: null, palette: false, playing: null, seamless: false, locked: false, introOff: true }),
+  open: (id) => {
+    const { windows, topZ } = get();
+    const z = topZ + 1;
+    const found = windows.find((w) => w.id === id);
+    set({
+      topZ: z,
+      launch: found ? get().launch : { id, t: Date.now() },
+      windows: found ? windows.map((w) => (w.id === id ? { ...w, min: false, z } : w)) : [...windows, { id, z, min: false, max: false }],
+    });
+  },
+  // closing the front window hands focus to the next one down, like macOS
+  close: (id) => {
+    const windows = get().windows.filter((w) => w.id !== id);
+    set({ windows, topZ: Math.max(get().topZ, 11) });
+    const next = windows.filter((w) => !w.min).sort((a, b) => b.z - a.z)[0];
+    if (next) set({ topZ: next.z });
+  },
+  focus: (id) => {
+    const { windows, topZ } = get();
+    if (windows.find((w) => w.id === id)?.z === topZ) return;
+    set({ topZ: topZ + 1, windows: windows.map((w) => (w.id === id ? { ...w, z: topZ + 1 } : w)) });
+  },
+  toggleMin: (id) => {
+    const windows = get().windows.map((w) => (w.id === id ? { ...w, min: !w.min } : w));
+    const me = windows.find((w) => w.id === id);
+    // minimising hands focus on; restoring brings the window to the front
+    if (me && !me.min) {
+      const z = get().topZ + 1;
+      return set({ topZ: z, windows: windows.map((w) => (w.id === id ? { ...w, z } : w)) });
+    }
+    const next = windows.filter((w) => !w.min).sort((a, b) => b.z - a.z)[0];
+    set({ windows, ...(next ? { topZ: next.z } : {}) });
+  },
+  toggleMax: (id) => set({ windows: get().windows.map((w) => (w.id === id ? { ...w, max: !w.max } : w)) }),
+  setSound: (on) => set({ sound: on }),
+  setPlaying: (what) => set({ playing: what }),
+  setPalette: (open) => set({ palette: open }),
+  openPhoneApp: (id, origin) => set(origin ? { phoneApp: id, phoneOrigin: origin } : { phoneApp: id }),
+  setWallpaper: (u, i) => set({ wallpaper: { ...get().wallpaper, [u]: i } }),
+}));
+
+// The app that is focused right now (top of the stack, not minimised).
+export function focusedApp(windows: Win[]): AppId | null {
+  const live = windows.filter((w) => !w.min);
+  if (!live.length) return null;
+  return live.reduce((a, b) => (a.z > b.z ? a : b)).id;
+}
+
+export function useWallpaper(u: UserId) {
+  const i = useOS((s) => s.wallpaper[u]);
+  return users[u].wallpapers[i] ?? users[u].wallpapers[0];
+}
+
+// dev only: lets the QA pass drive the OS from the console
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") (window as unknown as { os: typeof useOS }).os = useOS;

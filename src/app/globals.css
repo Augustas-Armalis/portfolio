@@ -1,0 +1,797 @@
+@import "tailwindcss";
+
+/* hover only where hover exists */
+@custom-variant hov (@media (hover: hover) and (pointer: fine));
+/* dark mode is a class on <html> (Settings > Appearance), not only the system setting */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Cool greys only (#FFF / #F7F7F9 / #F1F1F4). Light first. */
+/* the legacy colour names now read the semantic tokens, so every screen follows light and dark */
+@theme {
+  --color-ink: var(--label);
+  --color-ink-2: var(--label-2s);
+  --color-ink-3: var(--label-3s);
+  --color-line: var(--separator-opaque);
+  --color-field: var(--fill-solid);
+  --color-page: var(--page);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-inter), "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html,
+body {
+  height: 100%;
+}
+body {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button {
+  cursor: default;
+}
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+.no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* press feedback on pointer-down */
+.press {
+  transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.press:active {
+  transform: scale(0.97);
+}
+.press-row:active {
+  background: rgb(0 0 0 / 0.05);
+}
+
+/* ---------- glass: one material, the larpo.studio technique ----------
+   Every glass surface has the class "glass" plus a tone below. A tone sets --g-fill (the tint, enough to keep
+   text readable), --g-blur (the frost), --g-ring (hairline and the 1px inner highlight) and --g-shadow.
+   Chromium: installGlass() in ui.tsx draws a displacement map per element and adds data-lg and --lg, an SVG
+   filter that bends the backdrop through the rim with a faint chromatic split. Safari and Firefox (html.lg-css)
+   can't run an SVG filter as a backdrop, so they get a touch more frost, a sheen from the top left and the same
+   hairline instead. */
+.glass {
+  background-color: var(--g-fill);
+  -webkit-backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat, 1.8));
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat, 1.8));
+  box-shadow: var(--g-ring), var(--g-shadow, 0 0 #0000);
+}
+.glass[data-lg] {
+  backdrop-filter: blur(var(--g-blur)) var(--lg) saturate(var(--g-sat, 1.8));
+}
+.lg-css .glass {
+  -webkit-backdrop-filter: blur(calc(var(--g-blur) + 2px)) saturate(1.7) brightness(1.04);
+  backdrop-filter: blur(calc(var(--g-blur) + 2px)) saturate(1.7) brightness(1.04);
+  background-image: linear-gradient(155deg, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0.04) 38%, rgb(255 255 255 / 0) 62%);
+}
+/* menu bar: a light tint, only a bottom hairline */
+.glass-bar {
+  --g-fill: rgb(246 246 248 / 0.66);
+  --g-blur: 24px;
+  --g-ring: 0 0.5px 0 rgb(0 0 0 / 0.1);
+}
+/* menus, Spotlight, Control Center, tooltips: dense enough to read 13px text over anything */
+.glass-pop {
+  --g-fill: rgb(246 246 248 / 0.82);
+  --g-blur: 28px;
+  --g-ring: 0 0 0 0.5px rgb(0 0 0 / 0.14), inset 0 0 0 1px rgb(255 255 255 / 0.45);
+  --g-shadow: 0 12px 32px -10px rgb(16 18 24 / 0.28), 0 2px 6px rgb(16 18 24 / 0.06);
+}
+/* dock: clearer glass, the wallpaper shows through */
+.glass-dock {
+  --g-fill: rgb(250 250 252 / 0.34);
+  --g-blur: 20px;
+  --g-ring: 0 0 0 0.5px rgb(0 0 0 / 0.12), inset 0 0 0 1px rgb(255 255 255 / 0.4);
+  --g-shadow: 0 10px 30px -10px rgb(16 18 24 / 0.32);
+}
+.glass-widget {
+  --g-fill: rgb(255 255 255 / 0.55);
+  --g-blur: 24px;
+  --g-sat: 1.6;
+  --g-ring: 0 0 0 0.5px rgb(0 0 0 / 0.07), inset 0 0 0 1px rgb(255 255 255 / 0.35);
+  --g-shadow: 0 6px 24px -10px rgb(16 18 24 / 0.2);
+}
+.glass-widget-dark {
+  --g-fill: rgb(40 44 54 / 0.5);
+  --g-blur: 24px;
+  --g-sat: 1.6;
+  --g-ring: 0 0 0 0.5px rgb(255 255 255 / 0.1), inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  --g-shadow: 0 6px 24px -10px rgb(0 0 0 / 0.5);
+}
+/* lock screen controls */
+.glass-lock {
+  --g-fill: rgb(255 255 255 / 0.42);
+  --g-blur: 20px;
+  --g-sat: 1.6;
+  --g-ring: 0 0 0 0.5px rgb(0 0 0 / 0.06), inset 0 0 0 1px rgb(255 255 255 / 0.4);
+}
+/* iOS round buttons over content (the close button) */
+.glass-btn {
+  --g-fill: rgb(242 242 247 / 0.72);
+  --g-blur: 12px;
+  --g-ring: 0 0 0 0.5px rgb(0 0 0 / 0.06), inset 0 0 0 1px rgb(255 255 255 / 0.5);
+  --g-shadow: 0 2px 8px -2px rgb(16 18 24 / 0.12);
+}
+.glass-btn-dark {
+  --g-fill: rgb(58 58 62 / 0.6);
+  --g-blur: 12px;
+  --g-ring: 0 0 0 0.5px rgb(255 255 255 / 0.1), inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background-color: #f7f7f9;
+    background-image: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .glass-widget-dark,
+  .glass-btn-dark {
+    background-color: #2a2c31;
+  }
+}
+
+/* ---------- windows ---------- */
+.win {
+  background: #fff;
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.16),
+    0 8px 24px -8px rgb(16 18 24 / 0.16),
+    0 2px 6px rgb(16 18 24 / 0.05);
+  transition: box-shadow 200ms ease;
+}
+.win.is-focused {
+  box-shadow:
+    0 0 0 0.5px rgb(0 0 0 / 0.2),
+    0 24px 70px -16px rgb(16 18 24 / 0.38),
+    0 4px 12px rgb(16 18 24 / 0.08);
+}
+/* ---------- user tiles (login) ---------- */
+.avatar-ring {
+  box-shadow: 0 0 0 0 rgb(26 27 30 / 0);
+  transition: box-shadow 160ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .user-tile:hover .avatar-ring {
+    box-shadow: 0 0 0 2px rgb(255 255 255 / 0.95), 0 0 0 3.5px rgb(26 27 30 / 0.18);
+  }
+}
+.user-tile:focus-visible .avatar-ring {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0a84ff;
+}
+.user-tile:active .avatar-ring {
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.95), 0 0 0 3.5px rgb(26 27 30 / 0.3);
+}
+
+/* ---------- app icons ---------- */
+.app-tile {
+  background: linear-gradient(180deg, #ffffff 0%, #eeeff2 100%);
+  box-shadow:
+    inset 0 0 0 0.5px rgb(0 0 0 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 1px 2px rgb(16 18 24 / 0.08);
+}
+.app-tile-dark {
+  background: linear-gradient(180deg, #34363c 0%, #18191c 100%);
+  box-shadow:
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 1px 2px rgb(16 18 24 / 0.15);
+}
+
+/* ---------- visual placeholders ---------- */
+.visual {
+  background-color: #eef0f3;
+  background-image:
+    radial-gradient(80% 90% at 15% 10%, #fbfbfc 0%, transparent 60%),
+    radial-gradient(60% 70% at 90% 90%, #dfe2e7 0%, transparent 70%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.06);
+}
+.visual-dark {
+  background-color: #1c2534;
+  background-image:
+    radial-gradient(70% 80% at 20% 0%, #33415a 0%, transparent 60%),
+    radial-gradient(60% 70% at 100% 100%, #0f141d 0%, transparent 70%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.06);
+}
+/* Larpo's own night (brand v4) */
+.larpo-night {
+  background-color: #1c2534;
+  background-image:
+    radial-gradient(90% 120% at 85% -10%, #3a4a66 0%, transparent 55%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .08 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.book-cover {
+  background: linear-gradient(160deg, #2b3446 0%, #141922 100%);
+  box-shadow:
+    inset 3px 0 0 rgb(255 255 255 / 0.08),
+    0 14px 30px -12px rgb(0 0 0 / 0.5);
+}
+
+/* ---------- piano ---------- */
+.piano-white {
+  background: linear-gradient(180deg, #e9eaee 0%, #ffffff 12%, #fafafb 100%);
+  box-shadow: inset 0 -3px 0 #e2e3e7;
+  transition: background 80ms linear, box-shadow 80ms linear;
+}
+.piano-white.is-down {
+  background: linear-gradient(180deg, #dcdee3 0%, #eef0f3 100%);
+  box-shadow: inset 0 -1px 0 #e2e3e7;
+}
+.piano-black {
+  z-index: 2;
+  background: linear-gradient(180deg, #2a2c31 0%, #0d0e10 100%);
+  box-shadow:
+    inset 0 -4px 0 #3a3c42,
+    0 2px 3px rgb(0 0 0 / 0.4);
+}
+.piano-black.is-down {
+  box-shadow:
+    inset 0 -1px 0 #3a3c42,
+    0 1px 1px rgb(0 0 0 / 0.4);
+}
+
+/* ---------- wallpapers (CSS stand-ins for live shaders) ---------- */
+.login-wp {
+  background:
+    radial-gradient(120% 80% at 50% 0%, #eef0f3 0%, transparent 60%),
+    linear-gradient(180deg, #dfe2e7 0%, #c9cdd4 100%);
+}
+.wp-engineer {
+  background-color: #e5e7eb;
+  background-image:
+    radial-gradient(70% 80% at 18% 12%, #f8f9fa 0%, transparent 60%),
+    radial-gradient(60% 70% at 88% 92%, #c9cdd5 0%, transparent 68%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.wp-founder {
+  background-color: #eceef1;
+  background-image:
+    radial-gradient(70% 70% at 80% 10%, rgb(255 255 255 / 0.9) 0%, transparent 60%),
+    linear-gradient(rgb(26 27 30 / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(26 27 30 / 0.06) 1px, transparent 1px);
+  background-size: auto, 44px 44px, 44px 44px;
+}
+.wp-art {
+  background-color: #141a24;
+  background-image:
+    repeating-linear-gradient(102deg, transparent 0 30px, rgb(255 255 255 / 0.035) 30px 31px),
+    radial-gradient(80% 60% at 25% 0%, #33415a 0%, transparent 70%),
+    linear-gradient(180deg, #1c2534 0%, #0e131b 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Apple continuous corners (superellipse n=5) for app icons */
+.app-tile,
+.app-tile-dark {
+  -webkit-mask: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M100.00 50.00 L99.97 65.36 L99.89 70.26 L99.75 73.81 L99.56 76.68 L99.31 79.12 L99.01 81.26 L98.64 83.17 L98.22 84.89 L97.74 86.46 L97.20 87.89 L96.60 89.21 L95.94 90.43 L95.20 91.54 L94.40 92.58 L93.53 93.53 L92.58 94.40 L91.54 95.20 L90.43 95.94 L89.21 96.60 L87.89 97.20 L86.46 97.74 L84.89 98.22 L83.17 98.64 L81.26 99.01 L79.12 99.31 L76.68 99.56 L73.81 99.75 L70.26 99.89 L65.36 99.97 L50.00 100.00 L34.64 99.97 L29.74 99.89 L26.19 99.75 L23.32 99.56 L20.88 99.31 L18.74 99.01 L16.83 98.64 L15.11 98.22 L13.54 97.74 L12.11 97.20 L10.79 96.60 L9.57 95.94 L8.46 95.20 L7.42 94.40 L6.47 93.53 L5.60 92.58 L4.80 91.54 L4.06 90.43 L3.40 89.21 L2.80 87.89 L2.26 86.46 L1.78 84.89 L1.36 83.17 L0.99 81.26 L0.69 79.12 L0.44 76.68 L0.25 73.81 L0.11 70.26 L0.03 65.36 L0.00 50.00 L0.03 34.64 L0.11 29.74 L0.25 26.19 L0.44 23.32 L0.69 20.88 L0.99 18.74 L1.36 16.83 L1.78 15.11 L2.26 13.54 L2.80 12.11 L3.40 10.79 L4.06 9.57 L4.80 8.46 L5.60 7.42 L6.47 6.47 L7.42 5.60 L8.46 4.80 L9.57 4.06 L10.79 3.40 L12.11 2.80 L13.54 2.26 L15.11 1.78 L16.83 1.36 L18.74 0.99 L20.88 0.69 L23.32 0.44 L26.19 0.25 L29.74 0.11 L34.64 0.03 L50.00 0.00 L65.36 0.03 L70.26 0.11 L73.81 0.25 L76.68 0.44 L79.12 0.69 L81.26 0.99 L83.17 1.36 L84.89 1.78 L86.46 2.26 L87.89 2.80 L89.21 3.40 L90.43 4.06 L91.54 4.80 L92.58 5.60 L93.53 6.47 L94.40 7.42 L95.20 8.46 L95.94 9.57 L96.60 10.79 L97.20 12.11 L97.74 13.54 L98.22 15.11 L98.64 16.83 L99.01 18.74 L99.31 20.88 L99.56 23.32 L99.75 26.19 L99.89 29.74 L99.97 34.64Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M100.00 50.00 L99.97 65.36 L99.89 70.26 L99.75 73.81 L99.56 76.68 L99.31 79.12 L99.01 81.26 L98.64 83.17 L98.22 84.89 L97.74 86.46 L97.20 87.89 L96.60 89.21 L95.94 90.43 L95.20 91.54 L94.40 92.58 L93.53 93.53 L92.58 94.40 L91.54 95.20 L90.43 95.94 L89.21 96.60 L87.89 97.20 L86.46 97.74 L84.89 98.22 L83.17 98.64 L81.26 99.01 L79.12 99.31 L76.68 99.56 L73.81 99.75 L70.26 99.89 L65.36 99.97 L50.00 100.00 L34.64 99.97 L29.74 99.89 L26.19 99.75 L23.32 99.56 L20.88 99.31 L18.74 99.01 L16.83 98.64 L15.11 98.22 L13.54 97.74 L12.11 97.20 L10.79 96.60 L9.57 95.94 L8.46 95.20 L7.42 94.40 L6.47 93.53 L5.60 92.58 L4.80 91.54 L4.06 90.43 L3.40 89.21 L2.80 87.89 L2.26 86.46 L1.78 84.89 L1.36 83.17 L0.99 81.26 L0.69 79.12 L0.44 76.68 L0.25 73.81 L0.11 70.26 L0.03 65.36 L0.00 50.00 L0.03 34.64 L0.11 29.74 L0.25 26.19 L0.44 23.32 L0.69 20.88 L0.99 18.74 L1.36 16.83 L1.78 15.11 L2.26 13.54 L2.80 12.11 L3.40 10.79 L4.06 9.57 L4.80 8.46 L5.60 7.42 L6.47 6.47 L7.42 5.60 L8.46 4.80 L9.57 4.06 L10.79 3.40 L12.11 2.80 L13.54 2.26 L15.11 1.78 L16.83 1.36 L18.74 0.99 L20.88 0.69 L23.32 0.44 L26.19 0.25 L29.74 0.11 L34.64 0.03 L50.00 0.00 L65.36 0.03 L70.26 0.11 L73.81 0.25 L76.68 0.44 L79.12 0.69 L81.26 0.99 L83.17 1.36 L84.89 1.78 L86.46 2.26 L87.89 2.80 L89.21 3.40 L90.43 4.06 L91.54 4.80 L92.58 5.60 L93.53 6.47 L94.40 7.42 L95.20 8.46 L95.94 9.57 L96.60 10.79 L97.20 12.11 L97.74 13.54 L98.22 15.11 L98.64 16.83 L99.01 18.74 L99.31 20.88 L99.56 23.32 L99.75 26.19 L99.89 29.74 L99.97 34.64Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  border-radius: 0 !important;
+}
+
+/* system focus ring */
+:focus-visible {
+  outline: 2px solid #0a84ff;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+input:focus-visible {
+  outline: none;
+}
+
+/* iOS nav bar material: the strip under the status bar and the Dynamic Island once content scrolls under it */
+.ios-bar {
+  --g-fill: rgb(249 249 251 / 0.78);
+  --g-blur: 20px;
+  --g-ring: 0 0.5px 0 rgb(0 0 0 / 0.15);
+}
+.ios-bar-dark {
+  --g-fill: rgb(28 29 32 / 0.8);
+  --g-blur: 20px;
+  --g-ring: 0 0.5px 0 rgb(255 255 255 / 0.12);
+}
+
+/* ---------- app icon family ---------- */
+.icon-wrap {
+  filter: drop-shadow(0 1px 1px rgb(16 18 24 / 0.16)) drop-shadow(0 6px 10px rgb(16 18 24 / 0.12));
+}
+.icon-sq {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  -webkit-mask: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M100.00 50.00 L99.97 65.36 L99.89 70.26 L99.75 73.81 L99.56 76.68 L99.31 79.12 L99.01 81.26 L98.64 83.17 L98.22 84.89 L97.74 86.46 L97.20 87.89 L96.60 89.21 L95.94 90.43 L95.20 91.54 L94.40 92.58 L93.53 93.53 L92.58 94.40 L91.54 95.20 L90.43 95.94 L89.21 96.60 L87.89 97.20 L86.46 97.74 L84.89 98.22 L83.17 98.64 L81.26 99.01 L79.12 99.31 L76.68 99.56 L73.81 99.75 L70.26 99.89 L65.36 99.97 L50.00 100.00 L34.64 99.97 L29.74 99.89 L26.19 99.75 L23.32 99.56 L20.88 99.31 L18.74 99.01 L16.83 98.64 L15.11 98.22 L13.54 97.74 L12.11 97.20 L10.79 96.60 L9.57 95.94 L8.46 95.20 L7.42 94.40 L6.47 93.53 L5.60 92.58 L4.80 91.54 L4.06 90.43 L3.40 89.21 L2.80 87.89 L2.26 86.46 L1.78 84.89 L1.36 83.17 L0.99 81.26 L0.69 79.12 L0.44 76.68 L0.25 73.81 L0.11 70.26 L0.03 65.36 L0.00 50.00 L0.03 34.64 L0.11 29.74 L0.25 26.19 L0.44 23.32 L0.69 20.88 L0.99 18.74 L1.36 16.83 L1.78 15.11 L2.26 13.54 L2.80 12.11 L3.40 10.79 L4.06 9.57 L4.80 8.46 L5.60 7.42 L6.47 6.47 L7.42 5.60 L8.46 4.80 L9.57 4.06 L10.79 3.40 L12.11 2.80 L13.54 2.26 L15.11 1.78 L16.83 1.36 L18.74 0.99 L20.88 0.69 L23.32 0.44 L26.19 0.25 L29.74 0.11 L34.64 0.03 L50.00 0.00 L65.36 0.03 L70.26 0.11 L73.81 0.25 L76.68 0.44 L79.12 0.69 L81.26 0.99 L83.17 1.36 L84.89 1.78 L86.46 2.26 L87.89 2.80 L89.21 3.40 L90.43 4.06 L91.54 4.80 L92.58 5.60 L93.53 6.47 L94.40 7.42 L95.20 8.46 L95.94 9.57 L96.60 10.79 L97.20 12.11 L97.74 13.54 L98.22 15.11 L98.64 16.83 L99.01 18.74 L99.31 20.88 L99.56 23.32 L99.75 26.19 L99.89 29.74 L99.97 34.64Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M100.00 50.00 L99.97 65.36 L99.89 70.26 L99.75 73.81 L99.56 76.68 L99.31 79.12 L99.01 81.26 L98.64 83.17 L98.22 84.89 L97.74 86.46 L97.20 87.89 L96.60 89.21 L95.94 90.43 L95.20 91.54 L94.40 92.58 L93.53 93.53 L92.58 94.40 L91.54 95.20 L90.43 95.94 L89.21 96.60 L87.89 97.20 L86.46 97.74 L84.89 98.22 L83.17 98.64 L81.26 99.01 L79.12 99.31 L76.68 99.56 L73.81 99.75 L70.26 99.89 L65.36 99.97 L50.00 100.00 L34.64 99.97 L29.74 99.89 L26.19 99.75 L23.32 99.56 L20.88 99.31 L18.74 99.01 L16.83 98.64 L15.11 98.22 L13.54 97.74 L12.11 97.20 L10.79 96.60 L9.57 95.94 L8.46 95.20 L7.42 94.40 L6.47 93.53 L5.60 92.58 L4.80 91.54 L4.06 90.43 L3.40 89.21 L2.80 87.89 L2.26 86.46 L1.78 84.89 L1.36 83.17 L0.99 81.26 L0.69 79.12 L0.44 76.68 L0.25 73.81 L0.11 70.26 L0.03 65.36 L0.00 50.00 L0.03 34.64 L0.11 29.74 L0.25 26.19 L0.44 23.32 L0.69 20.88 L0.99 18.74 L1.36 16.83 L1.78 15.11 L2.26 13.54 L2.80 12.11 L3.40 10.79 L4.06 9.57 L4.80 8.46 L5.60 7.42 L6.47 6.47 L7.42 5.60 L8.46 4.80 L9.57 4.06 L10.79 3.40 L12.11 2.80 L13.54 2.26 L15.11 1.78 L16.83 1.36 L18.74 0.99 L20.88 0.69 L23.32 0.44 L26.19 0.25 L29.74 0.11 L34.64 0.03 L50.00 0.00 L65.36 0.03 L70.26 0.11 L73.81 0.25 L76.68 0.44 L79.12 0.69 L81.26 0.99 L83.17 1.36 L84.89 1.78 L86.46 2.26 L87.89 2.80 L89.21 3.40 L90.43 4.06 L91.54 4.80 L92.58 5.60 L93.53 6.47 L94.40 7.42 L95.20 8.46 L95.94 9.57 L96.60 10.79 L97.20 12.11 L97.74 13.54 L98.22 15.11 L98.64 16.83 L99.01 18.74 L99.31 20.88 L99.56 23.32 L99.75 26.19 L99.89 29.74 L99.97 34.64Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  box-shadow:
+    inset 0 1.5px 0 rgb(255 255 255 / 0.35),
+    inset 0 -1px 0 rgb(0 0 0 / 0.12);
+}
+.icon-glyph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-glyph.is-light {
+  color: rgb(255 255 255 / 0.96);
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.28));
+}
+.icon-glyph.is-dark {
+  color: #23252b;
+  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.7));
+}
+.icon-spec {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 70% at 28% -8%, rgb(255 255 255 / 0.5) 0%, rgb(255 255 255 / 0) 55%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.14) 0%, rgb(255 255 255 / 0) 42%);
+}
+.icon-folder {
+  background: rgb(255 255 255 / 0.55);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+}
+
+/* photo wallpapers */
+.wp-photo {
+  background-color: #1c2534;
+  background-size: cover;
+  background-position: center;
+}
+.avatar-ring.is-current {
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.95), 0 0 0 4px #0a84ff;
+}
+
+/* ---------- loading skeleton: a slow sheen, transform-free so it never relayouts ---------- */
+.skeleton {
+  background: linear-gradient(90deg, #eeeff2 0%, #f6f6f8 50%, #eeeff2 100%) 0 0 / 200% 100%;
+  animation: skeleton 1.4s ease-in-out infinite;
+}
+@keyframes skeleton {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ---------- Records scrubber: thin track, the knob shows on hover ---------- */
+.scrub {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  background: transparent;
+}
+.scrub::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #1a1b1e var(--p, 0%), rgb(0 0 0 / 0.08) var(--p, 0%));
+}
+.scrub::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #1a1b1e var(--p, 0%), rgb(0 0 0 / 0.08) var(--p, 0%));
+}
+.scrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.2), 0 1px 3px rgb(0 0 0 / 0.25);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.scrub::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.2), 0 1px 3px rgb(0 0 0 / 0.25);
+}
+.scrub:hover::-webkit-slider-thumb,
+.scrub:focus-visible::-webkit-slider-thumb,
+.scrub:active::-webkit-slider-thumb {
+  opacity: 1;
+}
+.scrub:disabled {
+  opacity: 0.5;
+}
+
+/* ---------- phone reader: the chapter flows into page-wide columns, scrolled sideways ---------- */
+.paged {
+  scrollbar-width: none;
+}
+.paged::-webkit-scrollbar {
+  display: none;
+}
+.paged-cols {
+  column-width: calc(100vw - 48px);
+  column-gap: 48px;
+  column-fill: auto;
+}
+
+/* ---------- continuous corners ----------
+   A radius ladder: 4 (menu rows) / 6 (menus, chips) / 10 (iOS lists) / 12 (cards) / 13 (windows) / 16 (panels) / 22 (sheets).
+   Where the browser has corner-shape, every surface gets Apple's continuous (squircle) corner; a squircle at the
+   same radius reads tighter, so the main surfaces get a larger radius there. Elsewhere they keep the round corner. */
+@supports (corner-shape: superellipse(2)) {
+  .win,
+  .sq,
+  .glass,
+  .visual {
+    corner-shape: superellipse(1.6);
+  }
+  .win {
+    border-radius: 24px;
+  }
+  .win.is-max {
+    border-radius: 0 0 24px 24px;
+  }
+  .sq-panel {
+    border-radius: 30px !important;
+  }
+  .sq-card {
+    border-radius: 32px !important;
+  }
+  .sq-list {
+    border-radius: 18px !important;
+  }
+}
+.win {
+  border-radius: 16px;
+}
+.win.is-max {
+  border-radius: 0 0 16px 16px;
+}
+.sq-panel {
+  border-radius: 20px;
+}
+.sq-card {
+  border-radius: 24px;
+}
+.sq-list {
+  border-radius: 13px;
+}
+
+/* one icon weight everywhere: Lucide at 1.5, like SF Symbols regular. Bold glyphs (the iOS close X) opt out */
+svg.lucide {
+  stroke-width: 1.5;
+}
+svg.lucide.bold {
+  stroke-width: 2.4;
+}
+
+/* collapsible sidebar sections: rows fold away on a grid track, no height animation in JS */
+.fold {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.fold.is-closed {
+  grid-template-rows: 0fr;
+}
+.fold > div {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* hover lift for cards (only where hover exists) */
+@media (hover: hover) and (pointer: fine) {
+  .lift {
+    transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 200ms ease;
+  }
+  .lift:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.1), 0 6px 16px -8px rgb(16 18 24 / 0.22);
+  }
+}
+
+/* the Trash lifts while a desktop item hovers over it */
+.dock-btn[data-hot] > div {
+  transform: translateY(-6px) scale(1.12) !important;
+  transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* =====================================================================================================
+   Augustas OS design system. Every screen uses these tokens and the primitives in ui.tsx, nothing else.
+   Light first; dark tokens are ready under .dark / [data-theme="dark"].
+   ===================================================================================================== */
+:root {
+  /* one accent */
+  --accent: #007aff;
+  --accent-hover: #0068d9;
+  --accent-tint: rgb(0 122 255 / 0.12);
+  /* labels (Apple semantic greys, cooled) */
+  --label: #1a1b1e;
+  --label-2: rgb(60 60 67 / 0.62);
+  --label-3: rgb(60 60 67 / 0.32);
+  --label-2s: #5b5f68;
+  --label-3s: #8b9099;
+  --fill-solid: #f1f1f4;
+  --page: #e7e8ec;
+  --surface-2: #f7f7f9;
+  --separator: rgb(60 60 67 / 0.16);
+  --separator-opaque: #d9d9de;
+  /* surfaces */
+  --bg: #ffffff;
+  --bg-grouped: #f2f2f7;
+  --bg-elevated: #ffffff;
+  --bg-sidebar: #f4f4f6;
+  --fill: rgb(120 120 128 / 0.12);
+  --fill-2: rgb(120 120 128 / 0.08);
+  --hover: rgb(0 0 0 / 0.045);
+  --press: rgb(0 0 0 / 0.08);
+  --selection: rgb(0 0 0 / 0.08);
+  /* radius ladder (the squircle primitive smooths every one of them) */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-2xl: 22px;
+  --r-window: 14px;
+  /* shadows: crisp and short */
+  --shadow-1: 0 0 0 0.5px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-2: 0 0 0 0.5px rgb(0 0 0 / 0.1), 0 6px 18px -8px rgb(16 18 24 / 0.25);
+  --shadow-3: 0 0 0 0.5px rgb(0 0 0 / 0.14), 0 18px 48px -16px rgb(16 18 24 / 0.4);
+  /* motion */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+}
+.dark,
+[data-theme="dark"] {
+  --accent: #0a84ff;
+  --accent-hover: #2a95ff;
+  --accent-tint: rgb(10 132 255 / 0.2);
+  --label: #f5f5f7;
+  --label-2: rgb(235 235 245 / 0.6);
+  --label-3: rgb(235 235 245 / 0.3);
+  --label-2s: #a1a1a8;
+  --label-3s: #6e6e75;
+  --fill-solid: #2c2c2f;
+  --page: #121214;
+  --surface-2: #232326;
+  --separator: rgb(84 84 88 / 0.6);
+  --separator-opaque: #38383a;
+  --bg: #1c1c1e;
+  --bg-grouped: #000000;
+  --bg-elevated: #2c2c2e;
+  --bg-sidebar: #232326;
+  --fill: rgb(120 120 128 / 0.32);
+  --fill-2: rgb(120 120 128 / 0.2);
+  --hover: rgb(255 255 255 / 0.06);
+  --press: rgb(255 255 255 / 0.1);
+  --selection: rgb(255 255 255 / 0.1);
+}
+
+/* type scale: iOS (t-*) and macOS (m-*), SF tracking */
+.t-large { font-size: 34px; line-height: 41px; font-weight: 700; letter-spacing: 0.011em; }
+.t-title1 { font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: 0.013em; }
+.t-title2 { font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: -0.012em; }
+.t-title3 { font-size: 20px; line-height: 25px; font-weight: 600; letter-spacing: -0.017em; }
+.t-headline { font-size: 17px; line-height: 22px; font-weight: 600; letter-spacing: -0.024em; }
+.t-body { font-size: 17px; line-height: 22px; letter-spacing: -0.024em; }
+.t-callout { font-size: 16px; line-height: 21px; letter-spacing: -0.02em; }
+.t-sub { font-size: 15px; line-height: 20px; letter-spacing: -0.015em; }
+.t-foot { font-size: 13px; line-height: 18px; letter-spacing: -0.005em; }
+.t-cap { font-size: 12px; line-height: 16px; }
+.t-cap2 { font-size: 11px; line-height: 13px; letter-spacing: 0.005em; }
+.m-large { font-size: 26px; line-height: 32px; font-weight: 700; letter-spacing: -0.022em; }
+.m-title { font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: -0.02em; }
+.m-headline { font-size: 13px; line-height: 16px; font-weight: 600; letter-spacing: -0.003em; }
+.m-body { font-size: 13px; line-height: 16px; letter-spacing: -0.003em; }
+.m-sub { font-size: 11px; line-height: 14px; }
+.eyebrow { font-size: 13px; line-height: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
+
+/* native superellipse where the browser has it; ui.tsx clips with an SVG path everywhere else */
+@supports (corner-shape: superellipse(2)) {
+  [data-sq] {
+    corner-shape: superellipse(1.8);
+  }
+}
+
+/* buttons: one component, four styles, three sizes (see Btn in ui.tsx) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: background-color var(--dur-1) ease, color var(--dur-1) ease, transform 140ms var(--ease-out), box-shadow var(--dur-1) ease;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.4;
+}
+.btn:focus-visible {
+  outline: 3px solid rgb(0 122 255 / 0.45);
+  outline-offset: 1px;
+}
+.btn-sm { height: 26px; padding: 0 10px; font-size: 12px; border-radius: var(--r-sm); }
+.btn-md { height: 30px; padding: 0 13px; font-size: 13px; border-radius: var(--r-md); }
+.btn-lg { height: 44px; padding: 0 20px; font-size: 17px; font-weight: 600; border-radius: var(--r-lg); }
+.btn-capsule { border-radius: 999px; }
+.btn-icon.btn-sm { width: 26px; padding: 0; }
+.btn-icon.btn-md { width: 30px; padding: 0; }
+.btn-icon.btn-lg { width: 44px; padding: 0; }
+.btn-bordered { background: var(--bg-elevated); color: var(--label); box-shadow: var(--shadow-1); }
+.btn-prominent { background: var(--accent); color: #fff; font-weight: 600; box-shadow: 0 1px 2px rgb(0 60 140 / 0.24), inset 0 0.5px 0 rgb(255 255 255 / 0.2); }
+.btn-tinted { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
+.btn-plain { background: transparent; color: var(--label); }
+.btn-glass { color: var(--label); }
+.btn-glass-dark { color: #fff; }
+@media (hover: hover) and (pointer: fine) {
+  .btn-bordered:hover:not(:disabled) { background: #f7f7f9; }
+  .btn-prominent:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-tinted:hover:not(:disabled) { background: rgb(0 122 255 / 0.18); }
+  .btn-plain:hover:not(:disabled) { background: var(--hover); }
+  .btn-glass:hover:not(:disabled) { --g-fill: rgb(255 255 255 / 0.8); }
+}
+.btn-plain:active:not(:disabled) { background: var(--press); }
+
+/* inset grouped lists */
+.list { background: var(--bg-elevated); border-radius: var(--r-lg); overflow: hidden; }
+.list-row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding-left: 16px; }
+.list-row > .list-body { display: flex; align-self: stretch; align-items: center; gap: 8px; flex: 1; min-width: 0; padding-right: 16px; }
+.list-row + .list-row > .list-body { box-shadow: inset 0 0.5px 0 var(--separator-opaque); }
+.m-list .list-row { min-height: 36px; padding-left: 12px; gap: 10px; }
+.m-list .list-row > .list-body { padding-right: 12px; }
+.icon-tile { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fff; border-radius: 7px; }
+
+
+/* ---------- dark mode: the hard-coded light surfaces follow the tokens ---------- */
+.dark body,
+.dark .bg-page {
+  background: var(--page);
+}
+.dark .win,
+.dark .bg-white {
+  background-color: var(--bg);
+}
+.dark .bg-\[\#F7F7F9\],
+.dark .bg-\[\#FBFBFC\],
+.dark .bg-\[\#F1F1F4\] {
+  background-color: var(--surface-2);
+}
+.dark .bg-\[\#F4F4F6\] {
+  background-color: var(--bg-sidebar);
+}
+.dark .bg-\[\#F2F2F7\],
+.dark .bg-\[\#E9EAED\] {
+  background-color: var(--bg-grouped);
+}
+.dark .text-\[\#24262b\],
+.dark .text-\[\#1a1b1e\] {
+  color: var(--label);
+}
+.dark .border-black\/\[0\.06\],
+.dark .border-black\/\[0\.08\] {
+  border-color: rgb(255 255 255 / 0.08);
+}
+.dark .bg-black\/\[0\.08\],
+.dark .bg-black\/\[0\.05\] {
+  background-color: rgb(255 255 255 / 0.1);
+}
+.dark .btn-bordered:hover:not(:disabled) {
+  background: #3a3a3c;
+}
+.dark .glass-bar { --g-fill: rgb(30 30 34 / 0.6); --g-ring: 0 0.5px 0 rgb(255 255 255 / 0.08); }
+.dark .glass-pop {
+  --g-fill: rgb(38 38 42 / 0.8);
+  --g-ring: 0 0 0 0.5px rgb(0 0 0 / 0.5), inset 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+.dark .glass-dock { --g-fill: rgb(40 40 46 / 0.4); --g-ring: 0 0 0 0.5px rgb(0 0 0 / 0.4), inset 0 0 0 1px rgb(255 255 255 / 0.14); }
+.dark .glass-btn { --g-fill: rgb(60 60 66 / 0.7); }
+.dark .ios-bar { --g-fill: rgb(28 29 32 / 0.8); --g-ring: 0 0.5px 0 rgb(255 255 255 / 0.12); }
+.dark .menu-ink {
+  color: #f5f5f7;
+}
+.dark .win.is-focused,
+.dark .win {
+  box-shadow: 0 0 0 0.5px rgb(255 255 255 / 0.14), 0 24px 70px -16px rgb(0 0 0 / 0.7);
+}
+.dark .piano-white {
+  filter: brightness(0.92);
+}
+.dark .visual {
+  background-color: #2a2b30;
+}
+.dark .list {
+  background: var(--bg-elevated);
+}
+
+
+/* ---------- app icons: the Liquid Glass language ----------
+   soft two-stop base, a glow from the top left, a glass glyph lit from above with depth below it, a specular rim
+   along the top edge and a darker one along the bottom. Dark and tinted variants swap the base, keep the glass. */
+.icon-sq {
+  box-shadow:
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.3),
+    inset 0 1.5px 1px rgb(255 255 255 / 0.5),
+    inset 0 -2px 3px rgb(0 0 0 / 0.14) !important;
+}
+.icon-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 70% at 22% 6%, rgb(255 255 255 / 0.42) 0%, rgb(255 255 255 / 0) 58%),
+    radial-gradient(70% 50% at 50% 110%, rgb(0 0 0 / 0.16) 0%, rgb(0 0 0 / 0) 70%);
+}
+.icon-glyph.is-light {
+  color: #fff;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.22)) drop-shadow(0 0 5px rgb(255 255 255 / 0.25));
+}
+.icon-glyph.is-dark {
+  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 0.8)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.1));
+}
+.icon-spec {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.22) 0%, rgb(255 255 255 / 0) 40%),
+    radial-gradient(60% 30% at 50% 0%, rgb(255 255 255 / 0.3) 0%, rgb(255 255 255 / 0) 100%) !important;
+}
+/* dark icons: a near-black glass base, the glyph takes the icon's own colour */
+.dark .icon-sq {
+  background: linear-gradient(180deg, #2c2e34 0%, #131417 100%) !important;
+}
+.dark .icon-glyph svg.glyph-line {
+  stroke: color-mix(in oklab, var(--ia), white 42%);
+}
+.dark .icon-glyph svg.glyph-mark {
+  fill: color-mix(in oklab, var(--ia), white 42%);
+}
+.dark .icon-glyph.is-dark svg.glyph-line,
+.dark .icon-glyph.is-dark svg.glyph-mark {
+  stroke: #e9eaee;
+  fill: none;
+}
+.dark .icon-glyph.is-dark svg.glyph-mark {
+  fill: #e9eaee;
+}
+.dark .icon-glyph.is-dark {
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.4));
+}
+/* tinted icons: one accent glyph on dark glass */
+.tinted .icon-sq {
+  background: linear-gradient(180deg, #26272c 0%, #0f1013 100%) !important;
+}
+.tinted .icon-glyph svg.glyph-line {
+  stroke: var(--accent) !important;
+}
+.tinted .icon-glyph svg.glyph-mark {
+  fill: var(--accent) !important;
+}

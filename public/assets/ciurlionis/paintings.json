@@ -1,0 +1,34 @@
+[
+ {
+  "id": "sun-allegro",
+  "file": "/assets/ciurlionis/sun-allegro.jpg",
+  "title": "Sonata of the Sun. Allegro (1907)",
+  "width": 1600,
+  "height": 1815,
+  "source": "https://commons.wikimedia.org/wiki/File:Saules_sonata.Allegro.jpg"
+ },
+ {
+  "id": "stars-allegro",
+  "file": "/assets/ciurlionis/stars-allegro.jpg",
+  "title": "Sonata of the Stars. Allegro (1908)",
+  "width": 1600,
+  "height": 1865,
+  "source": "https://commons.wikimedia.org/wiki/File:Sonata_No._6_(Sonata_of_the_Stars)._Allegro.jpeg"
+ },
+ {
+  "id": "stars-andante",
+  "file": "/assets/ciurlionis/stars-andante.jpg",
+  "title": "Sonata of the Stars. Andante (1908)",
+  "width": 1600,
+  "height": 1883,
+  "source": "https://commons.wikimedia.org/wiki/File:Sonata_No._6_(Sonata_of_the_Stars)._Andante.jpeg"
+ },
+ {
+  "id": "fairy-tale",
+  "file": "/assets/ciurlionis/fairy-tale.jpg",
+  "title": "Fairy Tale. Castle Fairy Tale (1909)",
+  "width": 1600,
+  "height": 1183,
+  "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_FAIRY_TALE_(CASTLE_FAIRY_TALE)_-_1909.jpg"
+ }
+]

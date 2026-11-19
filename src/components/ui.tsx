@@ -1,0 +1,981 @@
+"use client";
+
+import { AnimatePresence, motion } from "motion/react";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { apps, type AppId } from "@/content";
+import { useOS } from "@/store";
+import { isSoundEnabled, play as playSfx, setSoundEnabled } from "@/lib/sfx";
+
+// Shared Apple-style primitives. Light first, cool greys, 1px rings,
+// radius ladder 6 (chips) / 8 (rows, controls) / 12 (cards, windows) / 16+ (surfaces).
+
+export const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+
+// Where an app is being drawn: a desktop window (traffic lights top-left)
+// or a phone sheet (compact, list -> detail navigation).
+export const Chrome = createContext<{ compact: boolean }>({ compact: false });
+export const useChrome = () => useContext(Chrome);
+// Inside a SplitView's detail the traffic lights sit over the sidebar, so the toolbar needs no inset.
+const InSplit = createContext(false);
+
+export function Badge({ children, tone = "grey" }: { children: ReactNode; tone?: "grey" | "ink" | "live" }) {
+  const cls =
+    tone === "ink"
+      ? "bg-ink text-white"
+      : tone === "live"
+        ? "bg-[#E9F6EE] text-[#1F7A45] ring-1 ring-inset ring-[#1F7A45]/15"
+        : "bg-field text-ink-2 ring-1 ring-inset ring-black/[0.06]";
+  return <span className={`inline-flex h-5 items-center rounded-[6px] px-1.5 text-[11px] font-medium ${cls}`}>{children}</span>;
+}
+
+// Older call sites: one mapping onto Btn so every button in the OS is the same component.
+export function Button({
+  children,
+  onClick,
+  href,
+  variant = "secondary",
+  size = "md",
+  icon,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  href?: string;
+  variant?: "primary" | "secondary" | "ghost";
+  size?: "sm" | "md";
+  icon?: ReactNode;
+}) {
+  return (
+    <Btn variant={variant === "primary" ? "prominent" : variant === "ghost" ? "plain" : "bordered"} size={size} icon={icon} href={href} onClick={onClick ? () => onClick() : undefined}>
+      {children}
+    </Btn>
+  );
+}
+
+export function Segmented<T extends string>({ value, options, onChange, id }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; id: string }) {
+  return (
+    <div className="flex h-7 items-center rounded-[8px] bg-black/[0.05] p-[2px]">
+      {options.map((o) => (
+        <button
+          type="button"
+          key={o.value}
+          onClick={() => onChange(o.value)}
+          className="relative h-6 px-2.5 text-[12px] font-medium"
+        >
+          {value === o.value && (
+            <motion.span
+              layoutId={`seg-${id}`}
+              className="absolute inset-0 rounded-[6px] bg-white shadow-[0_1px_2px_rgb(0_0_0/0.1),0_0_0_0.5px_rgb(0_0_0/0.06)]"
+              transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+            />
+          )}
+          <span className={`relative ${value === o.value ? "text-ink" : "text-ink-2"}`}>{o.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// iOS switch. Round because it's an indicator.
+export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={() => onChange(!on)}
+      className={`relative h-[22px] w-[38px] shrink-0 rounded-full transition-colors duration-200 ${on ? "bg-[#34C759]" : "bg-black/[0.12]"}`}
+    >
+      <motion.span
+        animate={{ x: on ? 16 : 0 }}
+        transition={{ type: "spring", bounce: 0, duration: 0.25 }}
+        className="absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/0.2)]"
+      />
+    </button>
+  );
+}
+
+// Visual placeholder: a soft cool-grey field with grain, not a striped box.
+export function Visual({ label, className = "", dark = false, src, alt = "" }: { label?: string; className?: string; dark?: boolean; src?: string; alt?: string }) {
+  return (
+    <div
+      className={`visual sq-card relative flex items-end overflow-hidden rounded-[12px] ${dark ? "visual-dark" : ""} ${className}`}
+    >
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} className="absolute inset-0 h-full w-full object-cover object-top" />
+      )}
+      {src && <span className="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.08)]" />}
+      {label && !src && (
+        <span className={`m-3 text-[11px] font-medium ${dark ? "text-white/55" : "text-ink-3"}`}>{label}</span>
+      )}
+    </div>
+  );
+}
+
+// macOS-style toolbar. In a window the traffic lights sit at its left.
+export function Toolbar({ title, sub, children, inset }: { title?: ReactNode; sub?: ReactNode; children?: ReactNode; inset?: boolean }) {
+  const { compact } = useChrome();
+  const inSplit = useContext(InSplit);
+  const pad = inset ?? !inSplit;
+  if (compact) {
+    if (!children) return null;
+    return <div className="flex items-center justify-end gap-2 px-4 pb-3">{children}</div>;
+  }
+  return (
+    <div
+      data-drag
+      className={`flex h-[52px] shrink-0 items-center gap-2 border-b border-black/[0.06] pr-3 ${pad ? "pl-[84px]" : "pl-4"}`}
+    >
+      <div className="min-w-0 flex-1">
+        {title && <div className="truncate text-[13px] font-semibold leading-[16px] tracking-[-0.003em] text-ink">{title}</div>}
+        {sub && <div className="truncate text-[11px] leading-[14px] text-ink-3">{sub}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// macOS toolbar search field.
+export function SearchField({ value, onChange, placeholder = "Search", id }: { value: string; onChange: (v: string) => void; placeholder?: string; id: string }) {
+  const { compact } = useChrome();
+  return (
+    <label
+      htmlFor={id}
+      className={`flex shrink-0 items-center gap-1.5 text-ink-3 ${
+        compact ? "h-9 w-full rounded-[10px] bg-[#767680]/[0.12] px-2" : "h-7 w-[168px] rounded-[6px] bg-black/[0.05] px-2 focus-within:ring-[3px] focus-within:ring-[#0A84FF]/30"
+      }`}
+    >
+      <Search size={compact ? 16 : 13} strokeWidth={2} className="shrink-0" />
+      <input
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoComplete="off"
+        spellCheck={false}
+        className={`min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-3 ${compact ? "text-[17px] tracking-[-0.02em]" : "text-[13px]"}`}
+      />
+      {value && (
+        <button type="button" aria-label="Clear search" onClick={() => onChange("")} className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-ink-3 text-white">
+          <X size={10} strokeWidth={3} />
+        </button>
+      )}
+    </label>
+  );
+}
+
+// Quick Look: a floating preview of an image or a document. Space or Escape closes it, arrows step through.
+export type LookItem = { title: string; src?: string; node?: ReactNode };
+export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[]; index: number | null; onIndex?: (i: number) => void; onClose: () => void }) {
+  const { compact } = useChrome();
+  const it = index === null ? null : items[index];
+  useEffect(() => {
+    if (index === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+      if (e.key === "Escape" || e.key === " ") {
+        e.preventDefault();
+        onClose();
+      }
+      if (onIndex && e.key === "ArrowRight") onIndex((index + 1) % items.length);
+      if (onIndex && e.key === "ArrowLeft") onIndex((index - 1 + items.length) % items.length);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [index, items.length, onClose, onIndex]);
+  const many = items.length > 1 && !!onIndex;
+  return (
+    <AnimatePresence>
+      {it && index !== null && (
+        <motion.div
+          key="ql"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.12 } }}
+          transition={{ duration: 0.16 }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            if (e.target === e.currentTarget) onClose();
+          }}
+          className={`fixed inset-0 z-[2400] flex items-center justify-center ${compact ? "bg-black" : "px-10 pb-[96px] pt-10"}`}
+        >
+          <motion.div
+            initial={{ scale: 0.96, y: 6 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.98 }}
+            transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+            className={
+              compact
+                ? "flex h-full w-full flex-col"
+                : "sq-card flex max-h-full w-[min(760px,100%)] flex-col overflow-hidden rounded-[13px] bg-[#F7F7F9] shadow-[0_0_0_0.5px_rgb(0_0_0/0.2),0_24px_70px_-16px_rgb(16_18_24/0.45)]"
+            }
+          >
+            {compact ? (
+              <button type="button" aria-label="Close" onClick={onClose} data-glass="" className={`${glass("btn-dark")} absolute right-4 top-[calc(env(safe-area-inset-top)+58px)] z-10 flex h-9 w-9 items-center justify-center rounded-full text-white`}>
+                <X size={17} className="bold" />
+              </button>
+            ) : (
+              <div className="relative flex h-[38px] shrink-0 items-center justify-center border-b border-black/[0.06] px-12">
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={onClose}
+                  className="group/x absolute left-3 flex h-3 w-3 items-center justify-center rounded-full bg-[#FF5F57] ring-[0.5px] ring-inset ring-black/[0.12]"
+                >
+                  <svg viewBox="0 0 12 12" className="h-[8px] w-[8px] opacity-0 hov:group-hover/x:opacity-100" aria-hidden="true">
+                    <path d="M3 3l6 6M9 3l-6 6" stroke="rgb(0 0 0 / 0.5)" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+                  </svg>
+                </button>
+                <span className="truncate text-[13px] font-semibold text-ink">{it.title}</span>
+                {many && (
+                  <span className="absolute right-2 flex">
+                    <button type="button" aria-label="Previous" onClick={() => onIndex!((index - 1 + items.length) % items.length)} className="flex h-6 w-7 items-center justify-center rounded-[6px] text-ink-2 hov:hover:bg-black/[0.05]">
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button type="button" aria-label="Next" onClick={() => onIndex!((index + 1) % items.length)} className="flex h-6 w-7 items-center justify-center rounded-[6px] text-ink-2 hov:hover:bg-black/[0.05]">
+                      <ChevronRight size={16} />
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
+            <div className={`min-h-0 flex-1 overflow-auto ${compact ? "flex items-center justify-center" : ""}`}>
+              {it.node ??
+                (it.src && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={it.src} alt={it.title} draggable={false} className={`block w-full object-contain ${compact ? "max-h-full" : "max-h-[calc(100vh-180px)]"}`} />
+                ))}
+            </div>
+            {compact && <div className="pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-center text-[15px] font-semibold text-white">{it.title}</div>}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+export type SideItem = { id: string; label: string; icon?: ReactNode; meta?: ReactNode };
+
+// Sidebar + detail. On a phone it becomes list -> detail with a back button.
+export function SplitView({
+  sections,
+  selected,
+  onSelect,
+  detail,
+  width = 200,
+}: {
+  sections: { title?: string; items: SideItem[] }[];
+  selected: string;
+  onSelect: (id: string) => void;
+  detail: ReactNode;
+  width?: number;
+}) {
+  const { compact } = useChrome();
+  const [pushed, setPushed] = useState(false);
+  const [folded, setFolded] = useState<string[]>([]);
+  if (compact) {
+    return (
+      <div className="relative overflow-hidden">
+        <AnimatePresence initial={false} mode="popLayout">
+          {pushed ? (
+            <motion.div
+              key="detail"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+              className="min-h-[60vh] bg-white"
+            >
+              <button type="button" onClick={() => setPushed(false)} className="press flex h-11 items-center gap-0.5 pl-2 pr-3 text-[17px] tracking-[-0.02em] text-[#0A84FF]">
+                <ChevronLeft size={24} strokeWidth={2.2} className="-mr-0.5" /> Back
+              </button>
+              <InSplit.Provider value>{detail}</InSplit.Provider>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="list"
+              initial={{ x: "-25%", opacity: 0.6 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: "-25%", opacity: 0.6 }}
+              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+              className="px-4 pb-8"
+            >
+              {sections.map((s, i) => (
+                <div key={i} className="mt-4">
+                  {s.title && <div className="mb-[7px] px-4 text-[13px] uppercase tracking-[-0.005em] text-[#6D6D72]">{s.title}</div>}
+                  <div className="sq-list overflow-hidden rounded-[10px] bg-white">
+                    {s.items.map((it, j) => (
+                      <button
+                        type="button"
+                        key={it.id}
+                        onClick={() => {
+                          onSelect(it.id);
+                          setPushed(true);
+                        }}
+                        className="press-row flex min-h-[44px] w-full items-center gap-3 pl-4 text-left"
+                      >
+                        {it.icon && <span className="flex h-7 w-7 shrink-0 items-center justify-center text-ink-2">{it.icon}</span>}
+                        <span className={`flex min-h-[44px] flex-1 items-center gap-2 pr-4 ${j ? "border-t-[0.5px] border-[#C6C6C8]" : ""}`}>
+                          <span className="flex-1 text-[17px] tracking-[-0.02em] text-ink">{it.label}</span>
+                          {it.meta}
+                          <ChevronRight size={17} strokeWidth={2.4} className="-mr-1 text-[#C4C4C7]" />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full min-h-0">
+      <aside
+        data-drag
+        onKeyDown={(e) => {
+          // arrow keys walk the sidebar like a real source list
+          if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+          const ids = sections.flatMap((s) => s.items.map((i) => i.id));
+          const i = ids.indexOf(selected);
+          const next = ids[Math.min(ids.length - 1, Math.max(0, i + (e.key === "ArrowDown" ? 1 : -1)))];
+          if (next && next !== selected) {
+            e.preventDefault();
+            onSelect(next);
+            (e.currentTarget.querySelector(`[data-id="${next}"]`) as HTMLElement | null)?.focus();
+          }
+        }}
+        className="flex shrink-0 flex-col gap-3 overflow-auto border-r border-black/[0.06] bg-[#F4F4F6] px-2.5 pb-3 pt-[52px]"
+        style={{ width }}
+      >
+        {sections.map((s, i) => (
+          <div key={i}>
+            {s.title && (
+              // a section folds away from its header, with the chevron macOS shows on hover
+              <button
+                type="button"
+                aria-expanded={!folded.includes(s.title)}
+                onClick={() => setFolded((f) => (f.includes(s.title!) ? f.filter((x) => x !== s.title) : [...f, s.title!]))}
+                className="group/sec flex h-[22px] w-full items-center justify-between rounded-[4px] px-2 text-left text-[11px] font-semibold text-ink-3"
+              >
+                {s.title}
+                <ChevronRight
+                  size={12}
+                  className={`opacity-0 transition-[transform,opacity] duration-200 hov:group-hover/sec:opacity-100 ${folded.includes(s.title) ? "" : "rotate-90"}`}
+                />
+              </button>
+            )}
+            <div className={`fold ${s.title && folded.includes(s.title) ? "is-closed" : ""}`}>
+            <div className="flex flex-col">
+              {s.items.map((it) => {
+                const on = it.id === selected;
+                return (
+                  <button
+                    type="button"
+                    key={it.id}
+                    data-id={it.id}
+                    onClick={() => onSelect(it.id)}
+                    className={`flex h-[28px] items-center gap-2 rounded-[6px] px-2 text-left text-[13px] tracking-[-0.003em] ${
+                      on ? "bg-black/[0.08] text-ink" : "text-ink hov:hover:bg-black/[0.035]"
+                    }`}
+                  >
+                    {it.icon && <span className={`flex h-4 w-4 shrink-0 items-center justify-center ${on ? "text-ink" : "text-ink-2"}`}>{it.icon}</span>}
+                    <span className="min-w-0 flex-1 truncate">{it.label}</span>
+                    {it.meta}
+                  </button>
+                );
+              })}
+            </div>
+            </div>
+          </div>
+        ))}
+      </aside>
+      <div className="min-w-0 flex-1 overflow-auto bg-white">
+        <InSplit.Provider value>{detail}</InSplit.Provider>
+      </div>
+    </div>
+  );
+}
+
+// Settings-style grouped rows.
+export function Group({ title, children, footer }: { title?: string; children: ReactNode; footer?: string }) {
+  return (
+    <section>
+      {title && <h3 className="mb-1.5 px-1 text-[13px] font-semibold text-ink">{title}</h3>}
+      <div className="sq divide-y divide-black/[0.06] overflow-hidden rounded-[10px] bg-white ring-[0.5px] ring-black/[0.1]">{children}</div>
+      {footer && <p className="mt-1.5 px-1 text-[11px] leading-relaxed text-ink-3">{footer}</p>}
+    </section>
+  );
+}
+
+export function Row({ label, children, sub }: { label: ReactNode; children?: ReactNode; sub?: ReactNode }) {
+  return (
+    <div className="flex min-h-[40px] items-center gap-3 px-2.5 py-1.5">
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] text-ink">{label}</div>
+        {sub && <div className="text-[11px] text-ink-3">{sub}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// App icon: a squircle tile with a Lucide glyph. Light by default, one dark tile per profile.
+export function AppTile({ id, size = 52, icon, dark }: { id: AppId; size?: number; icon: ReactNode; dark?: boolean }) {
+  return (
+    <div
+      aria-hidden
+      className={`app-tile flex shrink-0 items-center justify-center ${dark ? "app-tile-dark text-white" : "text-ink"}`}
+      style={{ width: size, height: size, borderRadius: size * 0.225 }}
+      title={apps[id].title}
+    >
+      {icon}
+    </div>
+  );
+}
+
+// ---------- Glass: one material for every translucent surface ----------
+// Ported from larpo.studio (LiquidGlass.tsx). Not just a blur: in Chromium the backdrop is bent through the rim.
+//   1. a displacement map is drawn on a canvas for the element's size and corner radius: flat in the middle, and
+//      across a bezel along the edge it pushes each sample inward along the edge's normal, steepest at the rim
+//   2. an SVG filter runs the backdrop through that map three times at slightly different strengths and keeps one
+//      colour channel from each, so the rim splits into a faint rainbow like thick glass
+//   3. backdrop-filter points at that filter (--lg). Only Chromium can run an SVG filter as a backdrop; Safari and
+//      Firefox get html.lg-css and the CSS fallback in globals.css (more frost, a sheen, a hairline)
+// Use <Glass tone="pop"> or put className="glass glass-<tone>" and data-glass on any element; useGlassScope()
+// (called once by Desktop, PhoneOS and Login) finds them all as they mount.
+
+const POW = 2;
+const maps = new Map<string, string>();
+function displacementMap(w: number, h: number, r: number, bezel: number) {
+  const key = `${w}x${h}r${r.toFixed(1)}b${bezel.toFixed(1)}`;
+  const had = maps.get(key);
+  if (had !== undefined) return had;
+  const sdf = (x: number, y: number) => {
+    const qx = Math.abs(x - w / 2) - (w / 2 - r);
+    const qy = Math.abs(y - h / 2) - (h / 2 - r);
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+  };
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  if (!g) return "";
+  const img = g.createImageData(w, h);
+  new Uint32Array(img.data.buffer).fill(0xff808080);
+  const band = Math.ceil(bezel) + 1;
+  const px = (x: number, y: number) => {
+    const d = -sdf(x + 0.5, y + 0.5);
+    if (d <= 0 || d >= bezel) return;
+    const nx = sdf(x + 1.5, y + 0.5) - sdf(x - 0.5, y + 0.5);
+    const ny = sdf(x + 0.5, y + 1.5) - sdf(x + 0.5, y - 0.5);
+    const len = Math.hypot(nx, ny) || 1;
+    const bend = Math.pow(1 - d / bezel, POW);
+    const i = (y * w + x) * 4;
+    img.data[i] = 128 + (-nx / len) * bend * 127;
+    img.data[i + 1] = 128 + (-ny / len) * bend * 127;
+  };
+  for (let y = 0; y < h; y++) {
+    if (y < band || y >= h - band || w <= band * 2) {
+      for (let x = 0; x < w; x++) px(x, y);
+      continue;
+    }
+    for (let x = 0; x < band; x++) px(x, y);
+    for (let x = w - band; x < w; x++) px(x, y);
+  }
+  g.putImageData(img, 0, 0);
+  const url = c.toDataURL();
+  if (maps.size > 120) maps.clear();
+  maps.set(key, url);
+  return url;
+}
+
+// Safari parses an SVG url in backdrop-filter and then draws nothing, so the bending is Chromium only.
+export const canRefract = () =>
+  typeof navigator !== "undefined" &&
+  /Chrome\/|Chromium\/|Edg\//.test(navigator.userAgent) &&
+  typeof CSS !== "undefined" &&
+  CSS.supports("backdrop-filter", "url(#a)") &&
+  !window.matchMedia("(prefers-reduced-transparency: reduce)").matches;
+
+const keep = (k: number) => {
+  const m = Array(20).fill(0);
+  m[k * 5 + k] = 1;
+  m[18] = 1;
+  return m.join(" ");
+};
+
+const NS = "http://www.w3.org/2000/svg";
+let defs: SVGSVGElement | null = null;
+let seq = 0;
+function filterFor(id: string, w: number, h: number, map: string, max: number) {
+  const set = (el: Element, a: Record<string, string | number>) => {
+    for (const k in a) el.setAttribute(k, String(a[k]));
+    return el;
+  };
+  const f = document.createElementNS(NS, "filter");
+  set(f, { id, x: 0, y: 0, width: w, height: h, filterUnits: "userSpaceOnUse", primitiveUnits: "userSpaceOnUse", "color-interpolation-filters": "sRGB" });
+  f.appendChild(set(document.createElementNS(NS, "feImage"), { href: map, x: 0, y: 0, width: w, height: h, result: "map", preserveAspectRatio: "none" }));
+  [1, 1.025, 1.05].forEach((s, k) => {
+    f.appendChild(set(document.createElementNS(NS, "feDisplacementMap"), { in: "SourceGraphic", in2: "map", scale: max * 2 * s, xChannelSelector: "R", yChannelSelector: "G", result: `d${k}` }));
+    f.appendChild(set(document.createElementNS(NS, "feColorMatrix"), { in: `d${k}`, type: "matrix", values: keep(k), result: `c${k}` }));
+  });
+  f.appendChild(set(document.createElementNS(NS, "feComposite"), { in: "c0", in2: "c1", operator: "arithmetic", k1: 0, k2: 1, k3: 1, k4: 0, result: "rg" }));
+  f.appendChild(set(document.createElementNS(NS, "feComposite"), { in: "rg", in2: "c2", operator: "arithmetic", k1: 0, k2: 1, k3: 1, k4: 0 }));
+  return f;
+}
+
+// Elements bigger than this stay frosted: their glass would be mostly flat middle and cost a large filter.
+const MAX_AREA = 420_000;
+const idle = (fn: () => void) => {
+  const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+  if (w.requestIdleCallback) w.requestIdleCallback(fn, { timeout: 300 });
+  else window.setTimeout(fn, 60);
+};
+
+function attachGlass(el: HTMLElement) {
+  if (!defs) {
+    defs = document.createElementNS(NS, "svg");
+    defs.setAttribute("width", "0");
+    defs.setAttribute("height", "0");
+    defs.setAttribute("aria-hidden", "true");
+    defs.style.position = "absolute";
+    defs.style.pointerEvents = "none";
+    document.body.appendChild(defs);
+  }
+  const id = `lg-${++seq}`;
+  let f: SVGFilterElement | null = null;
+  let size = "";
+  const off = () => {
+    f?.remove();
+    f = null;
+    el.removeAttribute("data-lg");
+    el.style.removeProperty("--lg");
+  };
+  const build = () => {
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    if (!w || !h || `${w}x${h}` === size) return;
+    size = `${w}x${h}`;
+    if (w * h > MAX_AREA) return off();
+    // a bevel about 40% of the height, up to 24px; the push stays under the fold point so the rim magnifies, never smears
+    const bezel = Math.max(6, Math.min(24, h * 0.4, w / 2));
+    const max = bezel * 0.4;
+    const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2);
+    const next = filterFor(id, w, h, displacementMap(w, h, r, bezel), max);
+    if (f) f.replaceWith(next);
+    else defs!.appendChild(next);
+    f = next as unknown as SVGFilterElement;
+    el.style.setProperty("--lg", `url(#${id})`);
+    el.setAttribute("data-lg", "");
+  };
+  // drawn a moment later, off the frame that mounts it, so opening a menu never waits on a canvas
+  let gone = false;
+  let queued = false;
+  const soon = () => {
+    if (queued || gone) return;
+    queued = true;
+    idle(() => {
+      queued = false;
+      if (!gone) build();
+    });
+  };
+  soon();
+  const ro = new ResizeObserver(soon);
+  ro.observe(el);
+  return () => {
+    gone = true;
+    ro.disconnect();
+    off();
+  };
+}
+
+let scopes = 0;
+let stopScope: (() => void) | null = null;
+function installGlass() {
+  const refract = canRefract();
+  document.documentElement.classList.toggle("lg-css", !refract);
+  if (!refract) return () => document.documentElement.classList.remove("lg-css");
+  const tracked = new Map<Element, () => void>();
+  let raf = 0;
+  const scan = () => {
+    raf = 0;
+    document.querySelectorAll<HTMLElement>("[data-glass]").forEach((el) => {
+      if (!tracked.has(el)) tracked.set(el, attachGlass(el));
+    });
+    tracked.forEach((stop, el) => {
+      if (!el.isConnected) {
+        stop();
+        tracked.delete(el);
+      }
+    });
+  };
+  const mo = new MutationObserver(() => {
+    if (!raf) raf = requestAnimationFrame(scan);
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
+  scan();
+  return () => {
+    mo.disconnect();
+    cancelAnimationFrame(raf);
+    tracked.forEach((stop) => stop());
+    tracked.clear();
+  };
+}
+
+// Light, Dark or Auto: puts .dark on <html> so every token switches. Auto follows the system setting.
+function useAppearance() {
+  const appearance = useOS((s) => s.appearance);
+  const tinted = useOS((s) => s.tintedIcons);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("aos.appearance");
+      if (saved === "light" || saved === "dark" || saved === "auto") useOS.setState({ appearance: saved });
+    } catch {}
+  }, []);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => document.documentElement.classList.toggle("dark", appearance === "dark" || (appearance === "auto" && mq.matches));
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, [appearance]);
+  useEffect(() => {
+    document.documentElement.classList.toggle("tinted", tinted);
+  }, [tinted]);
+}
+
+// Turns the glass (and the appearance) on for as long as any OS surface is mounted.
+export function useGlassScope() {
+  useAppearance();
+  useEffect(() => {
+    if (scopes++ === 0) stopScope = installGlass();
+    return () => {
+      if (--scopes === 0) {
+        stopScope?.();
+        stopScope = null;
+      }
+    };
+  }, []);
+}
+
+export type GlassTone = "bar" | "pop" | "dock" | "widget" | "widget-dark" | "lock" | "btn" | "btn-dark";
+export const glass = (tone: GlassTone) => `glass glass-${tone}`;
+
+export function Glass({ tone, className = "", children, ...rest }: { tone: GlassTone; className?: string; children?: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div data-glass="" className={`${glass(tone)} ${className}`} {...rest}>
+      {children}
+    </div>
+  );
+}
+
+// ---------- context menu (right-click), drawn in a portal so window transforms never clip or offset it ----------
+export type MenuAction = { label: string; run: () => void; hint?: string } | "sep";
+export function useContextMenu() {
+  const [m, setM] = useState<{ x: number; y: number; items: MenuAction[] } | null>(null);
+  useEffect(() => {
+    if (!m) return;
+    const off = () => setM(null);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && off();
+    window.addEventListener("pointerdown", off);
+    window.addEventListener("keydown", esc);
+    window.addEventListener("blur", off);
+    return () => {
+      window.removeEventListener("pointerdown", off);
+      window.removeEventListener("keydown", esc);
+      window.removeEventListener("blur", off);
+    };
+  }, [m]);
+  const open = (e: React.MouseEvent, items: MenuAction[]) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const x = Math.min(e.clientX, window.innerWidth - 210);
+    const y = Math.min(e.clientY, window.innerHeight - (items.length * 22 + 20));
+    setM({ x, y, items });
+  };
+  const node =
+    m && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            data-glass=""
+            style={{ left: m.x, top: m.y }}
+            className={`${glass("pop")} fixed z-[5000] w-[200px] rounded-[6px] p-[5px]`}
+          >
+            {m.items.map((it, i) =>
+              it === "sep" ? (
+                <div key={i} className="mx-[9px] my-[5px] h-px bg-black/[0.1]" />
+              ) : (
+                <button
+                  type="button"
+                  key={i}
+                  onClick={() => {
+                    setM(null);
+                    it.run();
+                  }}
+                  className="flex h-[22px] w-full items-center justify-between gap-6 rounded-[4px] px-[9px] text-left text-[13px] leading-none tracking-[-0.003em] text-ink hov:hover:bg-[#0A84FF] hov:hover:text-white"
+                >
+                  <span>{it.label}</span>
+                  {it.hint && <span className="opacity-45">{it.hint}</span>}
+                </button>
+              ),
+            )}
+          </div>,
+          document.body,
+        )
+      : null;
+  return { open, node };
+}
+
+// ---------- OS sounds ----------
+// The OS makes almost no sound: only the boot chime (Restart) and Shut Down, by request. Everything else is silent.
+// Both go through sfx(); the engine (src/lib/sfx.ts) plugs in once with registerSfx(), and the Sound switch
+// (Settings, Control Center) turns the chime and music off.
+export type SfxName =
+  | "boot" | "click" | "pop" | "open" | "close" | "minimize" | "zoom" | "error" | "notify"
+  | "lock" | "unlock" | "type" | "page" | "whoosh" | "trash" | "shutdown";
+type SfxEngine = { play: (n: SfxName) => void; setEnabled?: (on: boolean) => void; isEnabled?: () => boolean };
+let sfxImpl: SfxEngine | null = null;
+export function registerSfx(impl: SfxEngine) {
+  sfxImpl = impl;
+  // the engine remembers the choice across visits; the store follows it
+  if (typeof window !== "undefined" && impl.isEnabled) useOS.getState().setSound(impl.isEnabled());
+  useOS.subscribe((s, prev) => s.sound !== prev.sound && impl.setEnabled?.(s.sound));
+}
+// the engine: one line to swap
+registerSfx({ play: (n) => playSfx(n), setEnabled: setSoundEnabled, isEnabled: isSoundEnabled });
+
+export function sfx(name: SfxName) {
+  if (typeof window === "undefined" || !useOS.getState().sound) return;
+  try {
+    sfxImpl?.play(name);
+  } catch {}
+}
+
+// =====================================================================================================
+// Design system primitives. Screens compose these; they don't restyle them.
+// =====================================================================================================
+
+export const SPRING = { type: "spring", bounce: 0, duration: 0.42 } as const;
+export const SPRING_SOFT = { type: "spring", bounce: 0.12, duration: 0.55 } as const;
+
+// ---------- Squircle: Figma-style smoothed corners (smoothing 0.6) ----------
+// The path math follows figma-squircle (MIT): each corner is a straight run, a cubic into a short circular arc,
+// and a cubic out, with the smoothing capped by the space the side has.
+const rad = (d: number) => (d * Math.PI) / 180;
+function corner(r: number, smoothing: number, budget: number) {
+  r = Math.min(r, budget);
+  let s = smoothing;
+  let p = (1 + s) * r;
+  const maxS = budget / Math.max(r, 0.0001) - 1;
+  s = Math.max(0, Math.min(s, maxS));
+  p = Math.min(p, budget);
+  const arcMeasure = 90 * (1 - s);
+  const arc = Math.sin(rad(arcMeasure / 2)) * r * Math.sqrt(2);
+  const alpha = (90 - arcMeasure) / 2;
+  const p3p4 = r * Math.tan(rad(alpha / 2));
+  const beta = 45 * s;
+  const c = p3p4 * Math.cos(rad(beta));
+  const d = c * Math.tan(rad(beta));
+  const b = (p - arc - c - d) / 3;
+  const a = 2 * b;
+  return { a, b, c, d, p, arc, r };
+}
+export function squirclePath(w: number, h: number, radius: number, smoothing = 0.6) {
+  if (w <= 0 || h <= 0) return "";
+  const k = corner(radius, smoothing, Math.min(w, h) / 2);
+  const { a, b, c, d, p, arc, r } = k;
+  const f = (n: number) => +n.toFixed(3);
+  return [
+    `M ${f(w - p)} 0`,
+    `c ${f(a)} 0 ${f(a + b)} 0 ${f(a + b + c)} ${f(d)}`,
+    `a ${f(r)} ${f(r)} 0 0 1 ${f(arc)} ${f(arc)}`,
+    `c ${f(d)} ${f(c)} ${f(d)} ${f(b + c)} ${f(d)} ${f(a + b + c)}`,
+    `L ${f(w)} ${f(h - p)}`,
+    `c 0 ${f(a)} 0 ${f(a + b)} ${f(-d)} ${f(a + b + c)}`,
+    `a ${f(r)} ${f(r)} 0 0 1 ${f(-arc)} ${f(arc)}`,
+    `c ${f(-c)} ${f(d)} ${f(-(b + c))} ${f(d)} ${f(-(a + b + c))} ${f(d)}`,
+    `L ${f(p)} ${f(h)}`,
+    `c ${f(-a)} 0 ${f(-(a + b))} 0 ${f(-(a + b + c))} ${f(-d)}`,
+    `a ${f(r)} ${f(r)} 0 0 1 ${f(-arc)} ${f(-arc)}`,
+    `c ${f(-d)} ${f(-c)} ${f(-d)} ${f(-(b + c))} ${f(-d)} ${f(-(a + b + c))}`,
+    `L 0 ${f(p)}`,
+    `c 0 ${f(-a)} 0 ${f(-(a + b))} ${f(d)} ${f(-(a + b + c))}`,
+    `a ${f(r)} ${f(r)} 0 0 1 ${f(arc)} ${f(-arc)}`,
+    `c ${f(c)} ${f(-d)} ${f(b + c)} ${f(-d)} ${f(a + b + c)} ${f(-d)}`,
+    "Z",
+  ].join(" ");
+}
+const nativeSquircle = () => typeof CSS !== "undefined" && CSS.supports("corner-shape", "superellipse(2)");
+
+// Gives any element smoothed corners at `radius`. Native corner-shape where the browser has it (cheap, keeps
+// shadows); otherwise a measured SVG clip-path; if neither works, the plain border-radius stays.
+export function useSquircle<T extends HTMLElement>(radius: number, smoothing = 0.6) {
+  const ref = useRef<T | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.borderRadius = `${radius}px`;
+    el.setAttribute("data-sq", "");
+    if (nativeSquircle()) return;
+    let last = "";
+    const apply = () => {
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const key = `${w}x${h}`;
+      if (!w || !h || key === last) return;
+      last = key;
+      el.style.clipPath = `path("${squirclePath(w, h, radius, smoothing)}")`;
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      el.style.clipPath = "";
+    };
+  }, [radius, smoothing]);
+  return ref;
+}
+
+export function Squircle({ radius = 12, className = "", style, children, ...rest }: { radius?: number; className?: string; style?: React.CSSProperties; children?: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  const ref = useSquircle<HTMLDivElement>(radius);
+  return (
+    <div ref={ref} className={className} style={{ borderRadius: radius, ...style }} {...rest}>
+      {children}
+    </div>
+  );
+}
+
+// ---------- Btn: the only button ----------
+export type BtnVariant = "bordered" | "prominent" | "tinted" | "plain" | "glass" | "glass-dark";
+export type BtnSize = "sm" | "md" | "lg";
+export function Btn({
+  children,
+  variant = "bordered",
+  size = "md",
+  capsule = false,
+  icon,
+  iconOnly = false,
+  href,
+  onClick,
+  label,
+  disabled,
+  className = "",
+  type = "button",
+}: {
+  children?: ReactNode;
+  variant?: BtnVariant;
+  size?: BtnSize;
+  capsule?: boolean;
+  icon?: ReactNode;
+  iconOnly?: boolean;
+  href?: string;
+  onClick?: (e: React.MouseEvent) => void;
+  label?: string;
+  disabled?: boolean;
+  className?: string;
+  type?: "button" | "submit";
+}) {
+  const radius = capsule ? 999 : size === "sm" ? 6 : size === "md" ? 8 : 12;
+  const glassy = variant === "glass" || variant === "glass-dark";
+  const cls = `btn btn-${size} btn-${variant} ${capsule ? "btn-capsule" : ""} ${iconOnly ? "btn-icon" : ""} ${glassy ? `glass ${variant === "glass" ? "glass-btn" : "glass-btn-dark"}` : ""} ${className}`;
+  const inner = (
+    <>
+      {icon}
+      {!iconOnly && children}
+    </>
+  );
+  const sq = !capsule ? { "data-sq": "" } : {};
+  if (href)
+    return (
+      <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" aria-label={label} className={cls} style={{ borderRadius: radius }} {...(glassy ? { "data-glass": "" } : {})} {...sq}>
+        {inner}
+      </a>
+    );
+  return (
+    <button type={type} onClick={onClick} disabled={disabled} aria-label={label} className={cls} style={{ borderRadius: radius }} {...(glassy ? { "data-glass": "" } : {})} {...sq}>
+      {inner}
+    </button>
+  );
+}
+
+// ---------- lists, stats, info ----------
+export function List({ children, mac = false, className = "" }: { children: ReactNode; mac?: boolean; className?: string }) {
+  return (
+    <Squircle radius={mac ? 10 : 12} className={`list ${mac ? "m-list shadow-[var(--shadow-1)]" : ""} ${className}`}>
+      {children}
+    </Squircle>
+  );
+}
+export function ListRow({ icon, title, sub, detail, chevron, href, onClick, mac = false }: { icon?: ReactNode; title: ReactNode; sub?: ReactNode; detail?: ReactNode; chevron?: boolean; href?: string; onClick?: () => void; mac?: boolean }) {
+  const body = (
+    <>
+      {icon}
+      <span className="list-body">
+        <span className="min-w-0 flex-1">
+          <span className={`block truncate text-[var(--label)] ${mac ? "m-body" : "t-body"}`}>{title}</span>
+          {sub && <span className={`block truncate text-[var(--label-2)] ${mac ? "m-sub" : "t-foot"}`}>{sub}</span>}
+        </span>
+        {detail && <span className={`shrink-0 text-[var(--label-2)] ${mac ? "m-body" : "t-body"}`}>{detail}</span>}
+        {chevron && <ChevronRight size={mac ? 13 : 17} className="-mr-1 shrink-0 text-[var(--label-3)]" />}
+      </span>
+    </>
+  );
+  const cls = "list-row press-row w-full text-left";
+  if (href)
+    return (
+      <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className={cls}>
+        {body}
+      </a>
+    );
+  if (onClick)
+    return (
+      <button type="button" onClick={onClick} className={cls}>
+        {body}
+      </button>
+    );
+  return <div className="list-row">{body}</div>;
+}
+export function IconTile({ color, children, size = 29 }: { color: string; children: ReactNode; size?: number }) {
+  return (
+    <Squircle radius={size * 0.24} className="icon-tile" style={{ width: size, height: size, background: color }}>
+      {children}
+    </Squircle>
+  );
+}
+export function SectionHeader({ children, mac = false }: { children: ReactNode; mac?: boolean }) {
+  return <div className={mac ? "m-headline mb-1.5 px-1 text-[var(--label)]" : "t-foot mb-[7px] px-4 uppercase text-[var(--label-2)]"}>{children}</div>;
+}
+export function StatsRow({ stats }: { stats: { k: string; v: string; sub?: string }[] }) {
+  if (!stats.length) return null;
+  return (
+    <div className="grid" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}>
+      {stats.map((s, i) => (
+        <div key={s.k} className={`min-w-0 px-2 text-center ${i ? "shadow-[inset_0.5px_0_0_var(--separator-opaque)]" : ""}`}>
+          <div className="t-cap2 truncate font-semibold uppercase text-[var(--label-2)]">{s.k}</div>
+          <div className="t-title3 mt-1 truncate font-bold text-[var(--label-2)]">{s.v}</div>
+          {s.sub && <div className="t-cap mt-0.5 truncate text-[var(--label-3)]">{s.sub}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+export function InfoGrid({ rows, cols = 2 }: { rows: { k: string; v: ReactNode }[]; cols?: 1 | 2 }) {
+  return (
+    <dl className={`grid ${cols === 2 ? "grid-cols-2 gap-x-8" : "grid-cols-1"}`}>
+      {rows.map((f) => (
+        <div key={f.k} className="t-sub flex items-baseline justify-between gap-4 py-3 shadow-[inset_0_-0.5px_0_var(--separator-opaque)]">
+          <dt className="text-[var(--label-2)]">{f.k}</dt>
+          <dd className="text-right text-[var(--label)]">{f.v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}

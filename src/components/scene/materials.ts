@@ -1,0 +1,316 @@
+import * as THREE from "three";
+import { BOOT } from "./shared";
+
+// Procedural textures and the shared PBR materials. Built once, client only.
+
+function canvas(w: number, h: number) {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  return { c, g: c.getContext("2d")! };
+}
+
+function rng(seed: number) {
+  let s = seed;
+  return () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+// 1D smooth noise from a random table
+function noise1(seed: number, n = 256) {
+  const r = rng(seed);
+  const t = Array.from({ length: n }, r);
+  return (x: number) => {
+    const i = Math.floor(x);
+    const f = x - i;
+    const u = f * f * (3 - 2 * f);
+    return t[((i % n) + n) % n] * (1 - u) + t[(((i + 1) % n) + n) % n] * u;
+  };
+}
+
+function woodTexture() {
+  const W = 1024;
+  const H = 512;
+  const { c, g } = canvas(W, H);
+  const img = g.createImageData(W, H);
+  const nA = noise1(7);
+  const nB = noise1(19);
+  const nC = noise1(31);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const warp = nA(x * 0.004 + y * 0.002) * 26 + nB(x * 0.02) * 4;
+      const v = y + warp;
+      const ring = Math.pow(Math.abs(Math.sin(v * 0.23 + nC(v * 0.03) * 2.0)), 8);
+      const fine = nB(v * 0.9 + x * 0.002) * 0.5;
+      const k = 1 - ring * 0.07 - fine * 0.06 + nC(x * 0.05 + y * 0.3) * 0.03;
+      const i = (y * W + x) * 4;
+      img.data[i] = 214 * k;
+      img.data[i + 1] = 190 * k;
+      img.data[i + 2] = 156 * k;
+      img.data[i + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+function noiseTexture(size: number, seed: number, scale = 1) {
+  const { c, g } = canvas(size, size);
+  const img = g.createImageData(size, size);
+  const r = rng(seed);
+  for (let i = 0; i < size * size; i++) {
+    const v = 128 + (r() - 0.5) * 255 * scale;
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
+    img.data[i * 4 + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+function meshTexture() {
+  const { c, g } = canvas(64, 64);
+  g.fillStyle = "#8f9196";
+  g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = "#e6e7ea";
+  g.lineWidth = 5;
+  for (let i = -64; i <= 128; i += 16) {
+    g.beginPath();
+    g.moveTo(i, 0);
+    g.lineTo(i + 64, 64);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(i, 64);
+    g.lineTo(i + 64, 0);
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(26, 2);
+  return t;
+}
+
+function pagesTexture() {
+  const { c, g } = canvas(256, 64);
+  g.fillStyle = "#efeae0";
+  g.fillRect(0, 0, 256, 64);
+  const r = rng(5);
+  for (let y = 0; y < 64; y += 1) {
+    g.fillStyle = `rgba(120,108,90,${0.04 + r() * 0.08})`;
+    g.fillRect(0, y, 256, 0.5);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function blobTexture() {
+  const { c, g } = canvas(128, 128);
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, "rgba(255,255,255,1)");
+  gr.addColorStop(0.35, "rgba(255,255,255,0.6)");
+  gr.addColorStop(0.7, "rgba(255,255,255,0.15)");
+  gr.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+
+// The novel's own cover (from his epub). Falls back to set type if it fails.
+function typeCover() {
+  const { c, g } = canvas(512, 776);
+  g.fillStyle = "#0b0c10";
+  g.fillRect(0, 0, 512, 776);
+  g.fillStyle = "#f4f4f2";
+  g.font = `600 52px Georgia, "Times New Roman", serif`;
+  g.textAlign = "left";
+  ["ŽIEMOS", "NAKTYS", "ŠVIESESNĖS"].forEach((l, i) => g.fillText(l, 44, 110 + i * 58));
+  g.font = `500 20px -apple-system, Inter, sans-serif`;
+  g.fillText("Augustas Armalis", 44, 730);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+
+// Poly Haven CC0 textures (see CREDITS.md). Paths live here so they are easy to swap.
+export const TEX = {
+  wood: { map: "/scene/tex/white_oak_veneer_diff.jpg", normal: "/scene/tex/white_oak_veneer_nor.jpg", rough: "/scene/tex/white_oak_veneer_rough.jpg" },
+  leather: { map: "/scene/tex/fabric_leather_02_diff.jpg", normal: "/scene/tex/fabric_leather_02_nor.jpg", rough: "/scene/tex/fabric_leather_02_rough.jpg" },
+  knit: { map: "/scene/tex/knitted_fleece_diff.jpg", normal: "/scene/tex/knitted_fleece_nor.jpg" },
+  cover: { map: "/assets/polyhaven/leather_white_diff_1k.jpg", normal: "/assets/polyhaven/leather_white_nor_gl_1k.jpg", rough: "/assets/polyhaven/leather_white_rough_1k.jpg" },
+};
+
+const loader = typeof window !== "undefined" ? new THREE.TextureLoader() : null;
+function load(url: string, repeat: number, srgb: boolean) {
+  const t = loader!.load(url);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeat, repeat);
+  t.anisotropy = 8;
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+function pbr(set: { map: string; normal: string; rough?: string }, repeat: number, ry = repeat) {
+  const a = {
+    map: load(set.map, repeat, true),
+    normalMap: load(set.normal, repeat, false),
+    ...(set.rough ? { roughnessMap: load(set.rough, repeat, false) } : {}),
+  };
+  Object.values(a).forEach((t) => t.repeat.set(repeat, ry));
+  return a;
+}
+
+// Brushed aluminium: fine streaks in the roughness, plus anisotropy.
+function brushedTexture() {
+  const W = 512;
+  const { c, g } = canvas(W, W);
+  const img = g.createImageData(W, W);
+  const r = rng(13);
+  const rows = Array.from({ length: W }, () => r());
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const v = 150 + (rows[y] - 0.5) * 70 + (r() - 0.5) * 26;
+      const i = (y * W + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(1, 2);
+  return t;
+}
+
+export type Mats = ReturnType<typeof build>;
+let cache: Mats | null = null;
+let coverDone: Promise<void> = Promise.resolve();
+
+function build() {
+  const cover = new THREE.MeshPhysicalMaterial({ roughness: 0.42, clearcoat: 0.25, clearcoatRoughness: 0.5 });
+  coverDone = new Promise<void>((res) => {
+    new THREE.TextureLoader().load(
+      "/scene/novel-cover.jpg",
+      (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = 8;
+        cover.map = t;
+        cover.needsUpdate = true;
+        res();
+      },
+      undefined,
+      () => {
+        cover.map = typeCover();
+        cover.needsUpdate = true;
+        res();
+      },
+    );
+  });
+  const pages = pagesTexture();
+  return {
+    wood: new THREE.MeshPhysicalMaterial({ ...pbr(TEX.wood, 2.4, 1.2), roughness: 0.85, normalScale: new THREE.Vector2(0.6, 0.6), clearcoat: 0.12, clearcoatRoughness: 0.4 }),
+    frame: new THREE.MeshStandardMaterial({ color: "#1e1e20", metalness: 0.35, roughness: 0.55 }),
+    alu: new THREE.MeshPhysicalMaterial({ color: "#d4d6da", metalness: 1, roughness: 0.42, roughnessMap: brushedTexture(), anisotropy: 0.6 }),
+    aluDark: new THREE.MeshPhysicalMaterial({ color: "#4b4d53", metalness: 0.9, roughness: 0.42 }),
+    titanium: new THREE.MeshPhysicalMaterial({ color: "#bdbab3", metalness: 1, roughness: 0.34 }),
+    steel: new THREE.MeshStandardMaterial({ color: "#d8dadd", metalness: 1, roughness: 0.14 }),
+    glass: new THREE.MeshStandardMaterial({ color: "#000000", roughness: 0.25, metalness: 0, envMapIntensity: 0.15 }),
+    reflect: new THREE.MeshStandardMaterial({
+      color: "#3c3d42",
+      roughness: 0.05,
+      metalness: 1,
+      envMapIntensity: 1,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+    knit: new THREE.MeshPhysicalMaterial({ ...pbr(TEX.knit, 2), color: "#e2e3e6", roughness: 1, sheen: 1, sheenColor: new THREE.Color("#ffffff"), sheenRoughness: 0.6 }),
+    canopy: new THREE.MeshStandardMaterial({ map: meshTexture(), color: "#c9cbcf", roughness: 0.95, side: THREE.DoubleSide }),
+    leather: new THREE.MeshPhysicalMaterial({ ...pbr(TEX.leather, 3), color: "#3a3a3e", roughness: 1, clearcoat: 0.08 }),
+    rubber: new THREE.MeshStandardMaterial({ color: "#141416", roughness: 0.85 }),
+    lens: new THREE.MeshPhysicalMaterial({
+      color: "#07080b",
+      roughness: 0.02,
+      metalness: 0.1,
+      clearcoat: 1,
+      iridescence: 1,
+      iridescenceIOR: 1.8,
+      iridescenceThicknessRange: [260, 640],
+      envMapIntensity: 1.6,
+    }),
+    keyWhite: new THREE.MeshPhysicalMaterial({ color: "#f5f5f3", roughness: 0.32, clearcoat: 0.4 }),
+    keyBlack: new THREE.MeshPhysicalMaterial({ color: "#121214", roughness: 0.38, clearcoat: 0.5 }),
+    oled: new THREE.MeshStandardMaterial({ color: "#050506", roughness: 0.1 }),
+    linen: new THREE.MeshStandardMaterial({ ...pbr(TEX.cover, 1), color: "#4a4d52", roughness: 1 }),
+    pages: new THREE.MeshStandardMaterial({ map: pages, roughness: 0.95 }),
+    paperBlack: new THREE.MeshStandardMaterial({ color: "#0d0e11", roughness: 0.55 }),
+    cover,
+    elastic: new THREE.MeshStandardMaterial({ color: "#111113", roughness: 0.7 }),
+    pencil: new THREE.MeshPhysicalMaterial({ color: "#2c2e33", roughness: 0.35, clearcoat: 0.6 }),
+    pencilWood: new THREE.MeshStandardMaterial({ color: "#d8b88e", roughness: 0.8 }),
+    graphite: new THREE.MeshStandardMaterial({ color: "#2a2a2c", metalness: 0.5, roughness: 0.35 }),
+    blob: new THREE.MeshBasicMaterial({ color: "#000000", alphaMap: blobTexture(), transparent: true, depthWrite: false, opacity: 0.5 }),
+  };
+}
+
+export function getMats() {
+  if (!cache) cache = build();
+  return cache;
+}
+export const coverReady = () => {
+  getMats();
+  return coverDone;
+};
+
+// The display content: black, then the boot mark and a thin progress bar.
+// Drawn as signed distance fields in CSS px of the final, covering frame, so it
+// is crisp at any distance and matches the DOM veil exactly. Writes display
+// (sRGB) values directly, like CSS does.
+export function makeScreenMaterial(size: [number, number]) {
+  const { markY, markH, markW, stroke, barY, barW, barH } = BOOT;
+  const f = (n: number) => n.toFixed(3);
+  return new THREE.ShaderMaterial({
+    toneMapped: false,
+    uniforms: {
+      uSize: { value: new THREE.Vector2(...size) },
+      uPx: { value: 1000 },
+      uMark: { value: 0 },
+      uProg: { value: 0 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform vec2 uSize; uniform float uPx; uniform float uMark; uniform float uProg;
+      varying vec2 vUv;
+      float seg(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h); }
+      float rbox(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
+      float cover(float d){ float w = max(fwidth(d), 1e-4) * 0.5; return 1.0 - smoothstep(-w, w, d); }
+      void main(){
+        vec2 p = (vUv - 0.5) * uSize * uPx; p.y = -p.y;
+        vec2 apex = vec2(0.0, ${f(markY - markH / 2)});
+        vec2 fl = vec2(${f(-markW / 2)}, ${f(markY + markH / 2)});
+        vec2 fr = vec2(${f(markW / 2)}, ${f(markY + markH / 2)});
+        float cy = ${f(markY + markH * 0.16)};
+        float cx = ${f((markW / 2) * 0.66)};
+        float d = min(min(seg(p, apex, fl), seg(p, apex, fr)), seg(p, vec2(-cx, cy), vec2(cx, cy))) - ${f(stroke / 2)};
+        float mark = cover(d);
+        vec2 bp = p - vec2(0.0, ${f(barY)});
+        float track = cover(rbox(bp, vec2(${f(barW / 2)}, ${f(barH / 2)}), ${f(barH / 2)}));
+        float fw = max(${f(barW)} * uProg, ${f(barH)});
+        float fill = cover(rbox(bp - vec2(${f(-barW / 2)} + fw * 0.5, 0.0), vec2(fw * 0.5, ${f(barH / 2)}), ${f(barH / 2)})) * step(0.001, uProg);
+        float v = 0.0;
+        v = mix(v, 1.0, mark * uMark);
+        v = mix(v, 1.0, track * 0.2 * uMark);
+        v = mix(v, 1.0, fill * uMark);
+        gl_FragColor = vec4(vec3(v), 1.0);
+      }`,
+  });
+}

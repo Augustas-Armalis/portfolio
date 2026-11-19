@@ -1,0 +1,26 @@
+[
+  {
+    "id": "nocturne-for-absent-things",
+    "title": "Nocturne for Absent Things",
+    "artist": "Augustas Armalis",
+    "file": "/content/music/nocturne-for-absent-things.mp3",
+    "cover": "/content/music/nocturne-for-absent-things.jpg",
+    "duration": 191,
+    "durationLabel": "3:11",
+    "year": 2026,
+    "status": "his",
+    "note": "Orchestral nocturne written in MuseScore for the novel. Released on Spotify via RouteNote on 2026-08-12 as Augustas Armalis. The file is the 44.1 kHz export from 2026-08-13, which is most likely the released version with the rewritten opening. The 'OG' export from 2026-08-12 is left out. The cover is assumed from IMG_3199 (same date)."
+  },
+  {
+    "id": "afterlight",
+    "title": "Afterlight",
+    "artist": "Augustas Armalis",
+    "file": "/content/music/afterlight.m4a",
+    "cover": "/content/music/afterlight.jpg",
+    "duration": 403,
+    "durationLabel": "6:43",
+    "year": 2026,
+    "status": "uncertain",
+    "note": "The novel's ending piece, in the style of On the Nature of Daylight. The score is credited to Augustas Armalis, with the working title 'Žiemos Naktys Šviesesnės — The Ending' / 'When Winter Learned to Glow'. Polished in MuseScore on 2026-10-15, B♭ minor to D♭ major, ♩=60. It started from an AI-assisted coda session in August and is unreleased, so he needs to confirm that it's his and that it's shareable. Re-encoded from 320 kbps MP3 to 160 kbps AAC to save space. The cover comes from coverr.png (same date)."
+  }
+]
