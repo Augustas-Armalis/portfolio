@@ -686,10 +686,11 @@ function Scene({
     },
     // the photograph: the framed part of the view, drawn again at twice the page's size (or the screen's own density when that is more)
     shoot: () => {
-      const cv = gl.domElement;
-      const want = Math.max(2, window.devicePixelRatio || 1) / Math.max(0.5, cv.width / Math.max(1, cv.clientWidth));
-      const most = Math.sqrt((mobile ? 5e6 : 9.5e6) / Math.max(1, cv.width * cv.height));
-      return postCtl.capture?.(photoCtl.frame, Math.max(1, Math.min(want, most))) ?? null;
+      // a whole number of pixels per page pixel where it can be, so the frame's edges land on pixel edges
+      const cw = Math.max(1, gl.domElement.clientWidth);
+      const ch = Math.max(1, gl.domElement.clientHeight);
+      const k = Math.min(Math.max(2, Math.ceil(window.devicePixelRatio || 1)), Math.sqrt((mobile ? 5e6 : 9.5e6) / (cw * ch)));
+      return postCtl.capture?.(photoCtl.frame, Math.round(cw * k), Math.round(ch * k)) ?? null;
     },
     // tap to focus: how far away is whatever is drawn under that point
     focusAt: (x, y) => {

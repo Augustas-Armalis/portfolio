@@ -32,7 +32,7 @@ export function TopBar({ title, hint, exitLabel = "Put down", onExit }: { title:
         {hint && <span className="ml-2 hidden text-[12.5px] text-white/65 sm:inline">{hint}</span>}
         <button type="button" className={`${btn} lg-chip ml-2`} onClick={(e) => (e.stopPropagation(), onExit())}>
           {exitLabel}
-          <span className="ml-1.5 text-white/50">Esc</span>
+          <span className="ml-1.5 text-white/50 [@media(hover:none)]:hidden">Esc</span>
         </button>
       </Glass>
     </div>

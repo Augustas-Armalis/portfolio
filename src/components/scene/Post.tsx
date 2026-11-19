@@ -49,8 +49,8 @@ export const postCtl = {
   render: null as (() => void) | null, // draw one finished frame now (photos, stills)
   // metres from the lens to whatever is drawn at a point of the frame (0..1, origin bottom left)
   depthAt: null as ((u: number, v: number) => number | null) | null,
-  // one finished frame at `scale` times the canvas, cropped to a rectangle of the frame (0..1, origin top left)
-  capture: null as ((rect: { x: number; y: number; w: number; h: number }, scale: number) => Capture | null) | null,
+  // one finished frame drawn at width x height pixels, cropped to a rectangle of the frame (0..1, origin top left)
+  capture: null as ((rect: { x: number; y: number; w: number; h: number }, width: number, height: number) => Capture | null) | null,
   level: 0,
 };
 
@@ -655,7 +655,7 @@ export function Post({ level }: { level: number }) {
       const t = px[0] / 255 + px[1] / 255 / 255 + px[2] / 255 / 65025;
       return Math.pow(2, t * 12) - 1;
     };
-    postCtl.capture = (rect, scale) => {
+    postCtl.capture = (rect, width, height) => {
       const cv = gl.domElement;
       const flip = (data: Uint8Array | Uint8ClampedArray, w: number, h: number) => {
         // GL rows run bottom to top
@@ -680,9 +680,10 @@ export function Post({ level }: { level: number }) {
           return { data: flip(px, r.w, r.h), w: r.w, h: r.h };
         }
         const max = Math.min(gl.capabilities.maxTextureSize, 8192);
-        const k = Math.max(1, Math.min(scale, max / cv.width, max / cv.height));
-        const W = Math.round(cv.width * k);
-        const H = Math.round(cv.height * k);
+        const fit = Math.min(1, max / width, max / height);
+        const W = Math.max(8, Math.round(width * fit));
+        const H = Math.max(8, Math.round(height * fit));
+        const k = H / cv.height;
         const out = new THREE.WebGLRenderTarget(W, H, { depthBuffer: false });
         // points are sized in device pixels: keep them the size they are on screen
         const pts: { u: THREE.IUniform; v: number }[] = [];
