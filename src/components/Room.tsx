@@ -429,7 +429,7 @@ function Scene({
   }, [scene, fog]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v });
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef });
   }, [input, cam, v]);
 
   // compile everything behind the preloader, then report ready. compileAsync
