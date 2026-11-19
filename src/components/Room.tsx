@@ -1424,10 +1424,11 @@ function SkyLife({ reduced, amount }: { reduced: boolean; amount: number }) {
     const n = SKY_U.uNight.value > 0.5;
     if (n !== night) setNight(n);
   });
+  // keyed by their number too: a change of graphics quality remakes them whole (drei's Sparkles left with a new count draws nothing)
   return night ? (
-    <Sparkles key="n" count={Math.round(60 + 200 * amount)} scale={[26, 1.5, 26]} position={[0, 0.7, -3]} size={3.4} speed={reduced ? 0 : 0.35} opacity={0.9} color="#e4ff8f" noise={1.4} />
+    <Sparkles key={`n${amount}`} count={Math.round(60 + 200 * amount)} scale={[26, 1.5, 26]} position={[0, 0.7, -3]} size={3.4} speed={reduced ? 0 : 0.35} opacity={0.9} color="#e4ff8f" noise={1.4} />
   ) : (
-    <Sparkles key="d" count={Math.round(30 + 60 * amount)} scale={[4, 1.4, 3]} position={[0, 1.05, 0.2]} size={1.5} speed={reduced ? 0 : 0.18} opacity={0.5} color="#ffe2b0" noise={0.6} />
+    <Sparkles key={`d${amount}`} count={Math.round(30 + 60 * amount)} scale={[4, 1.4, 3]} position={[0, 1.05, 0.2]} size={1.5} speed={reduced ? 0 : 0.18} opacity={0.5} color="#ffe2b0" noise={0.6} />
   );
 }
 
