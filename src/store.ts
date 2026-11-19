@@ -43,6 +43,9 @@ type OS = {
   // image files dropped onto the desktop (from Shots, Gallery, project previews)
   files: { id: string; name: string; src: string; user: UserId }[];
   addFile: (f: { name: string; src: string; user: UserId }) => string;
+  // full-screen overlays on the desktop: the Apps grid and the window overview
+  overlay: "apps" | "mission" | null;
+  setOverlay: (o: "apps" | "mission" | null) => void;
   // desktop items dragged to the Trash (ids from desktopItems), in the order they went in
   trash: string[];
   // emptied from the Trash: gone for this visit
@@ -110,6 +113,8 @@ export const useOS = create<OS>((set, get) => ({
     set({ files: [...get().files, { ...f, id }] });
     return id;
   },
+  overlay: null,
+  setOverlay: (o) => set({ overlay: o }),
   trash: [],
   deleted: [],
   trashed: (ids) => set({ trash: [...get().trash.filter((x) => !ids.includes(x)), ...ids] }),

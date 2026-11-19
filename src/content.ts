@@ -14,7 +14,7 @@ export type AppId =
   // Art
   | "records" | "piano" | "novel" | "gallery"
   // System
-  | "about" | "contact" | "terminal" | "game" | "settings" | "trash";
+  | "about" | "contact" | "terminal" | "game" | "settings" | "trash" | "launchpad";
 
 export const owner = {
   name: "Augustas",
@@ -112,6 +112,7 @@ export const apps: Record<AppId, { title: string; size: Size }> = {
   game: { title: "Catch", size: { w: 460, h: 400 } },
   settings: { title: "System Settings", size: { w: 820, h: 560 } },
   trash: { title: "Trash", size: { w: 620, h: 420 } },
+  launchpad: { title: "Apps", size: { w: 0, h: 0 } },
 };
 
 // One template for every project.

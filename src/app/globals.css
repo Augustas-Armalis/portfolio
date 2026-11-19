@@ -853,3 +853,6 @@ svg.lucide.bold {
   pointer-events: none;
   z-index: 70;
 }
+.dark .glass-btn {
+  color: rgb(235 235 245 / 0.85) !important;
+}

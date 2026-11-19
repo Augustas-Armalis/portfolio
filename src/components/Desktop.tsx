@@ -156,14 +156,211 @@ function ControlCenter({ user, close }: { user: UserId; close: () => void }) {
   );
 }
 
+// ---------- Notification Center: a few widgets under the clock ----------
+
+function Widget({ children, className = "", onClick }: { children: ReactNode; className?: string; onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-sq=""
+      className={`press block w-full rounded-[18px] bg-white/60 p-3.5 text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)] dark:bg-white/10 ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function NotificationCenter({ close }: { close: () => void }) {
+  const { playing, open } = useOS();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const iv = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(iv);
+  }, []);
+  const go = (id: AppId) => () => {
+    close();
+    open(id);
+  };
+  const h = now.getHours() % 12;
+  const m = now.getMinutes();
+  const sec = now.getSeconds();
+  const hand = (deg: number, len: number, w: number, c: string) => (
+    <line x1="50" y1="50" x2={50 + Math.sin((deg * Math.PI) / 180) * len} y2={50 - Math.cos((deg * Math.PI) / 180) * len} stroke={c} strokeWidth={w} strokeLinecap="round" />
+  );
+  return (
+    <div className="space-y-2.5">
+      <div className="grid grid-cols-2 gap-2.5">
+        <Widget className="aspect-square">
+          <svg viewBox="0 0 100 100" className="h-full w-full" aria-label="Clock">
+            <circle cx="50" cy="50" r="47" fill="var(--bg-elevated)" stroke="var(--separator-opaque)" />
+            {Array.from({ length: 12 }, (_, i) => (
+              <line key={i} x1="50" y1="8" x2="50" y2={i % 3 ? 11 : 14} stroke="var(--label-3s)" strokeWidth={i % 3 ? 1 : 2} strokeLinecap="round" transform={`rotate(${i * 30} 50 50)`} />
+            ))}
+            {hand(h * 30 + m / 2, 24, 3.4, "var(--label)")}
+            {hand(m * 6, 34, 2.4, "var(--label)")}
+            {hand(sec * 6, 37, 1, "#FF9500")}
+            <circle cx="50" cy="50" r="2.4" fill="#FF9500" />
+          </svg>
+        </Widget>
+        <Widget className="flex aspect-square flex-col justify-between">
+          <div className="eyebrow !text-[11px] text-[#FF3B30]">{now.toLocaleDateString("en-GB", { weekday: "long" })}</div>
+          <div>
+            <div className="text-[44px] font-light leading-none tracking-[-0.03em] text-ink">{now.getDate()}</div>
+            <div className="m-body mt-1 text-ink-2">{now.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</div>
+          </div>
+        </Widget>
+      </div>
+      <Widget onClick={go("work")}>
+        <div className="eyebrow !text-[11px] text-ink-3">Currently working on</div>
+        <div className="mt-2 flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={mainWork.image} alt="" className="h-12 w-[76px] rounded-[8px] object-cover object-top shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" />
+          <div className="min-w-0">
+            <div className="t-headline truncate text-ink">{mainWork.name}</div>
+            <div className="m-body truncate text-ink-2">
+              {mainWork.role}, {mainWork.years}
+            </div>
+          </div>
+        </div>
+      </Widget>
+      {playing && (
+        <Widget onClick={go("records")} className="flex items-center gap-3">
+          <Bars />
+          <div className="min-w-0">
+            <div className="eyebrow !text-[11px] text-ink-3">Now Playing</div>
+            <div className="t-headline truncate text-ink">{playing}</div>
+          </div>
+        </Widget>
+      )}
+    </div>
+  );
+}
+
+// ---------- Apps (Launchpad) and the window overview (Mission Control) ----------
+
+function AppsOverlay({ user }: { user: UserId }) {
+  const overlay = useOS((s) => s.overlay);
+  const setOverlay = useOS((s) => s.setOverlay);
+  const open = useOS((s) => s.open);
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    if (overlay !== "apps") setQ("");
+  }, [overlay]);
+  const all: AppId[] = [...users[user].apps, ...(user === "founder" ? labApps : []), ...sharedApps, "about", "trash"];
+  const list = all.filter((id) => apps[id].title.toLowerCase().includes(q.trim().toLowerCase()));
+  return (
+    <AnimatePresence>
+      {overlay === "apps" && (
+        <motion.div
+          key="apps"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.16 } }}
+          transition={{ duration: 0.22 }}
+          onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}
+          className="absolute inset-0 z-[1800] flex flex-col items-center bg-black/25 pt-[11vh] [backdrop-filter:blur(36px)_saturate(1.6)]"
+        >
+          <motion.div initial={{ scale: 1.08 }} animate={{ scale: 1 }} exit={{ scale: 1.04 }} transition={{ type: "spring", bounce: 0, duration: 0.4 }} className="flex w-full flex-col items-center" onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}>
+            <label htmlFor="apps-search" className="flex h-9 w-[260px] items-center gap-2 rounded-full bg-white/15 px-3 text-white/70 shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.25)]">
+              <Search size={14} />
+              <input id="apps-search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/55" />
+            </label>
+            <div className="mt-[7vh] grid w-[min(980px,86vw)] grid-cols-[repeat(auto-fill,minmax(120px,1fr))] justify-items-center gap-y-9">
+              {list.map((id, i) => (
+                <motion.button
+                  type="button"
+                  key={id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: EASE_OUT, delay: Math.min(i * 0.015, 0.2) }}
+                  whileTap={{ scale: 0.94 }}
+                  onClick={() => {
+                    setOverlay(null);
+                    open(id);
+                  }}
+                  className="flex w-[112px] flex-col items-center gap-2 outline-none"
+                >
+                  {id === "trash" ? <TrashArt size={76} /> : <AppIcon id={id} size={76} />}
+                  <span className="max-w-full truncate text-[13px] font-medium text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.4)]">{apps[id].title}</span>
+                </motion.button>
+              ))}
+            </div>
+            {!list.length && <div className="mt-16 text-[15px] text-white/70">{`No apps match “${q.trim()}”`}</div>}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function MissionControl() {
+  const overlay = useOS((s) => s.overlay);
+  const setOverlay = useOS((s) => s.setOverlay);
+  const windows = useOS((s) => s.windows);
+  const { open, close } = useOS();
+  const live = [...windows].sort((a, b) => b.z - a.z);
+  return (
+    <AnimatePresence>
+      {overlay === "mission" && (
+        <motion.div
+          key="mission"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.16 } }}
+          transition={{ duration: 0.22 }}
+          onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}
+          className="absolute inset-0 z-[1800] flex flex-col items-center bg-black/30 px-10 pt-[9vh] [backdrop-filter:blur(30px)_saturate(1.5)]"
+        >
+          <div className="eyebrow text-white/60">{live.length ? `${live.length} open window${live.length > 1 ? "s" : ""}` : "No open windows"}</div>
+          <div className="mt-8 flex w-full max-w-[1100px] flex-wrap items-start justify-center gap-7">
+            {live.map((w, i) => {
+              const sz = apps[w.id].size;
+              const k = 200 / Math.max(sz.h, 1);
+              return (
+                <motion.div key={w.id} initial={{ opacity: 0, scale: 1.12 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", bounce: 0, duration: 0.45, delay: i * 0.03 }} className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOverlay(null);
+                      open(w.id);
+                    }}
+                    data-sq=""
+                    style={{ width: Math.max(180, Math.min(340, sz.w * k)), height: 200 }}
+                    className="press flex flex-col items-center justify-center gap-3 rounded-[18px] bg-[var(--bg)] shadow-[0_0_0_0.5px_rgb(255_255_255/0.2),0_24px_50px_-18px_rgb(0_0_0/0.6)] outline-none transition-shadow hov:hover:shadow-[0_0_0_3px_var(--accent),0_24px_50px_-18px_rgb(0_0_0/0.6)]"
+                  >
+                    <AppIcon id={w.id} size={64} />
+                    <span className="m-headline text-ink">{apps[w.id].title}</span>
+                    {w.min && <span className="m-sub text-ink-3">Minimised</span>}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Close ${apps[w.id].title}`}
+                    onClick={() => close(w.id)}
+                    className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-ink opacity-0 shadow-[var(--shadow-2)] transition-opacity hov:group-hover:opacity-100"
+                  >
+                    <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden>
+                      <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function MenuBar({ user }: { user: UserId }) {
   const { windows, setPalette, logout, shutdown, playing, open, sleep, restart, lockScreen } = useOS();
-  const [menu, setMenu] = useState<null | "a" | "go" | "cc">(null);
+  const [menu, setMenu] = useState<null | "a" | "go" | "cc" | "nc">(null);
   const close = () => setMenu(null);
   useOutside(menu !== null, close);
   const time = useClock();
   const f = focusedApp(windows);
-  const item = (m: "a" | "go" | "cc") => ({
+  const item = (m: "a" | "go" | "cc" | "nc") => ({
     onPointerDown: (e: React.PointerEvent) => {
       e.stopPropagation();
       setMenu(menu === m ? null : m);
@@ -269,7 +466,14 @@ function MenuBar({ user }: { user: UserId }) {
             <ControlCenter user={user} close={close} />
           </Pop>
         </div>
-        <span className="px-[9px] tabular-nums">{time}</span>
+        <div className="relative">
+          <button type="button" aria-label="Notification Center" className={`${btn(menu === "nc")} tabular-nums`} {...item("nc")}>
+            {time}
+          </button>
+          <Pop open={menu === "nc"} align="right" width={340} panel>
+            <NotificationCenter close={close} />
+          </Pop>
+        </div>
       </div>
     </motion.div>
   );
@@ -610,6 +814,11 @@ function DockIcon({ id, mouseX, running, dark, dragging }: { id: AppId; mouseX: 
         onMouseLeave={() => setTip(false)}
         onClick={() => {
           if (dragging) return;
+          if (id === "launchpad") {
+            const st = useOS.getState();
+            return st.setOverlay(st.overlay === "apps" ? null : "apps");
+          }
+          useOS.getState().setOverlay(null);
           open(id);
         }}
         onContextMenu={(e) => {
@@ -672,6 +881,9 @@ function Dock({ user }: { user: UserId }) {
       >
         {/* material on its own layer, so the tooltips above can blur the wallpaper too */}
         <div aria-hidden data-glass="" className={`${glass("dock")} pointer-events-none absolute inset-0 rounded-[20px]`} />
+        <div className="relative">
+          <DockIcon id="launchpad" mouseX={mouseX} running={false} dark={dark} dragging={false} />
+        </div>
         <Reorder.Group as="div" axis="x" values={order} onReorder={setOrder} className="relative flex items-end gap-1">
           {order.map((id) => (
             <Reorder.Item
@@ -1179,6 +1391,16 @@ export default function Desktop({ user }: { user: UserId }) {
   // ⌘W closes, ⌘M minimises the focused window (where the browser lets the page have the key).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const st = useOS.getState();
+      if (e.key === "F3" || (e.ctrlKey && e.key === "ArrowUp")) {
+        e.preventDefault();
+        return st.setOverlay(st.overlay === "mission" ? null : "mission");
+      }
+      if (e.key === "F4") {
+        e.preventDefault();
+        return st.setOverlay(st.overlay === "apps" ? null : "apps");
+      }
+      if (e.key === "Escape" && st.overlay) return st.setOverlay(null);
       if (!(e.metaKey || e.ctrlKey)) return;
       const k = e.key.toLowerCase();
       if (e.metaKey && e.ctrlKey && k === "q") {
@@ -1213,6 +1435,8 @@ export default function Desktop({ user }: { user: UserId }) {
           ))}
         </AnimatePresence>
       </div>
+      <AppsOverlay user={user} />
+      <MissionControl />
       <Dock user={user} />
       <Spotlight user={user} />
       <PowerOverlay />

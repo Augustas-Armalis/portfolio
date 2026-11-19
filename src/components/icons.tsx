@@ -61,6 +61,7 @@ export const ICONS: Record<AppId, Spec> = {
   game: { bg: ["#4cd97b", "#1f9d4a"], glyph: Gamepad2, fg: "light" },
   settings: { bg: ["#b3b8c2", "#6b717c"], glyph: Settings, fg: "light" },
   trash: { bg: ["#f4f5f7", "#d9dce2"], glyph: Trash2, fg: "dark" },
+  launchpad: { bg: ["#8fa2b8", "#4d5d73"], glyph: LayoutGrid, fg: "light" },
 };
 
 export function iconBackground(id: AppId) {

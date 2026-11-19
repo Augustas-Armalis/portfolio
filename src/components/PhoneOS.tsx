@@ -2,7 +2,7 @@
 
 import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransform, type AnimationPlaybackControls } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { apps, projects, sharedApps, tracks, users, type AppId, type UserId } from "@/content";
+import { apps, mainWork, owner, projects, sharedApps, tracks, users, type AppId, type UserId } from "@/content";
 import { useOS, useWallpaper } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, player, usePlayer } from "./Apps";
 import { Bars } from "./Desktop";
@@ -156,6 +156,24 @@ function Lock() {
       >
         <div className="text-[17px] font-semibold text-ink-2">{date}</div>
         <div className="text-[88px] font-semibold leading-[0.95] tracking-[-0.04em] tabular-nums">{time}</div>
+      </motion.div>
+      {/* lock screen widgets: what he's working on, and the studio */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: EASE_OUT, delay: 0.45 }}
+        className="relative mt-5 grid w-full grid-cols-2 gap-2.5 px-5"
+      >
+        {[
+          { k: "Working on", v: mainWork.name, s: mainWork.role ?? "" },
+          { k: "Studio", v: "Larpo", s: owner.city },
+        ].map((w) => (
+          <div key={w.k} data-glass="" className={`${glass("lock")} rounded-[18px] px-3.5 py-3 text-left`}>
+            <div className="t-cap2 font-semibold uppercase text-ink-2">{w.k}</div>
+            <div className="t-headline mt-0.5 truncate text-ink">{w.v}</div>
+            <div className="t-foot truncate text-ink-2">{w.s}</div>
+          </div>
+        ))}
       </motion.div>
       <div className="relative mt-auto w-full px-5 pb-[max(20px,env(safe-area-inset-bottom))]">
         <div className="mb-3 text-center text-[13px] font-medium text-ink-2">Tap a profile to unlock</div>
