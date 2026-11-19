@@ -1,11 +1,13 @@
 "use client";
 
+import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, type RefObject } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { DESK, MONITOR, PHONE } from "./shared";
-import { getMats } from "./materials";
+import { DESK, MONITOR, PHONE, clamp01, smooth } from "./shared";
+import { getMats, nightLift } from "./materials";
+import { SKY_U } from "./sky";
 
 // Everything here is modelled in code at real scale (metres): lofted
 // sections, bevelled prisms and lathes with PBR materials. No logos anywhere.
@@ -55,6 +57,9 @@ function useGeo<T extends Record<string, unknown>>(make: () => T): T {
   return g;
 }
 
+// the desk's metals pick up more of the sky after dark (see nightLift)
+const useNightLift = () => useFrame(() => nightLift(SKY_U.uNight.value));
+
 function roundedRectShape(w: number, h: number, r: number) {
   const s = new THREE.Shape();
   const x = -w / 2;
@@ -99,19 +104,6 @@ function rrPts(hw: number, hh: number, r: number, cs = 5) {
       pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
     }
   });
-  return pts;
-}
-
-// Superellipse outline (a squircle for n > 2), counter-clockwise, as [u, v] pairs.
-function sePts(a: number, b: number, n: number, seg = 48) {
-  const pts: [number, number][] = [];
-  const e = 2 / n;
-  for (let j = 0; j < seg; j++) {
-    const t = (j / seg) * Math.PI * 2;
-    const c = Math.cos(t);
-    const s = Math.sin(t);
-    pts.push([a * Math.sign(c) * Math.pow(Math.abs(c), e), b * Math.sign(s) * Math.pow(Math.abs(s), e)]);
-  }
   return pts;
 }
 
@@ -195,6 +187,58 @@ function prism(w: number, d: number, r: number, h: number, bevel: number, bevelS
   return g;
 }
 
+// An upright band around a rounded-rectangle plan, its top and bottom edges
+// turned in, with UVs that follow the perimeter (in metres x scale), so a
+// texture wraps the corners without stretching.
+function wrapBand(hw: number, hd: number, r: number, y0: number, y1: number, scale: number) {
+  const lip = 0.0025;
+  const outline = (inset: number) => {
+    const o = rrPts(hw - inset, hd - inset, r - inset, 8);
+    o.push(o[0]);
+    return o;
+  };
+  const o = outline(0);
+  const cum = [0];
+  for (let j = 1; j < o.length; j++) cum.push(cum[j - 1] + Math.hypot(o[j][0] - o[j - 1][0], o[j][1] - o[j - 1][1]));
+  const rows: [number, number, number][] = [
+    [lip, y0, y0 - lip],
+    [0, y0, y0],
+    [0, y1, y1],
+    [lip, y1, y1 + lip],
+  ];
+  const g = loft(rows.map(([inset, y]) => outline(inset).map(([x, z]) => v3(x, y, z))));
+  const uv = g.attributes.uv;
+  rows.forEach(([, , v], i) => o.forEach((_, j) => uv.setXY(i * o.length + j, cum[j] * scale, v * scale)));
+  return g;
+}
+
+// Give a loft of closed rings UVs that run round the ring (u) and along the
+// profile (v) in metres x scale, with a real seam, so a fine texture wraps a
+// soft form without swirling. Pass the rings open; the seam is added here.
+function skin(rings: THREE.Vector3[][], scale: number) {
+  const closed = rings.map((r) => [...r, r[0].clone()]);
+  const n = closed[0].length;
+  const g = loft(closed);
+  const ref = closed.reduce((a, b) => (b[0].distanceTo(b[n >> 1]) > a[0].distanceTo(a[n >> 1]) ? b : a));
+  const cum = [0];
+  for (let j = 1; j < n; j++) cum.push(cum[j - 1] + ref[j].distanceTo(ref[j - 1]));
+  const tiles = Math.max(1, Math.round(cum[n - 1] * scale)) / cum[n - 1];
+  const uv = g.attributes.uv;
+  const nor = g.attributes.normal;
+  let v = 0;
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  closed.forEach((r, i) => {
+    if (i) v += r[0].distanceTo(closed[i - 1][0]);
+    r.forEach((_, j) => uv.setXY(i * n + j, cum[j] * tiles, v * scale));
+    // one normal across the seam
+    a.fromBufferAttribute(nor, i * n).add(b.fromBufferAttribute(nor, i * n + n - 1)).normalize();
+    nor.setXYZ(i * n, a.x, a.y, a.z);
+    nor.setXYZ(i * n + n - 1, a.x, a.y, a.z);
+  });
+  return g;
+}
+
 // A cylinder with a knurled side.
 function ridgedRing(r: number, h: number, ridges: number, depth: number) {
   const g = new THREE.CylinderGeometry(r, r, h, ridges * 4, 1, false);
@@ -228,7 +272,8 @@ function Blob({ w, d, opacity = 0.5, y = 0.0006 }: { w: number; d: number; opaci
   useEffect(() => () => mat.dispose(), [mat]);
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, 0]} material={mat} renderOrder={1}>
-      <planeGeometry args={[w, d]} />
+      {/* the falloff is soft all the way out, so the patch reaches a little past the footprint it was sized for */}
+      <planeGeometry args={[w * 1.14, d * 1.14]} />
     </mesh>
   );
 }
@@ -310,50 +355,33 @@ export function Desk() {
 
 // ---------- display ----------
 
-// Studio-style tilt stand: one bent slab of aluminium. A flat foot with
-// rounded front corners, a tight bend at the back, and an arm that leans
-// forward up to the hinge. Built as a loft along the bend, so the edges stay
-// rounded all the way round. Origin: desk surface, under the bend's centre.
-function standGeometry(topY: number) {
-  const t = 0.009;
-  const R = 0.017;
-  const W = 0.18;
-  const planR = 0.013;
-  const lean = (10 * Math.PI) / 180;
-  const y0 = t / 2;
-  const turn = Math.PI / 2 + lean;
-  const Lf = 0.168 - R - t / 2;
-  const a1 = -Math.PI / 2 - turn;
-  const end: [number, number] = [R * Math.cos(a1), y0 + R + R * Math.sin(a1)];
-  const dir: [number, number] = [Math.sin(lean), Math.cos(lean)];
-  const La = (topY - end[1]) / dir[1];
-  const total = Lf + R * turn + La;
-  // centreline point and tangent, as (z, y)
-  const at = (s: number): [number, number, number, number] => {
-    if (s < Lf) return [Lf - s, y0, -1, 0];
-    if (s < Lf + R * turn) {
-      const a = -Math.PI / 2 - (s - Lf) / R;
-      return [R * Math.cos(a), y0 + R + R * Math.sin(a), Math.sin(a), -Math.cos(a)];
-    }
-    const u = s - Lf - R * turn;
-    return [end[0] + dir[0] * u, end[1] + dir[1] * u, dir[0], dir[1]];
-  };
-  const ss: number[] = [];
-  for (let k = 0; k <= 8; k++) ss.push(planR * (1 - Math.cos((k / 8) * (Math.PI / 2))));
-  for (let k = 1; k <= 3; k++) ss.push(planR + (Lf - planR) * (k / 3));
-  for (let k = 1; k <= 16; k++) ss.push(Lf + R * turn * (k / 16));
-  for (let k = 1; k <= 4; k++) ss.push(Lf + R * turn + La * (k / 4));
-  const ringAt = (s: number, flat = false) => {
-    const [z, y, tz, ty] = at(s);
-    const e = Math.min(s, planR);
-    const hw = W / 2 - planR + Math.sqrt(Math.max(0, planR * planR - (planR - e) * (planR - e)));
-    return rrPts(hw, t / 2, 0.0024, 3).map(([u, v]) => (flat ? v3(u, y, z) : v3(u, y + v * tz, z + v * -ty)));
-  };
-  const rings: THREE.Vector3[][] = [ringAt(0, true), ringAt(0)];
-  ss.forEach((s) => rings.push(ringAt(s)));
-  rings.push(ringAt(total), ringAt(total, true));
-  const top = at(total);
-  return { g: loft(rings), top: { z: top[0], y: top[1] }, footMid: Lf / 2 };
+// The tilt stand, measured off the maker's own side and back drawings: a flat
+// rectangular foot 16.8 cm deep, a slab arm of the same width rising from
+// 2.6 cm inside the foot's back edge and leaning 14 degrees forward to a hinge
+// barrel 20.7 cm above the desk, with the round cable pass-through below the
+// hinge. Origin: the hinge axis.
+const STAND = { w: 0.153, foot: 0.168, footT: 0.007, armT: 0.0095, lean: (14 * Math.PI) / 180, hingeH: 0.207, hingeR: 0.0082, back: 0.026, hole: 0.0165, holeDown: 0.068 };
+
+function standGeometry() {
+  const S = STAND;
+  const bev = 0.001;
+  const over = 0.003;
+  const L = (S.hingeH - S.footT) / Math.cos(S.lean) + 0.004;
+  const shape = roundedRectShape(S.w - bev * 2, L + over - bev * 2, 0.003);
+  const holeY = (L + over) / 2 - over - S.holeDown;
+  shape.holes.push(new THREE.Path().absarc(0, holeY, S.hole + bev, 0, Math.PI * 2, true));
+  const arm = new THREE.ExtrudeGeometry(shape, { depth: S.armT - bev * 2, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 20 });
+  arm.translate(0, over - (L + over) / 2, -(S.armT - bev * 2) / 2);
+  arm.rotateX(S.lean);
+  const liner = new THREE.CylinderGeometry(S.hole - 0.0006, S.hole - 0.0006, S.armT + 0.0006, 40, 1, true);
+  liner.rotateX(Math.PI / 2);
+  liner.translate(0, -S.holeDown, 0);
+  liner.rotateX(S.lean);
+  const baseZ = -(S.hingeH - S.footT) * Math.tan(S.lean);
+  const footZ = baseZ - S.back + S.foot / 2;
+  const foot = put(prism(S.w, S.foot, 0.0065, S.footT, 0.0012, 3), 0, -S.hingeH, footZ);
+  const hinge = put(cyl(S.hingeR, S.hingeR, S.w - 0.004, 32), 0, 0, 0, 0, 0, Math.PI / 2);
+  return { g: merge([arm, hinge, foot]), liner, footZ };
 }
 
 // A single bright sweep across the display glass as it settles (0..1, <0 = off).
@@ -377,54 +405,63 @@ const glintMat =
           }`,
       });
 
-// A 27-inch studio display: a flat 2 cm aluminium slab with softly rounded
-// corners, edge-to-edge glass with a thin uniform black border, vent slots
-// along the top and bottom edges, ports low on the back. No logo.
-const STAND_TOP = MONITOR.y - DESK.top - 0.055;
+// A 27-inch studio display: the real 62.3 x 36.2 cm enclosure around the 16:9
+// panel, which leaves an even 1.3 cm black border under edge-to-edge glass; a
+// flat 2 cm aluminium slab with tight corners and a hairline chamfer, fine
+// perforations along the top and bottom edges, four upright ports low on the
+// back. No logo.
+const ENC = { w: 0.623, h: 0.362, r: 0.0066 };
 
 export function Monitor({ screenMat, screenRef }: { screenMat: THREE.Material; screenRef: RefObject<THREE.Mesh | null> }) {
   const m = getMats();
+  useNightLift();
+  // the hinge sits just behind the back of the panel, 8.8 cm below its centre
+  const hy = DESK.top + STAND.hingeH;
+  const zl = -MONITOR.d / 2 - STAND.hingeR - 0.0028;
+  const yl = (hy - MONITOR.y + zl * Math.sin(MONITOR.tilt)) / Math.cos(MONITOR.tilt);
+  const hz = MONITOR.z + yl * Math.sin(MONITOR.tilt) + zl * Math.cos(MONITOR.tilt);
   const geo = useGeo(() => {
-    const stand = standGeometry(STAND_TOP);
-    const bevel = 0.0011;
-    const cr = 0.0105;
-    const body = new THREE.ExtrudeGeometry(roundedRectShape(MONITOR.w - bevel * 2, MONITOR.h - bevel * 2, cr - bevel), {
+    const stand = standGeometry();
+    const bevel = 0.0008;
+    const shell = new THREE.ExtrudeGeometry(roundedRectShape(ENC.w - bevel * 2, ENC.h - bevel * 2, ENC.r - bevel), {
       depth: MONITOR.d - bevel * 2,
       bevelEnabled: true,
       bevelThickness: bevel,
       bevelSize: bevel,
-      bevelSegments: 3,
+      bevelSegments: 2,
       curveSegments: 10,
     });
-    body.translate(0, 0, -(MONITOR.d - bevel * 2) / 2);
-    const dark: Geo[] = [];
-    for (const s of [-1, 1]) dark.push(put(rbox(MONITOR.w * 0.8, 0.0006, 0.0075, 0.00025, 1), 0, s * (MONITOR.h / 2 + 0.00005), -0.0012));
+    shell.translate(0, 0, -(MONITOR.d - bevel * 2) / 2);
+    // the short neck between the hinge barrel and the back of the enclosure
+    const body = merge([shell, put(rbox(0.058, 0.0125, 0.012, 0.002, 2), 0, yl, -MONITOR.d / 2 - 0.004)]);
     const bz = -MONITOR.d / 2 - 0.00005;
-    for (let i = 0; i < 4; i++) dark.push(put(rbox(0.0092, 0.0036, 0.0006, 0.00025, 1), -0.235 + i * 0.0165, -0.118, bz));
-    dark.push(put(cyl(0.0085, 0.0085, 0.0006, 28), 0.215, -0.118, bz, Math.PI / 2));
+    const ports = merge(Array.from({ length: 4 }, (_, i) => put(rbox(0.0031, 0.0088, 0.0006, 0.00028, 2), 0.173 + i * 0.015, -ENC.h / 2 + 0.026, bz)));
+    const vw = ENC.w - 0.05;
+    const vents = merge([
+      put(new THREE.PlaneGeometry(vw, 0.0085), 0, ENC.h / 2 + 0.00012, -0.0012, -Math.PI / 2),
+      put(new THREE.PlaneGeometry(vw, 0.0085), 0, -ENC.h / 2 - 0.00012, -0.0012, Math.PI / 2),
+    ]);
     return {
       body,
-      dark: merge(dark),
-      glass: roundedPlane(MONITOR.w - 0.0016, MONITOR.h - 0.0016, cr - 0.0008),
-      hinge: put(cyl(0.0118, 0.0118, 0.164, 28), 0, 0, 0, 0, 0, Math.PI / 2),
+      ports,
+      vents,
+      glass: roundedPlane(ENC.w - 0.0024, ENC.h - 0.0024, ENC.r - 0.0012),
       standG: stand.g,
-      standTop: stand.top,
-      footMid: stand.footMid,
+      liner: stand.liner,
+      footZ: stand.footZ,
     };
   });
-  // the hinge sits just behind the back of the panel; the arm's top meets it there
-  const hy = DESK.top + STAND_TOP;
-  const yl = (hy - MONITOR.y) / Math.cos(MONITOR.tilt);
-  const hz = MONITOR.z + yl * Math.sin(MONITOR.tilt) - (MONITOR.d / 2) * Math.cos(MONITOR.tilt) - 0.0095;
-  const standZ = hz - geo.standTop.z;
   const fz = MONITOR.d / 2;
   return (
     <group>
-      <mesh geometry={geo.standG} material={m.anodised} position={[0, DESK.top, standZ]} castShadow receiveShadow />
-      <mesh geometry={geo.hinge} material={m.anodised} position={[0, hy, hz]} castShadow />
+      <group position={[0, hy, hz]}>
+        <mesh geometry={geo.standG} material={m.anodised} castShadow receiveShadow />
+        <mesh geometry={geo.liner} material={m.liner} />
+      </group>
       <group position={[0, MONITOR.y, MONITOR.z]} rotation={[MONITOR.tilt, 0, 0]}>
         <mesh geometry={geo.body} material={m.anodised} castShadow receiveShadow />
-        <mesh geometry={geo.dark} material={m.rubber} />
+        <mesh geometry={geo.ports} material={m.rubber} />
+        <mesh geometry={geo.vents} material={m.vents} renderOrder={1} />
         <mesh geometry={geo.glass} material={m.glass} position={[0, 0, fz + 0.0002]} />
         <mesh ref={screenRef} material={screenMat} position={[0, 0, fz + 0.0005]}>
           <planeGeometry args={[MONITOR.aw, MONITOR.ah]} />
@@ -432,8 +469,8 @@ export function Monitor({ screenMat, screenRef }: { screenMat: THREE.Material; s
         <mesh geometry={geo.glass} material={m.reflect} position={[0, 0, fz + 0.0009]} renderOrder={2} />
         {glintMat && <mesh geometry={geo.glass} material={glintMat} position={[0, 0, fz + 0.0012]} renderOrder={3} />}
       </group>
-      <group position={[0, DESK.top, standZ + geo.footMid]}>
-        <Blob w={0.25} d={0.23} opacity={0.3} />
+      <group position={[0, DESK.top, hz + geo.footZ]}>
+        <Blob w={0.2} d={0.215} opacity={0.42} />
       </group>
     </group>
   );
@@ -444,6 +481,7 @@ export function Monitor({ screenMat, screenRef }: { screenMat: THREE.Material; s
 // A titanium phone standing in the slot of a small machined-aluminium dock.
 export function Phone({ screenMat, screenRef }: { screenMat: THREE.Material; screenRef: RefObject<THREE.Mesh | null> }) {
   const m = getMats();
+  useNightLift();
   const geo = useGeo(() => {
     const bevel = 0.0013;
     const shell = new THREE.ExtrudeGeometry(roundedRectShape(PHONE.w - bevel * 2, PHONE.h - bevel * 2, PHONE.r - bevel), {
@@ -532,6 +570,7 @@ export function KeysBody() {
       <mesh geometry={geo.knobs} material={m.satin} castShadow />
       <mesh geometry={geo.marks} material={m.keyWhite} />
       <mesh geometry={geo.felt} material={m.ribbon} />
+      <Blob w={0.37} d={0.16} opacity={0.46} />
     </group>
   );
 }
@@ -556,158 +595,223 @@ export function Keys() {
       {blacks.map((i) => (
         <mesh key={`b${i}`} geometry={geo.black} material={m.keyBlack} position={[x0 + i * kw + kw / 2, 0.0285, zB]} castShadow />
       ))}
-      <Blob w={0.38} d={0.17} opacity={0.35} />
     </group>
   );
 }
 
-// Over-ear headphones after a well-known aluminium pair: squircle cups with a
-// gently domed face, knit cushions, polished telescoping rods, a soft-touch
-// frame whose two rails open into a loop, and a knit canopy stretched between
-// them. A crown and a button on the right cup. They stand on the cups, the
-// band leaning back a little the way they come to rest.
+// Over-ear headphones after a well-known aluminium pair, proportioned from the
+// maker's own front and side views: egg-shaped anodised cups with a domed
+// face, knit cushions of the same outline around a perforated inner fabric,
+// short polished rods dropping from steel collars into the top of each cup,
+// and a soft-touch band whose thick stems fork into two slim rails with an
+// open knit canopy slung between them. A crown and a noise button on the
+// right cup. With no head between them the cups swing in at the bottom, the
+// way the pair really rests. Origin of the parts: the underside of the collars.
 const HP = {
-  a: 0.039, // cup half-width (front to back)
-  b: 0.048, // cup half-height
-  n: 3.3, // squircle exponent
-  cupD: 0.025,
+  a: 0.0385, // cup half-width (front to back)
+  bt: 0.043, // cup height above its widest line
+  bb: 0.051, // and below it: the bottom is rounder than the top
+  nt: 3.0,
+  nb: 2.5,
+  cupD: 0.0245,
   cushD: 0.0205,
-  cupX: 0.058, // where cup meets cushion, from the centre
-  armX: 0.0685,
-  spring: 0.036, // the arch starts this far above the cup top
-  top: 0.187, // overall height
-  railZ: 0.0195,
-  railR: 0.003,
-  lean: -0.06,
-  yaw: 0.07,
+  x: 0.0775, // collar centres, from the middle
+  straight: 0.012, // the stems run straight this far before the arch begins
+  rise: 0.082, // collar to the top of the band
+  stemR: 0.0047,
+  railW: 0.0029, // rail half-width (front to back)
+  railT: 0.0021, // rail half-thickness
+  gap: 0.0172, // half the distance between the rails
+  fork0: 0.03, // arc length from the collar at which the stem starts to open
+  fork1: 0.058, // ... and at which the rails run parallel
+  collar: 0.003,
+  rod: 0.0095,
+  toe: 0.31,
+  yaw: [0.12, -0.07],
 };
-const HP_PIVOT = HP.b * 2 - 0.003;
-const HP_RISE = HP.top - HP_PIVOT - HP.spring - HP.railR;
 
-// the band's centreline over t = 0..1, in the band's own frame (pivot at the cup tops)
-function archAt(t: number) {
-  const th = Math.PI * t;
-  const c = Math.cos(th);
-  const s = Math.sin(th);
-  const e = 2 / 2.6;
-  return v3(HP.armX * Math.sign(c) * Math.pow(Math.abs(c), e), HP.spring + HP_RISE * Math.pow(Math.abs(s), e), 0);
+function cupPts(inset: number, k = 1, seg = 56) {
+  const pts: [number, number][] = [];
+  for (let j = 0; j < seg; j++) {
+    const t = (j / seg) * Math.PI * 2;
+    const c = Math.cos(t);
+    const sn = Math.sin(t);
+    const up = sn >= 0;
+    const e = 2 / (up ? HP.nt : HP.nb);
+    pts.push([(HP.a - inset) * k * Math.sign(c) * Math.pow(Math.abs(c), e), ((up ? HP.bt : HP.bb) - inset) * k * Math.sign(sn) * Math.pow(Math.abs(sn), e)]);
+  }
+  return pts;
 }
-// half the gap between the two rails: they leave the stem together and open into a loop
-function railGap(t: number) {
-  const u = Math.min(1, Math.min(t, 1 - t) / 0.075);
-  return HP.railZ * Math.sqrt(1 - (1 - u) * (1 - u));
+// top edge of the cup outline at front/back offset u
+const cupTopAt = (u: number) => HP.bt * Math.pow(1 - Math.pow(Math.abs(u) / HP.a, HP.nt), 1 / HP.nt);
+
+// The band's centreline from collar to collar, resampled evenly along its length.
+function bandLine(n: number) {
+  const raw: THREE.Vector3[] = [];
+  const B = HP.rise - HP.straight - HP.railT;
+  const e = 2 / 2.2;
+  for (let i = 0; i < 6; i++) raw.push(v3(-HP.x, (HP.straight * i) / 6, 0));
+  for (let i = 0; i <= 200; i++) {
+    const th = Math.PI * (1 - i / 200);
+    const c = Math.cos(th);
+    raw.push(v3(HP.x * Math.sign(c) * Math.pow(Math.abs(c), e), HP.straight + B * Math.pow(Math.sin(th), e), 0));
+  }
+  for (let i = 5; i >= 0; i--) raw.push(v3(HP.x, (HP.straight * i) / 6, 0));
+  const cum = [0];
+  for (let i = 1; i < raw.length; i++) cum.push(cum[i - 1] + raw[i].distanceTo(raw[i - 1]));
+  const total = cum[cum.length - 1];
+  const pts: THREE.Vector3[] = [];
+  let k = 0;
+  for (let i = 0; i <= n; i++) {
+    const d = (total * i) / n;
+    while (k < raw.length - 2 && cum[k + 1] < d) k++;
+    pts.push(raw[k].clone().lerp(raw[k + 1], (d - cum[k]) / Math.max(cum[k + 1] - cum[k], 1e-9)));
+  }
+  return { pts, total };
 }
 
-function canopyGeometry() {
-  const n = 56;
+function bandGeometry() {
+  const n = 120;
+  const { pts, total } = bandLine(n);
+  const centre = v3(0, HP.straight, 0);
+  const frames = pts.map((p, i) => {
+    const t = pts[Math.min(n, i + 1)].clone().sub(pts[Math.max(0, i - 1)]).normalize();
+    // in-plane normal, pointing in toward the head
+    const nIn = v3(-t.y, t.x, 0);
+    if (nIn.dot(centre.clone().sub(p)) < 0) nIn.negate();
+    const d = Math.min((total * i) / n, total - (total * i) / n);
+    const u = smooth(clamp01((d - HP.fork0) / (HP.fork1 - HP.fork0)));
+    return { p, nIn, d, u };
+  });
+  const rail = (side: number) => {
+    const rings = frames.map(({ p, nIn, u }) => {
+      const rn = THREE.MathUtils.lerp(HP.stemR, HP.railT, u);
+      const rz = THREE.MathUtils.lerp(HP.stemR, HP.railW, u);
+      return Array.from({ length: 12 }, (_, j) => {
+        const a = (j / 12) * Math.PI * 2;
+        return v3(p.x + nIn.x * rn * Math.cos(a), p.y + nIn.y * rn * Math.cos(a), side * HP.gap * u + rz * Math.sin(a));
+      });
+    });
+    return loft(rings);
+  };
+  // the canopy: slung between the rails, sagging in toward the head, starting in the crotch of each fork
+  const open = frames.filter((f) => HP.gap * f.u > 0.0045);
+  const d0 = open[0].d;
   const m = 6;
   const pos: number[] = [];
   const uv: number[] = [];
   const idx: number[] = [];
-  const t0 = 0.03;
-  for (let i = 0; i <= n; i++) {
-    const t = t0 + (1 - 2 * t0) * (i / n);
-    const p = archAt(t);
-    const q = archAt(t + 0.002).sub(archAt(t - 0.002)).normalize();
-    // inward normal of the arch (toward the head)
-    const nx = -q.y;
-    const ny = q.x;
-    const half = Math.max(0.001, railGap(t) - 0.0012);
+  open.forEach(({ p, nIn, d, u }, i) => {
+    const half = HP.gap * u - HP.railW * 0.5;
+    const sag = smooth(clamp01((d - d0) / 0.03));
     for (let j = 0; j <= m; j++) {
       const v = (j / m) * 2 - 1;
-      const dip = 0.0008 + 0.0042 * (1 - v * v) * Math.sin(Math.PI * (i / n));
-      pos.push(p.x + nx * dip, p.y + ny * dip, v * half);
-      uv.push(i / n, j / m);
+      const dip = 0.0004 + 0.0074 * Math.pow(1 - v * v, 0.8) * sag;
+      pos.push(p.x + nIn.x * dip, p.y + nIn.y * dip, v * half);
+      uv.push(i / (open.length - 1), j / m);
     }
-  }
-  for (let i = 0; i < n; i++)
+  });
+  for (let i = 0; i < open.length - 1; i++)
     for (let j = 0; j < m; j++) {
       const a = i * (m + 1) + j;
       idx.push(a, a + m + 1, a + 1, a + 1, a + m + 1, a + m + 2);
     }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  return g;
+  const canopy = new THREE.BufferGeometry();
+  canopy.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  canopy.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  canopy.setIndex(idx);
+  canopy.computeVertexNormals();
+  return { frame: merge([rail(-1), rail(1)]), canopy };
 }
-
-// top edge of the cup outline at front/back offset u
-const cupTopAt = (u: number) => HP.b * Math.pow(1 - Math.pow(Math.abs(u) / HP.a, HP.n), 1 / HP.n);
 
 export function Headphones() {
   const m = getMats();
   const geo = useGeo(() => {
-    const ring = (inset: number, z: number, k = 1) => sePts((HP.a - inset) * k, (HP.b - inset) * k, HP.n, 56).map(([x, y]) => v3(x, y, z));
-    // cup: built with its outer face toward +z, the cushion side at z = 0
+    const ring = (inset: number, z: number, k = 1) => cupPts(inset, k).map(([x, y]) => v3(x, y, z));
+    // every cup part is built with its outer face toward +z and the cushion side at z = 0,
+    // then seated so the rod's pivot (top of the cup, mid-depth) is the origin and the face looks along +x
+    const seat = <G extends Geo>(g: G) => put(put(g, 0, -HP.bt, -HP.cupD / 2), 0, 0, 0, 0, Math.PI / 2, 0);
+    const prof: [number, number][] = [
+      [0.0019, 0.0005],
+      [0.0002, 0.0028],
+      [0, 0.0075],
+      [0.0006, 0.0118],
+      [0.0024, 0.0158],
+      [0.0056, 0.0192],
+      [0.0102, 0.0219],
+      [0.0156, 0.0236],
+    ];
     const cupRings: THREE.Vector3[][] = [ring(0.006, 0, 0.001), ring(0.006, 0)];
-    (
-      [
-        [0.0018, 0.0005],
-        [0, 0.003],
-        [0, 0.011],
-        [0.0006, 0.0152],
-        [0.0026, 0.0193],
-        [0.0064, 0.0226],
-        [0.0122, 0.0245],
-      ] as const
-    ).forEach(([i, z]) => cupRings.push(ring(i, z)));
-    for (const f of [0.8, 0.6, 0.4, 0.2, 0.001]) cupRings.push(ring(0.0122, 0.0245 + (HP.cupD - 0.0245) * (1 - f * f), f));
-    const cup = loft(cupRings);
-    // cushion: a pillow ring toward -z, open in the middle
-    const c0 = 0.0026;
-    const cushion = loft(
-      (
-        [
-          [0.004, 0.0006],
-          [0.0012, -0.0018],
-          [0, -0.006],
-          [0, -0.012],
-          [0.0018, -0.0166],
-          [0.0056, -0.0195],
-          [0.0105, -HP.cushD],
-          [0.0155, -0.0196],
-          [0.019, -0.0165],
-          [0.0204, -0.011],
-          [0.0204, -0.0025],
-        ] as const
-      ).map(([i, z]) => ring(c0 + i, z)),
-      (p) => [p.x * 9 + p.z * 9, p.y * 9],
+    prof.forEach(([i, z]) => cupRings.push(ring(i, z)));
+    for (const f of [0.78, 0.56, 0.34, 0.14, 0.001]) cupRings.push(ring(0.0156, 0.0236 + (HP.cupD - 0.0236) * (1 - f * f), f));
+    const cup = seat(loft(cupRings));
+    // cushion: a pillow ring toward -z with the cup's own outline, open in the middle
+    const c0 = 0.0012;
+    const cushion = seat(
+      skin(
+        (
+          [
+            [0.004, 0.0006],
+            [0.0012, -0.0018],
+            [0, -0.006],
+            [0, -0.0118],
+            [0.0016, -0.0162],
+            [0.0052, -0.0193],
+            [0.01, -HP.cushD],
+            [0.0148, -0.0195],
+            [0.0184, -0.0166],
+            [0.0202, -0.0115],
+            [0.0206, -0.004],
+          ] as const
+        ).map(([i, z]) => ring(c0 + i, z)),
+        16,
+      ),
     );
-    const floor = loft([ring(c0 + 0.0204, -0.0035), ring(c0 + 0.0204, -0.0035, 0.001)]);
-    // crown and noise button on the top of the right cup
+    const floor = seat(loft([ring(c0 + 0.0206, -0.0045), ring(c0 + 0.0206, -0.0045, 0.001)], (p) => [p.x * 26, p.y * 26]));
+    // crown (toward the back) and noise button (toward the front) on top of the right cup
     const onTop = (g: Geo, u: number, sink: number) => {
       const slope = Math.atan((cupTopAt(u + 0.001) - cupTopAt(u - 0.001)) / 0.002);
-      return put(put(g, 0, -sink, 0, 0, 0, slope), u, cupTopAt(u), HP.cupD * 0.46);
+      return put(put(g, 0, -sink, 0, 0, 0, slope), u, cupTopAt(u), HP.cupD * 0.47);
     };
-    const controls = merge([onTop(dial(0.0049, 0.0046, 20, 0.0003), 0.0175, 0.0006), onTop(rbox(0.0175, 0.003, 0.0056, 0.0013, 3), -0.014, 0.0009)]);
-    const railPts = (z: number) => Array.from({ length: 73 }, (_, i) => archAt(i / 72).setZ(z * railGap(i / 72)));
-    const frame = merge([
-      ...[-1, 1].map((z) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPts(z)), 96, HP.railR, 8, false)),
-      ...[-1, 1].map((s) => put(new THREE.CapsuleGeometry(0.0046, 0.013, 6, 16), s * HP.armX, HP.spring - 0.0055, 0)),
-    ]);
-    const steel = merge([
-      ...[-1, 1].map((s) => put(cyl(0.0027, 0.0027, 0.03, 16), s * HP.armX, 0.012, 0)),
-      ...[-1, 1].map((s) => put(cyl(0.0044, 0.0048, 0.0032, 20), s * HP.armX, 0.0036, 0)),
-    ]);
-    return { cup, cushion, floor, controls, frame, steel, canopy: canopyGeometry() };
+    const controls = seat(merge([onTop(dial(0.0052, 0.0047, 30, 0.0003), 0.0195, 0.0007), onTop(rbox(0.0165, 0.0028, 0.0052, 0.0012, 3), -0.0165, 0.0012)]));
+    // a microphone slot high on the outer face, lying along the dome
+    const slot = seat(put(rbox(0.0058, 0.0004, 0.0015, 0.00015, 1), 0, HP.bt - 0.0041, 0.01765, 0.76));
+    // how far the lowest point of a swung-in cup hangs below its pivot
+    let low = 0;
+    const q = new THREE.Vector3();
+    HP.yaw.forEach((yaw, k) => {
+      const mat = new THREE.Matrix4().makeRotationZ(k ? HP.toe : -HP.toe).multiply(new THREE.Matrix4().makeRotationY(yaw + (k ? Math.PI : 0)));
+      for (const g of [cup, cushion]) {
+        const p = g.attributes.position;
+        for (let i = 0; i < p.count; i++) low = Math.min(low, q.fromBufferAttribute(p, i).applyMatrix4(mat).y);
+      }
+    });
+    const drop = HP.collar + HP.rod;
+    const steel = merge(
+      [-1, 1].flatMap((sd) => [
+        put(cyl(0.0056, 0.0056, HP.collar, 28), sd * HP.x, -HP.collar / 2, 0),
+        put(cyl(0.0032, 0.0032, HP.rod, 20), sd * HP.x, -HP.collar - HP.rod / 2, 0),
+        put(new THREE.SphereGeometry(0.0032, 16, 10), sd * HP.x, -drop, 0),
+      ]),
+    );
+    return { cup, cushion, floor, controls, slot, steel, ...bandGeometry(), lift: drop - low + 0.0002 };
   });
   return (
-    <group position={[0, 0, 0.02]}>
+    <group position={[0, geo.lift, 0.02]}>
       {[-1, 1].map((s) => (
-        <group key={s} position={[s * HP.cupX, HP.b, 0]} rotation={[0, s * (Math.PI / 2 - HP.yaw), 0]}>
-          <mesh geometry={geo.cup} material={m.anodised} castShadow receiveShadow />
-          <mesh geometry={geo.cushion} material={m.knit} castShadow />
-          <mesh geometry={geo.floor} material={m.meshDark} />
-          {s > 0 && <mesh geometry={geo.controls} material={m.anodised} castShadow />}
+        <group key={s} position={[s * HP.x, -(HP.collar + HP.rod), 0]} rotation={[0, 0, -s * HP.toe]}>
+          <group rotation={[0, s > 0 ? HP.yaw[0] : Math.PI + HP.yaw[1], 0]}>
+            <mesh geometry={geo.cup} material={m.cupAlu} castShadow receiveShadow />
+            <mesh geometry={geo.cushion} material={m.knit} castShadow />
+            <mesh geometry={geo.floor} material={m.earMesh} />
+            <mesh geometry={geo.slot} material={m.aluDark} />
+            {s > 0 && <mesh geometry={geo.controls} material={m.cupAlu} castShadow />}
+          </group>
         </group>
       ))}
-      <group position={[0, HP_PIVOT, 0]} rotation={[HP.lean, 0, 0]}>
-        <mesh geometry={geo.steel} material={m.steel} castShadow />
-        <mesh geometry={geo.frame} material={m.softTouch} castShadow />
-        <mesh geometry={geo.canopy} material={m.canopy} castShadow />
-      </group>
+      <mesh geometry={geo.steel} material={m.steel} castShadow />
+      <mesh geometry={geo.frame} material={m.softTouch} castShadow />
+      <mesh geometry={geo.canopy} material={m.canopy} castShadow />
     </group>
   );
 }
@@ -716,11 +820,11 @@ export function HeadphonesBlob() {
   return (
     <group position={[0, 0, 0.02]}>
       {[-1, 1].map((s) => (
-        <group key={s} position={[s * (HP.cupX + 0.004), 0, 0]}>
-          <Blob w={0.1} d={0.14} opacity={0.36} />
+        <group key={s} position={[s * 0.056, 0, 0]}>
+          <Blob w={0.09} d={0.125} opacity={0.5} />
         </group>
       ))}
-      <Blob w={0.3} d={0.13} opacity={0.14} />
+      <Blob w={0.26} d={0.13} opacity={0.14} />
     </group>
   );
 }
@@ -739,7 +843,8 @@ export function CameraBody() {
     const T = CAM.top;
     const HPI = Math.PI / 2;
     // along the lens axis (lathe y -> camera +z)
-    const lensPut = <G extends Geo>(g: G) => put(g, CAM.lx, CAM.ly, front, HPI);
+    // (a compact pancake: the barrel stands 2.5 cm off the body)
+    const lensPut = <G extends Geo>(g: G) => put(g.scale(1, 0.82, 1) as G, CAM.lx, CAM.ly, front, HPI);
     const lathe = (pts: [number, number][], seg = 64) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg);
 
     const silver: Geo[] = [
@@ -760,8 +865,8 @@ export function CameraBody() {
           [0.0208, 0.0295],
         ]),
       ),
-      lensPut(put(ridgedRing(0.024, 0.006, 40, 0.0007), 0, 0.0074, 0)),
-      lensPut(put(ridgedRing(0.0242, 0.0095, 72, 0.0005), 0, 0.0178, 0)),
+      lensPut(put(ridgedRing(0.0238, 0.006, 64, 0.00035), 0, 0.0074, 0)),
+      lensPut(put(ridgedRing(0.0241, 0.0095, 96, 0.0003), 0, 0.0178, 0)),
       ...[-1, 1].map((s) => lensPut(put(rbox(0.0052, 0.0056, 0.0085, 0.0014, 2), s * 0.0247, 0.0074, 0))),
       // top plate: shutter-speed dial, exposure compensation, shutter collar and button, hot shoe
       put(dial(0.0113, 0.0078, 40, 0.0005), -0.0195, T, -0.002),
@@ -784,10 +889,12 @@ export function CameraBody() {
     ];
     const rings = merge([-1, 1].map((s) => put(new THREE.TorusGeometry(0.0046, 0.00065, 6, 22), s * (CAM.w / 2 + 0.0042), 0.0535, 0.003, 0, HPI, s * -0.42)));
 
+    const grip = put(rbox(0.015, 0.037, 0.0085, 0.0041, 4), -0.0525, 0.0275, front + 0.0012);
+    for (let i = 0, gp = grip.attributes.position, gu = grip.attributes.uv; i < gp.count; i++) gu.setXY(i, (gp.getX(i) - gp.getZ(i)) * 11, gp.getY(i) * 11);
     const leather = merge([
-      put(prism(CAM.w + 0.0006, CAM.d + 0.0006, CAM.r + 0.0003, CAM.band - CAM.base + 0.0006, 0), 0, CAM.base - 0.0003, 0),
-      // a low grip under the fingers
-      put(rbox(0.015, 0.037, 0.0085, 0.0041, 4), -0.0525, 0.0275, front + 0.0012),
+      wrapBand(CAM.w / 2 + 0.0003, CAM.d / 2 + 0.0003, CAM.r + 0.0003, CAM.base - 0.0003, CAM.band + 0.0003, 11),
+      // a low grip under the fingers, its grain at the same scale
+      grip,
     ]);
 
     const black = merge([
@@ -828,7 +935,7 @@ export function CameraBody() {
       <mesh geometry={geo.glass} material={m.lens} />
       <mesh geometry={geo.lcd} material={m.glass} />
       <group position={[0, 0, 0.006]}>
-        <Blob w={0.17} d={0.115} opacity={0.4} />
+        <Blob w={0.165} d={0.1} opacity={0.5} />
       </group>
     </group>
   );

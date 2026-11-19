@@ -75,26 +75,74 @@ function noiseTexture(size: number, seed: number, scale = 1) {
   return t;
 }
 
-function meshTexture() {
-  const { c, g } = canvas(64, 64);
-  g.fillStyle = "#8f9196";
-  g.fillRect(0, 0, 64, 64);
-  g.strokeStyle = "#e6e7ea";
-  g.lineWidth = 5;
-  for (let i = -64; i <= 128; i += 16) {
+// Rows of fine perforations (the display's vents): one pitch of four staggered rows, as coverage.
+function ventTexture(repeat: number) {
+  const { c, g } = canvas(32, 64);
+  g.fillStyle = "#000";
+  g.fillRect(0, 0, 32, 64);
+  g.fillStyle = "#fff";
+  for (let r = 0; r < 4; r++)
+    for (const x of r % 2 ? [16] : [0, 32]) {
+      g.beginPath();
+      g.ellipse(x, 8 + r * 16, 9.6, 5.2, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = THREE.RepeatWrapping;
+  t.repeat.set(repeat, 1);
+  t.anisotropy = 8;
+  return t;
+}
+
+// The open knit of the headband canopy: a fine diagonal lattice, light yarn on a darker gap.
+// `alpha` gives the same lattice as coverage, so the canopy lets a little of the world through.
+function latticeTexture(alpha: boolean) {
+  const S = 64;
+  const { c, g } = canvas(S, S);
+  g.fillStyle = alpha ? "#5e5e5e" : "#b9bbc0";
+  g.fillRect(0, 0, S, S);
+  g.strokeStyle = "#ffffff";
+  g.lineWidth = 5.5;
+  g.lineCap = "round";
+  for (let i = -S; i <= S * 2; i += 16) {
     g.beginPath();
     g.moveTo(i, 0);
-    g.lineTo(i + 64, 64);
+    g.lineTo(i + S, S);
     g.stroke();
     g.beginPath();
-    g.moveTo(i, 64);
-    g.lineTo(i + 64, 0);
+    g.moveTo(i, S);
+    g.lineTo(i + S, 0);
     g.stroke();
   }
   const t = new THREE.CanvasTexture(c);
+  if (!alpha) t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(30, 5);
+  t.anisotropy = 8;
+  return t;
+}
+
+// The fabric inside the ear cushions: the same knit, with the driver's perforations as small dark clusters.
+function earTexture() {
+  const S = 128;
+  const { c, g } = canvas(S, S);
+  g.fillStyle = "#d9dadd";
+  g.fillRect(0, 0, S, S);
+  g.fillStyle = "#77797f";
+  for (let y = 0; y < 4; y++)
+    for (let x = 0; x < 4; x++) {
+      const cx = x * 32 + (y % 2 ? 24 : 8);
+      const cy = y * 32 + 16;
+      for (const [dx, dy] of [[0, -6], [-6, 0], [6, 0], [0, 6]]) {
+        g.beginPath();
+        g.arc(cx + dx, cy + dy, 2.6, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(26, 2);
+  t.anisotropy = 8;
   return t;
 }
 
@@ -112,16 +160,54 @@ function pagesTexture() {
   return t;
 }
 
+// Soft contact shadow, as coverage in the green channel (what an alphaMap
+// reads): a rounded patch that is full under the object and eases out over the
+// outer third, so it stays dark right at the footprint's edge.
 function blobTexture() {
-  const { c, g } = canvas(128, 128);
-  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gr.addColorStop(0, "rgba(255,255,255,1)");
-  gr.addColorStop(0.35, "rgba(255,255,255,0.6)");
-  gr.addColorStop(0.7, "rgba(255,255,255,0.15)");
-  gr.addColorStop(1, "rgba(255,255,255,0)");
-  g.fillStyle = gr;
-  g.fillRect(0, 0, 128, 128);
+  const S = 128;
+  const { c, g } = canvas(S, S);
+  const img = g.createImageData(S, S);
+  const R = 0.3;
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const qx = Math.abs((x + 0.5) / S - 0.5) * 2 - (1 - R);
+      const qy = Math.abs((y + 0.5) / S - 0.5) * 2 - (1 - R);
+      const d = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - R; // < 0 inside
+      const t = Math.min(1, Math.max(0, -d / 0.3));
+      const v = 255 * t * t * (3 - 2 * t);
+      const i = (y * S + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 255;
+    }
+  g.putImageData(img, 0, 0);
   return new THREE.CanvasTexture(c);
+}
+
+// A fine knit for the ear cushions: pale yarn over slightly darker gaps, about a millimetre a stitch.
+function knitTexture() {
+  const S = 32;
+  const { c, g } = canvas(S, S);
+  g.fillStyle = "#bfc0c4";
+  g.fillRect(0, 0, S, S);
+  g.strokeStyle = "#ffffff";
+  g.lineWidth = 4.2;
+  g.lineCap = "round";
+  for (let i = -S; i <= S * 2; i += 8) {
+    g.beginPath();
+    g.moveTo(i, 0);
+    g.lineTo(i + S, S);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(i, S);
+    g.lineTo(i + S, 0);
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(14, 14);
+  t.anisotropy = 8;
+  return t;
 }
 
 // The novel's own cover (from his epub). Falls back to set type if it fails.
@@ -190,6 +276,16 @@ function brushedTexture() {
   return t;
 }
 
+// Coverage-blended surfaces must leave the target's alpha at 1: the lens reads alpha as "grade this".
+function keepAlpha<T extends THREE.Material>(m: T) {
+  m.blending = THREE.CustomBlending;
+  m.blendSrc = THREE.SrcAlphaFactor;
+  m.blendDst = THREE.OneMinusSrcAlphaFactor;
+  m.blendSrcAlpha = THREE.OneFactor;
+  m.blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
+  return m;
+}
+
 export type Mats = ReturnType<typeof build>;
 let cache: Mats | null = null;
 let coverDone: Promise<void> = Promise.resolve();
@@ -221,9 +317,11 @@ function build() {
     alu: new THREE.MeshPhysicalMaterial({ color: "#d4d6da", metalness: 1, roughness: 0.42, roughnessMap: brushedTexture(), anisotropy: 0.6 }),
     aluDark: new THREE.MeshPhysicalMaterial({ color: "#4b4d53", metalness: 0.9, roughness: 0.42 }),
     // bead-blasted anodised aluminium (display, headphone cups): no brushing, a soft even sheen
-    anodised: new THREE.MeshPhysicalMaterial({ color: "#b8babf", metalness: 0.72, roughness: 0.5, clearcoat: 0.15, clearcoatRoughness: 0.6 }),
+    anodised: new THREE.MeshStandardMaterial({ color: "#d3d1cd", metalness: 0.5, roughness: 0.5, envMapIntensity: 0.85 }),
+    // the headphone cups: the same finish a shade deeper and more metallic, so they sit apart from the pale band and cushions
+    cupAlu: new THREE.MeshStandardMaterial({ color: "#b4b5b8", metalness: 0.78, roughness: 0.4, envMapIntensity: 1 }),
     // satin silver plate and machined dials (camera, knobs)
-    satin: new THREE.MeshPhysicalMaterial({ color: "#bcbdc0", metalness: 0.8, roughness: 0.36 }),
+    satin: new THREE.MeshStandardMaterial({ color: "#c9c7c3", metalness: 0.62, roughness: 0.36, envMapIntensity: 0.9 }),
     brass: new THREE.MeshStandardMaterial({ color: "#b8935a", metalness: 1, roughness: 0.38 }),
     // the headband frame's soft-touch coating
     softTouch: new THREE.MeshPhysicalMaterial({ color: "#b4b5b9", roughness: 0.62, sheen: 0.4, sheenColor: new THREE.Color("#ffffff"), sheenRoughness: 0.5 }),
@@ -240,8 +338,14 @@ function build() {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     }),
-    knit: new THREE.MeshPhysicalMaterial({ ...pbr(TEX.knit, 2), color: "#e2e3e6", roughness: 1, sheen: 1, sheenColor: new THREE.Color("#ffffff"), sheenRoughness: 0.6 }),
-    canopy: new THREE.MeshStandardMaterial({ map: meshTexture(), color: "#a6a8ad", roughness: 0.95, side: THREE.DoubleSide }),
+    knit: new THREE.MeshPhysicalMaterial({ map: knitTexture(), normalMap: load(TEX.knit.normal, 2, false), normalScale: new THREE.Vector2(1.2, 1.2), color: "#cfd0d3", roughness: 1, sheen: 0.6, sheenColor: new THREE.Color("#ffffff"), sheenRoughness: 0.6 }),
+    canopy: keepAlpha(new THREE.MeshStandardMaterial({ map: latticeTexture(false), alphaMap: latticeTexture(true), color: "#c9cacd", roughness: 0.95, side: THREE.DoubleSide, transparent: true })),
+    earMesh: new THREE.MeshStandardMaterial({ map: earTexture(), color: "#cfd0d3", roughness: 1 }),
+    // the dark sleeve inside the stand's cable pass-through
+    liner: new THREE.MeshStandardMaterial({ color: "#1b1b1d", roughness: 0.7, side: THREE.DoubleSide }),
+    vents: keepAlpha(
+      new THREE.MeshStandardMaterial({ color: "#060607", roughness: 0.9, alphaMap: ventTexture(260), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+    ),
     leather: new THREE.MeshPhysicalMaterial({ ...pbr(TEX.leather, 3), color: "#3a3a3e", roughness: 1, clearcoat: 0.08 }),
     rubber: new THREE.MeshStandardMaterial({ color: "#141416", roughness: 0.85 }),
     lens: new THREE.MeshPhysicalMaterial({
@@ -270,8 +374,32 @@ function build() {
   };
 }
 
+// Moonlight: the night environment is dim, and metal shows little else, so the
+// desk's metals and pale fabrics take more of it after dark (n = 0 day .. 1 night).
+let litFor = -1;
+export function nightLift(n: number) {
+  if (!cache || Math.abs(n - litFor) < 0.004) return;
+  litFor = n;
+  const m = cache;
+  const set = (mat: THREE.MeshStandardMaterial, base: number, gain: number) => (mat.envMapIntensity = base * (1 + gain * n));
+  set(m.anodised, 0.85, 3.2);
+  set(m.cupAlu, 1, 3);
+  set(m.satin, 0.9, 3.2);
+  set(m.steel, 1, 2.4);
+  set(m.titanium, 1, 3);
+  set(m.aluDark, 1, 3);
+  set(m.softTouch, 1, 2.6);
+  set(m.knit, 1, 2.2);
+  set(m.canopy, 1, 2.2);
+  set(m.earMesh, 1, 2.2);
+}
+
 export function getMats() {
-  if (!cache) cache = build();
+  if (!cache) {
+    cache = build();
+    // dev: the shared materials on window, for tuning from the console
+    if (process.env.NODE_ENV !== "production") (window as unknown as { __mats: Mats }).__mats = cache;
+  }
   return cache;
 }
 export const coverReady = () => {
