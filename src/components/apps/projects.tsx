@@ -25,7 +25,7 @@ function CardFace({ it, big, open }: { it: StoryItem; big?: boolean; open?: bool
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.42)_0%,rgb(0_0_0/0.08)_38%,rgb(0_0_0/0)_55%,rgb(0_0_0/0.5)_100%)]" />
       {shot && (
         <div className={`absolute inset-x-0 bottom-0 flex justify-center ${CROP[storyImage(it)] ? "items-center pb-[6%]" : "items-start"} ${open ? (compact ? "top-[40%]" : "top-[190px]") : "top-[38%]"}`}>
-          <Squircle radius={12} className="w-[84%] overflow-hidden shadow-[0_24px_60px_-20px_rgb(0_0_0/0.7),0_0_0_0.5px_rgb(255_255_255/0.2)]">
+          <Squircle radius={16} className="w-[84%] overflow-hidden shadow-[0_24px_60px_-20px_rgb(0_0_0/0.7),0_0_0_0.5px_rgb(255_255_255/0.2)]">
             <ShotImg src={storyImage(it)} alt="" draggable={false} />
           </Squircle>
         </div>
@@ -110,7 +110,7 @@ function Story({ it, standalone }: { it: StoryItem; standalone?: boolean }) {
                 type="button"
                 key={src}
                 onClick={() => setLook(i)}
-                className={`press lift sq-card shrink-0 snap-start overflow-hidden rounded-[14px] shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)] ${compact ? "w-[82%]" : "w-[min(520px,70%)]"}`}
+                className={`press lift sq-card shrink-0 snap-start overflow-hidden rounded-[18px] shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)] ${compact ? "w-[82%]" : "w-[min(520px,70%)]"}`}
                 data-sq=""
               >
                 <ShotImg src={src} alt={`${p.name} ${i + 1}`} {...dragFile(`${p.name} ${i + 1}`, src)} />
@@ -199,7 +199,7 @@ function Readme({ text }: { text: string }) {
   for (const raw of lines) {
     if (raw.trim().startsWith("```")) {
       if (code) {
-        out.push(<pre key={out.length} className="mt-2 overflow-x-auto rounded-[8px] bg-[var(--fill-2)] p-3 font-mono text-[12px] leading-[1.5] text-ink">{code.join("\n")}</pre>);
+        out.push(<pre key={out.length} className="mt-2 overflow-x-auto rounded-[10px] bg-[var(--fill-2)] p-3 font-mono text-[12px] leading-[1.5] text-ink">{code.join("\n")}</pre>);
         code = null;
       } else {
         flush();
@@ -293,7 +293,7 @@ function RepoView({ it }: { it: StoryItem }) {
                   ) : repoState === "loading" ? (
                     <div className="space-y-2.5 p-4" aria-label="Loading files from GitHub" role="status">
                       {[52, 38, 64, 44].map((w) => (
-                        <div key={w} className="skeleton h-4 rounded-[4px]" style={{ width: `${w}%` }} />
+                        <div key={w} className="skeleton h-4 rounded-[6px]" style={{ width: `${w}%` }} />
                       ))}
                     </div>
                   ) : (
@@ -405,10 +405,10 @@ function LiveSite({ it }: { it: StoryItem }) {
     <div className="relative min-h-0 flex-1 bg-[var(--bg)]">
       {!loaded && (
         <div className="absolute inset-0 space-y-3 p-8" aria-hidden>
-          <div className="skeleton h-8 w-1/3 rounded-[8px]" />
-          <div className="skeleton h-48 w-full rounded-[16px]" />
-          <div className="skeleton h-4 w-2/3 rounded-[4px]" />
-          <div className="skeleton h-4 w-1/2 rounded-[4px]" />
+          <div className="skeleton h-8 w-1/3 rounded-[10px]" />
+          <div className="skeleton h-48 w-full rounded-[20px]" />
+          <div className="skeleton h-4 w-2/3 rounded-[6px]" />
+          <div className="skeleton h-4 w-1/2 rounded-[6px]" />
         </div>
       )}
       <iframe
@@ -431,7 +431,7 @@ function LiveSite({ it }: { it: StoryItem }) {
         {/* a navigation row of its own, so the close button never sits on the site's header */}
         <div className="t-headline absolute inset-x-16 -top-[50px] flex h-11 items-center justify-center truncate text-ink">{it.p.name}</div>
         {frame}
-        <div data-glass="" className={`${glass("pop")} absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+36px)] flex h-12 items-center gap-1 rounded-[16px] px-1.5`}>
+        <div data-glass="" className={`${glass("pop")} absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+36px)] flex h-12 items-center gap-1 rounded-[20px] px-1.5`}>
           <Btn variant="plain" size="md" iconOnly label="Info" onClick={() => setInfo(true)} icon={<Info size={18} />} />
           <span className="t-sub min-w-0 flex-1 truncate text-center font-medium text-ink">{domain}</span>
           <Btn variant="plain" size="md" iconOnly label="Open in Safari" href={href} icon={<ArrowUpRight size={18} />} />
@@ -450,7 +450,7 @@ function LiveSite({ it }: { it: StoryItem }) {
                 dragConstraints={{ top: 0, bottom: 0 }}
                 dragElastic={{ top: 0, bottom: 0.6 }}
                 onDragEnd={(_, i) => (i.offset.y > 90 || i.velocity.y > 600) && setInfo(false)}
-                className="sq-panel fixed inset-x-0 bottom-0 z-[51] max-h-[75%] overflow-auto rounded-t-[24px] bg-[var(--bg-elevated)] px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-3"
+                className="sq-panel fixed inset-x-0 bottom-0 z-[51] max-h-[75%] overflow-auto rounded-t-[28px] bg-[var(--bg-elevated)] px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-3"
               >
                 <div className="mx-auto mb-4 h-[5px] w-9 rounded-full bg-[var(--fill)]" />
                 <Inspector it={it} />
@@ -464,7 +464,7 @@ function LiveSite({ it }: { it: StoryItem }) {
     <div className="flex h-full min-h-0 flex-col">
       <div data-drag className="toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--separator)] pl-[84px] pr-3">
         <Btn variant="plain" size="sm" iconOnly label="Reload" onClick={() => setReload((r) => r + 1)} icon={<RotateCw size={14} />} />
-        <div className="search mx-auto flex h-[30px] w-[min(420px,60%)] items-center justify-center gap-1.5 rounded-[8px] bg-[var(--fill-2)] px-3">
+        <div className="search mx-auto flex h-[30px] w-[min(420px,60%)] items-center justify-center gap-1.5 rounded-[10px] bg-[var(--fill-2)] px-3">
           <Lock size={11} className="text-ink-2" />
           <span className="m-body truncate font-medium text-ink">{domain}</span>
         </div>

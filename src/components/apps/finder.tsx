@@ -124,12 +124,12 @@ export function Finder({ start }: { start: PlaceId }) {
                       onPointerDown={(e) => (e.stopPropagation(), setSel(it.id))}
                       onDoubleClick={() => run(it)}
                       onKeyDown={(e) => e.key === "Enter" && run(it)}
-                      className="group flex flex-col items-center gap-1.5 rounded-[10px] px-1 py-2 outline-none"
+                      className="group flex flex-col items-center gap-1.5 rounded-[12px] px-1 py-2 outline-none"
                     >
-                      <span className={`flex h-[78px] w-[78px] items-center justify-center rounded-[12px] transition-colors duration-100 ${on ? "bg-[var(--selection)]" : "hov:group-hover:bg-[var(--hover)]"}`} data-sq="">
+                      <span className={`flex h-[78px] w-[78px] items-center justify-center rounded-[16px] transition-colors duration-100 ${on ? "bg-[var(--selection)]" : "hov:group-hover:bg-[var(--hover)]"}`} data-sq="">
                         <FinderIcon it={it} size={60} />
                       </span>
-                      <span className={`line-clamp-2 max-w-[108px] rounded-[5px] px-[6px] py-px text-center text-[12px] font-medium leading-[15px] ${on ? "bg-[var(--accent)] text-white" : "text-ink group-focus-visible:bg-[var(--accent)] group-focus-visible:text-white"}`}>{it.name}</span>
+                      <span className={`line-clamp-2 max-w-[108px] rounded-[7px] px-[6px] py-px text-center text-[12px] font-medium leading-[15px] ${on ? "bg-[var(--accent)] text-white" : "text-ink group-focus-visible:bg-[var(--accent)] group-focus-visible:text-white"}`}>{it.name}</span>
                       <span className="m-sub -mt-1 text-ink-3">{it.kind}</span>
                     </button>
                   );
@@ -146,7 +146,7 @@ export function Finder({ start }: { start: PlaceId }) {
                       onPointerDown={(e) => (e.stopPropagation(), setSel(it.id))}
                       onDoubleClick={() => run(it)}
                       onKeyDown={(e) => e.key === "Enter" && run(it)}
-                      className={`flex h-9 w-full items-center gap-2.5 rounded-[8px] px-2 text-left outline-none ${on ? "bg-[var(--accent)] text-white" : "text-ink odd:bg-[var(--fill-2)] focus-visible:bg-[var(--accent)] focus-visible:text-white"}`}
+                      className={`flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2 text-left outline-none ${on ? "bg-[var(--accent)] text-white" : "text-ink odd:bg-[var(--fill-2)] focus-visible:bg-[var(--accent)] focus-visible:text-white"}`}
                     >
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center">
                         <FinderIcon it={it} size={24} />

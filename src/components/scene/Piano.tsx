@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { playPiano, preloadPiano } from "@/lib/piano";
 import { getMats } from "./materials";
+import { KeysBody } from "./models";
 
 // A 25-key controller you can actually play: click keys, or use the computer
 // keyboard (A..' for white keys, W E T Y U O P for black). Keys dip when hit.
@@ -31,10 +32,8 @@ export function PianoKeys({ playable }: { playable: boolean }) {
   const m = getMats();
   const geo = useMemo(
     () => ({
-      chassis: new RoundedBoxGeometry(0.345, 0.022, 0.135, 4, 0.0055),
       white: new RoundedBoxGeometry(0.0204, 0.011, 0.092, 2, 0.0016),
       black: new RoundedBoxGeometry(0.0112, 0.012, 0.056, 2, 0.0018),
-      oled: new RoundedBoxGeometry(0.042, 0.002, 0.012, 2, 0.0009),
     }),
     [],
   );
@@ -66,7 +65,7 @@ export function PianoKeys({ playable }: { playable: boolean }) {
 
   return (
     <group>
-      <mesh geometry={geo.chassis} material={m.aluDark} position={[0, 0.011, 0]} castShadow receiveShadow />
+      <KeysBody />
       {keys.map((k) => (
         // pivot at the back edge so keys tip down like real ones
         <group
@@ -100,12 +99,6 @@ export function PianoKeys({ playable }: { playable: boolean }) {
             </Html>
           )}
         </group>
-      ))}
-      <mesh geometry={geo.oled} material={m.oled} position={[-0.12, 0.0225, -0.046]} />
-      {[0.118, 0.146].map((x) => (
-        <mesh key={x} material={m.alu} position={[x, 0.026, -0.046]} castShadow>
-          <cylinderGeometry args={[0.0075, 0.0078, 0.009, 40]} />
-        </mesh>
       ))}
     </group>
   );

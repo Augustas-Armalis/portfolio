@@ -9,7 +9,7 @@ import { useOS } from "@/store";
 export function Empty({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-14 text-center">
-      <div className="flex h-11 w-11 items-center justify-center rounded-[12px] bg-[#F1F1F4] text-ink-3">{icon}</div>
+      <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[#F1F1F4] text-ink-3">{icon}</div>
       <div className="mt-1 text-[14px] font-semibold text-ink">{title}</div>
       <div className="max-w-[32ch] text-[12px] leading-relaxed text-ink-2">{body}</div>
     </div>

@@ -44,7 +44,7 @@ export function LockFace({ still = false, action }: { still?: boolean; action?: 
       </motion.div>
       <motion.div {...enter(0.12, 8)} className="relative mt-8 grid w-[420px] max-w-[calc(100%-48px)] grid-cols-2 gap-3">
         {LOCK_WIDGETS.map((w) => (
-          <div key={w.k} data-glass="" className={`${glass("widget-dark")} sq-panel rounded-[22px] px-4 py-3.5 text-left`}>
+          <div key={w.k} data-glass="" className={`${glass("widget-dark")} sq-panel rounded-[26px] px-4 py-3.5 text-left`}>
             <div className="text-[12px] font-medium leading-4 text-white/60">{w.k}</div>
             <div className="mt-1 truncate text-[17px] font-semibold leading-[22px] tracking-[-0.02em] text-white">{w.v}</div>
             <div className="truncate text-[13px] leading-[18px] text-white/65">{w.s}</div>

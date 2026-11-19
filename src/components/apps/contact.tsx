@@ -50,7 +50,7 @@ export function Contact() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-          className={`flex items-center gap-2.5 rounded-[10px] bg-[#E9F6EE] px-3 py-2.5 text-[13px] text-[#1F7A45] ${compact ? "mx-4 mt-3" : ""}`}
+          className={`flex items-center gap-2.5 rounded-[12px] bg-[#E9F6EE] px-3 py-2.5 text-[13px] text-[#1F7A45] ${compact ? "mx-4 mt-3" : ""}`}
         >
           <Check size={15} strokeWidth={2.4} className="shrink-0" />
           <span className="min-w-0 flex-1">Message copied. Paste it into X or any channel below.</span>
@@ -74,17 +74,17 @@ export function Contact() {
         </div>
         <div className="mt-5 grid grid-cols-4 gap-2 px-4">
           {actions.map((a) => (
-            <a key={a.k} href={a.href} target={a.href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[10px] bg-white text-[#0A84FF]">
+            <a key={a.k} href={a.href} target={a.href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[12px] bg-white text-[#0A84FF]">
               {a.icon}
               <span className="text-[11px] font-medium">{a.label}</span>
             </a>
           ))}
-          <button type="button" onClick={() => copy("handle", owner.x.label)} className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[10px] bg-white text-[#0A84FF]">
+          <button type="button" onClick={() => copy("handle", owner.x.label)} className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[12px] bg-white text-[#0A84FF]">
             {copied === "handle" ? <Check size={20} strokeWidth={2.2} /> : <Copy size={19} strokeWidth={1.9} />}
             <span className="text-[11px] font-medium">{copied === "handle" ? "Copied" : "Copy"}</span>
           </button>
         </div>
-        <div className="mx-4 mt-6 sq-list overflow-hidden rounded-[10px] bg-white">
+        <div className="mx-4 mt-6 sq-list overflow-hidden rounded-[12px] bg-white">
           {contactList.map((c, j) => (
             <a key={c.id} href={hrefOf(c)} target={c.href?.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="press-row flex min-h-[56px] items-center pl-4">
               <span className={`flex min-h-[56px] flex-1 flex-col justify-center pr-4 ${j ? "border-t-[0.5px] border-[#C6C6C8]" : ""}`}>
@@ -95,7 +95,7 @@ export function Contact() {
           ))}
         </div>
         <div className="mb-[7px] mt-7 px-8 text-[13px] uppercase tracking-[-0.005em] text-[#6D6D72]">New message</div>
-        <div className="mx-4 sq-list overflow-hidden rounded-[10px] bg-white">
+        <div className="mx-4 sq-list overflow-hidden rounded-[12px] bg-white">
           <input
             id="contact-subject"
             value={subject}
@@ -113,7 +113,7 @@ export function Contact() {
             className="block w-full resize-none bg-transparent px-4 py-3 text-[17px] leading-[22px] tracking-[-0.02em] text-ink outline-none placeholder:text-[#C4C4C7]"
           />
         </div>
-        <div className="mx-4 mt-4 sq-list overflow-hidden rounded-[10px] bg-white">
+        <div className="mx-4 mt-4 sq-list overflow-hidden rounded-[12px] bg-white">
           <button type="button" onClick={send} className="press-row flex h-11 w-full items-center justify-center text-[17px] font-semibold tracking-[-0.02em] text-[#0A84FF]">
             Send Message
           </button>
@@ -155,7 +155,7 @@ export function Contact() {
         </div>
         <div className={field}>
           <span className="w-[58px] text-right text-ink-3">To:</span>
-          <span className="inline-flex h-[22px] items-center rounded-[6px] bg-[#0A84FF]/[0.1] px-2 text-[13px] font-medium text-[#0A84FF]">{owner.name}</span>
+          <span className="inline-flex h-[22px] items-center rounded-[8px] bg-[#0A84FF]/[0.1] px-2 text-[13px] font-medium text-[#0A84FF]">{owner.name}</span>
         </div>
         <label htmlFor="contact-subject" className={field}>
           <span className="w-[58px] text-right text-ink-3">Subject:</span>
@@ -199,7 +199,7 @@ export function Contact() {
                   href={hrefOf(c)}
                   target={c.href?.startsWith("http") ? "_blank" : undefined}
                   rel="noreferrer"
-                  className="group flex h-8 items-center gap-2 rounded-[6px] px-2 text-[13px] hov:hover:bg-black/[0.04]"
+                  className="group flex h-8 items-center gap-2 rounded-[8px] px-2 text-[13px] hov:hover:bg-black/[0.04]"
                 >
                   <span className="flex h-4 w-4 items-center justify-center text-ink-2">{channelIcon[c.id]}</span>
                   <span className="text-ink">{c.label}</span>
@@ -214,10 +214,10 @@ export function Contact() {
 }
 
 function QuickAction({ href, onClick, icon, label, sub }: { href?: string; onClick?: () => void; icon: React.ReactNode; label: string; sub: string }) {
-  const cls = "press lift sq flex flex-col items-start gap-2 rounded-[12px] bg-[var(--bg-elevated)] p-3 text-left shadow-[var(--shadow-1)]";
+  const cls = "press lift sq flex flex-col items-start gap-2 rounded-[16px] bg-[var(--bg-elevated)] p-3 text-left shadow-[var(--shadow-1)]";
   const inner = (
     <>
-      <span className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-[var(--accent-tint)] text-[var(--accent)]">{icon}</span>
+      <span className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-[var(--accent-tint)] text-[var(--accent)]">{icon}</span>
       <span className="min-w-0">
         <span className="block text-[13px] font-medium text-ink">{label}</span>
         <span className="block truncate text-[11px] text-ink-3">{sub}</span>

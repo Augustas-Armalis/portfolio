@@ -20,6 +20,7 @@ import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone, glint } f
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
 import { Preloader } from "./scene/Overlays";
+import { Post, postCtl } from "./scene/Post";
 import { KEYMAP, PianoKeys, strike } from "./scene/Piano";
 import { Plane, type PlaneApi } from "./scene/Plane";
 import { Reader, type ReaderApi, type ReaderInfo } from "./scene/Reader";
@@ -39,6 +40,7 @@ import {
   easeInOutQuint,
   easeOutExpo,
   nowS,
+  skewClock,
   smooth,
   spring,
   type ObjKind,
@@ -363,7 +365,9 @@ function Scene({
   voyage: boolean;
   q: Quality;
 }) {
-  const { camera, size, gl, scene } = useThree();
+  const { camera, size, gl, scene, advance } = useThree();
+  // dev only: a fixed time step and a held viewpoint for frame-by-frame stills
+  const dev = useRef<{ dt: number | null; view: { pos: [number, number, number]; look: [number, number, number]; fov?: number; focus?: number } | null }>({ dt: null, view: null });
   const cam = camera as THREE.PerspectiveCamera;
   if (process.env.NODE_ENV !== "production") {
     const w = window as unknown as { __t?: Record<string, number> };
@@ -455,6 +459,41 @@ function Scene({
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __fs: flightSky, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.() });
+    if (process.env.NODE_ENV === "production") return;
+    // window.__scene: scrub the world deterministically and save stills.
+    //   step(seconds, dt)  run the simulation forward in fixed steps (the pane itself only paints ~2 fps)
+    //   time(h)            hour of day; fly() / warp(z) / land(); intro(t) seconds into the arrival
+    //   view({pos, look, fov, focus}) hold a viewpoint, view(null) to release
+    //   shot(name)         POST the finished frame to the local still receiver (scratchpad/save.js)
+    const step = (sec: number, dt = 1 / 30) => {
+      const n = Math.max(1, Math.round(sec / dt));
+      for (let i = 0; i < n; i++) {
+        skewClock(dt);
+        dev.current.dt = dt;
+        advance(performance.now());
+      }
+      dev.current.dt = null;
+      return { stage: stage.current, cam: cam.position.toArray().map((x) => +x.toFixed(2)), plane: planeApi.current?.pos.toArray().map((x) => +x.toFixed(2)) };
+    };
+    Object.assign(window, {
+      __scene: {
+        step,
+        time: (h: number | null) => setTimeOverride(h),
+        fly: () => enterRef.current?.("plane"),
+        land: () => exitRef.current?.(),
+        warp: (z: number) => planeApi.current?.warp(z),
+        intro: (t: number) => (introAt.current = nowS() - t),
+        view: (o: typeof dev.current.view) => (dev.current.view = o),
+        post: postCtl,
+        shot: async (name: string) => {
+          advance(performance.now());
+          const url = gl.domElement.toDataURL("image/jpeg", 0.9);
+          const blob = await (await fetch(url)).blob();
+          await fetch(`http://127.0.0.1:3998/?name=${encodeURIComponent(name)}.jpg`, { method: "POST", mode: "no-cors", body: blob });
+          return `${name}.jpg ${blob.size}`;
+        },
+      },
+    });
   }, [input, cam, v]);
 
   // compile everything behind the preloader, then report ready. compileAsync
@@ -663,7 +702,8 @@ function Scene({
       if (a !== null && nowS() - a < ARRIVE) introAt.current = nowS() - (ARRIVE + 1.6);
     },
     snap: () => {
-      gl.render(scene, cam);
+      if (postCtl.render) postCtl.render();
+      else gl.render(scene, cam);
       try {
         return gl.domElement.toDataURL("image/jpeg", 0.92);
       } catch {
@@ -861,12 +901,44 @@ function Scene({
 
   useFrame((_, rawDt) => {
     try {
-      frame(rawDt);
+      frame(dev.current.dt ?? rawDt);
+      lens(Math.min(rawDt, 0.1));
     } catch (err) {
       if (process.env.NODE_ENV !== "production") Object.assign(window, { __err: String((err as Error)?.stack ?? err) });
       throw err;
     }
   });
+
+  // where the lens focuses: on the desk from the orbit, on whatever a mode
+  // is looking at, wide open to the land in flight, and nothing soft at all
+  // while the display takes over the frame
+  const lens = (dt: number) => {
+    const s = stage.current;
+    let focus = cam.position.distanceTo(v.tmp.set(...cfg.target));
+    let dof = 1;
+    if (s === "fly" || s === "land" || s === "approach" || s === "boot" || s === "done") dof = 0;
+    else if (s === "focus") {
+      focus = mode === "camera" ? 45 : cam.position.distanceTo(v.look);
+      dof = mode === "camera" ? 0.55 : 0.85;
+    } else if (s === "idle" && nav === "explore") {
+      focus = Math.max(1.4, focus);
+      dof = 0.6;
+    }
+    const d = dev.current.view;
+    if (d) {
+      cam.position.set(...d.pos);
+      cam.up.set(0, 1, 0);
+      cam.lookAt(...d.look);
+      if (d.fov) {
+        cam.fov = d.fov;
+        cam.updateProjectionMatrix();
+      }
+      dof = d.focus ? 1 : 0;
+      focus = d.focus ?? focus;
+    }
+    postCtl.focus += (focus - postCtl.focus) * (1 - Math.exp(-dt * 6));
+    postCtl.dof += (dof - postCtl.dof) * (1 - Math.exp(-dt * (dof < postCtl.dof ? 7 : 2.5)));
+  };
 
   const frame = (rawDt: number) => {
     if (process.env.NODE_ENV !== "production") ((window as unknown as { __t: Record<string, number> }).__t.frame ??= performance.now());
@@ -1163,6 +1235,7 @@ function Scene({
       {idle && mode === "none" && <PlaneLabel spot={planeSpot} />}
       <DustPuffs lands={lands} />
       {voyage && <Voyage mobile={mobile || q.trees < 0.7} />}
+      <Post level={mobile ? Math.min(1, q.post) : q.post} />
     </>
   );
 }
@@ -1496,7 +1569,7 @@ export default function Room({
       />
       <div
         className="pointer-events-none absolute inset-0 transition-opacity duration-700"
-        style={{ opacity: stage === "idle" || mode !== "none" ? 1 : 0, background: "radial-gradient(120% 95% at 50% 45%, transparent 55%, rgb(10 10 14 / 0.3) 100%)" }}
+        style={{ opacity: q.post === 0 && (stage === "idle" || mode !== "none") ? 1 : 0, background: "radial-gradient(120% 95% at 50% 45%, transparent 55%, rgb(10 10 14 / 0.3) 100%)" }}
       />
 
       <div className="pointer-events-none absolute inset-0 transition-opacity duration-500" style={{ opacity: idle ? 1 : 0 }}>

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { POST_U } from "./Post";
 import { BOOT } from "./shared";
 
 // Procedural textures and the shared PBR materials. Built once, client only.
@@ -219,6 +220,14 @@ function build() {
     frame: new THREE.MeshStandardMaterial({ color: "#1e1e20", metalness: 0.35, roughness: 0.55 }),
     alu: new THREE.MeshPhysicalMaterial({ color: "#d4d6da", metalness: 1, roughness: 0.42, roughnessMap: brushedTexture(), anisotropy: 0.6 }),
     aluDark: new THREE.MeshPhysicalMaterial({ color: "#4b4d53", metalness: 0.9, roughness: 0.42 }),
+    // bead-blasted anodised aluminium (display, headphone cups): no brushing, a soft even sheen
+    anodised: new THREE.MeshPhysicalMaterial({ color: "#d9dadd", metalness: 0.92, roughness: 0.46, clearcoat: 0.15, clearcoatRoughness: 0.6 }),
+    // satin silver plate and machined dials (camera, knobs)
+    satin: new THREE.MeshPhysicalMaterial({ color: "#cfd0d2", metalness: 0.95, roughness: 0.32 }),
+    brass: new THREE.MeshStandardMaterial({ color: "#b8935a", metalness: 1, roughness: 0.38 }),
+    // the headband frame's soft-touch coating
+    softTouch: new THREE.MeshPhysicalMaterial({ color: "#c3c4c7", roughness: 0.62, sheen: 0.4, sheenColor: new THREE.Color("#ffffff"), sheenRoughness: 0.5 }),
+    meshDark: new THREE.MeshStandardMaterial({ color: "#3b3d42", roughness: 0.95 }),
     titanium: new THREE.MeshPhysicalMaterial({ color: "#bdbab3", metalness: 1, roughness: 0.34 }),
     steel: new THREE.MeshStandardMaterial({ color: "#d8dadd", metalness: 1, roughness: 0.14 }),
     glass: new THREE.MeshStandardMaterial({ color: "#000000", roughness: 0.25, metalness: 0, envMapIntensity: 0.15 }),
@@ -232,7 +241,7 @@ function build() {
       depthWrite: false,
     }),
     knit: new THREE.MeshPhysicalMaterial({ ...pbr(TEX.knit, 2), color: "#e2e3e6", roughness: 1, sheen: 1, sheenColor: new THREE.Color("#ffffff"), sheenRoughness: 0.6 }),
-    canopy: new THREE.MeshStandardMaterial({ map: meshTexture(), color: "#c9cbcf", roughness: 0.95, side: THREE.DoubleSide }),
+    canopy: new THREE.MeshStandardMaterial({ map: meshTexture(), color: "#a6a8ad", roughness: 0.95, side: THREE.DoubleSide }),
     leather: new THREE.MeshPhysicalMaterial({ ...pbr(TEX.leather, 3), color: "#3a3a3e", roughness: 1, clearcoat: 0.08 }),
     rubber: new THREE.MeshStandardMaterial({ color: "#141416", roughness: 0.85 }),
     lens: new THREE.MeshPhysicalMaterial({
@@ -286,13 +295,14 @@ export function makeScreenMaterial(size: [number, number]) {
       uProg: { value: 0 },
       uLock: { value: null as THREE.Texture | null },
       uLockMix: { value: 0 },
+      ...POST_U,
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
       void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
       uniform vec2 uSize; uniform float uPx; uniform float uMark; uniform float uProg;
-      uniform sampler2D uLock; uniform float uLockMix;
+      uniform sampler2D uLock; uniform float uLockMix; uniform float uLinearOut;
       varying vec2 vUv;
       float seg(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h); }
       float rbox(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
@@ -316,7 +326,9 @@ export function makeScreenMaterial(size: [number, number]) {
         v = mix(v, 1.0, fill * uMark);
         vec3 col = vec3(v);
         if (uLockMix > 0.001) col = mix(col, texture2D(uLock, vUv).rgb, uLockMix);
-        gl_FragColor = vec4(col, 1.0);
+        // into the lens' linear target it goes as linear light, flagged (alpha 0) to pass through ungraded
+        if (uLinearOut > 0.5) { col = mix(col / 12.92, pow((col + 0.055) / 1.055, vec3(2.4)), step(0.04045, col)); gl_FragColor = vec4(col, 0.0); }
+        else gl_FragColor = vec4(col, 1.0);
       }`,
   });
 }

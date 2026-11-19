@@ -275,7 +275,7 @@ export default function Blocks({ compact = false }: { compact?: boolean }) {
 
       {/* Hotbar */}
       <div className="pointer-events-none absolute inset-x-0 z-20 flex justify-center" style={{ bottom: hotbarBottom }}>
-        <div className={`pointer-events-auto flex gap-1 rounded-[18px] bg-black/35 p-1.5 backdrop-blur-xl ${GLASS_RING}`}>
+        <div className={`pointer-events-auto flex gap-1 rounded-[22px] bg-black/35 p-1.5 backdrop-blur-xl ${GLASS_RING}`}>
           {PLACEABLE.map((id, slot) => (
             <button
               key={id}
@@ -283,7 +283,7 @@ export default function Blocks({ compact = false }: { compact?: boolean }) {
               aria-label={BLOCKS[id].name}
               aria-pressed={slot === selected}
               onClick={() => gameRef.current?.select(slot)}
-              className={`h-10 w-10 rounded-[12px] bg-white/10 bg-cover [image-rendering:pixelated] transition-transform duration-150 ease-out motion-reduce:transition-none ${
+              className={`h-10 w-10 rounded-[16px] bg-white/10 bg-cover [image-rendering:pixelated] transition-transform duration-150 ease-out motion-reduce:transition-none ${
                 slot === selected ? "scale-[1.08] ring-2 ring-white" : "ring-0"
               }`}
               style={icons[slot] ? { backgroundImage: `url(${icons[slot]})` } : undefined}

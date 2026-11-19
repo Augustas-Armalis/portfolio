@@ -142,7 +142,7 @@ export function Doom() {
             ["Space", "open"],
           ].map(([k, v]) => (
             <span key={k} className="flex items-center gap-1.5">
-              <kbd className="rounded-[5px] bg-white/10 px-1.5 py-0.5 font-sans text-white/75 shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.18)]">{k}</kbd>
+              <kbd className="rounded-[7px] bg-white/10 px-1.5 py-0.5 font-sans text-white/75 shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.18)]">{k}</kbd>
               {v}
             </span>
           ))}

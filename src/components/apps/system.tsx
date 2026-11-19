@@ -47,10 +47,10 @@ export function TrashApp() {
               }}
               className="flex flex-col items-center gap-1 outline-none"
             >
-              <span className={`flex h-[72px] w-[72px] items-center justify-center rounded-[6px] ${sel === it.id ? "bg-black/[0.08]" : ""}`}>
+              <span className={`flex h-[72px] w-[72px] items-center justify-center rounded-[8px] ${sel === it.id ? "bg-black/[0.08]" : ""}`}>
                 <DeskArt item={it} />
               </span>
-              <span className={`line-clamp-2 max-w-[92px] rounded-[4px] px-[5px] py-px text-center text-[12px] leading-[15px] ${sel === it.id ? "bg-[#0A84FF] text-white" : "text-ink"}`}>{it.name}</span>
+              <span className={`line-clamp-2 max-w-[92px] rounded-[6px] px-[5px] py-px text-center text-[12px] leading-[15px] ${sel === it.id ? "bg-[#0A84FF] text-white" : "text-ink"}`}>{it.name}</span>
             </button>
           ))}
         </div>
@@ -259,7 +259,7 @@ export function Game() {
       <Toolbar title="Catch" sub={running ? `${left}s left` : `Best ${best.current}`}>
         <span className="text-[13px] font-semibold tabular-nums text-ink">{score}</span>
       </Toolbar>
-      <div className="relative m-3 flex-1 overflow-hidden rounded-[12px] bg-[#F7F7F9] ring-1 ring-black/[0.05]">
+      <div className="relative m-3 flex-1 overflow-hidden rounded-[16px] bg-[#F7F7F9] ring-1 ring-black/[0.05]">
         {running ? (
           <motion.button
             type="button"
@@ -324,7 +324,7 @@ export function SettingsApp() {
                 return (
                   <button type="button" key={l.v} onClick={() => setAppearance(l.v)} aria-pressed={on} className="press flex flex-col items-center gap-2">
                     <Squircle
-                      radius={10}
+                      radius={12}
                       className={`relative aspect-[16/10] w-full overflow-hidden ${on ? "ring-[3px] ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-elevated)]" : "shadow-[var(--shadow-1)]"}`}
                       style={{
                         background:
@@ -335,7 +335,7 @@ export function SettingsApp() {
                               : "linear-gradient(90deg,#e7eaf0 50%,#1a1c22 50%)",
                       }}
                     >
-                      <span className={`absolute left-[12%] top-[16%] h-[54%] w-[64%] rounded-[5px] shadow-[0_4px_10px_-4px_rgb(0_0_0/0.4)] ${l.v === "dark" ? "bg-[#2c2c2e]" : "bg-[#fff]"}`}>
+                      <span className={`absolute left-[12%] top-[16%] h-[54%] w-[64%] rounded-[7px] shadow-[0_4px_10px_-4px_rgb(0_0_0/0.4)] ${l.v === "dark" ? "bg-[#2c2c2e]" : "bg-[#fff]"}`}>
                         <span className="absolute left-[6px] top-[5px] flex gap-[3px]">
                           {["#FF5F57", "#FEBC2E", "#28C840"].map((c) => (
                             <span key={c} className="h-[5px] w-[5px] rounded-full" style={{ background: c }} />
@@ -366,7 +366,7 @@ export function SettingsApp() {
               return (
                 <button type="button" key={w.src} onClick={() => setWallpaper(i)} aria-pressed={on} className="press text-left">
                   <Squircle
-                    radius={10}
+                    radius={12}
                     className={`relative block aspect-[16/10] overflow-hidden bg-cover bg-center ${on ? "ring-[3px] ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-elevated)]" : "shadow-[var(--shadow-1)]"} ${live ? "bg-[#070b16]" : ""}`}
                     style={live ? undefined : { backgroundImage: `url(${w.src})` }}
                   >

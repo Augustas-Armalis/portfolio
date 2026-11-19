@@ -59,7 +59,7 @@ function Pop({ open, align = "left", width = 220, panel = false, children }: { o
           onPointerDown={(e) => e.stopPropagation()}
           data-glass=""
           style={{ width, transformOrigin: align === "left" ? "18px -11px" : "calc(100% - 18px) -11px" }}
-          className={`${glass("pop")} absolute top-[23px] z-[3000] ${panel ? "sq-panel rounded-[16px] p-2.5" : "rounded-[6px] p-[5px]"} ${align === "left" ? "left-0" : "right-0"}`}
+          className={`${glass("pop")} absolute top-[23px] z-[3000] ${panel ? "sq-panel rounded-[20px] p-2.5" : "rounded-[8px] p-[5px]"} ${align === "left" ? "left-0" : "right-0"}`}
         >
           {children}
         </motion.div>
@@ -69,7 +69,7 @@ function Pop({ open, align = "left", width = 220, panel = false, children }: { o
 }
 
 function MenuItem({ children, onClick, hint, href }: { children: ReactNode; onClick?: () => void; hint?: string; href?: string }) {
-  const cls = "flex h-[22px] w-full items-center justify-between gap-6 rounded-[4px] px-[9px] text-left text-[13px] leading-none tracking-[-0.003em] text-ink hov:hover:bg-[#0A84FF] hov:hover:text-white";
+  const cls = "flex h-[22px] w-full items-center justify-between gap-6 rounded-[6px] px-[9px] text-left text-[13px] leading-none tracking-[-0.003em] text-ink hov:hover:bg-[#0A84FF] hov:hover:text-white";
   const inner = (
     <>
       <span>{children}</span>
@@ -95,7 +95,7 @@ function ControlCenter({ close }: { close: () => void }) {
   const { sound, setSound, playing, lockScreen, appearance, setAppearance } = useOS();
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between rounded-[12px] bg-white/60 dark:bg-white/10 px-3 py-2.5 shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]">
+      <div className="flex items-center justify-between rounded-[16px] bg-white/60 dark:bg-white/10 px-3 py-2.5 shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]">
         <span className="text-[12px] font-semibold text-ink">Appearance</span>
         <Segmented
           id="cc-appearance"
@@ -112,7 +112,7 @@ function ControlCenter({ close }: { close: () => void }) {
         <button
           type="button"
           onClick={() => setSound(!sound)}
-          className="press flex h-[64px] flex-col justify-between rounded-[12px] bg-white/60 dark:bg-white/10 p-2.5 text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]"
+          className="press flex h-[64px] flex-col justify-between rounded-[16px] bg-white/60 dark:bg-white/10 p-2.5 text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]"
         >
           <span className={`flex h-[26px] w-[26px] items-center justify-center rounded-full ${sound ? "bg-[#0A84FF] text-white" : "bg-black/[0.08] text-ink"}`}>
             {sound ? <Volume2 size={14} /> : <VolumeX size={14} />}
@@ -125,7 +125,7 @@ function ControlCenter({ close }: { close: () => void }) {
             close();
             lockScreen();
           }}
-          className="press flex h-[64px] flex-col justify-between rounded-[12px] bg-white/60 dark:bg-white/10 p-2.5 text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]"
+          className="press flex h-[64px] flex-col justify-between rounded-[16px] bg-white/60 dark:bg-white/10 p-2.5 text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]"
         >
           <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-black/[0.08] text-ink">
             <Lock size={13} />
@@ -134,7 +134,7 @@ function ControlCenter({ close }: { close: () => void }) {
         </button>
       </div>
       {playing && (
-        <div className="flex items-center gap-2.5 rounded-[12px] bg-white/60 dark:bg-white/10 px-3 py-2.5 shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]">
+        <div className="flex items-center gap-2.5 rounded-[16px] bg-white/60 dark:bg-white/10 px-3 py-2.5 shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]">
           <Bars />
           <div className="min-w-0">
             <div className="text-[11px] leading-[14px] text-ink-3">Now Playing</div>
@@ -154,7 +154,7 @@ function Widget({ children, className = "", onClick }: { children: ReactNode; cl
       type="button"
       onClick={onClick}
       data-sq=""
-      className={`press block w-full rounded-[18px] bg-white/60 p-3.5 text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)] dark:bg-white/10 ${className}`}
+      className={`press block w-full rounded-[22px] bg-white/60 p-3.5 text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)] dark:bg-white/10 ${className}`}
     >
       {children}
     </button>
@@ -205,7 +205,7 @@ function NotificationCenter({ close }: { close: () => void }) {
         <div className="eyebrow !text-[11px] text-ink-3">Currently working on</div>
         <div className="mt-2 flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={mainWork.image} alt="" className="h-12 w-[76px] rounded-[8px] object-cover object-top shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" />
+          <img src={mainWork.image} alt="" className="h-12 w-[76px] rounded-[10px] object-cover object-top shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" />
           <div className="min-w-0">
             <div className="t-headline truncate text-ink">{mainWork.name}</div>
             <div className="m-body truncate text-ink-2">
@@ -375,7 +375,7 @@ function MissionControl() {
                     setOverlay(null);
                     open(w.id);
                   }}
-                  className={`press sq-list relative rounded-[12px] shadow-[0_0_0_0.5px_rgb(255_255_255/0.22),0_24px_50px_-18px_rgb(0_0_0/0.65)] outline-none transition-shadow duration-150 hov:hover:shadow-[0_0_0_3px_var(--accent),0_24px_50px_-18px_rgb(0_0_0/0.65)] focus-visible:shadow-[0_0_0_3px_var(--accent),0_24px_50px_-18px_rgb(0_0_0/0.65)] ${w.min ? "opacity-70" : ""}`}
+                  className={`press sq-list relative rounded-[16px] shadow-[0_0_0_0.5px_rgb(255_255_255/0.22),0_24px_50px_-18px_rgb(0_0_0/0.65)] outline-none transition-shadow duration-150 hov:hover:shadow-[0_0_0_3px_var(--accent),0_24px_50px_-18px_rgb(0_0_0/0.65)] focus-visible:shadow-[0_0_0_3px_var(--accent),0_24px_50px_-18px_rgb(0_0_0/0.65)] ${w.min ? "opacity-70" : ""}`}
                 >
                   <WindowThumb id={w.id} />
                 </button>
@@ -421,7 +421,7 @@ function MenuBar() {
     close();
     fn();
   };
-  const btn = (on: boolean) => `flex h-[22px] items-center rounded-[5px] px-[9px] ${on ? "bg-black/[0.1]" : ""}`;
+  const btn = (on: boolean) => `flex h-[22px] items-center rounded-[7px] px-[9px] ${on ? "bg-black/[0.1]" : ""}`;
 
   return (
     <motion.div
@@ -842,7 +842,7 @@ function DockIcon({ id, mouseX, running, front = false, dark, dragging }: { id: 
             exit={{ opacity: 0, transition: { duration: 0.08 } }}
             transition={{ duration: 0.12, ease: EASE_OUT }}
             data-glass=""
-            className={`${glass("pop")} pointer-events-none absolute -top-[46px] whitespace-nowrap rounded-[6px] px-2.5 py-[3px] text-[13px] tracking-[-0.003em] text-ink`}
+            className={`${glass("pop")} pointer-events-none absolute -top-[46px] whitespace-nowrap rounded-[8px] px-2.5 py-[3px] text-[13px] tracking-[-0.003em] text-ink`}
           >
             {apps[id].title}
           </motion.span>
@@ -955,8 +955,8 @@ function Dock() {
         className="relative flex h-[66px] items-end gap-1 px-[7px] pb-[2px]"
       >
         {/* material on its own layer, so the tooltips above can blur the wallpaper too */}
-        <div aria-hidden data-glass="" className={`${glass("dock")} pointer-events-none absolute inset-0 rounded-[20px]`} />
-        <motion.div aria-hidden style={{ x: lensX, scaleX: lensStretch, opacity: lensOpacity }} className="dock-lens pointer-events-none absolute bottom-[5px] left-0 h-[56px] w-[56px] rounded-[16px]" />
+        <div aria-hidden data-glass="" className={`${glass("dock")} pointer-events-none absolute inset-0 rounded-[24px]`} />
+        <motion.div aria-hidden style={{ x: lensX, scaleX: lensStretch, opacity: lensOpacity }} className="dock-lens pointer-events-none absolute bottom-[5px] left-0 h-[56px] w-[56px] rounded-[20px]" />
         <div className="relative">
           <DockIcon id="launchpad" mouseX={mouseX} running={false} dark={dark} dragging={false} />
         </div>
@@ -1043,7 +1043,7 @@ function Spotlight() {
   if (!palette) return null;
   return (
     <div className="absolute inset-0 z-[2500] flex justify-center pt-[22vh]" onPointerDown={() => setPalette(false)}>
-      <div onPointerDown={(e) => e.stopPropagation()} data-glass="" className={`${glass("pop")} sq-panel h-fit w-[min(680px,92vw)] overflow-hidden rounded-[16px]`}>
+      <div onPointerDown={(e) => e.stopPropagation()} data-glass="" className={`${glass("pop")} sq-panel h-fit w-[min(680px,92vw)] overflow-hidden rounded-[20px]`}>
         <div className="flex h-[54px] items-center gap-2.5 px-4">
           <Search size={20} strokeWidth={2} className="shrink-0 text-ink-2" />
           <input
@@ -1076,7 +1076,7 @@ function Spotlight() {
                   it.run();
                   setPalette(false);
                 }}
-                className={`flex h-[34px] w-full items-center gap-2.5 rounded-[6px] px-2 text-left text-[13px] tracking-[-0.003em] ${sel === i ? "bg-[#0A84FF] text-white" : "text-ink"}`}
+                className={`flex h-[34px] w-full items-center gap-2.5 rounded-[8px] px-2 text-left text-[13px] tracking-[-0.003em] ${sel === i ? "bg-[#0A84FF] text-white" : "text-ink"}`}
               >
                 {it.icon ? <AppIcon id={it.icon} size={22} flat /> : <span className="h-[22px] w-[22px]" />}
                 <span className="flex-1 truncate">{it.label}</span>
@@ -1146,7 +1146,7 @@ export function DeskArt({ item }: { item: DeskItem }) {
     return (
       <span className="flex h-16 w-16 items-center justify-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.art} alt="" draggable={false} className="h-[58px] w-[58px] rounded-[6px] bg-white object-contain p-[3px] shadow-[0_1px_3px_rgb(0_0_0/0.3),0_0_0_0.5px_rgb(0_0_0/0.1)]" />
+        <img src={item.art} alt="" draggable={false} className="h-[58px] w-[58px] rounded-[8px] bg-white object-contain p-[3px] shadow-[0_1px_3px_rgb(0_0_0/0.3),0_0_0_0.5px_rgb(0_0_0/0.1)]" />
       </span>
     );
   if (item.kind === "folder") return <FolderArt size={64} />;
@@ -1381,11 +1381,11 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
             style={{ left: p.left, top: p.top, x: on ? dx : 0, y: on ? dy : 0 }}
             className="absolute flex w-[108px] flex-col items-center gap-[3px] pt-1 outline-none"
           >
-            <span className={`flex h-[72px] w-[72px] items-center justify-center rounded-[6px] ${on ? "bg-black/[0.22] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]" : ""}`}>
+            <span className={`flex h-[72px] w-[72px] items-center justify-center rounded-[8px] ${on ? "bg-black/[0.22] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]" : ""}`}>
               <DeskArt item={it} />
             </span>
             <span
-              className={`line-clamp-2 max-w-[104px] rounded-[4px] px-[5px] py-px text-center text-[12px] font-medium leading-[15px] [text-wrap:balance] ${
+              className={`line-clamp-2 max-w-[104px] rounded-[6px] px-[5px] py-px text-center text-[12px] font-medium leading-[15px] [text-wrap:balance] ${
                 on ? "bg-[#0A84FF] text-white" : dark ? "text-white [text-shadow:0_1px_1px_rgb(0_0_0/0.75)]" : "text-[#1a1b1e] [text-shadow:0_0_3px_rgb(255_255_255/0.95)] dark:text-white dark:[text-shadow:0_1px_1px_rgb(0_0_0/0.75)]"
               }`}
             >
@@ -1404,7 +1404,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
             onPointerDown={(e) => e.stopPropagation()}
             data-glass=""
             style={{ left: menu.x, top: menu.y }}
-            className={`${glass("pop")} absolute z-[3000] w-[200px] rounded-[6px] p-[5px]`}
+            className={`${glass("pop")} absolute z-[3000] w-[200px] rounded-[8px] p-[5px]`}
           >
             <MenuItem
               onClick={() => {
@@ -1479,7 +1479,7 @@ function Welcome() {
           transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.35 }}
           data-glass=""
           style={{ width: NOTE_W }}
-          className={`${glass(dark ? "widget-dark" : "widget")} sq-panel group absolute left-6 top-6 rounded-[22px] p-5 ${dark ? "text-white" : "text-ink"}`}
+          className={`${glass(dark ? "widget-dark" : "widget")} sq-panel group absolute left-6 top-6 rounded-[26px] p-5 ${dark ? "text-white" : "text-ink"}`}
         >
           <button
             type="button"

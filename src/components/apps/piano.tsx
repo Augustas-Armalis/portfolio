@@ -140,7 +140,7 @@ export function PianoApp() {
             ]}
           />
         </div>
-        <div className="mx-2 h-[42%] max-h-[340px] min-h-[220px] shrink-0 rounded-[16px] bg-[#16171A] px-[6px] pb-[6px] pt-3 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]">{keyboard}</div>
+        <div className="mx-2 h-[42%] max-h-[340px] min-h-[220px] shrink-0 rounded-[20px] bg-[#16171A] px-[6px] pb-[6px] pt-3 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]">{keyboard}</div>
       </div>
     );
 
@@ -148,7 +148,7 @@ export function PianoApp() {
     <div className="flex h-full min-h-0 flex-col">
       <Toolbar title="Piano" sub={last !== null ? noteName(last) : "A – ;"} />
       <div className="flex min-h-0 flex-1 flex-col gap-3 bg-[#F7F7F9] p-4">
-        <div className="relative min-h-[140px] flex-1 rounded-[12px] bg-[#16171A] px-2 pb-2 pt-3 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]">{keyboard}</div>
+        <div className="relative min-h-[140px] flex-1 rounded-[16px] bg-[#16171A] px-2 pb-2 pt-3 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]">{keyboard}</div>
       </div>
     </div>
   );

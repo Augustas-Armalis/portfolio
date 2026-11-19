@@ -451,10 +451,10 @@ input:focus-visible {
     corner-shape: superellipse(1.6);
   }
   .win {
-    border-radius: 26px;
+    border-radius: 32px;
   }
   .win.is-max {
-    border-radius: 0 0 26px 26px;
+    border-radius: 0 0 32px 32px;
   }
   .sq-panel {
     border-radius: 30px !important;
@@ -467,7 +467,7 @@ input:focus-visible {
   }
 }
 .win {
-  border-radius: 16px;
+  border-radius: 20px;
 }
 .win.is-max {
   border-radius: 0 0 16px 16px;
@@ -552,12 +552,12 @@ svg.lucide.bold {
   --press: rgb(0 0 0 / 0.08);
   --selection: rgb(0 0 0 / 0.08);
   /* radius ladder (the squircle primitive smooths every one of them) */
-  --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-xl: 16px;
-  --r-2xl: 22px;
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-2xl: 26px;
   --r-window: 14px;
   /* shadows: crisp and short */
   --shadow-1: 0 0 0 0.5px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.05);
@@ -1253,4 +1253,33 @@ a.list-row:active {
 .dark .dock-lens {
   background: radial-gradient(120% 90% at 50% 0%, rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.05) 60%, rgb(255 255 255 / 0.08));
   box-shadow: inset 0 1px 0.5px -0.25px rgb(255 255 255 / 0.4), inset 0 -0.6px 0.5px -0.25px rgb(255 255 255 / 0.12);
+}
+
+/* Round 8: one step rounder, and the continuous corner on every rounded box (pills and circles stay round) */
+@supports (corner-shape: superellipse(2)) {
+  [class*="rounded-["]:not([class*="rounded-b-["]),
+  .btn:not(.btn-capsule),
+  .list,
+  .skeleton {
+    corner-shape: superellipse(1.6);
+  }
+}
+/* sidebars and inspectors stay concentric with the rounder window (32 outer, 8 inset) */
+.win aside[data-drag],
+.inspector {
+  border-radius: 24px;
+}
+/* the continuous corner reads tighter than a circular one, so a squircle window is authored larger. This sits
+   last: an earlier fallback rule used to win over the superellipse radius, which left windows at 16px. */
+@supports (corner-shape: superellipse(2)) {
+  .win {
+    border-radius: 34px;
+  }
+  .win.is-max {
+    border-radius: 0 0 34px 34px;
+  }
+  .win aside[data-drag],
+  .inspector {
+    border-radius: 26px;
+  }
 }

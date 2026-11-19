@@ -25,7 +25,10 @@ export const BOOT = {
 
 // Monotonic seconds. R3F resets its clock when the frameloop is paused and
 // resumed (the scene sleeps under the OS), so timing never uses it.
-export const nowS = () => performance.now() / 1000;
+// (dev stills can push the clock forward by hand: see window.__scene in Room)
+let skew = 0;
+export const skewClock = (s: number) => (skew += s);
+export const nowS = () => performance.now() / 1000 + skew;
 
 export const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 export const smooth = (t: number) => t * t * (3 - 2 * t);

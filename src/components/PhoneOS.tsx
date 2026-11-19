@@ -65,7 +65,7 @@ function Island() {
           {mode === "music" && track && (
             <motion.div key="m" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="absolute inset-0 flex items-center justify-between px-[7px]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={track.cover} alt="" className="h-[25px] w-[25px] rounded-[7px] object-cover" />
+              <img src={track.cover} alt="" className="h-[25px] w-[25px] rounded-[9px] object-cover" />
               <span className="pr-2 text-[#9b8cff]">
                 <Bars light />
               </span>
@@ -83,7 +83,7 @@ function Island() {
             <motion.div key="b" initial={{ opacity: 0, filter: "blur(6px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} exit={{ opacity: 0 }} transition={{ duration: 0.25, delay: 0.08 }} className="absolute inset-0 flex flex-col px-5 pb-4 pt-5">
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={track.cover} alt="" className="h-[52px] w-[52px] rounded-[12px] object-cover" />
+                <img src={track.cover} alt="" className="h-[52px] w-[52px] rounded-[16px] object-cover" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[15px] font-semibold">{track.title}</div>
                   <div className="truncate text-[13px] text-white/55">{track.artist}</div>
@@ -130,7 +130,7 @@ function StatusBar({ light }: { light?: boolean }) {
             <span key={h} className={`w-[3px] rounded-[1px] ${light ? "bg-white" : "bg-ink"}`} style={{ height: h }} />
           ))}
         </span>
-        <span className={`ml-[2px] flex h-[13px] w-[25px] items-center rounded-[4px] border p-[1.5px] ${light ? "border-white/45" : "border-ink/35"}`}>
+        <span className={`ml-[2px] flex h-[13px] w-[25px] items-center rounded-[6px] border p-[1.5px] ${light ? "border-white/45" : "border-ink/35"}`}>
           <span className={`h-full w-[72%] rounded-[2px] ${light ? "bg-white" : "bg-ink"}`} />
         </span>
       </span>
@@ -181,7 +181,7 @@ function Lock() {
             { k: "Working on", v: mainWork.name, s: mainWork.role ?? "" },
             { k: "Studio", v: "Larpo", s: owner.city },
           ].map((w) => (
-            <div key={w.k} data-glass="" className={`${glass("widget-dark")} rounded-[22px] px-4 py-3 text-left`}>
+            <div key={w.k} data-glass="" className={`${glass("widget-dark")} rounded-[26px] px-4 py-3 text-left`}>
               <div className="text-[12px] font-medium leading-4 text-white/60">{w.k}</div>
               <div className="t-headline mt-0.5 truncate text-white">{w.v}</div>
               <div className="t-foot truncate text-white/65">{w.s}</div>
@@ -251,7 +251,7 @@ function HomeIcon({ id, label, onOpen }: { id: AppId; label?: string; onOpen: (i
               transition={{ type: "spring", bounce: 0.15, duration: 0.3 }}
               style={{ transformOrigin: "top left" }}
               data-glass=""
-              className={`${glass("pop")} absolute left-0 top-[68px] z-50 w-[220px] overflow-hidden rounded-[14px]`}
+              className={`${glass("pop")} absolute left-0 top-[68px] z-50 w-[220px] overflow-hidden rounded-[18px]`}
             >
               <button
                 type="button"
@@ -292,7 +292,7 @@ function Home({ onOpen }: { onOpen: (id: AppId, o: Origin) => void }) {
             onOpen("about", { x: r.x, y: r.y, w: r.width, h: r.height });
           }}
           data-glass=""
-          className={`glass-press flex w-full items-center gap-3.5 rounded-[24px] p-4 text-left ${glass("widget-dark")} text-white`}
+          className={`glass-press flex w-full items-center gap-3.5 rounded-[28px] p-4 text-left ${glass("widget-dark")} text-white`}
         >
           <Monogram size={48} />
           <span className="min-w-0 flex-1">

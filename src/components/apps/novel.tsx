@@ -82,7 +82,7 @@ export function Novel() {
     <div className={`mx-auto max-w-[620px] ${compact ? "px-4 pb-10" : "px-8 py-8"}`}>
       <div className={`flex gap-7 ${compact ? "flex-col items-center text-center" : "items-start"}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={novel.cover} alt={novel.title} draggable={false} data-sq="" className="book-cover aspect-[2/3] w-[168px] shrink-0 rounded-[10px] bg-[#0b0d12] object-cover" />
+        <img src={novel.cover} alt={novel.title} draggable={false} data-sq="" className="book-cover aspect-[2/3] w-[168px] shrink-0 rounded-[12px] bg-[#0b0d12] object-cover" />
         <div className={`min-w-0 ${compact ? "" : "pt-1"}`}>
           <h1 className={`${SERIF} text-[28px] font-semibold leading-[1.12] tracking-[-0.015em] text-ink [text-wrap:balance]`}>{novel.title}</h1>
           <p className="t-sub mt-2 text-ink-2">{novel.author}</p>
@@ -102,14 +102,14 @@ export function Novel() {
       ) : (
         <div className="mt-7 space-y-2.5" aria-hidden>
           {[100, 96, 98, 72].map((w, i) => (
-            <div key={i} className="skeleton h-3 rounded-[4px]" style={{ width: `${w}%` }} />
+            <div key={i} className="skeleton h-3 rounded-[6px]" style={{ width: `${w}%` }} />
           ))}
         </div>
       )}
       {compact && book && (
         <>
           <div className="mb-[7px] mt-8 px-4 text-left text-[13px] uppercase tracking-[-0.005em] text-[#6D6D72]">Contents</div>
-          <div className="sq-list overflow-hidden rounded-[10px] bg-white text-left">
+          <div className="sq-list overflow-hidden rounded-[12px] bg-white text-left">
             {book.chapters.map((c, i) => (
               <button type="button" key={c.id} onClick={() => setCh(i)} className="press-row flex min-h-[44px] w-full items-center pl-4">
                 <span className={`flex min-h-[44px] flex-1 items-center gap-2 pr-4 ${i ? "border-t-[0.5px] border-[#C6C6C8]" : ""}`}>
@@ -142,7 +142,7 @@ export function Novel() {
         <button
           type="button"
           onClick={() => setCh(null)}
-          className={`flex h-[28px] shrink-0 items-center gap-2 rounded-[6px] px-2 text-left text-[13px] text-ink ${ch === null ? "bg-black/[0.08]" : "hov:hover:bg-black/[0.035]"}`}
+          className={`flex h-[28px] shrink-0 items-center gap-2 rounded-[8px] px-2 text-left text-[13px] text-ink ${ch === null ? "bg-black/[0.08]" : "hov:hover:bg-black/[0.035]"}`}
         >
           <BookOpen size={15} className="text-ink-2" /> Library
         </button>
@@ -153,14 +153,14 @@ export function Novel() {
                 type="button"
                 key={c.id}
                 onClick={() => setCh(i)}
-                className={`flex h-[28px] shrink-0 items-center gap-2 rounded-[6px] px-2 text-left text-[13px] ${ch === i ? "bg-black/[0.08] text-ink" : "text-ink hov:hover:bg-black/[0.035]"}`}
+                className={`flex h-[28px] shrink-0 items-center gap-2 rounded-[8px] px-2 text-left text-[13px] ${ch === i ? "bg-black/[0.08] text-ink" : "text-ink hov:hover:bg-black/[0.035]"}`}
               >
                 <span className="min-w-0 flex-1 truncate">{c.title}</span>
                 {saved?.ch === i && ch !== i && <span className="h-1.5 w-1.5 rounded-full bg-[#0A84FF]" />}
                 <span className="text-[11px] tabular-nums text-ink-3">{minutes(c.words)}</span>
               </button>
             ))
-          : Array.from({ length: 10 }, (_, i) => <div key={i} className="skeleton mx-2 my-[7px] h-3.5 shrink-0 rounded-[4px]" style={{ width: `${60 + ((i * 17) % 30)}%` }} />)}
+          : Array.from({ length: 10 }, (_, i) => <div key={i} className="skeleton mx-2 my-[7px] h-3.5 shrink-0 rounded-[6px]" style={{ width: `${60 + ((i * 17) % 30)}%` }} />)}
       </aside>
       <div className="relative min-w-0 flex-1 bg-white">
         <AnimatePresence mode="wait" initial={false}>

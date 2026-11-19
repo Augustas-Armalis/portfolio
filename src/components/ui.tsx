@@ -31,7 +31,7 @@ export function Badge({ children, tone = "grey" }: { children: ReactNode; tone?:
       : tone === "live"
         ? "bg-[#E9F6EE] text-[#1F7A45] ring-1 ring-inset ring-[#1F7A45]/15"
         : "bg-field text-ink-2 ring-1 ring-inset ring-black/[0.06]";
-  return <span className={`inline-flex h-5 items-center rounded-[6px] px-1.5 text-[11px] font-medium ${cls}`}>{children}</span>;
+  return <span className={`inline-flex h-5 items-center rounded-[8px] px-1.5 text-[11px] font-medium ${cls}`}>{children}</span>;
 }
 
 // Older call sites: one mapping onto Btn so every button in the OS is the same component.
@@ -143,8 +143,8 @@ export function GlassThumb({ index, className = "" }: { index: number; className
 export function Segmented<T extends string>({ value, options, onChange, id }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; id: string }) {
   const { compact } = useChrome();
   return (
-    <div role="radiogroup" data-seg-id={id} className={`seg relative flex items-center bg-[var(--fill-2)] p-[2px] ${compact ? "h-9 rounded-[10px]" : "h-7 rounded-[8px]"}`}>
-      <GlassThumb index={options.findIndex((o) => o.value === value)} className={`seg-thumb inset-y-[2px] ${compact ? "rounded-[8px]" : "rounded-[6px]"}`} />
+    <div role="radiogroup" data-seg-id={id} className={`seg relative flex items-center bg-[var(--fill-2)] p-[2px] ${compact ? "h-9 rounded-[12px]" : "h-7 rounded-[10px]"}`}>
+      <GlassThumb index={options.findIndex((o) => o.value === value)} className={`seg-thumb inset-y-[2px] ${compact ? "rounded-[10px]" : "rounded-[8px]"}`} />
       {options.map((o) => (
         <button
           type="button"
@@ -186,7 +186,7 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boo
 export function Visual({ label, className = "", dark = false, src, alt = "" }: { label?: string; className?: string; dark?: boolean; src?: string; alt?: string }) {
   return (
     <div
-      className={`visual sq-card relative flex items-end overflow-hidden rounded-[12px] ${dark ? "visual-dark" : ""} ${className}`}
+      className={`visual sq-card relative flex items-end overflow-hidden rounded-[16px] ${dark ? "visual-dark" : ""} ${className}`}
     >
       {src && (
         // eslint-disable-next-line @next/next/no-img-element
@@ -230,7 +230,7 @@ export function SearchField({ value, onChange, placeholder = "Search", id }: { v
     <label
       htmlFor={id}
       className={`search flex shrink-0 items-center gap-1.5 text-ink-3 ${
-        compact ? "h-9 w-full rounded-[10px] bg-[#767680]/[0.12] px-2" : "h-8 w-[190px] rounded-full bg-black/[0.05] px-2.5 focus-within:ring-[3px] focus-within:ring-[var(--accent)]/30"
+        compact ? "h-9 w-full rounded-[12px] bg-[#767680]/[0.12] px-2" : "h-8 w-[190px] rounded-full bg-black/[0.05] px-2.5 focus-within:ring-[3px] focus-within:ring-[var(--accent)]/30"
       }`}
     >
       <Search size={compact ? 16 : 13} strokeWidth={2} className="shrink-0" />
@@ -633,7 +633,7 @@ export function SplitView({
               {sections.map((s, i) => (
                 <div key={i} className="mt-4">
                   {s.title && <div className="mb-[7px] px-4 text-[13px] uppercase tracking-[-0.005em] text-[#6D6D72]">{s.title}</div>}
-                  <div className="sq-list overflow-hidden rounded-[10px] bg-white">
+                  <div className="sq-list overflow-hidden rounded-[12px] bg-white">
                     {s.items.map((it, j) => (
                       <button
                         type="button"
@@ -689,7 +689,7 @@ export function SplitView({
                 type="button"
                 aria-expanded={!folded.includes(s.title)}
                 onClick={() => setFolded((f) => (f.includes(s.title!) ? f.filter((x) => x !== s.title) : [...f, s.title!]))}
-                className="group/sec flex h-[22px] w-full items-center justify-between rounded-[4px] px-2 text-left text-[11px] font-semibold text-ink-3"
+                className="group/sec flex h-[22px] w-full items-center justify-between rounded-[6px] px-2 text-left text-[11px] font-semibold text-ink-3"
               >
                 {s.title}
                 <ChevronRight
@@ -708,7 +708,7 @@ export function SplitView({
                     key={it.id}
                     data-id={it.id}
                     onClick={() => onSelect(it.id)}
-                    className={`flex h-[28px] items-center gap-2 rounded-[6px] px-2 text-left text-[13px] tracking-[-0.003em] ${
+                    className={`flex h-[28px] items-center gap-2 rounded-[8px] px-2 text-left text-[13px] tracking-[-0.003em] ${
                       on ? "bg-black/[0.08] text-ink" : "text-ink hov:hover:bg-black/[0.035]"
                     }`}
                   >
@@ -736,7 +736,7 @@ export function Group({ title, children, footer }: { title?: string; children: R
   return (
     <section>
       {title && <h3 className={compact ? "t-foot mb-[7px] px-4 uppercase text-[var(--label-2)]" : "mb-1.5 px-1 text-[13px] font-semibold text-ink"}>{title}</h3>}
-      <div className="sq divide-y divide-[var(--separator)] overflow-hidden rounded-[10px] bg-[var(--bg-elevated)] shadow-[var(--shadow-1)]">{children}</div>
+      <div className="sq divide-y divide-[var(--separator)] overflow-hidden rounded-[12px] bg-[var(--bg-elevated)] shadow-[var(--shadow-1)]">{children}</div>
       {footer && <p className="mt-1.5 px-1 text-[11px] leading-relaxed text-ink-3">{footer}</p>}
     </section>
   );
@@ -1053,7 +1053,7 @@ export function useContextMenu() {
             onPointerDown={(e) => e.stopPropagation()}
             data-glass=""
             style={{ left: m.x, top: m.y }}
-            className={`${glass("pop")} fixed z-[5000] w-[200px] rounded-[6px] p-[5px]`}
+            className={`${glass("pop")} fixed z-[5000] w-[200px] rounded-[8px] p-[5px]`}
           >
             {m.items.map((it, i) =>
               it === "sep" ? (
@@ -1066,7 +1066,7 @@ export function useContextMenu() {
                     setM(null);
                     it.run();
                   }}
-                  className="flex h-[22px] w-full items-center justify-between gap-6 rounded-[4px] px-[9px] text-left text-[13px] leading-none tracking-[-0.003em] text-ink hov:hover:bg-[#0A84FF] hov:hover:text-white"
+                  className="flex h-[22px] w-full items-center justify-between gap-6 rounded-[6px] px-[9px] text-left text-[13px] leading-none tracking-[-0.003em] text-ink hov:hover:bg-[#0A84FF] hov:hover:text-white"
                 >
                   <span>{it.label}</span>
                   {it.hint && <span className="opacity-45">{it.hint}</span>}
@@ -1277,7 +1277,7 @@ export function GlassMenu<T extends string>({ label, icon, value, options, onCha
                   onChange(o.value);
                   setOpen(false);
                 }}
-                className="m-body flex h-7 w-full items-center gap-2 rounded-[8px] px-2.5 text-left text-ink hov:hover:bg-[var(--accent)] hov:hover:text-white"
+                className="m-body flex h-7 w-full items-center gap-2 rounded-[10px] px-2.5 text-left text-ink hov:hover:bg-[var(--accent)] hov:hover:text-white"
               >
                 <span className="w-3 shrink-0 text-[11px]">{o.value === value ? "✓" : ""}</span>
                 {o.label}
@@ -1325,7 +1325,7 @@ export function Btn({
   className?: string;
   type?: "button" | "submit";
 }) {
-  const radius = capsule ? 999 : size === "sm" ? 6 : size === "md" ? 8 : 12;
+  const radius = capsule ? 999 : size === "sm" ? 8 : size === "md" ? 10 : 16;
   const glassy = variant === "glass" || variant === "glass-dark";
   const cls = `btn btn-${size} btn-${variant} ${capsule ? "btn-capsule" : ""} ${iconOnly ? "btn-icon" : ""} ${glassy ? `glass ${variant === "glass" ? "glass-btn" : "glass-btn-dark"}` : ""} ${className}`;
   const inner = (
@@ -1351,7 +1351,7 @@ export function Btn({
 // ---------- lists, stats, info ----------
 export function List({ children, mac = false, className = "" }: { children: ReactNode; mac?: boolean; className?: string }) {
   return (
-    <Squircle radius={mac ? 10 : 12} className={`list ${mac ? "m-list shadow-[var(--shadow-1)]" : ""} ${className}`}>
+    <Squircle radius={mac ? 12 : 16} className={`list ${mac ? "m-list shadow-[var(--shadow-1)]" : ""} ${className}`}>
       {children}
     </Squircle>
   );

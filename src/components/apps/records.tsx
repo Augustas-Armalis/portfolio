@@ -104,7 +104,7 @@ function NowPlaying({ compact }: { compact: boolean }) {
           animate={{ scale: p.playing || !p.id ? 1 : 0.86 }}
           transition={{ type: "spring", bounce: 0.25, duration: 0.6 }}
           data-sq=""
-          className={`mx-auto aspect-square w-full object-cover shadow-[0_30px_60px_-20px_rgb(0_0_0/0.6)] ${compact ? "max-w-[320px] rounded-[14px]" : "max-w-[340px] rounded-[14px]"}`}
+          className={`mx-auto aspect-square w-full object-cover shadow-[0_30px_60px_-20px_rgb(0_0_0/0.6)] ${compact ? "max-w-[320px] rounded-[18px]" : "max-w-[340px] rounded-[18px]"}`}
         />
         <div className={`mx-auto w-full ${compact ? "mt-9 max-w-[320px]" : "mt-7 max-w-[340px]"}`}>
           <div className="flex items-center gap-2">
@@ -112,7 +112,7 @@ function NowPlaying({ compact }: { compact: boolean }) {
               <div className="truncate text-[20px] font-semibold tracking-[-0.02em]">{lead.title}</div>
               <div className={`truncate text-white/60 ${compact ? "text-[17px]" : "text-[15px]"}`}>{lead.artist}</div>
             </div>
-            {!lead.confirmed && <span className="m-sub shrink-0 rounded-[6px] bg-white/15 px-1.5 py-0.5 text-white/80">Unreleased</span>}
+            {!lead.confirmed && <span className="m-sub shrink-0 rounded-[8px] bg-white/15 px-1.5 py-0.5 text-white/80">Unreleased</span>}
           </div>
           <div className="mt-4">
             <Scrubber />
@@ -165,14 +165,14 @@ function GlassQueue() {
               type="button"
               key={t.id}
               onClick={() => player.toggle(t.id)}
-              className={`press group flex w-full items-center gap-3.5 rounded-[14px] p-2.5 text-left transition-colors duration-150 ${on ? "bg-white/[0.14]" : "hov:hover:bg-white/[0.08]"}`}
+              className={`press group flex w-full items-center gap-3.5 rounded-[18px] p-2.5 text-left transition-colors duration-150 ${on ? "bg-white/[0.14]" : "hov:hover:bg-white/[0.08]"}`}
               data-sq=""
             >
               <span className="relative shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={t.cover} alt="" className="h-14 w-14 rounded-[9px] object-cover shadow-[0_6px_16px_-6px_rgb(0_0_0/0.6)]" />
+                <img src={t.cover} alt="" className="h-14 w-14 rounded-[12px] object-cover shadow-[0_6px_16px_-6px_rgb(0_0_0/0.6)]" />
                 {on && p.playing && (
-                  <span className="absolute inset-0 flex items-center justify-center rounded-[9px] bg-black/45">
+                  <span className="absolute inset-0 flex items-center justify-center rounded-[12px] bg-black/45">
                     <Bars light />
                   </span>
                 )}
@@ -214,7 +214,7 @@ function Queue({ compact }: { compact: boolean }) {
               mac={!compact}
               onClick={() => player.toggle(t.id)}
               icon={
-                <span className={`relative block shrink-0 overflow-hidden shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)] ${compact ? "my-2 h-12 w-12 rounded-[8px]" : "h-9 w-9 rounded-[6px]"}`}>
+                <span className={`relative block shrink-0 overflow-hidden shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)] ${compact ? "my-2 h-12 w-12 rounded-[10px]" : "h-9 w-9 rounded-[8px]"}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={t.cover} alt="" width={96} height={96} className="h-full w-full object-cover" />
                   {on && p.playing && (
@@ -276,10 +276,10 @@ export function Records() {
         layoutId="np"
         onClick={() => setFull(true)}
         data-glass=""
-        className={`${glass("pop")} fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+40px)] z-[30] flex h-14 items-center gap-3 rounded-[16px] px-2 text-left`}
+        className={`${glass("pop")} fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+40px)] z-[30] flex h-14 items-center gap-3 rounded-[20px] px-2 text-left`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={(cur ?? tracks[0]).cover} alt="" className="h-10 w-10 rounded-[8px] object-cover" />
+        <img src={(cur ?? tracks[0]).cover} alt="" className="h-10 w-10 rounded-[10px] object-cover" />
         <span className="t-sub min-w-0 flex-1 truncate font-medium text-ink">{cur?.title ?? "Not Playing"}</span>
         <span
           role="button"
@@ -305,7 +305,7 @@ export function Records() {
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={(_, info) => (info.offset.y > 120 || info.velocity.y > 700) && setFull(false)}
-            className="fixed inset-0 z-[45] overflow-hidden rounded-t-[24px]"
+            className="fixed inset-0 z-[45] overflow-hidden rounded-t-[28px]"
           >
             <span className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+52px)] z-10 h-[5px] w-9 -translate-x-1/2 rounded-full bg-white/40" />
             <NowPlaying compact />

@@ -23,6 +23,7 @@ export const GLB_MODELS: Record<"display" | "headphones" | "camera" | "keyboard"
 };
 
 const cache = new Map<string, Promise<THREE.Object3D | null>>();
+let draco: import("three/examples/jsm/loaders/DRACOLoader.js").DRACOLoader | null = null;
 function load(file: string) {
   let p = cache.get(file);
   if (!p) {
@@ -30,10 +31,12 @@ function load(file: string) {
       .then((r) => {
         // a static host answers a missing file with 404 (or an HTML page): only a real model counts
         if (!r.ok || (r.headers.get("content-type") ?? "").includes("text/html")) return null;
-        return import("three/examples/jsm/loaders/GLTFLoader.js").then(
-          ({ GLTFLoader }) =>
-            new Promise<THREE.Object3D | null>((res) =>
-              new GLTFLoader().load(
+        // the Draco decoder (public/draco, copied from three) is only fetched if a model is actually compressed
+        return Promise.all([import("three/examples/jsm/loaders/GLTFLoader.js"), import("three/examples/jsm/loaders/DRACOLoader.js")]).then(
+          ([{ GLTFLoader }, { DRACOLoader }]) =>
+            new Promise<THREE.Object3D | null>((res) => {
+              draco ??= new DRACOLoader().setDecoderPath("/draco/");
+              new GLTFLoader().setDRACOLoader(draco).load(
                 file,
                 (g) => {
                   g.scene.traverse((o) => {
@@ -44,8 +47,8 @@ function load(file: string) {
                 },
                 undefined,
                 () => res(null),
-              ),
-            ),
+              );
+            }),
         );
       })
       .catch(() => null);
