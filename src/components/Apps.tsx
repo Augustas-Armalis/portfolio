@@ -154,29 +154,30 @@ function CardFace({ it, big, open }: { it: StoryItem; big?: boolean; open?: bool
       </motion.div>
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.42)_0%,rgb(0_0_0/0.08)_38%,rgb(0_0_0/0)_55%,rgb(0_0_0/0.5)_100%)]" />
       {shot && (
-        <Squircle
-          radius={12}
-          className={`absolute left-1/2 w-[84%] -translate-x-1/2 overflow-hidden shadow-[0_24px_60px_-20px_rgb(0_0_0/0.7),0_0_0_0.5px_rgb(255_255_255/0.2)] ${open ? "top-[34%]" : "top-[40%]"}`}
-        >
-          <ShotImg src={storyImage(it)} alt="" draggable={false} />
-        </Squircle>
+        <div className={`absolute inset-x-0 bottom-0 flex justify-center ${CROP[storyImage(it)] ? "items-center pb-[6%]" : "items-start"} ${open ? (compact ? "top-[40%]" : "top-[190px]") : "top-[38%]"}`}>
+          <Squircle radius={12} className="w-[84%] overflow-hidden shadow-[0_24px_60px_-20px_rgb(0_0_0/0.7),0_0_0_0.5px_rgb(255_255_255/0.2)]">
+            <ShotImg src={storyImage(it)} alt="" draggable={false} />
+          </Squircle>
+        </div>
       )}
-      <motion.div layoutId={`head-${it.key}`} className={`absolute inset-x-0 top-0 ${pad} ${open && compact ? "pt-[calc(env(safe-area-inset-top)+64px)]" : ""}`}>
+      {/* in a window the headline starts under the traffic lights */}
+      <motion.div layoutId={`head-${it.key}`} className={`absolute inset-x-0 top-0 ${pad} ${open ? (compact ? "pt-[calc(env(safe-area-inset-top)+64px)]" : "pt-[56px]") : ""}`}>
         <div className="eyebrow text-white/75">{it.eyebrow}</div>
-        <div className={`mt-1 max-w-[18ch] font-bold leading-[1.05] tracking-[-0.025em] text-white [text-wrap:balance] ${open ? (compact ? "text-[34px]" : "text-[40px]") : big ? "text-[34px]" : "text-[28px]"}`}>
+        <div className={`mt-1 max-w-[18ch] font-bold leading-[1.05] tracking-[-0.025em] text-white [text-wrap:balance] ${open ? (compact ? "text-[34px]" : "text-[40px]") : big ? "text-[34px]" : "text-[26px]"}`}>
           {it.p.name}
         </div>
-        {it.p.what && (shot || open) && <p className="t-sub mt-1.5 max-w-[34ch] text-white/85 [text-wrap:pretty]">{it.p.what}</p>}
+        {it.p.what && (shot || open) && <p className={`mt-1.5 text-white/85 [text-wrap:pretty] ${open && !compact ? "t-body max-w-[56ch]" : "t-sub max-w-[34ch]"}`}>{it.p.what}</p>}
       </motion.div>
-      {!shot && it.app && (
-        <div className={`absolute ${compact ? "left-5" : big || open ? "left-7" : "left-5"} ${it.p.what && !open ? "bottom-[78px]" : compact ? "bottom-5" : "bottom-7"}`}>
-          <AppIcon id={it.app} size={big || open ? 64 : 52} />
+      {/* photo stories: the app icon, then the one-liner, stacked from the bottom edge so neither can collide */}
+      {!shot && (
+        <div className={`absolute inset-x-0 bottom-0 flex flex-col items-start gap-3 ${pad}`}>
+          {it.app && <AppIcon id={it.app} size={big || open ? 64 : 52} />}
+          {it.p.what && !open && (
+            <motion.p layoutId={`sub-${it.key}`} className={`max-w-[46ch] text-white/90 [text-wrap:pretty] ${big ? "t-body" : "t-sub"}`}>
+              {it.p.what}
+            </motion.p>
+          )}
         </div>
-      )}
-      {it.p.what && !shot && !open && (
-        <motion.p layoutId={`sub-${it.key}`} className={`absolute inset-x-0 bottom-0 max-w-[46ch] text-white/90 [text-wrap:pretty] ${pad} ${big ? "t-body" : "t-sub"}`}>
-          {it.p.what}
-        </motion.p>
       )}
     </>
   );
@@ -187,29 +188,32 @@ function Today({ title, items, header }: { title: string; items: StoryItem[]; he
   const date = useToday();
   const [open, setOpen] = useState<string | null>(null);
   const cur = items.find((i) => i.key === open) ?? null;
+  // a long shelf (the Lab) reads as a collection in three columns; a couple of stories stay large
+  const many = !compact && items.length > 4;
   return (
     <div className={`relative ${compact ? "" : "h-full overflow-hidden bg-[#F2F2F7]"}`}>
       <div className={compact ? "px-5 pb-10" : "h-full overflow-auto px-8 pb-10 pt-[52px]"} data-drag={compact ? undefined : ""}>
         <div className="mb-5 flex items-end justify-between gap-4">
           <div>
-            <div className="text-[13px] font-semibold tracking-[0.01em] text-[#8A8A8E]">{date}</div>
+            <div className="eyebrow min-h-[16px] text-[var(--label-2)]">{date}</div>
             <h1 className="text-[34px] font-bold leading-[41px] tracking-[0.011em] text-ink">{title}</h1>
           </div>
           {header}
         </div>
-        <div className={`grid gap-6 ${compact ? "grid-cols-1" : "grid-cols-2"}`}>
+        <div className={`grid ${compact ? "grid-cols-1 gap-5" : many ? "grid-cols-3 gap-5" : "grid-cols-2 gap-6"}`}>
           {items.map((it, i) => {
-            const big = !compact && i === 0 && items.length % 2 === 1;
+            const big = !compact && !many && i === 0 && items.length % 2 === 1;
             return (
               <motion.button
                 type="button"
                 key={it.key}
                 layoutId={`card-${it.key}`}
                 onClick={() => setOpen(it.key)}
+                whileHover={{ scale: 1.012 }}
                 whileTap={{ scale: 0.97 }}
                 transition={{ type: "spring", bounce: 0.12, duration: 0.5 }}
-                className={`sq-panel group relative block overflow-hidden rounded-[18px] text-left shadow-[0_14px_34px_-18px_rgb(16_18_24/0.55)] ${
-                  big ? "col-span-2 aspect-[16/8]" : compact ? "aspect-[4/5]" : "aspect-[10/11]"
+                className={`sq-panel group relative block overflow-hidden rounded-[18px] text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.08),0_18px_40px_-20px_rgb(16_18_24/0.6)] ${
+                  big ? "col-span-2 aspect-[16/8]" : compact || many ? "aspect-[4/5]" : "aspect-square"
                 } ${open === it.key ? "invisible" : ""}`}
                 style={{ borderRadius: 18 }}
               >
@@ -305,14 +309,14 @@ function Story({ it, standalone }: { it: StoryItem; standalone?: boolean }) {
   const pad = compact ? "px-5" : "px-10";
   return (
     <article className="bg-white pb-12">
-      <div data-drag={standalone && !compact ? "" : undefined} className={`relative w-full overflow-hidden ${compact ? "aspect-[4/5]" : "h-[380px]"}`}>
+      <div data-drag={standalone && !compact ? "" : undefined} className={`relative w-full overflow-hidden ${compact ? "aspect-[4/5]" : "h-[420px]"}`}>
         <CardFace it={it} big open />
       </div>
       <div className={`${pad} flex items-center gap-3.5 border-b border-black/[0.08] py-5`}>
         {it.app ? <AppIcon id={it.app} size={56} /> : <AppIcon id="work" size={56} />}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[17px] font-semibold tracking-[-0.02em] text-ink">{p.name}</div>
-          <div className="truncate text-[13px] text-[#8A8A8E]">{p.stack ?? p.role ?? it.eyebrow}</div>
+          <div className="truncate text-[13px] text-[var(--label-2)]">{p.stack ?? p.role ?? it.eyebrow}</div>
         </div>
         {it.action ? (
           <Btn variant="prominent" capsule onClick={it.action.run} className="!px-4 !text-[15px] !font-bold">
@@ -370,7 +374,8 @@ function Work() {
 // ---------- Photos: a tight grid; a photo zooms out of its tile into the viewer ----------
 
 type Photo = { title: string; src: string };
-function PhotosApp({ title, sub, photos, actions, credit }: { title: string; sub?: string; photos: Photo[]; actions?: React.ReactNode; credit?: string }) {
+// aspect "wide" keeps 16:10 screenshots whole; "square" is the Photos grid
+function PhotosApp({ title, sub, photos, actions, credit, aspect = "square" }: { title: string; sub?: string; photos: Photo[]; actions?: React.ReactNode; credit?: string; aspect?: "square" | "wide" }) {
   const { compact } = useChrome();
   const [q, setQ] = useState("");
   const [size, setSize] = useState<"grid" | "large">("grid");
@@ -378,10 +383,11 @@ function PhotosApp({ title, sub, photos, actions, credit }: { title: string; sub
   const ctx = useContextMenu();
   const list = photos.filter((s) => s.title.toLowerCase().includes(q.trim().toLowerCase()));
   const looks: LookItem[] = list.map((s) => ({ title: s.title, src: s.src }));
+  const wide = aspect === "wide";
   return (
     <div className="@container relative flex h-full min-h-0 flex-col bg-[var(--bg)]">
       {!compact && (
-        <Toolbar title={title} sub={sub ?? `${photos.length} photos`}>
+        <Toolbar title={title} sub={sub}>
           <Segmented
             id={`ph-${title}`}
             value={size}
@@ -402,7 +408,21 @@ function PhotosApp({ title, sub, photos, actions, credit }: { title: string; sub
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-auto">
-        <div className={`grid gap-[2px] ${compact ? "grid-cols-3" : size === "grid" ? "grid-cols-[repeat(auto-fill,minmax(150px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(280px,1fr))]"}`}>
+        <div
+          className={`grid gap-[2px] ${
+            compact
+              ? wide
+                ? "grid-cols-2"
+                : "grid-cols-3"
+              : size === "grid"
+                ? wide
+                  ? "grid-cols-[repeat(auto-fill,minmax(300px,1fr))]"
+                  : "grid-cols-[repeat(auto-fill,minmax(170px,1fr))]"
+                : wide
+                  ? "grid-cols-[repeat(auto-fill,minmax(460px,1fr))]"
+                  : "grid-cols-[repeat(auto-fill,minmax(300px,1fr))]"
+          }`}
+        >
           {list.map((ph, i) => (
             <button
               type="button"
@@ -414,7 +434,7 @@ function PhotosApp({ title, sub, photos, actions, credit }: { title: string; sub
                   { label: "Open in New Tab", run: () => window.open(ph.src, "_blank", "noreferrer") },
                 ])
               }
-              className="group relative aspect-square overflow-hidden bg-[var(--fill-2)] outline-none"
+              className={`group relative overflow-hidden bg-[var(--fill-2)] outline-none focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${wide ? "aspect-[16/10]" : "aspect-square"}`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -443,11 +463,11 @@ function Shots() {
   return (
     <PhotosApp
       title="Shots"
-      sub={shots.handle}
+      aspect="wide"
       photos={shots.items}
       actions={
-        <Btn size="sm" href={shots.href} icon={<ArrowUpRight size={14} />}>
-          Open on X
+        <Btn size="sm" href={shots.href} label={`Open ${shots.handle} on X`} icon={<XMark size={12} />}>
+          {shots.handle}
         </Btn>
       }
     />
@@ -459,23 +479,30 @@ function Taste() {
   const title = sel === "rules" ? "Rules" : "Designers I rate";
   const detail =
     sel === "rules" ? (
-      <ol className="mx-auto max-w-[520px] divide-y divide-black/[0.06] px-6 py-4">
+      // a short manifesto: big type, numbered, one rule a line
+      <ol className="px-6 pb-6">
         {taste.rules.map((r, i) => (
-          <li key={r} className="flex gap-4 py-3.5">
-            <span className="w-5 shrink-0 text-[20px] font-medium tabular-nums leading-none tracking-[-0.02em] text-ink-3">{i + 1}</span>
-            <span className="text-[14px] leading-snug text-ink">{r}</span>
+          <li key={r} className={`flex items-baseline gap-4 py-[15px] ${i ? "shadow-[inset_0_0.5px_0_var(--separator-opaque)]" : ""}`}>
+            <span className="w-5 shrink-0 text-[13px] font-semibold tabular-nums text-ink-3">{String(i + 1).padStart(2, "0")}</span>
+            <span className="t-title3 text-ink [text-wrap:balance]">{r}</span>
           </li>
         ))}
       </ol>
     ) : (
-      <ul className="mx-auto max-w-[520px] space-y-1 px-4 py-4">
-        {taste.rated.map((d) => (
-          <li key={d} className="flex h-12 items-center gap-3 rounded-[8px] px-2 hov:hover:bg-[#F7F7F9]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-b from-white to-[#E6E7EB] text-[12px] font-semibold text-ink-2 ring-1 ring-black/[0.06]">{d[0].toUpperCase()}</span>
-            <span className="text-[14px] text-ink">{d}</span>
-          </li>
-        ))}
-      </ul>
+      <div className="px-5 pb-6 pt-1">
+        <List mac>
+          {taste.rated.map((d) => (
+            <ListRow
+              mac
+              key={d}
+              icon={
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-[#B4B9C4] to-[#868B96] text-[12px] font-semibold text-white">{d[0].toUpperCase()}</span>
+              }
+              title={d}
+            />
+          ))}
+        </List>
+      </div>
     );
   return (
     <SplitView
@@ -525,7 +552,7 @@ function Kit() {
             />
           </Row>
           <Row label="Slider" sub={`${val}%`}>
-            <input id="kit-slider" type="range" min={0} max={100} value={val} onChange={(e) => setVal(+e.target.value)} className="w-36 accent-[#1a1b1e]" />
+            <input id="kit-slider" type="range" aria-label="Example slider" min={0} max={100} value={val} onChange={(e) => setVal(+e.target.value)} className="scrub scrub-accent w-36" style={{ ["--p" as string]: `${val}%` }} />
           </Row>
         </Group>
         <Group title="Buttons">
@@ -667,8 +694,8 @@ function LiveSite({ it }: { it: StoryItem }) {
       <div data-drag className="toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--separator)] pl-[84px] pr-3">
         <Btn variant="plain" size="sm" iconOnly label="Reload" onClick={() => setReload((r) => r + 1)} icon={<RotateCw size={14} />} />
         <div className="search mx-auto flex h-[30px] w-[min(420px,60%)] items-center justify-center gap-1.5 rounded-[8px] bg-[var(--fill-2)] px-3">
-          <Lock size={11} className="text-ink-3" />
-          <span className="m-body truncate text-ink">{domain}</span>
+          <Lock size={11} className="text-ink-2" />
+          <span className="m-body truncate font-medium text-ink">{domain}</span>
         </div>
         <Btn variant="plain" size="sm" iconOnly label="Open in a new tab" href={href} icon={<ArrowUpRight size={15} />} />
         <Btn variant={info ? "tinted" : "plain"} size="sm" iconOnly label="Info" onClick={() => setInfo((v) => !v)} icon={<Info size={15} />} />
@@ -683,7 +710,7 @@ function LiveSite({ it }: { it: StoryItem }) {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 280, opacity: 0 }}
               transition={{ type: "spring", bounce: 0, duration: 0.36 }}
-              className="w-[280px] shrink-0 overflow-auto border-l border-[var(--separator)] bg-[var(--bg-sidebar)] p-5"
+              className="inspector w-[272px] shrink-0 overflow-auto p-5"
             >
               <Inspector it={it} />
             </motion.aside>

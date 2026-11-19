@@ -87,7 +87,7 @@ type Size = { w: number; h: number };
 export const apps: Record<AppId, { title: string; size: Size }> = {
   work: { title: "Work", size: { w: 1040, h: 680 } },
   shots: { title: "Shots", size: { w: 1000, h: 660 } },
-  taste: { title: "Taste", size: { w: 760, h: 500 } },
+  taste: { title: "Taste", size: { w: 700, h: 430 } },
   kit: { title: "Kit", size: { w: 480, h: 400 } },
   larpo: { title: "Larpo", size: { w: 1040, h: 680 } },
   lunor: { title: "Lunor", size: { w: 900, h: 680 } },
