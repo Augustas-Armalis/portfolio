@@ -130,8 +130,8 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
       const g = id === "home" ? 0 : groundAt(def, lx, lz);
       halos.push({ p: [p.x, p.y - 0.75, p.z], size: 2.2, col: tint, k: 0.17 * gain });
       // a fine thread of light falling from it, gone before it reaches the ground
-      const h = Math.min(p.y - 0.75 - g - 0.5, 5.5);
-      if (h > 1.5) k.add(new THREE.CylinderGeometry(0.03, 0.004, h, 4, 1, true), [p.x, p.y - 0.75 - h / 2, p.z], [tint[0] * 0.8, tint[1] * 0.74, tint[2] * 0.6], { glow: 0.3 * gain });
+      const h = Math.min(p.y - 0.75 - g - 0.5, 2.4);
+      if (h > 1.2) k.add(new THREE.CylinderGeometry(0.018, 0.003, h, 4, 1, true), [p.x, p.y - 0.75 - h / 2, p.z], [tint[0] * 0.8, tint[1] * 0.74, tint[2] * 0.6], { glow: 0.3 * gain });
       if (angels && n % 4 === 1 && effects > 0.25) {
         tan.subVectors(pts[i + 1], pts[i - 1]).normalize();
         const s = n % 8 === 1 ? 1 : -1;

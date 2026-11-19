@@ -213,6 +213,7 @@ export type GroundPalette = {
   b: V3; // where it is dry
   c: V3; // broad drifts of a third tone
   shore?: V3; // sand at the water's edge
+  shoreAt?: [number, number]; // how high above the water the sand reaches: all sand below the first, none above the second
   rock?: V3; // on steep ground
   high?: V3; // on high ground
   highAt?: [number, number];
@@ -283,7 +284,7 @@ export function makeTerrainMaterial(def: WorldDef, pal: GroundPalette) {
                alb = mix(alb, band, ${pal.bands.toFixed(2)}) * mix(1.55, 1.0, line); }`
             : ""
         }
-        ${pal.shore ? `alb = mix(alb, ${v3(pal.shore)}, 1.0 - smoothstep(${(water + 0.25).toFixed(2)}, ${(water + 1.3).toFixed(2)}, h + (vnoise(p * 0.2) - 0.5) * 0.5));` : ""}
+        ${pal.shore ? `alb = mix(alb, ${v3(pal.shore)}, 1.0 - smoothstep(${(water + (pal.shoreAt ?? [0.25, 1.3])[0]).toFixed(2)}, ${(water + (pal.shoreAt ?? [0.25, 1.3])[1]).toFixed(2)}, h + (vnoise(p * 0.2) - 0.5) * 0.5));` : ""}
         alb = mix(alb, alb * vec3(0.5, 0.56, 0.6), 1.0 - smoothstep(${(water - 2.5).toFixed(2)}, ${(water + 0.05).toFixed(2)}, h));
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         float ndl = clamp(dot(n, uKeyDir), 0.0, 1.0);
@@ -667,32 +668,54 @@ function wing() {
   wingGeo = new THREE.ExtrudeGeometry(s, { depth: 0.035, bevelEnabled: false, curveSegments: 10 });
   return wingGeo;
 }
-export function angel(k: Kit, p: V3, s: number, yaw: number, robe: V3, o: { bow?: number; glow?: number; wing?: V3; open?: number } = {}) {
+export function angel(k: Kit, p: V3, s: number, yaw: number, robe: V3, o: { bow?: number; glow?: number; wing?: V3; open?: number; bend?: number } = {}) {
   const bow = o.bow ?? 0;
+  const bend = o.bend ?? 0;
   const glow = o.glow ?? 0.12;
   const pale: V3 = [Math.min(1, robe[0] * 0.5 + 0.55), Math.min(1, robe[1] * 0.5 + 0.55), Math.min(1, robe[2] * 0.5 + 0.55)];
-  const place = (g: THREE.BufferGeometry, lp: V3, lr: V3, col: V3, gl: number, top?: V3, sc: V3 = [1, 1, 1]) => {
-    // local (figure) space -> bowed -> turned -> placed
-    const m = new THREE.Matrix4().compose(new THREE.Vector3(...lp), new THREE.Quaternion().setFromEuler(new THREE.Euler(...lr)), new THREE.Vector3(...sc));
-    const fig = new THREE.Matrix4().compose(new THREE.Vector3(...p), new THREE.Quaternion().setFromEuler(new THREE.Euler(bow, yaw, 0, "YXZ")), new THREE.Vector3(s, s, s));
+  const fig = new THREE.Matrix4().compose(new THREE.Vector3(...p), new THREE.Quaternion().setFromEuler(new THREE.Euler(bow, yaw, 0, "YXZ")), new THREE.Vector3(s, s, s));
+  // everything above the waist turns about it when the figure bends
+  const WAIST = 0.92;
+  const waist = new THREE.Matrix4().makeTranslation(0, WAIST, 0).multiply(new THREE.Matrix4().makeRotationX(bend)).multiply(new THREE.Matrix4().makeTranslation(0, -WAIST, 0));
+  const put = (g: THREE.BufferGeometry, m: THREE.Matrix4, col: V3, gl: number, top?: V3, upper = false) => {
     const painted = paint(g, col, gl, top);
-    painted.applyMatrix4(fig.multiply(m));
+    painted.applyMatrix4(fig.clone().multiply(upper ? waist.clone().multiply(m) : m));
     k.parts.push(painted);
   };
+  const place = (g: THREE.BufferGeometry, lp: V3, lr: V3, col: V3, gl: number, top?: V3, sc: V3 = [1, 1, 1], upper = false) =>
+    put(g, new THREE.Matrix4().compose(new THREE.Vector3(...lp), new THREE.Quaternion().setFromEuler(new THREE.Euler(...lr)), new THREE.Vector3(...sc)), col, gl, top, upper);
   // robe: narrow at the shoulder, falling to a soft hem
   const robeProfile: [number, number][] = [
     [0.36, 0],
     [0.33, 0.06],
     [0.25, 0.5],
+    [0.2, WAIST],
     [0.19, 1.0],
     [0.17, 1.3],
     [0.2, 1.42],
     [0.13, 1.52],
     [0.07, 1.56],
   ];
-  place(new THREE.LatheGeometry(robeProfile.map(([r, y]) => new THREE.Vector2(r * 1.15, y)), 14), [0, 0, 0], [0, 0, 0], robe, glow, [robe[0] * 0.6 + pale[0] * 0.4, robe[1] * 0.6 + pale[1] * 0.4, robe[2] * 0.6 + pale[2] * 0.4]);
-  place(new THREE.SphereGeometry(0.115, 12, 10), [0, 1.68, 0.01], [0, 0, 0], [0.94, 0.8, 0.68], glow * 1.2);
+  const mid: V3 = [robe[0] * 0.6 + pale[0] * 0.4, robe[1] * 0.6 + pale[1] * 0.4, robe[2] * 0.6 + pale[2] * 0.4];
+  const lathe = (pts: [number, number][]) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r * 1.15, y)), 14);
+  if (bend > 0) {
+    place(lathe(robeProfile.slice(0, 4)), [0, 0, 0], [0, 0, 0], robe, glow, mix3k(robe, mid, 0.6));
+    // the bent back: a soft joint at the waist so the robe does not break
+    place(new THREE.SphereGeometry(0.235, 12, 10), [0, WAIST, 0], [0, 0, 0], mix3k(robe, mid, 0.6), glow);
+    place(lathe(robeProfile.slice(3)), [0, 0, 0], [0, 0, 0], mix3k(robe, mid, 0.6), glow, mid, [1, 1, 1], true);
+    // an arm let down to the flower
+    const sh = new THREE.Vector3(0.14, 1.34, 0.08).applyMatrix4(waist);
+    const hand = new THREE.Vector3(0.1, 0.1, sh.z + 0.16);
+    const dir = hand.clone().sub(sh);
+    const len = dir.length();
+    put(new THREE.CylinderGeometry(0.035, 0.028, len, 6), new THREE.Matrix4().compose(sh.clone().add(hand).multiplyScalar(0.5), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()), new THREE.Vector3(1, 1, 1)), mid, glow);
+  } else place(lathe(robeProfile), [0, 0, 0], [0, 0, 0], robe, glow, mid);
+  place(new THREE.SphereGeometry(0.115, 12, 10), [0, 1.68, 0.01], [0, 0, 0], [0.94, 0.8, 0.68], glow * 1.2, undefined, [1, 1, 1], true);
   const wc = o.wing ?? [0.9 * 0.7 + pale[0] * 0.3, 0.88 * 0.7 + pale[1] * 0.3, 0.8 * 0.7 + pale[2] * 0.3];
+  const wt: V3 = [Math.min(1, wc[0] * 0.7 + 0.28), Math.min(1, wc[1] * 0.7 + 0.28), Math.min(1, wc[2] * 0.7 + 0.28)];
   const open = o.open ?? 0.36;
-  for (const w of [-1, 1]) place(wing().clone(), [w * 0.1, 1.16, -0.13], [-0.1, -w * open, -w * 0.1], wc, glow * 0.9, undefined, [w, 1, 1]);
+  // bent over, the wings come forward with the back and close over the figure like a shell
+  if (bend > 0) for (const w of [-1, 1]) place(wing().clone(), [w * 0.2, 1.0, -0.1], [0.78, Math.PI / 2 - w * open, 0], wc, glow * 0.9, wt, [1.7, 1.02, 1], true);
+  else for (const w of [-1, 1]) place(wing().clone(), [w * 0.1, 1.16, -0.13], [-0.1, -w * open, -w * 0.1], wc, glow * 0.9, o.wing ? wt : undefined, [w, 1, 1], true);
 }
+const mix3k = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
