@@ -271,7 +271,6 @@ export function Reader({
   const turnMesh = useRef<THREE.Mesh>(null);
   const shadow = useRef<THREE.Mesh>(null);
   const gutter = useRef<THREE.Mesh>(null);
-  const ribbon = useRef<THREE.Group>(null);
   const geom = useRef({ top: BT });
   const drag = useRef({ x: 0, y: 0, travel: 0, target: 0 });
   const { inv, ro, rd } = useMemo(() => ({ inv: new THREE.Matrix4(), ro: new THREE.Vector3(), rd: new THREE.Vector3() }), []);
@@ -519,11 +518,6 @@ export function Reader({
       turnMesh.current.position.y = top + 0.0007;
       turnMesh.current.visible = !!s.turn;
     }
-    // ribbon: tucked between the pages when shut, lying in the gutter when open
-    if (ribbon.current) {
-      ribbon.current.position.x = THREE.MathUtils.lerp(SPINE_X + 0.03, SPINE_X, o);
-      ribbon.current.position.y = top + 0.0009 - (1 - o) * 0.0006;
-    }
     if (s.turn) {
       turnMat.uniforms.uCurl.value = 1;
       if (s.turn.drag) {
@@ -554,15 +548,6 @@ export function Reader({
 
   return (
     <group ref={root} onPointerUp={release} onPointerCancel={release}>
-      {/* ribbon bookmark: sewn into the head of the spine, down the gutter, its tail past the foot */}
-      <group ref={ribbon} position={[SPINE_X + 0.03, BT, 0]}>
-        <mesh material={m.ribbon}>
-          <boxGeometry args={[0.0022, 0.0003, BD - 0.002]} />
-        </mesh>
-        <mesh material={m.ribbon} position={[0, -0.0035, BD / 2 + 0.0135]} rotation={[0.25, 0, 0]}>
-          <boxGeometry args={[0.0022, 0.0003, 0.03]} />
-        </mesh>
-      </group>
       {/* back board + page block */}
       <mesh material={m.paperBlack} position={[0, BOARD / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[BW, BOARD, BD]} />
