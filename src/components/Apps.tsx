@@ -670,7 +670,9 @@ function LiveSite({ it }: { it: StoryItem }) {
   );
   if (compact)
     return (
-      <div className="fixed inset-x-0 bottom-0 top-[calc(env(safe-area-inset-top)+54px)] flex flex-col">
+      <div className="fixed inset-x-0 bottom-0 top-[calc(env(safe-area-inset-top)+108px)] flex flex-col">
+        {/* a navigation row of its own, so the close button never sits on the site's header */}
+        <div className="t-headline absolute inset-x-16 -top-[50px] flex h-11 items-center justify-center truncate text-ink">{it.p.name}</div>
         {frame}
         <div data-glass="" className={`${glass("pop")} absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+36px)] flex h-12 items-center gap-1 rounded-[16px] px-1.5`}>
           <Btn variant="plain" size="md" iconOnly label="Info" onClick={() => setInfo(true)} icon={<Info size={18} />} />
@@ -734,20 +736,53 @@ function LiveSite({ it }: { it: StoryItem }) {
 }
 
 // Shareware DOOM in js-dos, loaded only when the app opens.
+// js-dos ships a Tailwind 3 + daisyUI stylesheet: global resets (*, ::before { --tw-translate-x: 0 }) and class
+// names this OS also uses (.btn, .glass). Loaded as is, it un-centred the Dock and restyled every button the
+// moment DOOM started. So its rules are confined to the player: scoped to .jsdos-host and put in the lowest
+// cascade layer (declared first in globals.css). Keyframes and fonts can't live in a scope, so they stay outside.
+function scopeCss(css: string, root: string) {
+  const outside: string[] = [];
+  const inside: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) {
+        const rule = css.slice(start, i + 1);
+        (/^\s*@(-webkit-)?(keyframes|font-face|property)/.test(rule) ? outside : inside).push(rule);
+        start = i + 1;
+      }
+    } else if (c === ";" && depth === 0) start = i + 1;
+  }
+  return `${outside.join("")}@layer jsdos{@scope (${root}){${inside.join("").replace(/:root/g, ":scope")}}}`;
+}
 let dosLoad: Promise<void> | null = null;
 function loadDos() {
   if (dosLoad) return dosLoad;
-  dosLoad = new Promise<void>((resolve, reject) => {
-    const css = document.createElement("link");
-    css.rel = "stylesheet";
-    css.href = "/doom/js-dos.css";
-    document.head.appendChild(css);
-    const js = document.createElement("script");
-    js.src = "/doom/js-dos.js";
-    js.onload = () => resolve();
-    js.onerror = () => reject(new Error("js-dos failed to load"));
-    document.head.appendChild(js);
-  });
+  const style = document.createElement("style");
+  document.head.appendChild(style);
+  const css =
+    typeof CSSScopeRule === "undefined"
+      ? Promise.reject(new Error("no @scope"))
+      : fetch("/doom/js-dos.css")
+          .then((r) => (r.ok ? r.text() : Promise.reject(new Error("css"))))
+          .then((t) => void (style.textContent = scopeCss(t, ".jsdos-host")));
+  dosLoad = css
+    // an older browser: the layer alone still keeps the resets under the OS's own styles
+    .catch(() => void (style.textContent = '@import url("/doom/js-dos.css") layer(jsdos);'))
+    .then(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const js = document.createElement("script");
+          js.src = "/doom/js-dos.js";
+          js.onload = () => resolve();
+          js.onerror = () => reject(new Error("js-dos failed to load"));
+          document.head.appendChild(js);
+        }),
+    );
   return dosLoad;
 }
 
@@ -787,7 +822,7 @@ function Doom() {
     <div className="on-dark relative flex h-full min-h-[320px] flex-col bg-black">
       <Toolbar title={<span className="text-white/85">DOOM</span>} sub={<span className="text-white/40">Shareware v1.9</span>} />
       <div className="relative min-h-[280px] flex-1">
-        <div ref={ref} className="absolute inset-0" />
+        <div ref={ref} className="jsdos-host absolute inset-0" />
         {!started && (
           // a title card: the icon, the name in heavy type, the episode, one clear button and the keys
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[radial-gradient(70%_60%_at_50%_42%,#3a0d08_0%,#120403_55%,#000_100%)] px-6 text-center">

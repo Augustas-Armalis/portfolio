@@ -1,3 +1,7 @@
+/* js-dos ships a Tailwind 3 build whose unlayered resets (*, ::before { --tw-translate-x: 0 } and friends) would
+   override every transform utility in the OS once DOOM loads. It is imported into this layer, declared first so
+   it sits under everything else. */
+@layer jsdos;
 @import "tailwindcss";
 
 /* hover only where hover exists */

@@ -276,6 +276,13 @@ export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[
   }, [index, items.length, onClose, onIndex]);
   const many = items.length > 1 && !!onIndex;
   const [zoomed, setZoomed] = useState(false);
+  // the phone viewer is black to the top edge: the status bar turns white over it
+  const open = index !== null;
+  useEffect(() => {
+    if (!compact || !open) return;
+    useOS.getState().setHeroDark(true);
+    return () => useOS.getState().setHeroDark(false);
+  }, [compact, open]);
   if (compact)
     return (
       <AnimatePresence>
@@ -288,7 +295,7 @@ export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[
             transition={{ duration: 0.16 }}
             className="fixed inset-0 z-[2400] flex flex-col bg-black"
           >
-            <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={onClose} icon={<X size={17} className="bold" />} className="absolute right-4 top-[calc(env(safe-area-inset-top)+58px)] z-10 !h-9 !w-9" />
+            <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={onClose} icon={<X size={17} className="bold" />} className="absolute right-4 top-[calc(env(safe-area-inset-top)+58px)] z-10 !h-11 !w-11" />
             <motion.div
               drag={many && !zoomed ? "x" : false}
               dragConstraints={{ left: 0, right: 0 }}
@@ -302,7 +309,7 @@ export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[
             >
               {it.node ?? (it.src && <ZoomImage key={it.src} src={it.src} alt={it.title} onZoom={setZoomed} />)}
             </motion.div>
-            <div className="pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-center text-[15px] font-semibold text-white">
+            <div className="pb-[calc(env(safe-area-inset-bottom)+44px)] pt-3 text-center text-[15px] font-semibold text-white">
               {it.title}
               {many && <span className="ml-2 font-normal text-white/50">{`${index + 1} of ${items.length}`}</span>}
             </div>

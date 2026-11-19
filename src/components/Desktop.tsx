@@ -1455,7 +1455,7 @@ function Welcome() {
             {owner.role} from {owner.city}.
           </p>
           <p className={`t-sub mt-3 [text-wrap:pretty] ${dark ? "text-white/75" : "text-ink-2"}`}>
-            This is my portfolio, built as a small operating system. The music playing is mine. The work is in the Projects folder.
+            This is my portfolio, built as a small operating system. The music in Records is mine. The work is in the Projects folder.
           </p>
           <div className="mt-4 flex gap-2">
             <Btn variant="prominent" capsule onClick={() => open("projects")}>
