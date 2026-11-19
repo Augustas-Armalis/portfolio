@@ -266,7 +266,7 @@ function AppsOverlay({ user }: { user: UserId }) {
               <Search size={14} />
               <input id="apps-search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/55" />
             </label>
-            <div className="mt-[7vh] grid w-[min(980px,86vw)] grid-cols-[repeat(auto-fill,minmax(120px,1fr))] justify-items-center gap-y-9">
+            <div className="mt-[7vh] flex w-[min(1000px,86vw)] flex-wrap justify-center gap-x-3 gap-y-9">
               {list.map((id, i) => (
                 <motion.button
                   type="button"
@@ -294,6 +294,68 @@ function AppsOverlay({ user }: { user: UserId }) {
   );
 }
 
+// A live thumbnail of a window: a clone of its DOM, scaled down with a transform. Cheap (no canvas capture), and it
+// shows exactly what the window shows. An embedded site can't be cloned without loading it again, so its frame is
+// swapped for the project's picture; a canvas gets its pixels copied across.
+const THUMB_W = 400;
+const THUMB_H = 236;
+function WindowThumb({ id }: { id: AppId }) {
+  const host = useRef<HTMLDivElement>(null);
+  const fallback = apps[id].size;
+  const [box, setBox] = useState(() => {
+    const k = Math.min(THUMB_W / Math.max(fallback.w, 1), THUMB_H / Math.max(fallback.h, 1));
+    return { w: Math.round(fallback.w * k), h: Math.round(fallback.h * k), live: false };
+  });
+  useLayoutEffect(() => {
+    const el = host.current;
+    const src = document.querySelector<HTMLElement>(`[data-win="${id}"]`);
+    if (!el || !src) return;
+    const sw = src.offsetWidth;
+    const sh = src.offsetHeight;
+    if (!sw || !sh) return;
+    const k = Math.min(THUMB_W / sw, THUMB_H / sh);
+    const clone = src.cloneNode(true) as HTMLElement;
+    // remember where each scroller was, and carry canvas pixels over, while the two trees still line up
+    const a = src.querySelectorAll<HTMLElement>("*");
+    const b = clone.querySelectorAll<HTMLElement>("*");
+    const scrolls: [HTMLElement, number][] = [];
+    a.forEach((n, i) => {
+      if (n.scrollTop > 0 && b[i]) scrolls.push([b[i], n.scrollTop]);
+      if (n instanceof HTMLCanvasElement && b[i] instanceof HTMLCanvasElement) {
+        try {
+          (b[i] as HTMLCanvasElement).getContext("2d")?.drawImage(n, 0, 0);
+        } catch {}
+      }
+    });
+    const art = projects[id]?.image;
+    clone.querySelectorAll("iframe").forEach((f) => {
+      const still = document.createElement("div");
+      still.style.cssText = `position:absolute;inset:0;background:${art ? `url(${art}) center top / cover` : "var(--bg)"}`;
+      f.replaceWith(still);
+    });
+    clone.querySelectorAll("audio,video,script").forEach((n) => n.remove());
+    clone.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
+    clone.removeAttribute("data-win");
+    clone.setAttribute("inert", "");
+    clone.setAttribute("aria-hidden", "true");
+    Object.assign(clone.style, { position: "absolute", left: "0", top: "0", width: `${sw}px`, height: `${sh}px`, transform: `scale(${k})`, transformOrigin: "0 0", opacity: "1", boxShadow: "none", pointerEvents: "none" });
+    el.replaceChildren(clone);
+    scrolls.forEach(([n, y]) => (n.scrollTop = y));
+    setBox({ w: Math.round(sw * k), h: Math.round(sh * k), live: true });
+    return () => el.replaceChildren();
+  }, [id]);
+  return (
+    <div className="relative overflow-hidden rounded-[inherit] bg-[var(--bg)]" style={{ width: box.w, height: box.h }}>
+      <div ref={host} className="absolute inset-0" />
+      {!box.live && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <AppIcon id={id} size={56} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MissionControl() {
   const overlay = useOS((s) => s.overlay);
   const setOverlay = useOS((s) => s.setOverlay);
@@ -310,42 +372,40 @@ function MissionControl() {
           exit={{ opacity: 0, transition: { duration: 0.16 } }}
           transition={{ duration: 0.22 }}
           onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}
-          className="absolute inset-0 z-[1800] flex flex-col items-center bg-black/30 px-10 pt-[9vh] [backdrop-filter:blur(30px)_saturate(1.5)]"
+          className="absolute inset-0 z-[1800] flex flex-col items-center bg-black/30 px-10 pt-[8vh] [backdrop-filter:blur(30px)_saturate(1.5)]"
         >
-          <div className="eyebrow text-white/60">{live.length ? `${live.length} open window${live.length > 1 ? "s" : ""}` : "No open windows"}</div>
-          <div className="mt-8 flex w-full max-w-[1100px] flex-wrap items-start justify-center gap-7">
-            {live.map((w, i) => {
-              const sz = apps[w.id].size;
-              const k = 200 / Math.max(sz.h, 1);
-              return (
-                <motion.div key={w.id} initial={{ opacity: 0, scale: 1.12 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", bounce: 0, duration: 0.45, delay: i * 0.03 }} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOverlay(null);
-                      open(w.id);
-                    }}
-                    data-sq=""
-                    style={{ width: Math.max(180, Math.min(340, sz.w * k)), height: 200 }}
-                    className="press flex flex-col items-center justify-center gap-3 rounded-[18px] bg-[var(--bg)] shadow-[0_0_0_0.5px_rgb(255_255_255/0.2),0_24px_50px_-18px_rgb(0_0_0/0.6)] outline-none transition-shadow hov:hover:shadow-[0_0_0_3px_var(--accent),0_24px_50px_-18px_rgb(0_0_0/0.6)]"
-                  >
-                    <AppIcon id={w.id} size={64} />
-                    <span className="m-headline text-ink">{apps[w.id].title}</span>
-                    {w.min && <span className="m-sub text-ink-3">Minimised</span>}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Close ${apps[w.id].title}`}
-                    onClick={() => close(w.id)}
-                    className="absolute -left-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-ink opacity-0 shadow-[var(--shadow-2)] transition-opacity hov:group-hover:opacity-100"
-                  >
-                    <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden>
-                      <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                </motion.div>
-              );
-            })}
+          <div className="eyebrow text-white/65">{live.length ? `${live.length} open window${live.length > 1 ? "s" : ""}` : "No open windows"}</div>
+          <div className="mt-8 flex w-full max-w-[1320px] flex-wrap items-start justify-center gap-x-8 gap-y-9" onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}>
+            {live.map((w, i) => (
+              <motion.div key={w.id} initial={{ opacity: 0, scale: 1.1 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", bounce: 0, duration: 0.45, delay: i * 0.03 }} className="group relative flex flex-col items-center gap-3">
+                <button
+                  type="button"
+                  aria-label={`Show ${apps[w.id].title}`}
+                  onClick={() => {
+                    setOverlay(null);
+                    open(w.id);
+                  }}
+                  className={`press sq-list relative rounded-[12px] shadow-[0_0_0_0.5px_rgb(255_255_255/0.22),0_24px_50px_-18px_rgb(0_0_0/0.65)] outline-none transition-shadow duration-150 hov:hover:shadow-[0_0_0_3px_var(--accent),0_24px_50px_-18px_rgb(0_0_0/0.65)] focus-visible:shadow-[0_0_0_3px_var(--accent),0_24px_50px_-18px_rgb(0_0_0/0.65)] ${w.min ? "opacity-70" : ""}`}
+                >
+                  <WindowThumb id={w.id} />
+                </button>
+                <div className="flex items-center gap-2">
+                  <AppIcon id={w.id} size={22} />
+                  <span className="text-[13px] font-medium text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.4)]">{apps[w.id].title}</span>
+                  {w.min && <span className="text-[12px] text-white/55">Minimised</span>}
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Close ${apps[w.id].title}`}
+                  onClick={() => close(w.id)}
+                  className="absolute -left-2.5 -top-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-ink opacity-0 shadow-[var(--shadow-2)] transition-opacity duration-150 focus-visible:opacity-100 hov:group-hover:opacity-100"
+                >
+                  <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden>
+                    <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </motion.div>
+            ))}
           </div>
         </motion.div>
       )}
@@ -728,6 +788,7 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
         }
         exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.14, ease: EASE_OUT } }}
         onAnimationComplete={() => win.min && setHidden(true)}
+        data-win={win.id}
         className={`win relative flex h-full w-full flex-col overflow-hidden ${focused ? "is-focused" : ""} ${win.max ? "is-max" : ""}`}
       >
         <div className="group/lights absolute left-[20px] top-[20px] z-[60] flex gap-[8px]" onPointerDown={(e) => e.stopPropagation()}>
