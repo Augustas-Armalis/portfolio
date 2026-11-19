@@ -10,7 +10,6 @@ import {
   useMotionValue,
   useSpring,
   useTransform,
-  useVelocity,
   type MotionValue,
 } from "motion/react";
 import { Lock, Search, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
@@ -917,23 +916,6 @@ function Dock() {
   const [order, setOrder] = useState<AppId[]>(dockApps);
   const [dragging, setDragging] = useState(false);
   const front = focusedApp(windows);
-  // the hover lens: a drop of clearer glass under the pointer. It follows on a spring and stretches with its speed.
-  // It is a plain highlight (no backdrop filter), so it costs nothing while it moves.
-  const row = useRef<HTMLDivElement>(null);
-  const lensTarget = useMotionValue(0);
-  const lensOn = useMotionValue(0);
-  const lensX = useSpring(lensTarget, { stiffness: 420, damping: 32, mass: 0.6 });
-  const lensV = useVelocity(lensX);
-  const lensStretch = useTransform(lensV, (v) => 1 + Math.min(0.38, Math.abs(v) / 2600));
-  const lensOpacity = useSpring(lensOn, { stiffness: 300, damping: 30 });
-  const moveLens = (clientX: number) => {
-    const r = row.current?.getBoundingClientRect();
-    if (!r) return;
-    const x = Math.max(6, Math.min(r.width - 62, clientX - r.left - 28));
-    if (lensOn.get() === 0) lensX.jump(x);
-    lensTarget.set(x);
-    lensOn.set(1);
-  };
   return (
     <motion.div
       initial={{ y: 90 }}
@@ -942,21 +924,12 @@ function Dock() {
       className="absolute bottom-[6px] left-1/2 z-[1900] -translate-x-1/2"
     >
       <div
-        ref={row}
-        onMouseMove={(e) => {
-          if (!fine || dragging) return;
-          mouseX.set(e.clientX);
-          if (!reducedMotion()) moveLens(e.clientX);
-        }}
-        onMouseLeave={() => {
-          mouseX.set(Infinity);
-          lensOn.set(0);
-        }}
+        onMouseMove={(e) => fine && !dragging && mouseX.set(e.clientX)}
+        onMouseLeave={() => mouseX.set(Infinity)}
         className="relative flex h-[66px] items-end gap-1 px-[7px] pb-[2px]"
       >
         {/* material on its own layer, so the tooltips above can blur the wallpaper too */}
         <div aria-hidden data-glass="" className={`${glass("dock")} pointer-events-none absolute inset-0 rounded-[24px]`} />
-        <motion.div aria-hidden style={{ x: lensX, scaleX: lensStretch, opacity: lensOpacity }} className="dock-lens pointer-events-none absolute bottom-[5px] left-0 h-[56px] w-[56px] rounded-[20px]" />
         <div className="relative">
           <DockIcon id="launchpad" mouseX={mouseX} running={false} dark={dark} dragging={false} />
         </div>
