@@ -45,3 +45,6 @@ public/assets/polyhaven/: wood_table_001, fabric_leather_02, leather_white (diff
 - public/assets/piano/*.mp3: Salamander Grand Piano samples by Alexander Holm (CC BY 3.0), via nbrosowsky/tonejs-instruments, https://github.com/nbrosowsky/tonejs-instruments
 
 - public/img/avatars/art-piano-falcos.jpg: Panagiotis Falcos, Unsplash Licence, https://unsplash.com/photos/XyEqiV99tMA
+
+## M. K. Čiurlionis paintings (public domain), added 19 Nov
+public/assets/ciurlionis/*.jpg, from Wikimedia Commons; each source page is listed in public/assets/ciurlionis/paintings.json.

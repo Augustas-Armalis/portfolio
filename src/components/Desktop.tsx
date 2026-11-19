@@ -17,9 +17,8 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { apps, desktopItems, labApps, mainWork, otherWork, owner, projects, sharedApps, users, type AppId, type DeskItem, type UserId } from "@/content";
 import { focusedApp, useOS, useWallpaper, type Win } from "@/store";
-import { AppIcon, AppView } from "./Apps";
+import { AppIcon, AppView, LiveWallpaper } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
-import MusicShader from "./scene/MusicShader";
 import { PowerOverlay } from "./Login";
 import { Chrome, EASE_OUT, FILE_MIME, QuickLook, Segmented, glass, sfx, useContextMenu, useGlassScope, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
@@ -342,11 +341,12 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
   const areaSize = () => ({ W: area.current?.clientWidth ?? window.innerWidth, H: area.current?.clientHeight ?? window.innerHeight - 24 });
   const [rect, setRect] = useState<Rect>(() => {
     const { W, H } = areaSize();
-    const w = Math.min(size.w, W - 24);
-    const h = Math.min(size.h, H - DOCK_SPACE - 16);
-    // cascade from the centre, wrapping before it walks off screen
+    // the designed size, never more than 88% of the space; the first window sits dead centre (a touch above, like
+    // macOS), later ones cascade down-right from it
+    const w = Math.round(Math.min(size.w, (W - 24) * 0.88));
+    const h = Math.round(Math.min(size.h, (H - DOCK_SPACE - 16) * 0.94));
     const step = index % 6;
-    return clampRect({ left: Math.round((W - w) / 2 - 60 + step * 32), top: Math.round((H - DOCK_SPACE - h) / 2 - 30 + step * 26), w, h }, W, H);
+    return clampRect({ left: Math.round((W - w) / 2 + step * 28), top: Math.round((H - DOCK_SPACE - h) * 0.42 + step * 24), w, h }, W, H);
   });
   const [hidden, setHidden] = useState(false);
   // zoom is a FLIP: the window jumps to its new frame, then a transform carries it from the old one (no animated layout)
@@ -800,7 +800,7 @@ function Spotlight({ user }: { user: UserId }) {
 
 // ---------- desktop icons: a right-hand column like files on a Mac desktop ----------
 
-const CELL_W = 92;
+const CELL_W = 108;
 const CELL_H = 106;
 const EDGE = 10;
 type Cell = { c: number; r: number };
@@ -1086,14 +1086,14 @@ function DesktopIcons({ user, area }: { user: UserId; area: RefObject<HTMLDivEle
               setMenu({ x: e.clientX - b.left, y: e.clientY - b.top, id: it.id });
             }}
             style={{ left: p.left, top: p.top, x: on ? dx : 0, y: on ? dy : 0 }}
-            className="absolute flex w-[92px] flex-col items-center gap-[3px] pt-1 outline-none"
+            className="absolute flex w-[108px] flex-col items-center gap-[3px] pt-1 outline-none"
           >
             <span className={`flex h-[72px] w-[72px] items-center justify-center rounded-[6px] ${on ? "bg-black/[0.22] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]" : ""}`}>
               <DeskArt item={it} />
             </span>
             <span
-              className={`line-clamp-2 max-w-[88px] rounded-[4px] px-[5px] py-px text-center text-[12px] font-medium leading-[15px] tracking-[-0.003em] [text-wrap:balance] ${
-                on ? "bg-[#0A84FF] text-white" : dark ? "text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.55),0_0_1px_rgb(0_0_0/0.4)]" : "text-[#1a1b1e] [text-shadow:0_0_6px_rgb(255_255_255/0.9),0_0_2px_rgb(255_255_255/0.9)] dark:text-white dark:[text-shadow:0_1px_2px_rgb(0_0_0/0.6)]"
+              className={`line-clamp-2 max-w-[104px] rounded-[4px] px-[5px] py-px text-center text-[12px] font-medium leading-[15px] [text-wrap:balance] ${
+                on ? "bg-[#0A84FF] text-white" : dark ? "text-white [text-shadow:0_1px_1px_rgb(0_0_0/0.75)]" : "text-[#1a1b1e] [text-shadow:0_0_3px_rgb(255_255_255/0.95)] dark:text-white dark:[text-shadow:0_1px_1px_rgb(0_0_0/0.75)]"
               }`}
             >
               {it.name}
@@ -1202,11 +1202,7 @@ export default function Desktop({ user }: { user: UserId }) {
   }, []);
   return (
     <div className="wp-photo absolute inset-0 select-none overflow-hidden" style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}>
-      {wp.src.startsWith("live:") && (
-        <div className="absolute inset-0">
-          <MusicShader palette="night" />
-        </div>
-      )}
+      {wp.src.startsWith("live:") && <LiveWallpaper />}
       <MenuBar user={user} />
       {/* isolate: windows stack among themselves, always under the menu bar and the dock */}
       <div ref={area} id="os-window-layer" className="absolute inset-x-0 bottom-0 top-[24px] isolate">

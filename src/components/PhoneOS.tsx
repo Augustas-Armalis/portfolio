@@ -4,13 +4,12 @@ import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransfo
 import { useEffect, useRef, useState } from "react";
 import { apps, projects, sharedApps, tracks, users, type AppId, type UserId } from "@/content";
 import { useOS, useWallpaper } from "@/store";
-import { AppIcon, AppView, player, usePlayer } from "./Apps";
+import { AppIcon, AppView, LiveWallpaper, player, usePlayer } from "./Apps";
 import { Bars } from "./Desktop";
 import { Avatar, LoginBackdrop, PowerOverlay } from "./Login";
 import { Glyph, ICONS, iconBackground } from "./icons";
 import { Check, Pause, Play, X } from "lucide-react";
 import { Chrome, EASE_OUT, glass, useGlassScope } from "./ui";
-import MusicShader from "./scene/MusicShader";
 import { useClock, useDate } from "./useClock";
 
 // iPhone-style OS: lock screen that lifts away, a home screen of icons, and apps
@@ -261,11 +260,7 @@ function Home({ user, onOpen }: { user: UserId; onOpen: (id: AppId, o: Origin) =
   const dock: AppId[] = [...sharedApps, "about"];
   return (
     <div className="wp-photo absolute inset-0 flex flex-col" style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}>
-      {wp.src.startsWith("live:") && (
-        <div className="absolute inset-0">
-          <MusicShader palette="night" />
-        </div>
-      )}
+      {wp.src.startsWith("live:") && <LiveWallpaper />}
       <div className="relative px-5 pt-[calc(env(safe-area-inset-top)+64px)]">
         <button
           type="button"
@@ -309,7 +304,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
   const bar = useTransform(scrollY, [24, 44], [0, 1]);
   const big = useTransform(scrollY, [0, 36], [1, 0]);
   return (
-    <div className={`absolute inset-0 ${ground}`}>
+    <div className={`phone-app absolute inset-0 ${ground}`}>
       <motion.div
         style={{ opacity: bar }}
         data-glass=""
@@ -429,7 +424,7 @@ function AppWindow({ id, origin, onClosed }: { id: AppId; origin: Origin | null;
   const grouped = ["work", "taste", "settings", "contact", "records", "lab"].includes(id);
   const ground = darkApp ? "bg-[#1C1D20] text-white" : grouped ? "bg-[#F2F2F7] text-ink" : "bg-white text-ink";
   return (
-    <motion.div className="absolute inset-0 z-[60] will-change-transform" style={{ x, y, scale, clipPath }}>
+    <motion.div className="phone-app absolute inset-0 z-[60] will-change-transform" style={{ x, y, scale, clipPath }}>
       <div className={`absolute inset-0 ${ground}`} />
       <motion.div style={{ opacity: contentOpacity }} className="absolute inset-0">
         <AppScroll id={id} ground={ground} dark={darkApp} onClose={() => (to(0))} />

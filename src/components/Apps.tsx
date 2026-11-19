@@ -31,6 +31,7 @@ import {
   Trash2,
   Undo2,
   Users,
+  Volume1,
   Volume2,
   Wallpaper,
   Contrast,
@@ -927,6 +928,9 @@ export const player = {
     el.currentTime = sec;
     pset({ t: sec });
   },
+  volume(v: number) {
+    audioEl().volume = Math.max(0, Math.min(1, v));
+  },
   stop() {
     if (!media) return;
     media.pause();
@@ -1001,20 +1005,66 @@ function Transport({ size = 1 }: { size?: number }) {
   );
 }
 
+// The live shader, with a still photo under it: if WebGL is missing or its context is lost, the photo shows
+// instead of a blank canvas.
+export function LiveWallpaper({ fallback = "/wallpapers/art-bernd-dittrich.jpg", intensity = 1 }: { fallback?: string; intensity?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [ok, setOk] = useState(true);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const lost = () => setOk(false);
+    let canvas: HTMLCanvasElement | null = null;
+    const t = window.setTimeout(() => {
+      canvas = root.querySelector("canvas");
+      if (!canvas) return setOk(false);
+      const gl = (canvas.getContext("webgl") ?? canvas.getContext("webgl2")) as WebGLRenderingContext | null;
+      if (!gl || gl.isContextLost()) return setOk(false);
+      canvas.addEventListener("webglcontextlost", lost);
+    }, 400);
+    return () => {
+      window.clearTimeout(t);
+      canvas?.removeEventListener("webglcontextlost", lost);
+    };
+  }, []);
+  return (
+    <div ref={ref} className="absolute inset-0 bg-[#070b16] bg-cover bg-center" style={{ backgroundImage: `url(${fallback})` }}>
+      {ok && (
+        <div className="absolute inset-0">
+          <MusicShader intensity={intensity} palette="night" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// the artwork's own colours, blurred, behind everything; the shader joins in while music plays
+function MusicBackdrop() {
+  const p = usePlayer();
+  const lead = trackOf(p.id) ?? tracks[0];
+  return (
+    <div className="absolute inset-0 overflow-hidden bg-[#0b0c10]">
+      <AnimatePresence initial={false}>
+        <motion.div key={lead.cover} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }} className="absolute inset-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={lead.cover} alt="" className="absolute inset-[-20%] h-[140%] w-[140%] object-cover blur-[70px] saturate-[1.7]" />
+        </motion.div>
+      </AnimatePresence>
+      <motion.div className="absolute inset-0 mix-blend-screen" animate={{ opacity: p.playing ? 0.55 : 0 }} transition={{ duration: 0.8 }}>
+        {p.playing && <LiveWallpaper fallback={lead.cover} />}
+      </motion.div>
+      <div className="absolute inset-0 bg-black/40" />
+    </div>
+  );
+}
+
 function NowPlaying({ compact }: { compact: boolean }) {
   const p = usePlayer();
   const lead = trackOf(p.id) ?? tracks[0];
   return (
     <div className="relative flex h-full flex-col overflow-hidden text-white">
-      {/* the artwork's own colours, blurred, behind everything */}
-      <AnimatePresence initial={false}>
-        <motion.div key={lead.cover} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }} className="absolute inset-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lead.cover} alt="" className="absolute inset-[-20%] h-[140%] w-[140%] object-cover blur-[60px] saturate-[1.6]" />
-          <div className="absolute inset-0 bg-black/35" />
-        </motion.div>
-      </AnimatePresence>
-      <div className={`relative flex flex-1 flex-col ${compact ? "px-7 pb-10 pt-[calc(env(safe-area-inset-top)+70px)]" : "justify-center px-8 py-8"}`}>
+      {compact && <MusicBackdrop />}
+      <div className={`relative flex flex-1 flex-col ${compact ? "px-7 pb-10 pt-[calc(env(safe-area-inset-top)+70px)]" : "justify-center px-10 py-8"}`}>
         <motion.img
           key={lead.id}
           src={lead.cover}
@@ -1022,24 +1072,99 @@ function NowPlaying({ compact }: { compact: boolean }) {
           draggable={false}
           animate={{ scale: p.playing || !p.id ? 1 : 0.86 }}
           transition={{ type: "spring", bounce: 0.25, duration: 0.6 }}
-          className={`mx-auto aspect-square w-full object-cover shadow-[0_30px_60px_-20px_rgb(0_0_0/0.6)] ${compact ? "max-w-[320px] rounded-[12px]" : "max-w-[280px] rounded-[10px]"}`}
+          data-sq=""
+          className={`mx-auto aspect-square w-full object-cover shadow-[0_30px_60px_-20px_rgb(0_0_0/0.6)] ${compact ? "max-w-[320px] rounded-[14px]" : "max-w-[340px] rounded-[14px]"}`}
         />
-        <div className={`mx-auto w-full ${compact ? "mt-9 max-w-[320px]" : "mt-6 max-w-[280px]"}`}>
+        <div className={`mx-auto w-full ${compact ? "mt-9 max-w-[320px]" : "mt-7 max-w-[340px]"}`}>
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">
-              <div className={`truncate font-semibold tracking-[-0.02em] ${compact ? "text-[20px]" : "text-[17px]"}`}>{lead.title}</div>
-              <div className={`truncate text-white/60 ${compact ? "text-[17px]" : "text-[13px]"}`}>{lead.artist}</div>
+              <div className="truncate text-[20px] font-semibold tracking-[-0.02em]">{lead.title}</div>
+              <div className={`truncate text-white/60 ${compact ? "text-[17px]" : "text-[15px]"}`}>{lead.artist}</div>
             </div>
             {!lead.confirmed && <span className="m-sub shrink-0 rounded-[6px] bg-white/15 px-1.5 py-0.5 text-white/80">Unreleased</span>}
           </div>
           <div className="mt-4">
             <Scrubber />
           </div>
-          <div className="mt-4">
-            <Transport size={compact ? 1 : 0.8} />
+          <div className="mt-3">
+            <Transport size={compact ? 1 : 0.85} />
           </div>
+          <VolumeSlider />
         </div>
       </div>
+    </div>
+  );
+}
+
+function VolumeSlider() {
+  const [v, setV] = useState(1);
+  return (
+    <div className="mt-5 flex items-center gap-2.5 text-white/70">
+      <Volume1 size={15} />
+      <input
+        type="range"
+        aria-label="Volume"
+        min={0}
+        max={1}
+        step={0.01}
+        value={v}
+        onChange={(e) => {
+          setV(+e.target.value);
+          player.volume(+e.target.value);
+        }}
+        className="scrub scrub-light min-w-0 flex-1"
+        style={{ ["--p" as string]: `${v * 100}%` }}
+      />
+      <Volume2 size={15} />
+    </div>
+  );
+}
+
+// Up Next on the same surface: large type on a translucent material, the current piece lit
+function GlassQueue() {
+  const p = usePlayer();
+  return (
+    <div data-drag className="relative flex h-full flex-col overflow-auto border-l border-white/10 bg-white/[0.07] px-6 pb-6 pt-[60px] text-white [backdrop-filter:blur(30px)_saturate(1.6)]">
+      <div className="eyebrow mb-3 text-white/50">Up Next</div>
+      <div className="space-y-1">
+        {tracks.map((t) => {
+          const on = p.id === t.id;
+          return (
+            <button
+              type="button"
+              key={t.id}
+              onClick={() => player.toggle(t.id)}
+              className={`press group flex w-full items-center gap-3.5 rounded-[14px] p-2.5 text-left transition-colors duration-150 ${on ? "bg-white/[0.14]" : "hov:hover:bg-white/[0.08]"}`}
+              data-sq=""
+            >
+              <span className="relative shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={t.cover} alt="" className="h-14 w-14 rounded-[9px] object-cover shadow-[0_6px_16px_-6px_rgb(0_0_0/0.6)]" />
+                {on && p.playing && (
+                  <span className="absolute inset-0 flex items-center justify-center rounded-[9px] bg-black/45">
+                    <Bars light />
+                  </span>
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={`block truncate text-[17px] tracking-[-0.02em] ${on ? "font-semibold" : "font-medium text-white/90"}`}>{t.title}</span>
+                <span className="block truncate text-[13px] text-white/55">{t.note}</span>
+              </span>
+              <span className="text-[13px] tabular-nums text-white/50">{t.durationLabel}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-auto pt-8 text-[22px] font-semibold leading-[1.25] tracking-[-0.02em] text-white/35 [text-wrap:balance]">
+        Music written for the novel <span className="text-white/70">{novel.title}</span>.
+      </p>
+      {art.spotify.href && (
+        <div className="mt-4">
+          <Btn variant="glass-dark" capsule href={art.spotify.href} icon={<ArrowUpRight size={14} />}>
+            Spotify
+          </Btn>
+        </div>
+      )}
     </div>
   );
 }
@@ -1095,11 +1220,14 @@ function Records() {
   useEffect(() => () => void (!useOS.getState().isMobile && player.stop()), []);
   if (!compact)
     return (
-      <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <div data-drag className="min-h-0">
-          <NowPlaying compact={false} />
+      <div className="relative h-full min-h-0">
+        <MusicBackdrop />
+        <div className="relative grid h-full min-h-0 grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div data-drag className="min-h-0">
+            <NowPlaying compact={false} />
+          </div>
+          <GlassQueue />
         </div>
-        <Queue compact={false} />
       </div>
     );
   return (
@@ -2014,7 +2142,7 @@ function SettingsApp() {
                               : "linear-gradient(90deg,#e7eaf0 50%,#1a1c22 50%)",
                       }}
                     >
-                      <span className={`absolute left-[12%] top-[16%] h-[54%] w-[64%] rounded-[5px] shadow-[0_4px_10px_-4px_rgb(0_0_0/0.4)] ${l.v === "dark" ? "bg-[#2c2c2e]" : "bg-white"}`}>
+                      <span className={`absolute left-[12%] top-[16%] h-[54%] w-[64%] rounded-[5px] shadow-[0_4px_10px_-4px_rgb(0_0_0/0.4)] ${l.v === "dark" ? "bg-[#2c2c2e]" : "bg-[#fff]"}`}>
                         <span className="absolute left-[6px] top-[5px] flex gap-[3px]">
                           {["#FF5F57", "#FEBC2E", "#28C840"].map((c) => (
                             <span key={c} className="h-[5px] w-[5px] rounded-full" style={{ background: c }} />
@@ -2099,7 +2227,7 @@ function SettingsApp() {
       sections={[
         {
           items: [
-            { id: "appearance", label: "Appearance", icon: tile("#1C1C1E", <Contrast size={sz} />) },
+            { id: "appearance", label: "Appearance", icon: tile("#48484A", <Contrast size={sz} />) },
             { id: "wallpaper", label: "Wallpaper", icon: tile("#32ADE6", <Wallpaper size={sz} />) },
             { id: "sound", label: "Sound", icon: tile("#FF2D55", <Volume2 size={sz} />) },
             { id: "users", label: "Users", icon: tile("#8E8E93", <Users size={sz} />) },
