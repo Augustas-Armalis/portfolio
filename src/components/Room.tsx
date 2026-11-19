@@ -1728,11 +1728,12 @@ export default function Room({
         style={{ opacity: introDone && q.post === 0 && (stage === "idle" || mode !== "none") ? 1 : 0, background: "radial-gradient(120% 95% at 50% 45%, transparent 55%, rgb(10 10 14 / 0.3) 100%)" }}
       />
 
-      <div className="pointer-events-none absolute inset-0 transition-opacity duration-500" style={{ opacity: idle ? 1 : 0 }}>
-        <div className="absolute inset-x-0 bottom-8 flex justify-center px-4">
+      {/* the hint speaks of the desk: it steps aside while walking the field, and on a narrow window it keeps to the right, clear of the controls */}
+      <div className="pointer-events-none absolute inset-0 transition-opacity duration-500" style={{ opacity: idle && nav === "orbit" ? 1 : 0 }}>
+        <div className="absolute inset-x-0 bottom-8 flex justify-center px-4 sm:max-lg:justify-end">
           <Glass className="flex h-9 items-center gap-2 px-4 text-[13px] font-medium">
             <span>{introOff ? (isMobile ? "Tap the phone to power on" : "Click the display to power on") : isMobile ? "Tap the phone to start" : "Click the display to start"}</span>
-            <span className="hidden text-white/65 sm:inline">or try anything on the desk</span>
+            <span className="hidden text-white/65 md:inline">or try anything on the desk</span>
           </Glass>
         </div>
       </div>
