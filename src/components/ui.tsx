@@ -130,8 +130,8 @@ export function Toolbar({ title, sub, children, inset }: { title?: ReactNode; su
       className={`toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-black/[0.06] pr-3 ${pad ? "pl-[84px]" : "pl-5"}`}
     >
       <div className="min-w-0 flex-1">
-        {title && <div className="truncate text-[13px] font-semibold leading-[16px] tracking-[-0.003em] text-ink">{title}</div>}
-        {sub && <div className="truncate text-[11px] leading-[14px] text-ink-3">{sub}</div>}
+        {title && <div className="toolbar-title truncate text-ink">{title}</div>}
+        {sub && <div className="truncate text-[11px] leading-[14px] text-ink-2">{sub}</div>}
       </div>
       {children}
     </div>
@@ -145,7 +145,7 @@ export function SearchField({ value, onChange, placeholder = "Search", id }: { v
     <label
       htmlFor={id}
       className={`search flex shrink-0 items-center gap-1.5 text-ink-3 ${
-        compact ? "h-9 w-full rounded-[10px] bg-[#767680]/[0.12] px-2" : "h-7 w-[168px] rounded-[6px] bg-black/[0.05] px-2 focus-within:ring-[3px] focus-within:ring-[#0A84FF]/30"
+        compact ? "h-9 w-full rounded-[10px] bg-[#767680]/[0.12] px-2" : "h-8 w-[190px] rounded-full bg-black/[0.05] px-2.5 focus-within:ring-[3px] focus-within:ring-[var(--accent)]/30"
       }`}
     >
       <Search size={compact ? 16 : 13} strokeWidth={2} className="shrink-0" />

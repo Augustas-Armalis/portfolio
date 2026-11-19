@@ -10,6 +10,7 @@ import {
   Music,
   Gamepad2,
   Image as ImageIcon,
+  Images,
   Layers,
   Send,
   LayoutGrid,
@@ -34,11 +35,11 @@ import { marks } from "./marks";
 type Spec = { bg: [string, string]; glyph: LucideIcon | `mark:${string}`; fg: "light" | "dark" };
 
 export const ICONS: Record<AppId, Spec> = {
-  work: { bg: ["#3d424e", "#15171c"], glyph: Briefcase, fg: "light" },
-  shots: { bg: ["#7d93ff", "#3a52d4"], glyph: LayoutGrid, fg: "light" },
-  taste: { bg: ["#ffffff", "#dfe2e8"], glyph: Palette, fg: "dark" },
-  kit: { bg: ["#a7afbf", "#646d80"], glyph: Component, fg: "light" },
-  larpo: { bg: ["#33456a", "#121a2a"], glyph: Aperture, fg: "light" },
+  work: { bg: ["#ffb347", "#ff7417"], glyph: Briefcase, fg: "light" },
+  shots: { bg: ["#ff7fb5", "#ee2f7c"], glyph: Images, fg: "light" },
+  taste: { bg: ["#62e08c", "#1bb04f"], glyph: Palette, fg: "light" },
+  kit: { bg: ["#52d9ea", "#0c9bc2"], glyph: Component, fg: "light" },
+  larpo: { bg: ["#44598c", "#141d33"], glyph: Aperture, fg: "light" },
   lunor: { bg: ["#2a2a31", "#060607"], glyph: "mark:lunor", fg: "light" },
   capto: { bg: ["#ffffff", "#e3e5ea"], glyph: "mark:capto", fg: "dark" },
   contles: { bg: ["#6c7bff", "#3443d8"], glyph: "mark:contles", fg: "light" },
@@ -54,14 +55,14 @@ export const ICONS: Record<AppId, Spec> = {
   records: { bg: ["#ff5f7a", "#e5203f"], glyph: Music, fg: "light" },
   piano: { bg: ["#ffffff", "#dfe2e8"], glyph: Piano, fg: "dark" },
   novel: { bg: ["#ffb057", "#e8721f"], glyph: BookOpen, fg: "light" },
-  gallery: { bg: ["#ffffff", "#e6e8ee"], glyph: Flower2, fg: "dark" },
-  about: { bg: ["#ffffff", "#dfe2e8"], glyph: UserRound, fg: "dark" },
+  gallery: { bg: ["#5cdcd0", "#0e9fa6"], glyph: Flower2, fg: "light" },
+  about: { bg: ["#8eaad4", "#48649a"], glyph: UserRound, fg: "light" },
   contact: { bg: ["#5ac8ff", "#0a6cf0"], glyph: Mail, fg: "light" },
   terminal: { bg: ["#2f3137", "#0d0e10"], glyph: SquareTerminal, fg: "light" },
   game: { bg: ["#4cd97b", "#1f9d4a"], glyph: Gamepad2, fg: "light" },
-  settings: { bg: ["#b3b8c2", "#6b717c"], glyph: Settings, fg: "light" },
+  settings: { bg: ["#c2c7d1", "#737a86"], glyph: Settings, fg: "light" },
   trash: { bg: ["#f4f5f7", "#d9dce2"], glyph: Trash2, fg: "dark" },
-  launchpad: { bg: ["#8fa2b8", "#4d5d73"], glyph: LayoutGrid, fg: "light" },
+  launchpad: { bg: ["#a08fff", "#5a41ee"], glyph: LayoutGrid, fg: "light" },
 };
 
 export function iconBackground(id: AppId) {
