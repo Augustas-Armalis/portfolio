@@ -13,7 +13,7 @@ import { WORLDS, groundAt, heightAt } from "./voyage";
 // and nearer, bends to pick a flower. White birds cross the sky.
 
 const def = WORLDS.paradise;
-export const PARADISE_PAL: GroundPalette = { a: [0.17, 0.3, 0.07], b: [0.3, 0.36, 0.09], c: [0.12, 0.26, 0.08], shore: [0.74, 0.6, 0.3] };
+export const PARADISE_PAL: GroundPalette = { a: [0.12, 0.24, 0.055], b: [0.23, 0.29, 0.075], c: [0.09, 0.2, 0.065], shore: [0.62, 0.5, 0.25] };
 
 // the steps curve round the meadow: arcs about this point
 export const STEPS = { x: 60, z: -60, r0: 150, tread: 9.5, rise: 2.3, n: 13, y0: 7, a0: -1.95, a1: 0.62 };
@@ -117,10 +117,18 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
         count,
         (_, q) => {
           for (let tries = 0; tries < 12; tries++) {
-            const a = STEPS.a0 - 0.3 + q() * (STEPS.a1 - STEPS.a0 + 1.2);
-            const d = Math.pow(q(), 0.7) * (STEPS.r0 - 4);
-            const x = STEPS.x + Math.cos(a) * d + (q() - 0.5) * 40;
-            const z = STEPS.z + Math.sin(a) * d + (q() - 0.5) * 40 + 60;
+            let x: number;
+            let z: number;
+            if (q() < 0.42) {
+              // down the meadow beside the way in, in drifts
+              z = 470 - q() * 430;
+              x = 60 + (q() + q() - 1) * 70 + Math.sin(z * 0.05) * 16;
+            } else {
+              const a = STEPS.a0 - 0.3 + q() * (STEPS.a1 - STEPS.a0 + 1.2);
+              const d = Math.pow(q(), 0.7) * (STEPS.r0 - 4);
+              x = STEPS.x + Math.cos(a) * d + (q() - 0.5) * 40;
+              z = STEPS.z + Math.sin(a) * d + (q() - 0.5) * 40 + 60;
+            }
             if (!dry(x, z)) continue;
             return [x, g(x, z) + 0.5 + q() * 0.35, z, 0.5 + q() * 0.9];
           }
@@ -128,7 +136,7 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
         },
         seed,
       );
-    const nF = props.mobile ? 900 : Math.round(2600 * (0.5 + 0.5 * props.effects));
+    const nF = props.mobile ? 1300 : Math.round(4200 * (0.5 + 0.5 * props.effects));
     // low mist far out over the lake
     const puffs: Puff[] = [];
     for (let i = 0; i < 10; i++) puffs.push({ p: [-420 - r() * 260, 7 + r() * 5, 200 - r() * 520], size: 70 + r() * 60, a: 0.5 });

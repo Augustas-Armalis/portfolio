@@ -416,7 +416,7 @@ export function makeHaloMaterial(kind: 0 | 1 | 2 = 0) {
         mv.xy += position.xy * aPos.w * breathe;
         vUv = position.xy; vCol = aCol;
         // never a white-out when the plane flies through one
-        vFade = smoothstep(aPos.w * 0.15, aPos.w * 1.2, d);
+        vFade = smoothstep(2.0 + aPos.w * 0.2, 12.0 + aPos.w * 1.1, d);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */ `

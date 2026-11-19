@@ -19,7 +19,7 @@ export const SUN_PAL: GroundPalette = { a: [0.27, 0.215, 0.07], b: [0.36, 0.27, 
 const STONE: V3 = [0.14, 0.2, 0.33];
 const STONE_TOP: V3 = [0.22, 0.3, 0.44];
 const DARK: V3 = [0.06, 0.09, 0.19];
-const GOLD: V3 = [1.0, 0.76, 0.3];
+const GOLD: V3 = [1.0, 0.7, 0.22];
 
 // the bells: [x, z, radius at the foot, height]
 export const BELLS: [number, number, number, number][] = [
@@ -169,15 +169,15 @@ export default function SunWorld({ props }: { props: WorldProps }) {
     {
       const [x, z, R, H] = BELLS[3];
       const y0 = g(x, z);
-      suns.push({ p: [x - 8, y0 + H * 0.5, z + R * 0.96], size: 38, col: GOLD, k: 1.1 });
-      glows.push({ p: [x - 8, y0 + H * 0.5, z + R * 0.96], size: 80, col: [1, 0.66, 0.24], k: 0.14 });
+      suns.push({ p: [x - 8, y0 + H * 0.5, z + R * 0.96], size: 38, col: GOLD, k: 0.7 });
+      glows.push({ p: [x - 8, y0 + H * 0.5, z + R * 1.5], size: 44, col: [1, 0.66, 0.24], k: 0.12 });
     }
     // twin towers standing on the crown of the right-hand bell, a sun in the notch between them
     {
       const [x, z, , H] = BELLS[2];
       const y0 = g(x, z) + H - 14;
       const gh = gatehouse(k, x, z, 0.5, y0, 0.62);
-      suns.push({ p: gh.sun, size: gh.size * 1.5, col: GOLD, k: 1.0 });
+      suns.push({ p: gh.sun, size: gh.size * 1.5, col: GOLD, k: 0.75 });
     }
     // the gates on the way in
     const gates: [number, number, number, number][] = [
@@ -186,14 +186,14 @@ export default function SunWorld({ props }: { props: WorldProps }) {
     ];
     for (const [x, z, yaw, s] of gates) {
       const gh = gatehouse(k, x, z, yaw, g(x, z) - 1, s);
-      suns.push({ p: gh.sun, size: gh.size, col: GOLD, k: 1.0 });
+      suns.push({ p: gh.sun, size: gh.size, col: GOLD, k: 0.75 });
       glows.push({ p: gh.sun, size: gh.size * 3, col: [1, 0.68, 0.26], k: 0.14 });
     }
     // and the last pair, either side of the way out
     {
       const gate = gateOf("sun")!;
       const gh = gatehouse(k, gate.pos.x, gate.pos.z, gate.yaw, g(gate.pos.x, gate.pos.z) - 1, 1.5);
-      suns.push({ p: [gh.top[0], gh.top[1] + 16, gh.top[2]], size: 20, col: GOLD, k: 1.1 });
+      suns.push({ p: [gh.top[0], gh.top[1] + 16, gh.top[2]], size: 20, col: GOLD, k: 0.7 });
     }
     // arcades running out from the first gate
     if (!props.mobile) {
@@ -209,13 +209,13 @@ export default function SunWorld({ props }: { props: WorldProps }) {
         const z = 150 - i * 52 - row * 60 + (r() - 0.5) * 20;
         const y = g(x, z) + 46 + i * 11 + row * 22 + (r() - 0.5) * 10;
         const size = 13 + r() * 9 + (i === 3 ? 8 : 0);
-        suns.push({ p: [x, y, z], size, col: GOLD, k: 0.8 });
+        suns.push({ p: [x, y, z], size, col: GOLD, k: 0.7 });
       }
     // a few to the right, higher and further
     for (let i = 0; i < 6; i++) {
       const x = 200 + i * 46 + (r() - 0.5) * 20;
       const z = 60 - i * 70;
-      suns.push({ p: [x, g(x, z) + 90 + i * 14, z], size: 16 + r() * 8, col: GOLD, k: 1.0 });
+      suns.push({ p: [x, g(x, z) + 90 + i * 14, z], size: 16 + r() * 8, col: GOLD, k: 0.75 });
     }
     // suns on stems in the grass, like flowers, in drifts all along the path
     const pts = pathOf("sun").pts;
@@ -234,7 +234,7 @@ export default function SunWorld({ props }: { props: WorldProps }) {
         const h = 4.5 + r() * 5.5;
         const y = g(x, z);
         k.box(0.09, h, 0.09, [x, y + h / 2, z], [0.3, 0.25, 0.12]);
-        suns.push({ p: [x, y + h + 0.6, z], size: 1.7 + r() * 1.0, col: GOLD, k: 1.0 });
+        suns.push({ p: [x, y + h + 0.6, z], size: 1.7 + r() * 1.0, col: GOLD, k: 0.75 });
       }
     }
     // stands of thin dark spires on the plain, the same comb the bells wear, grown as trees
