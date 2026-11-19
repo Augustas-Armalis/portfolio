@@ -9,7 +9,7 @@ import { Bars } from "./Desktop";
 import { Monogram, PowerOverlay } from "./Login";
 import { Glyph, ICONS, iconBackground } from "./icons";
 import { Check, ChevronLeft, Pause, Play, X } from "lucide-react";
-import { Chrome, EASE_OUT, glass, PhoneNav, useGlassScope, type PhoneDetail } from "./ui";
+import { Chrome, EASE_OUT, glass, PhoneNav, SPRING_GLASS, useGlassScope, type PhoneDetail } from "./ui";
 import { useClock, useDate } from "./useClock";
 
 // iPhone-style OS: lock screen that lifts away, a home screen of icons, and apps
@@ -48,7 +48,7 @@ function Island() {
       <motion.div
         initial={false}
         animate={{ width: size[0], height: size[1], borderRadius: size[2] }}
-        transition={{ type: "spring", bounce: 0.28, duration: 0.55 }}
+        transition={SPRING_GLASS}
         onPointerDown={() => {
           held.current = false;
           hold.current = window.setTimeout(() => {

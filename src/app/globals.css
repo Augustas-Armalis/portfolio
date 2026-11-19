@@ -1240,3 +1240,17 @@ a.list-row:active {
     transform: none;
   }
 }
+/* a moving glass surface is plain frost; the refraction comes back when it lands */
+.glass[data-morphing][data-lg] {
+  backdrop-filter: blur(var(--g-blur)) saturate(var(--g-sat, 1.8));
+}
+/* the Dock's hover lens: a clearer drop with a lit rim, no backdrop filter of its own */
+.dock-lens {
+  background: radial-gradient(120% 90% at 50% 0%, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.14) 60%, rgb(255 255 255 / 0.2));
+  box-shadow: inset 0 1px 0.5px -0.25px rgb(255 255 255 / 0.9), inset 0 -0.6px 0.5px -0.25px rgb(255 255 255 / 0.35), 0 4px 12px -6px rgb(16 18 24 / 0.25);
+  will-change: transform, opacity;
+}
+.dark .dock-lens {
+  background: radial-gradient(120% 90% at 50% 0%, rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.05) 60%, rgb(255 255 255 / 0.08));
+  box-shadow: inset 0 1px 0.5px -0.25px rgb(255 255 255 / 0.4), inset 0 -0.6px 0.5px -0.25px rgb(255 255 255 / 0.12);
+}

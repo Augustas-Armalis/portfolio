@@ -10,6 +10,7 @@ import {
   useMotionValue,
   useSpring,
   useTransform,
+  useVelocity,
   type MotionValue,
 } from "motion/react";
 import { Lock, Search, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
@@ -20,7 +21,7 @@ import { focusedApp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
 import { Monogram, PowerOverlay } from "./Login";
-import { Btn, Chrome, EASE_OUT, FILE_MIME, QuickLook, Segmented, glass, sfx, useContextMenu, useGlassScope, type LookItem, type MenuAction } from "./ui";
+import { Btn, Chrome, EASE_OUT, FILE_MIME, QuickLook, SPRING_GLASS, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useMorph, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
 
 // ---------- menu bar ----------
@@ -39,18 +40,25 @@ function useOutside(open: boolean, close: () => void) {
   }, [open, close]);
 }
 
-// A menu: like macOS it appears at once (it's a direct response to the click) and fades out.
-// It hangs 1px under the menu bar. Control Center uses the larger, rounder panel.
+// A menu grows out of the title that opened it: the glass starts small at the title and springs to size, and
+// goes back the way it came. Control Center and Notification Center do the same from their icons, further.
+// The refraction filter is off while it moves (useMorph).
 function Pop({ open, align = "left", width = 220, panel = false, children }: { open: boolean; align?: "left" | "right"; width?: number; panel?: boolean; children: ReactNode }) {
+  const morph = useMorph<HTMLDivElement>();
+  const reduce = reducedMotion();
+  const from = reduce ? 1 : panel ? 0.3 : 0.72;
   return (
     <AnimatePresence>
       {open && (
         <motion.div
-          initial={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.12, ease: "easeOut" } }}
+          {...morph}
+          initial={{ opacity: 0, scale: from }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: reduce ? 1 : panel ? 0.6 : 0.86, transition: { duration: 0.14, ease: EASE_OUT } }}
+          transition={panel ? SPRING_GLASS : { type: "spring", bounce: 0.22, duration: 0.3 }}
           onPointerDown={(e) => e.stopPropagation()}
           data-glass=""
-          style={{ width }}
+          style={{ width, transformOrigin: align === "left" ? "18px -11px" : "calc(100% - 18px) -11px" }}
           className={`${glass("pop")} absolute top-[23px] z-[3000] ${panel ? "sq-panel rounded-[16px] p-2.5" : "rounded-[6px] p-[5px]"} ${align === "left" ? "left-0" : "right-0"}`}
         >
           {children}
@@ -796,7 +804,7 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
 const DOCK_ICON = 50;
 const DOCK_MAX = 68;
 
-function DockIcon({ id, mouseX, running, dark, dragging }: { id: AppId; mouseX: MotionValue<number>; running: boolean; dark: boolean; dragging: boolean }) {
+function DockIcon({ id, mouseX, running, front = false, dark, dragging }: { id: AppId; mouseX: MotionValue<number>; running: boolean; front?: boolean; dark: boolean; dragging: boolean }) {
   const open = useOS((s) => s.open);
   const launch = useOS((s) => s.launch);
   const trashFull = useOS((s) => s.trash.length > 0);
@@ -887,7 +895,14 @@ function DockIcon({ id, mouseX, running, dark, dragging }: { id: AppId; mouseX: 
         </motion.div>
       </motion.button>
       {ctx.node}
-      <span className={`mt-[3px] h-1 w-1 rounded-full ${running ? (dark ? "bg-white/85" : "bg-ink/75") : "bg-transparent"}`} />
+      {/* the running mark is a drop: it swells in when the app opens and stretches into a short bar under the app in front */}
+      <motion.span
+        aria-hidden
+        initial={false}
+        animate={{ opacity: running ? 1 : 0, scaleX: running ? (front ? 3 : 1) : 0.3, scaleY: running ? 1 : 0.3 }}
+        transition={SPRING_GLASS}
+        className={`mt-[3px] h-1 w-1 rounded-full ${dark ? "bg-white/85" : "bg-ink/75"}`}
+      />
     </div>
   );
 }
@@ -901,6 +916,24 @@ function Dock() {
   // the apps can be dragged into a new order, like the real dock
   const [order, setOrder] = useState<AppId[]>(dockApps);
   const [dragging, setDragging] = useState(false);
+  const front = focusedApp(windows);
+  // the hover lens: a drop of clearer glass under the pointer. It follows on a spring and stretches with its speed.
+  // It is a plain highlight (no backdrop filter), so it costs nothing while it moves.
+  const row = useRef<HTMLDivElement>(null);
+  const lensTarget = useMotionValue(0);
+  const lensOn = useMotionValue(0);
+  const lensX = useSpring(lensTarget, { stiffness: 420, damping: 32, mass: 0.6 });
+  const lensV = useVelocity(lensX);
+  const lensStretch = useTransform(lensV, (v) => 1 + Math.min(0.38, Math.abs(v) / 2600));
+  const lensOpacity = useSpring(lensOn, { stiffness: 300, damping: 30 });
+  const moveLens = (clientX: number) => {
+    const r = row.current?.getBoundingClientRect();
+    if (!r) return;
+    const x = Math.max(6, Math.min(r.width - 62, clientX - r.left - 28));
+    if (lensOn.get() === 0) lensX.jump(x);
+    lensTarget.set(x);
+    lensOn.set(1);
+  };
   return (
     <motion.div
       initial={{ y: 90 }}
@@ -909,12 +942,21 @@ function Dock() {
       className="absolute bottom-[6px] left-1/2 z-[1900] -translate-x-1/2"
     >
       <div
-        onMouseMove={(e) => fine && !dragging && mouseX.set(e.clientX)}
-        onMouseLeave={() => mouseX.set(Infinity)}
+        ref={row}
+        onMouseMove={(e) => {
+          if (!fine || dragging) return;
+          mouseX.set(e.clientX);
+          if (!reducedMotion()) moveLens(e.clientX);
+        }}
+        onMouseLeave={() => {
+          mouseX.set(Infinity);
+          lensOn.set(0);
+        }}
         className="relative flex h-[66px] items-end gap-1 px-[7px] pb-[2px]"
       >
         {/* material on its own layer, so the tooltips above can blur the wallpaper too */}
         <div aria-hidden data-glass="" className={`${glass("dock")} pointer-events-none absolute inset-0 rounded-[20px]`} />
+        <motion.div aria-hidden style={{ x: lensX, scaleX: lensStretch, opacity: lensOpacity }} className="dock-lens pointer-events-none absolute bottom-[5px] left-0 h-[56px] w-[56px] rounded-[16px]" />
         <div className="relative">
           <DockIcon id="launchpad" mouseX={mouseX} running={false} dark={dark} dragging={false} />
         </div>
@@ -933,14 +975,14 @@ function Dock() {
               whileDrag={{ zIndex: 2 }}
               className="relative"
             >
-              <DockIcon id={id} mouseX={mouseX} running={running.has(id)} dark={dark} dragging={dragging} />
+              <DockIcon id={id} mouseX={mouseX} running={running.has(id)} front={front === id} dark={dark} dragging={dragging} />
             </Reorder.Item>
           ))}
         </Reorder.Group>
         <div className="relative mx-1 mb-[12px] h-[40px] w-px self-end bg-black/[0.14]" />
         {sharedApps.map((id) => (
           <div key={id} className="relative">
-            <DockIcon id={id} mouseX={mouseX} running={running.has(id)} dark={dark} dragging={false} />
+            <DockIcon id={id} mouseX={mouseX} running={running.has(id)} front={front === id} dark={dark} dragging={false} />
           </div>
         ))}
         <div className="relative mx-1 mb-[12px] h-[40px] w-px self-end bg-black/[0.14]" />

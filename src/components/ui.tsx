@@ -64,6 +64,17 @@ export const SPRING_GLASS = { type: "spring", bounce: 0.26, duration: 0.5 } as c
 export const SPRING_LEAD = { type: "spring", bounce: 0.18, duration: 0.36 } as const;
 export const SPRING_TRAIL = { type: "spring", bounce: 0.3, duration: 0.58 } as const;
 
+// While a glass surface is in motion it drops the refraction filter (plain frost is cheap to composite, an SVG
+// displacement backdrop is not) and takes it back when it lands. Spread the result on a motion element.
+export function useMorph<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  return {
+    ref,
+    onAnimationStart: () => ref.current?.setAttribute("data-morphing", ""),
+    onAnimationComplete: () => ref.current?.removeAttribute("data-morphing"),
+  };
+}
+
 export const reducedMotion = () =>
   typeof window !== "undefined" && (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.classList.contains("reduce-fx"));
 
