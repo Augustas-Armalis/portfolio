@@ -167,6 +167,11 @@ export class BlocksGame {
   private wheelAccum = 0;
 
   private playing = false;
+  // The browser would not give the pointer lock (an embedded frame, a privacy setting, an automated browser):
+  // the game still plays, with drag to look and a plain click to break or place.
+  private free = false;
+  private everLocked = false;
+  private freeDrag: { button: number; place: boolean; moved: number } | null = null;
   private disposed = false;
   private raf = 0;
   private lastTime = 0;
@@ -284,17 +289,28 @@ export class BlocksGame {
       this.setPlaying(true);
       return;
     }
+    if (this.free) {
+      this.setPlaying(true);
+      return;
+    }
+    // A refusal right after Esc is the browser's cool-down: stay paused. A refusal when the lock has never
+    // worked means it isn't available here, so fall back to drag-to-look.
+    const refused = (): void => {
+      if (this.disposed || this.everLocked || document.pointerLockElement === this.canvas) return;
+      this.free = true;
+      this.setPlaying(true);
+    };
     try {
       // Returns a promise in current browsers; older ones return nothing.
       const result: unknown = this.canvas.requestPointerLock();
-      if (result instanceof Promise) result.catch(() => undefined);
+      if (result instanceof Promise) result.catch(refused);
     } catch {
-      // The browser refused (for example right after Esc). Stay paused.
+      refused();
     }
   }
 
   pause(): void {
-    if (this.touch) this.setPlaying(false);
+    if (this.touch || this.free) this.setPlaying(false);
     else if (document.pointerLockElement === this.canvas) document.exitPointerLock();
   }
 
@@ -869,7 +885,7 @@ export class BlocksGame {
   // -------------------------------------------------------------------------
 
   private get locked(): boolean {
-    return !this.touch && document.pointerLockElement === this.canvas;
+    return !this.touch && (this.free ? this.playing : document.pointerLockElement === this.canvas);
   }
 
   private setPlaying(playing: boolean): void {
@@ -898,7 +914,8 @@ export class BlocksGame {
   }
 
   private readonly onLockChange = (): void => {
-    if (this.touch) return;
+    if (this.touch || this.free) return;
+    if (document.pointerLockElement === this.canvas) this.everLocked = true;
     this.setPlaying(document.pointerLockElement === this.canvas);
   };
 
@@ -928,6 +945,10 @@ export class BlocksGame {
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (!this.locked || e.metaKey || e.ctrlKey || e.altKey) return;
     const code = e.code;
+    if (this.free && code === "Escape") {
+      this.setPlaying(false);
+      return;
+    }
     if (code.startsWith("Digit")) {
       const n = Number(code.slice(5));
       if (n >= 1 && n <= SLOT_COUNT) {
@@ -946,12 +967,23 @@ export class BlocksGame {
 
   private readonly onMouseMove = (e: MouseEvent): void => {
     if (!this.locked) return;
+    if (this.free) {
+      // drag to look: only while a button is down
+      if (!this.freeDrag) return;
+      this.freeDrag.moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+      this.rotate(-e.movementX * MOUSE_SENSITIVITY, -e.movementY * MOUSE_SENSITIVITY);
+      return;
+    }
     this.rotate(e.movementX * MOUSE_SENSITIVITY, e.movementY * MOUSE_SENSITIVITY);
   };
 
   private readonly onMouseDown = (e: MouseEvent): void => {
     if (!this.locked) return;
     e.preventDefault();
+    if (this.free) {
+      this.freeDrag = { button: e.button, place: e.button === 2 || e.ctrlKey || e.metaKey, moved: 0 };
+      return;
+    }
     if (e.button === 2 || (e.button === 0 && (e.ctrlKey || e.metaKey))) this.setPlacing(true);
     else if (e.button === 0) this.setBreaking(true);
   };
@@ -960,6 +992,12 @@ export class BlocksGame {
     if (this.touch) return;
     this.breakHeld = false;
     this.placeHeld = false;
+    // drag-to-look: a press that didn't travel is a click on the block under the crosshair
+    const d = this.freeDrag;
+    this.freeDrag = null;
+    if (!d || !this.locked || d.moved > 5) return;
+    if (d.place) this.placeQueued = true;
+    else if (d.button === 0) this.breakQueued = true;
   };
 
   private readonly onWheel = (e: WheelEvent): void => {
