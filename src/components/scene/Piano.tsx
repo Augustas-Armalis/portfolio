@@ -87,6 +87,12 @@ export function PianoKeys({ playable }: { playable: boolean }) {
               e.stopPropagation();
               strike(k.midi);
             }}
+            onPointerEnter={(e) => {
+              // glide across the keys with the button (or a finger) held down
+              if (!playable || !e.buttons) return;
+              e.stopPropagation();
+              strike(k.midi, 0.6);
+            }}
           />
           {playable && LABEL[k.midi] && (
             <Html position={[0, k.black ? 0.008 : 0.007, k.black ? 0.044 : 0.078]} center style={{ pointerEvents: "none" }} zIndexRange={[10, 0]}>

@@ -164,7 +164,7 @@ function Piece({
       land.at = nowS();
       land.pos.set(p.pos[0], p.pos[1] + 0.004, p.pos[2]);
     }
-    lift.current += ((hover && hoverable ? 0.016 : 0) - lift.current) * Math.min(1, dt * 14);
+    lift.current += ((hover && hoverable ? 0.007 : 0) - lift.current) * Math.min(1, dt * 14);
     base.set(p.pos[0] + e.x, p.pos[1] + e.y + lift.current, p.pos[2] + e.z);
     q0.setFromEuler(new THREE.Euler(e.rx, p.rot + e.ry, e.rz));
     // music mode: the headphones float up beside the camera
@@ -379,6 +379,7 @@ function Scene({
   const handed = useRef(false);
   const rig = useRef({ az: cfg.az, pol: cfg.pol, r: cfg.r, gaz: cfg.az, gpol: cfg.pol, gr: cfg.r });
   const vf = useRef({ yaw: 0, pitch: 0 });
+  const par = useRef(0);
   const v = useMemo(
     () => ({
       pos: new THREE.Vector3(),
@@ -429,7 +430,7 @@ function Scene({
   }, [scene, fog]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef });
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __os: useOS, __start: () => startRef.current?.() });
   }, [input, cam, v]);
 
   // compile everything behind the preloader, then report ready. compileAsync
@@ -571,11 +572,13 @@ function Scene({
       v.toPos.copy(local(c, rot, spineX, 0.02 + d, d * 0.14));
       v.toUp.set(0, 0, -1).applyAxisAngle(v.Y, rot);
     } else if (m === "camera") {
-      const { c, rot } = P("camera");
-      const yaw = rot + Math.PI;
-      vf.current = { yaw, pitch: 0.04 };
-      v.toPos.copy(local(c, rot, -0.006, 0.07, 0.0));
-      v.toLook.copy(v.toPos).add(new THREE.Vector3(Math.sin(yaw), 0.04, Math.cos(yaw)));
+      // pick the camera up: eye height just behind the desk, framed past the
+      // display toward the lake and the hills
+      const { c } = P("camera");
+      const yaw = Math.atan2(-0.34, -1);
+      vf.current = { yaw, pitch: -0.03 };
+      v.toPos.set(c.x + 0.06, DESK.top + 0.6, c.z + 0.62);
+      v.toLook.copy(v.toPos).add(new THREE.Vector3(Math.sin(yaw), -0.03, Math.cos(yaw)));
       v.toUp.set(0, 1, 0);
     }
   };
@@ -699,9 +702,10 @@ function Scene({
     const inp = input.current;
     if (!still) {
       if (inp.dx || inp.dy) {
-        // grab the world: drag right swings the view right
-        r.gaz += inp.dx * 0.0034;
-        r.gpol += inp.dy * 0.0024;
+        // grab the world: what's under the pointer follows it, so dragging
+        // right swings the camera left and dragging down lifts it
+        r.gaz -= inp.dx * 0.0034;
+        r.gpol -= inp.dy * 0.0024;
         inp.dx = inp.dy = 0;
       }
       if (inp.zoom) {
@@ -713,7 +717,8 @@ function Scene({
     r.gpol = THREE.MathUtils.clamp(r.gpol, cfg.polMin, cfg.polMax);
     r.gr = THREE.MathUtils.clamp(r.gr, cfg.rMin, cfg.rMax);
     const idleFor = (performance.now() - inp.last) / 1000;
-    if (!inp.dragging && idleFor > 2.6 && !reduced) {
+    // the view stays where it was put; only after a long rest does it drift home
+    if (!inp.dragging && idleFor > 14 && !reduced) {
       const k = 1 - Math.exp(-dt * 0.55);
       r.gaz += (cfg.az + Math.sin(now * 0.09) * 0.07 - r.gaz) * k;
       r.gpol += (cfg.pol + Math.sin(now * 0.063) * 0.012 - r.gpol) * k;
@@ -726,10 +731,11 @@ function Scene({
     let az = r.az;
     let pol = r.pol;
     let rad = r.r;
-    if (!mobile && !inp.dragging && !reduced) {
-      az += inp.px * 0.025;
-      pol += inp.py * 0.012;
-    }
+    // pointer parallax: eased out while a drag holds the view and back in
+    // after, so neither grabbing nor letting go makes the picture jump
+    par.current += ((mobile || reduced || inp.dragging ? 0 : 1) - par.current) * (1 - Math.exp(-dt * (inp.dragging ? 12 : 1.6)));
+    az += inp.px * 0.025 * par.current;
+    pol += inp.py * 0.012 * par.current;
     const [tx, ty, tz] = cfg.target;
     v.pos.set(tx + rad * Math.sin(pol) * Math.sin(az), ty + rad * Math.cos(pol), tz + rad * Math.sin(pol) * Math.cos(az));
     v.look.set(tx, ty, tz);
@@ -850,7 +856,7 @@ function Scene({
       } else if (mode === "camera" && el > DUR.focus) {
         // viewfinder: drag to aim
         const inp = input.current;
-        vf.current.yaw -= inp.dx * 0.003;
+        vf.current.yaw += inp.dx * 0.003;
         vf.current.pitch = THREE.MathUtils.clamp(vf.current.pitch + inp.dy * 0.003, -0.5, 0.6);
         inp.dx = inp.dy = 0;
         const { yaw, pitch } = vf.current;
@@ -1285,9 +1291,8 @@ export default function Room({
       onPointerCancel={onUp}
       onWheel={(e) => {
         if (!orbiting) return;
-        // like Maps with natural scrolling: a two-finger pull toward you zooms
-        // out, a push away zooms in; a trackpad pinch arrives as ctrl+wheel
-        input.current.zoom += e.ctrlKey ? e.deltaY * 2.5 : -e.deltaY;
+        // scroll up (or pinch out, which arrives as ctrl+wheel) moves in
+        input.current.zoom += e.ctrlKey ? e.deltaY * 2.5 : e.deltaY;
         input.current.last = performance.now();
       }}
     >
