@@ -7,6 +7,7 @@ import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { LightGate, LightPath, WorldBase, type WorldProps } from "./common";
 import { WORLD_U, type GroundPalette } from "./kit";
+import SeaWorld from "./Sea";
 import SunWorld from "./Sun";
 import { ORIGIN, WORLDS, useWorld, voyage, type WorldId } from "./voyage";
 
@@ -80,7 +81,7 @@ function Placeholder({ id, props }: { id: WorldId; props: WorldProps }) {
   return <WorldBase id={id} def={WORLDS[id]} pal={PAL[id]} props={props} />;
 }
 
-const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld };
+const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, sea: SeaWorld };
 
 export function Worlds(props: WorldProps) {
   const id = useWorld();

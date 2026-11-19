@@ -75,7 +75,7 @@ function ribbonGeometry(pts: THREE.Vector3[], width: number) {
   return { geo: g, len: run };
 }
 
-export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = true, effects = 1, from = 0 }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; angels?: boolean; effects?: number; from?: number }) {
+export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = true, marks = true, effects = 1, from = 0 }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; angels?: boolean; marks?: boolean; effects?: number; from?: number }) {
   const b = useDisposable(() => {
     const path = pathOf(id);
     const pts = path.pts.slice(Math.round(from / 4));
@@ -122,7 +122,7 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
     const step = Math.round(46 / 4);
     const tan = new THREE.Vector3();
     let n = 0;
-    for (let i = step; i < pts.length - step; i += step, n++) {
+    for (let i = step; marks && i < pts.length - step; i += step, n++) {
       const p = pts[i];
       const lx = p.x;
       const lz = p.z;
@@ -155,7 +155,7 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
   return (
     <>
       <mesh geometry={b.geo} material={b.mat} renderOrder={4} />
-      <mesh geometry={b.halos} material={b.haloMat} renderOrder={6} />
+      {marks && <mesh geometry={b.halos} material={b.haloMat} renderOrder={6} />}
       {b.glows && <mesh geometry={b.glows} material={b.glowMat} renderOrder={6} />}
       {b.marks && <mesh geometry={b.marks} material={b.tempera} />}
     </>
@@ -444,12 +444,12 @@ export function Gallery({ def }: { def: WorldDef }) {
 }
 
 // ---------- the whole base of a world ----------
-export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number }) {
+export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean }) {
   return (
     <>
       {def.terrain && <Ground def={def} pal={pal} mobile={props.mobile} size={groundSize} />}
       {grass && def.terrain && <WorldGrass def={def} pal={pal} tip={tip} mobile={props.mobile} density={props.grass} wind={props.reduced ? 0.25 : 1} mask={mask} tall={tall} />}
-      <LightPath id={id} def={def} tint={pathTint} gain={pathGain} effects={props.effects} />
+      <LightPath id={id} def={def} tint={pathTint} gain={pathGain} effects={props.effects} angels={angels} marks={marks} />
       {def.gate && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} />}
       <Gallery def={def} />
     </>

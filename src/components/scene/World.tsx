@@ -103,7 +103,7 @@ export function makeSkyMaterial(env = false) {
           float cover = max(max(cov1, cov2), bars * 0.6);
           col += uGlow * uPulse * 0.1 * (1.0 - smoothstep(0.0, 0.5, h));
           // crepuscular rays fanning from a low sun through the haze
-          float golden = sunVis * (1.0 - smoothstep(0.06, 0.4, uSunDir.y));
+          float golden = sunVis * (1.0 - smoothstep(0.06, 0.4, uSunDir.y)) * uSkyFx.z;
           if (golden > 0.01) {
             vec3 ax = normalize(cross(uSunDir, vec3(0.0, 1.0, 0.0)));
             vec2 rp = vec2(dot(d, ax), dot(d, cross(ax, uSunDir)));

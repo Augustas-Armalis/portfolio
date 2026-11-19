@@ -315,19 +315,22 @@ export function makeWater(o: { def: WorldDef; lights?: THREE.Vector3[]; lightCol
         float fres = 0.05 + 0.95 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
         vec3 deep = uDeep * (uSkyCol * 2.2 + 0.15);
         vec3 col = mix(deep, sky, clamp(fres * 0.82 + 0.18, 0.0, 1.0));
-        // each light is drawn toward the eye as a long thin streak, broken by the ripples
+        // each light is drawn down toward the eye as a long thin streak, broken by the ripples: it runs
+        // from under the light almost to the viewer's feet, so it stands tall in the frame as he painted it
         vec2 cl = vCamL;
+        float hc = max(cameraPosition.y, 1.0);
         for (int i = 0; i < ${n}; i++) {
           vec2 F = uLights[i].xz;
           vec2 u = cl - F; float D = length(u); u /= max(D, 0.001);
           vec2 d = q - F;
           float s = dot(d, u);
-          float t = dot(d, vec2(-u.y, u.x)) + (h0 - 0.62) * 1.6 * smoothstep(0.0, 40.0, s);
-          float len = min(uLen, D * 0.62);
-          float w = 0.34 + s * 0.006;
-          float a = exp(-(t * t) / (w * w)) * smoothstep(-0.5, 2.0, s) * (1.0 - smoothstep(len * 0.35, len, s));
-          float brk = 0.35 + 0.65 * smoothstep(0.25, 0.7, vnoise(vec2(s * 0.42 - uTime * 0.25, float(i) * 7.0)) * 0.6 + vnoise(vec2(s * 1.7 + uTime * 0.2, 3.0)) * 0.4);
-          col += uLightCol * a * brk * (1.0 + uPulse * 0.6) * step(-500.0, uLights[i].y);
+          float dcam = max(D - s, 0.0);
+          float w = max(0.07, dcam * 0.0042);
+          float t = dot(d, vec2(-u.y, u.x)) + (h0 - 0.62) * w * 2.2 * smoothstep(0.0, 30.0, s);
+          float a = exp(-(t * t) / (w * w)) * smoothstep(-0.4, 1.5, s) * smoothstep(hc * 1.5, hc * 5.5, dcam) * (1.0 - smoothstep(uLen * 0.7, uLen, s));
+          float lg = log(max(dcam, 1.0));
+          float brk = 0.25 + 0.75 * smoothstep(0.3, 0.72, vnoise(vec2(lg * 13.0 + uTime * 0.22, float(i) * 7.0)) * 0.6 + vnoise(vec2(lg * 41.0 - uTime * 0.3, 3.0)) * 0.4);
+          col += uLightCol * a * brk * (0.4 + 0.6 * dcam / max(D, 1.0)) * (1.0 + uPulse * 0.6) * step(-500.0, uLights[i].y);
         }
         ${o.shore ? `{ float th = terrainH(q); col = mix(col, ${v3(o.shore)} * (uSkyCol + uKeyCol * 0.3), smoothstep(-0.9, -0.02, th + (h0 - 0.6) * 0.5) * 0.9); }` : ""}
         col = applyAir(col, vWorld);
