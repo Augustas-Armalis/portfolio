@@ -13,7 +13,7 @@ import { WORLDS, groundAt } from "./voyage";
 // sun stands low to the right in a fan of rays.
 
 const def = WORLDS.fairy;
-export const FAIRY_PAL: GroundPalette = { a: [0.085, 0.18, 0.05], b: [0.17, 0.23, 0.065], c: [0.06, 0.14, 0.075] };
+export const FAIRY_PAL: GroundPalette = { a: [0.065, 0.135, 0.04], b: [0.13, 0.17, 0.05], c: [0.045, 0.105, 0.06] };
 
 export const MOUNT = { x: 0, z: -80, r0: 156, r1: 48, h: 156, turns: 2.5, wall: 6 };
 const WALL: V3 = [0.4, 0.14, 0.1];

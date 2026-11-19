@@ -13,7 +13,7 @@ import { WORLDS, groundAt, heightAt } from "./voyage";
 // and nearer, bends to pick a flower. White birds cross the sky.
 
 const def = WORLDS.paradise;
-export const PARADISE_PAL: GroundPalette = { a: [0.12, 0.24, 0.055], b: [0.23, 0.29, 0.075], c: [0.09, 0.2, 0.065], shore: [0.62, 0.5, 0.25] };
+export const PARADISE_PAL: GroundPalette = { a: [0.08, 0.155, 0.04], b: [0.155, 0.19, 0.055], c: [0.06, 0.13, 0.045], shore: [0.44, 0.355, 0.18] };
 
 // the steps curve round the meadow: arcs about this point
 export const STEPS = { x: 60, z: -60, r0: 150, tread: 9.5, rise: 2.3, n: 13, y0: 7, a0: -1.95, a1: 0.62 };
@@ -95,7 +95,7 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
     // and the one who bends to pick a flower, larger and nearer
     const bx = 82;
     const bz = 10;
-    angel(k, [bx, g(bx, bz) - 0.1, bz], 9.5, -2.3, [0.97, 0.93, 0.8], { bow: 0.62, glow: 0.07, open: 0.5 });
+    angel(k, [bx, g(bx, bz) - 0.1, bz], 9.5, -2.3, [0.97, 0.93, 0.8], { bow: 0.36, glow: 0.07, open: 0.5 });
     glows.push({ p: [bx - 3, g(bx, bz) + 9, bz - 3], size: 30, col: [1, 0.94, 0.74], k: 0.16 });
 
     // white birds over the water

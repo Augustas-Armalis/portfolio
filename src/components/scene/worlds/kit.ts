@@ -200,7 +200,7 @@ export function makeTempera(o: { rim?: V3; rimPow?: number; amb?: number; key?: 
         col = applyAir(col, vWorld);
         // its own light, added after the air so a lamp still reads through the haze
         float glow = max(vCol.a, 0.0);
-        col += vCol.rgb * glow * glowK() * (1.0 + uPulse * 0.6) * (1.0 - 0.6 * airAmt(vWorld));
+        col += vCol.rgb * glow * glowK() * (1.0 + uPulse * 0.6) * (1.0 - 0.6 * airAmt(vWorld)) * exp(-length(vWorld - cameraPosition) * uMist * 1.5);
         gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,
@@ -407,7 +407,7 @@ export function makeHaloMaterial(kind: 0 | 1 | 2 = 0) {
     vertexShader: /* glsl */ `
       attribute vec4 aPos; attribute vec4 aCol;
       varying vec2 vUv; varying vec4 vCol; varying float vFade; varying float vSeed;
-      uniform float uTime;
+      uniform float uTime; uniform float uMist;
       void main(){
         vec4 mv = modelViewMatrix * vec4(aPos.xyz, 1.0);
         float d = -mv.z;
@@ -416,7 +416,7 @@ export function makeHaloMaterial(kind: 0 | 1 | 2 = 0) {
         mv.xy += position.xy * aPos.w * breathe;
         vUv = position.xy; vCol = aCol;
         // never a white-out when the plane flies through one
-        vFade = smoothstep(2.0 + aPos.w * 0.2, 12.0 + aPos.w * 1.1, d);
+        vFade = smoothstep(2.0 + aPos.w * 0.2, 12.0 + aPos.w * 1.1, d) * exp(-d * uMist * 1.5);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */ `

@@ -106,9 +106,9 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
           float dist = length(vWorld - cameraPosition);
           a *= smoothstep(2.0, 16.0, dist) * (1.0 - smoothstep(240.0, 520.0, dist));
           // far off it is a thread; let it keep its light there
-          a *= 1.0 + smoothstep(30.0, 160.0, dist) * 1.6;
+          a *= 1.0 + smoothstep(30.0, 160.0, dist) * 0.8;
           a *= smoothstep(0.0, 14.0, vUv.x) * smoothstep(uLen, uLen - 14.0, vUv.x);
-          a *= 1.0 - airAmt(vWorld) * 0.7;
+          a *= (1.0 - airAmt(vWorld) * 0.7) * exp(-dist * uMist * 1.5);
           gl_FragColor = vec4(uTint * a * uGain * glowK() * (1.0 + uPulse * 0.6), 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -127,7 +127,7 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
       const lx = p.x;
       const lz = p.z;
       const g = id === "home" ? 0 : groundAt(def, lx, lz);
-      halos.push({ p: [p.x, p.y - 0.75, p.z], size: 2.4, col: tint, k: 0.26 * gain });
+      halos.push({ p: [p.x, p.y - 0.75, p.z], size: 2.2, col: tint, k: 0.17 * gain });
       // the thread it hangs on, down into the mist
       const h = p.y - 0.75 - g;
       if (h > 2 && def.water === null) k.box(0.035, h, 0.035, [p.x, g + h / 2, p.z], [tint[0] * 0.8, tint[1] * 0.74, tint[2] * 0.6], { glow: 0.22 * gain });
@@ -239,7 +239,7 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 11
           float a = (0.3 + 0.7 * smoothstep(0.25, 0.75, n)) * up * (0.35 + 0.65 * down) * side;
           vec3 col = mix(airCol(normalize(vWorld - cameraPosition)) * 1.3, uTint * 1.15 * glowK(), 0.5 + 0.3 * n) * uGain;
           float dist = length(vWorld - cameraPosition);
-          gl_FragColor = vec4(col * (1.0 + uPulse * 0.4), clamp(a * 0.86, 0.0, 0.9) * smoothstep(0.5, 6.0, dist));
+          gl_FragColor = vec4(col * (1.0 + uPulse * 0.4), clamp(a * 0.86, 0.0, 0.9) * smoothstep(0.5, 6.0, dist) * exp(-dist * uMist * 1.5));
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,

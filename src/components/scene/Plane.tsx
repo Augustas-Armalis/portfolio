@@ -128,6 +128,18 @@ export function Plane({
   );
   const rest = useMemo(() => new THREE.Vector3(spot.pos[0], DESK.top + 0.013, spot.pos[2]), [spot]);
 
+  // The paper itself is moved in the same breath as the camera that follows it
+  // (fly and land are called from the scene's frame; this component's own
+  // frame callback runs before that one and would show it a frame behind).
+  const sync = () => {
+    const g = group.current;
+    if (!g) return;
+    g.position.copy(st.pos);
+    g.rotation.set(0, 0, 0, "YXZ");
+    g.rotation.y = st.yaw;
+    g.rotation.x = st.pitch;
+    g.rotation.z = -st.roll;
+  };
   const updateNose = () => st.nose.set(-Math.sin(st.yaw) * Math.cos(st.pitch), Math.sin(st.pitch), -Math.cos(st.yaw) * Math.cos(st.pitch));
 
   // the chase camera swings on a boom behind the plane: it follows the
@@ -140,7 +152,7 @@ export function Plane({
     }
     st.camYaw += wrap(st.yaw - st.camYaw) * (1 - Math.exp(-dt * 3.2));
     st.camPitch = damp(st.camPitch, st.pitch * 0.55, 2.6, dt);
-    const dist = 1.5 + st.speed * 0.024;
+    const dist = 1.32 + st.speed * 0.022;
     const cp = Math.cos(st.camPitch);
     const want = st.tmp2.set(st.pos.x + Math.sin(st.camYaw) * cp * dist, st.pos.y - Math.sin(st.camPitch) * dist + 0.44 + Math.sin(st.t * 1.7) * 0.02, st.pos.z + Math.cos(st.camYaw) * cp * dist);
     // the lens keeps clear of the ground too
@@ -408,6 +420,7 @@ export function Plane({
       passage(dt);
       airOf(edge);
       chase(dt, cam, easeInOutCubic(clamp01(st.t / 1.7)));
+      sync();
     },
     beginLand: (cam) => {
       st.t = 0;
@@ -438,6 +451,7 @@ export function Plane({
         voyage.veil = Math.min(1, voyage.veil + dt / 1.0);
         airOf(0);
         chase(dt, cam);
+        sync();
         if (voyage.veil >= 1) {
           swapWorld("home");
           st.landPhase = 1;
@@ -514,6 +528,7 @@ export function Plane({
       cam.fov = st.fov;
       if (st.landMode === "cloud") voyage.veil = Math.max(0, voyage.veil - dt / 1.7);
       airOf(0);
+      sync();
       const done = u >= 1 && voyage.veil <= 0;
       if (done) {
         voyage.flying = false;
