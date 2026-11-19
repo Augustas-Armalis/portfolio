@@ -3,7 +3,7 @@
 // Trash, About, Terminal, Catch and System Settings.
 
 import { motion } from "motion/react";
-import { Check, Gauge, Info, Power, Send, Trash2, Undo2, UserRound, Volume2, Wallpaper, Contrast, Palette } from "lucide-react";
+import { Check, Gauge, Info, Power, Send, Trash2, Undo2, UserRound, Volume2, Wallpaper, Contrast } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { about, apps, desktopItems, allApps, owner, projectApps, timeline, wallpapers, type AppId } from "@/content";
 import MusicShader from "../scene/MusicShader";
@@ -47,10 +47,10 @@ export function TrashApp() {
               }}
               className="flex flex-col items-center gap-1 outline-none"
             >
-              <span className={`flex h-[72px] w-[72px] items-center justify-center rounded-[8px] ${sel === it.id ? "bg-black/[0.08]" : ""}`}>
+              <span data-sq="" className={`flex h-[78px] w-[78px] items-center justify-center rounded-[16px] ${sel === it.id ? "bg-[var(--selection)]" : ""}`}>
                 <DeskArt item={it} />
               </span>
-              <span className={`line-clamp-2 max-w-[92px] rounded-[6px] px-[5px] py-px text-center text-[12px] leading-[15px] ${sel === it.id ? "bg-[#0A84FF] text-white" : "text-ink"}`}>{it.name}</span>
+              <span className={`line-clamp-2 max-w-[92px] rounded-[7px] px-[6px] py-px text-center text-[12px] font-medium leading-[15px] ${sel === it.id ? "bg-[var(--accent)] text-white" : "text-ink"}`}>{it.name}</span>
             </button>
           ))}
         </div>

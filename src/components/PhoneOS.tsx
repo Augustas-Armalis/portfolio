@@ -154,7 +154,6 @@ function Lock() {
       style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}
       role="button"
       tabIndex={0}
-      aria-label="Open"
       onClick={() => login()}
       onKeyDown={(e) => e.key === "Enter" && login()}
     >

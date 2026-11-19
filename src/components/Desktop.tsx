@@ -15,7 +15,7 @@ import {
 import { Lock, Search, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, sharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
+import { about, allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, sharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
 import { focusedApp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
@@ -1105,7 +1105,7 @@ export function Resume() {
   return (
     <div className="flex justify-center bg-[#E9EAED] p-6">
       <article className="w-full max-w-[560px] bg-white px-12 py-11 text-ink shadow-[0_1px_3px_rgb(0_0_0/0.12)]">
-        <h1 className="text-[26px] font-semibold tracking-[-0.022em]">{owner.name}</h1>
+        <h1 className="text-[26px] font-semibold tracking-[-0.022em]">{about.name}</h1>
         <p className="mt-1 text-[13px] text-ink-2">
           {owner.role}. {owner.city}.
         </p>

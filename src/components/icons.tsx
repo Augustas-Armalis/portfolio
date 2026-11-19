@@ -50,9 +50,9 @@ const isFolder = (file: string) => file.startsWith("folder") || file.startsWith(
 function FileIcon({ file, size, flat = false }: { file: string; size: number | string; flat?: boolean }) {
   const app = !isFolder(file);
   return (
-    <span aria-hidden className={`inline-flex shrink-0 items-center justify-center ${app && !flat ? "icon-wrap" : ""}`} style={{ width: size, height: size }}>
+    <span aria-hidden className={`relative block shrink-0 ${app && !flat ? "icon-wrap" : ""}`} style={{ width: size, height: size }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={SYS + file} alt="" draggable={false} decoding="async" className="icon-file block max-w-none" style={{ width: app ? "112%" : "100%", height: app ? "112%" : "100%" }} />
+      <img src={SYS + file} alt="" draggable={false} decoding="async" className="icon-file absolute max-w-none" style={app ? { inset: "-6%", width: "112%", height: "112%" } : { inset: 0, width: "100%", height: "100%" }} />
     </span>
   );
 }

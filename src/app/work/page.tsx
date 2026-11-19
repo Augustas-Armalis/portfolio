@@ -7,13 +7,13 @@ const Row = ({ name, line, meta }: { name: string; line?: string; meta?: string 
   <li className="flex flex-col gap-0.5 border-t border-line py-3 sm:flex-row sm:items-baseline sm:gap-6">
     <span className="w-48 shrink-0 text-[15px] font-medium text-ink">{name}</span>
     <span className="flex-1 text-[14px] leading-relaxed text-ink-2">{line}</span>
-    {meta && <span className="text-[12px] text-ink-3">{meta}</span>}
+    {meta && <span className="text-[12px] text-ink-2">{meta}</span>}
   </li>
 );
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <section className="mt-12">
-    <h2 className="mb-2 text-[12px] font-semibold text-ink-3">{title}</h2>
+    <h2 className="mb-2 text-[12px] font-semibold text-ink-2">{title}</h2>
     <ul>{children}</ul>
   </section>
 );
