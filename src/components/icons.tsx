@@ -71,7 +71,41 @@ export const ICONS: Record<AppId, Spec> = {
   launchpad: { bg: ["#a08fff", "#5a41ee"], glyph: LayoutGrid, fg: "light" },
 };
 
+// Projects wear their real logo (public/logos: each project's own official icon), never a drawn stand-in.
+// Most are already app icons and fill the squircle; Sellify's is a bare mark, so it sits centred on a plain
+// ground. A project with no logo of its own uses its parent's (Filzy Movie) or a plain folder (the Lab).
+type Logo = { src: string; bg: string; mark?: boolean };
+export const LOGOS: Partial<Record<AppId, Logo>> = {
+  larpo: { src: "/logos/larpo.png", bg: "#f2f2f2" },
+  capto: { src: "/logos/capto.png", bg: "#000000" },
+  contles: { src: "/logos/contles.png", bg: "#030303" },
+  filzy: { src: "/logos/filzy.png", bg: "#050505" },
+  filzymovie: { src: "/logos/filzy.png", bg: "#050505" },
+  kaching: { src: "/logos/kaching.png", bg: "#ffffff" },
+  lunor: { src: "/logos/lunor.webp", bg: "#161617" },
+  sellify: { src: "/logos/sellify.svg", bg: "linear-gradient(180deg, #ffffff 0%, #fff0e4 100%)", mark: true },
+};
+const PLAIN_FOLDER: AppId[] = ["rug", "slideskipper", "musicengine", "trackpad", "reel", "openwhip"];
+
+function LogoImg({ logo, size }: { logo: Logo; size: number }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={logo.src}
+      alt=""
+      width={size}
+      height={size}
+      draggable={false}
+      decoding="async"
+      // a full-bleed icon is drawn a touch over size so its own rounded corners fall outside the squircle
+      style={logo.mark ? { width: size * 0.6, height: size * 0.6, objectFit: "contain" } : { width: size * 1.05, height: size * 1.05, maxWidth: "none", objectFit: "cover" }}
+    />
+  );
+}
+
 export function iconBackground(id: AppId) {
+  const logo = LOGOS[id];
+  if (logo) return logo.bg;
   const [a, b] = ICONS[id].bg;
   return `linear-gradient(180deg, ${a} 0%, ${b} 100%)`;
 }
@@ -96,6 +130,9 @@ export function GlyphDefs() {
 }
 
 export function Glyph({ id, size }: { id: AppId; size: number }) {
+  const logo = LOGOS[id];
+  // size is the glyph box (48% of the tile); a logo is sized from the whole tile
+  if (logo) return <LogoImg logo={logo} size={size / 0.48} />;
   const g = ICONS[id].glyph;
   const paint = GLASS[ICONS[id].fg];
   // the piano is drawn here: three ivory keys with the black keys cut out of them
@@ -126,6 +163,17 @@ export function AppIcon({ id, size = 52, flat = false }: { id: AppId; size?: num
   const s = ICONS[id];
   // Projects is a folder, so it looks like one (the Finder folder, as in the Dock's stacks)
   if (id === "projects" || id === "games") return <FolderArt size={size} badge={id === "games" ? "games" : undefined} />;
+  if (PLAIN_FOLDER.includes(id)) return <FolderArt size={size} />;
+  const logo = LOGOS[id];
+  if (logo)
+    return (
+      <div className={flat ? "" : "icon-wrap"} style={{ width: size, height: size }} aria-hidden>
+        <div className="icon-sq icon-logo flex items-center justify-center" style={{ background: logo.bg }}>
+          <LogoImg logo={logo} size={size} />
+          <div className="icon-spec opacity-40" />
+        </div>
+      </div>
+    );
   return (
     <div className={flat ? "" : "icon-wrap"} style={{ width: size, height: size, ["--ia" as string]: s.bg[0], ["--ib" as string]: s.bg[1] }} aria-hidden>
       <GlyphDefs />

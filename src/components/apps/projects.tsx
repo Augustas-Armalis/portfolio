@@ -465,7 +465,7 @@ function LiveSite({ it }: { it: StoryItem }) {
       <div data-drag className="toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--separator)] pl-[84px] pr-3">
         <Btn variant="plain" size="sm" iconOnly label="Reload" onClick={() => setReload((r) => r + 1)} icon={<RotateCw size={14} />} />
         <div className="search mx-auto flex h-[30px] w-[min(420px,60%)] items-center justify-center gap-1.5 rounded-[10px] bg-[var(--fill-2)] px-3">
-          <Lock size={11} className="text-ink-2" />
+          {it.app ? <AppIcon id={it.app} size={16} flat /> : <Lock size={11} className="text-ink-2" />}
           <span className="m-body truncate font-medium text-ink">{domain}</span>
         </div>
         <Btn variant="plain" size="sm" iconOnly label="Open in a new tab" href={href} icon={<ArrowUpRight size={15} />} />

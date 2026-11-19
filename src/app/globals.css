@@ -882,7 +882,7 @@ a.list-row:active {
   filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.4));
 }
 /* tinted icons: one accent glyph on dark glass */
-.tinted .icon-sq {
+.tinted .icon-sq:not(.icon-logo) {
   background: linear-gradient(180deg, #26272c 0%, #0f1013 100%) !important;
 }
 .tinted .icon-glyph svg.glyph-line {
@@ -1276,4 +1276,8 @@ a.list-row:active {
 .glass.rounded-full,
 .btn-capsule {
   corner-shape: round;
+}
+/* a project's real logo is never recoloured: not dimmed in dark mode, not replaced by the tint */
+.dark .icon-sq.icon-logo {
+  filter: none;
 }
