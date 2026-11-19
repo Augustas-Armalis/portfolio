@@ -89,11 +89,11 @@ export const apps: Record<AppId, { title: string; size: Size }> = {
   shots: { title: "Shots", size: { w: 820, h: 580 } },
   taste: { title: "Taste", size: { w: 720, h: 480 } },
   kit: { title: "Kit", size: { w: 480, h: 400 } },
-  larpo: { title: "Larpo", size: { w: 780, h: 600 } },
+  larpo: { title: "Larpo", size: { w: 1040, h: 680 } },
   lunor: { title: "Lunor", size: { w: 680, h: 560 } },
   capto: { title: "Capto", size: { w: 760, h: 600 } },
   contles: { title: "Contles", size: { w: 680, h: 560 } },
-  filzy: { title: "Filzy", size: { w: 680, h: 560 } },
+  filzy: { title: "Filzy", size: { w: 960, h: 640 } },
   lab: { title: "Lab", size: { w: 560, h: 420 } },
   rug: { title: "Road Rug", size: { w: 620, h: 500 } },
   slideskipper: { title: "Slide Skipper", size: { w: 560, h: 420 } },
@@ -102,10 +102,10 @@ export const apps: Record<AppId, { title: string; size: Size }> = {
   reel: { title: "Reel", size: { w: 620, h: 500 } },
   openwhip: { title: "OpenWhip", size: { w: 620, h: 500 } },
   doom: { title: "DOOM", size: { w: 800, h: 560 } },
-  records: { title: "Records", size: { w: 640, h: 540 } },
+  records: { title: "Records", size: { w: 820, h: 540 } },
   piano: { title: "Piano", size: { w: 760, h: 320 } },
   novel: { title: "Novel", size: { w: 900, h: 620 } },
-  gallery: { title: "Gallery", size: { w: 720, h: 480 } },
+  gallery: { title: "Gallery", size: { w: 760, h: 540 } },
   about: { title: "About Augustas", size: { w: 300, h: 470 } },
   contact: { title: "Get in Touch", size: { w: 620, h: 540 } },
   terminal: { title: "Terminal", size: { w: 600, h: 380 } },
@@ -127,6 +127,8 @@ export type Project = {
   images?: string[];
   numbers: { label: string; value: string }[];
   link?: { label: string; href: string };
+  // the live site may be shown inside the window (it allows framing); false or missing shows the story instead
+  embeddable?: boolean;
 };
 
 // ---------- Design engineer ----------
@@ -193,6 +195,7 @@ export const projects: Partial<Record<AppId, Project>> = {
       { label: "New site", value: "14 Nov" },
     ],
     link: { label: "larpo.studio", href: "https://larpo.studio" },
+    embeddable: true,
   },
   lunor: {
     id: "lunor",
@@ -234,6 +237,7 @@ export const projects: Partial<Record<AppId, Project>> = {
     stack: "Vite, WebRTC, Cloudflare Workers",
     numbers: [],
     link: { label: "Open Filzy", href: "https://augustas-armalis.github.io/filzy/" },
+    embeddable: true,
   },
   // Lab
   rug: {

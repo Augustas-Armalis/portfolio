@@ -142,6 +142,7 @@ export const SKY_U = {
   uCloudShade: { value: new THREE.Color() },
   uNight: { value: 0 },
   uTime: { value: 0 },
+  uMist: { value: 0 },
 };
 
 export function applySky(s: SkyState) {
@@ -164,7 +165,7 @@ applySky(skyState(14));
 export const GLSL_SKY = /* glsl */ `
 uniform vec3 uSunDir; uniform vec3 uMoonDir; uniform vec3 uKeyDir; uniform vec3 uKeyCol; uniform vec3 uSkyCol;
 uniform vec3 uZenith; uniform vec3 uUpper; uniform vec3 uHorizon; uniform vec3 uGlow;
-uniform vec3 uCloudLit; uniform vec3 uCloudShade; uniform float uNight; uniform float uTime;
+uniform vec3 uCloudLit; uniform vec3 uCloudShade; uniform float uNight; uniform float uTime; uniform float uMist;
 vec3 skyBase(vec3 d){
   float h = d.y;
   float hp = max(h, 0.0);

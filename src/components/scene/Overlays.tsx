@@ -69,48 +69,46 @@ export function BootVeil({ onDone }: { onDone: () => void }) {
   );
 }
 
-// First-load preloader: the "A" draws itself stroke by stroke as assets load
-// and shaders compile, then a caption with the place, local time and light.
-// When everything is ready the mark lifts away and the field fades up.
+// First-load preloader. Black, one thin line of light: real loading progress
+// draws it out from the centre into a horizon. When the world is ready a small
+// sun rises over it, and the whole thing dissolves into the mist the camera
+// descends through. Name and the live Kaunas time, small.
 export function Preloader({ progress, done = false, caption }: { progress: number; done?: boolean; caption?: string }) {
-  const [ref, box] = useBox();
-  const seg = (a: number, b: number) => 1 - Math.min(1, Math.max(0, (progress - a) / (b - a)));
-  const ease = "stroke-dashoffset 600ms cubic-bezier(0.22, 1, 0.36, 1)";
+  const p = Math.min(1, Math.max(0, progress));
   return (
     <motion.div
-      ref={ref}
-      className="pointer-events-none fixed inset-0 z-[50] bg-page"
+      className="pointer-events-none fixed inset-0 z-[50] bg-black"
       initial={false}
       animate={{ opacity: done ? 0 : 1 }}
-      transition={{ duration: 0.9, ease: [0.4, 0, 0.2, 1], delay: done ? 0.35 : 0 }}
+      transition={{ duration: 1.4, ease: [0.4, 0, 0.2, 1], delay: done ? 0.55 : 0 }}
     >
-      {box.w > 0 && (
+      <div className="absolute left-1/2 top-1/2 h-0 w-[min(560px,78vw)] -translate-x-1/2">
+        {/* horizon */}
+        <div
+          className="absolute left-1/2 top-0 h-px -translate-x-1/2 bg-gradient-to-r from-transparent via-white/90 to-transparent"
+          style={{ width: `${8 + p * 92}%`, transition: "width 700ms cubic-bezier(0.22, 1, 0.36, 1)" }}
+        />
+        <div
+          className="absolute left-1/2 top-0 h-6 -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(50%_50%_at_50%_50%,rgb(255_236_200/0.22),transparent)] blur-md"
+          style={{ width: `${p * 100}%`, transition: "width 700ms cubic-bezier(0.22, 1, 0.36, 1)" }}
+        />
+        {/* the sun rising once everything is ready */}
         <motion.div
-          className="absolute inset-0"
-          initial={false}
-          animate={{ opacity: done ? 0 : 1, y: done ? -10 : 0, filter: done ? "blur(4px)" : "blur(0px)" }}
-          transition={{ duration: 0.5, ease: [0.4, 0, 1, 1] }}
-        >
-          <svg className="absolute inset-0 h-full w-full" viewBox={`${-box.w / 2} ${-box.h / 2} ${box.w} ${box.h}`} aria-hidden>
-            <g stroke="rgba(26,27,30,0.1)" strokeWidth={stroke} strokeLinecap="round" fill="none">
-              <line x1={0} y1={markY - markH / 2} x2={-markW / 2} y2={markY + markH / 2} />
-              <line x1={0} y1={markY - markH / 2} x2={markW / 2} y2={markY + markH / 2} />
-              <line x1={-cx} y1={cy} x2={cx} y2={cy} />
-            </g>
-            <g stroke="#1a1b1e" strokeWidth={stroke} strokeLinecap="round" fill="none">
-              <line x1={-markW / 2} y1={markY + markH / 2} x2={0} y2={markY - markH / 2} pathLength={1} strokeDasharray="1 1" strokeDashoffset={seg(0.02, 0.45)} style={{ transition: ease }} />
-              <line x1={0} y1={markY - markH / 2} x2={markW / 2} y2={markY + markH / 2} pathLength={1} strokeDasharray="1 1" strokeDashoffset={seg(0.35, 0.75)} style={{ transition: ease }} />
-              <line x1={-cx} y1={cy} x2={cx} y2={cy} pathLength={1} strokeDasharray="1 1" strokeDashoffset={seg(0.7, 0.98)} style={{ transition: ease }} />
-            </g>
-          </svg>
-          <div className="absolute inset-x-0 text-center" style={{ top: box.h / 2 + 30 }}>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.32em] text-ink">Augustas OS</div>
-            <motion.div className="mt-1.5 text-[12px] tabular-nums text-ink-3" initial={{ opacity: 0 }} animate={{ opacity: caption ? 1 : 0 }} transition={{ duration: 0.6 }}>
-              {caption ?? "\u00a0"}
-            </motion.div>
-          </div>
-        </motion.div>
-      )}
+          className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 rounded-full bg-[#fff3dc] shadow-[0_0_24px_8px_rgb(255_214_160/0.55),0_0_80px_30px_rgb(255_190_120/0.2)]"
+          initial={{ y: 4, opacity: 0, scale: 0.6 }}
+          animate={p >= 1 ? { y: -22, opacity: 1, scale: 1 } : { y: 4, opacity: 0, scale: 0.6 }}
+          transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+        />
+      </div>
+      <motion.div
+        className="absolute inset-x-0 top-1/2 mt-7 text-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: done ? 0 : 1 }}
+        transition={{ duration: 0.8, delay: done ? 0 : 0.2 }}
+      >
+        <div className="text-[11px] font-medium uppercase tracking-[0.42em] text-white/80">Augustas Armalis</div>
+        <div className="mt-2 text-[11px] tabular-nums tracking-[0.08em] text-white/40">{caption ?? "\u00a0"}</div>
+      </motion.div>
     </motion.div>
   );
 }

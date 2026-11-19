@@ -2,7 +2,8 @@
 
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Environment, Html, Sparkles } from "@react-three/drei";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
+import { BookOpen, Camera as CameraIcon, Headphones as Headphones2, PenLine, Piano, Power, Send, type LucideIcon } from "lucide-react";
 import * as THREE from "three";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { owner, type UserId } from "@/content";
@@ -36,6 +37,7 @@ import {
   type ObjKind,
   type Placement,
 } from "./scene/shared";
+import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
 import { Birds, Ground, Lake, Mountains, Sky, Trees, makeSkyMaterial } from "./scene/World";
 
@@ -201,12 +203,30 @@ function Piece({
       }}
     >
       {children}
-      {hover && hoverable && label && (
-        <Html position={[0, 0.16, 0]} center style={{ pointerEvents: "none" }} zIndexRange={[20, 0]}>
-          <div className="whitespace-nowrap rounded-full bg-black/45 px-2.5 py-[3px] text-[12px] font-medium text-white backdrop-blur-md">{label}</div>
+      {hoverable && label && (
+        <Html position={[0, 0.2, 0]} center style={{ pointerEvents: "none" }} zIndexRange={[20, 0]}>
+          <GlassTag label={label} show={hover} />
         </Html>
       )}
     </group>
+  );
+}
+
+const ICONS: Record<string, LucideIcon> = { Piano: Piano, Camera: CameraIcon, Music: Headphones2, Read: BookOpen, Sketch: PenLine, Fly: Send, Start: Power };
+
+// Liquid Glass hover tag: a small frosted capsule with an icon, springing in.
+function GlassTag({ label, show }: { label: string; show: boolean }) {
+  const I = ICONS[label];
+  return (
+    <motion.div
+      initial={false}
+      animate={{ opacity: show ? 1 : 0, y: show ? 0 : 6, scale: show ? 1 : 0.92 }}
+      transition={{ type: "spring", stiffness: 520, damping: 30 }}
+      className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/40 bg-white/22 py-1 pl-2 pr-2.5 text-[12px] font-semibold text-white shadow-[0_8px_24px_-8px_rgb(0_0_0/0.45),inset_0_1px_0_rgb(255_255_255/0.5)] backdrop-blur-xl backdrop-saturate-150 [text-shadow:0_1px_6px_rgb(0_0_0/0.35)]"
+    >
+      {I && <I size={13} strokeWidth={2.2} />}
+      {label}
+    </motion.div>
   );
 }
 
@@ -278,7 +298,7 @@ function DustPuffs({ lands }: { lands: Land[] }) {
 
 // ---------- scene ----------
 
-type SceneApi = { snap: () => string | null; reader: MutableRefObject<ReaderApi | null>; sketch: MutableRefObject<SketchApi | null> };
+type SceneApi = { skip: () => void; snap: () => string | null; reader: MutableRefObject<ReaderApi | null>; sketch: MutableRefObject<SketchApi | null> };
 
 function Scene({
   mobile,
@@ -335,6 +355,14 @@ function Scene({
   const sw = mobile ? PHONE.aw : MONITOR.aw;
   const sh = mobile ? PHONE.ah : MONITOR.ah;
   const screenMat = useMemo(() => makeScreenMaterial([sw, sh]), [sw, sh]);
+  // idle face: a lock screen with the live time (dark after Shut Down)
+  const lock = useMemo(() => makeLockScreen(mobile), [mobile]);
+  useEffect(() => {
+    screenMat.uniforms.uLock.value = lock.tex;
+    return () => lock.dispose();
+  }, [lock, screenMat]);
+  const lockOn = useRef(skipIntro ? 0 : 1);
+  const offRef = useRef(skipIntro);
   const envSky = useMemo(() => makeSkyMaterial(true), []);
   const screen = useRef<THREE.Mesh | null>(null);
   const introAt = useRef<number | null>(null);
@@ -383,6 +411,7 @@ function Scene({
     return o;
   }, []);
   const skyTick = useRef(-1);
+  const lastH = useRef(-1);
   const lastLabel = useRef("");
 
   useEffect(() => {
@@ -468,6 +497,7 @@ function Scene({
       v.fromLook.copy(v.look);
       v.fromUp.copy(cam.up);
       input.current.last = performance.now();
+      offRef.current = true;
       play("shutdown");
       setStage(reduced ? "idle" : "wake");
     }
@@ -496,6 +526,7 @@ function Scene({
   startRef.current = () => {
     if (stage.current !== "idle" || !screen.current || !ready()) return;
     document.body.style.cursor = "";
+    offRef.current = false;
     play("boot");
     if (reduced) {
       setStage("done");
@@ -598,6 +629,10 @@ function Scene({
   exitRef.current = exit;
 
   apiRef.current = {
+    skip: () => {
+      const a = introAt.current;
+      if (a !== null && nowS() - a < INTRO + 1.6) introAt.current = nowS() - (INTRO + 3.2);
+    },
     snap: () => {
       gl.render(scene, cam);
       try {
@@ -714,9 +749,11 @@ function Scene({
 
   const updateSky = (now: number) => {
     SKY_U.uTime.value = now;
-    if (now - skyTick.current < 1 && skyTick.current > 0) return;
+    const h = clockHours();
+    if (now - skyTick.current < 1 && skyTick.current > 0 && Math.abs(h - lastH.current) < 0.003) return;
     skyTick.current = now;
-    const s = skyState(clockHours());
+    lastH.current = h;
+    const s = skyState(h);
     applySky(s);
     gl.toneMappingExposure = s.exposure;
     fog.color.copy(s.horizon);
@@ -756,8 +793,13 @@ function Scene({
     const el = now - st.current;
     const reflect = mats.reflect;
 
-    // display glint once it has settled
+    // arrival mist thins out as the camera comes down
     const at = introAt.current;
+    const mist = instant ? 0 : at === null ? 0.4 : 0.4 * (1 - smooth(clamp01((now - at) / 3.4)));
+    SKY_U.uMist.value = mist;
+    fog.near = 20 * (1 - mist * 2.2) + 0.5;
+    fog.far = 170 * (1 - mist * 2.2) + 6;
+    // display glint once it has settled
     if (at !== null && !instant) {
       const tg = now - at - INTRO - 1.25;
       glint.value = tg > 0 && tg < 1.1 ? tg / 1.1 : -1;
@@ -778,6 +820,12 @@ function Scene({
       f.q.copy(cam.quaternion).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.2 + Math.sin(now * 0.9) * 0.05, 0.6, 0.1)));
     }
 
+    // lock screen fades in once the display has settled; off while booting,
+    // and dark after Shut Down until the next boot
+    const lockTarget = (s === "idle" || s === "focus" || s === "unfocus" || s === "fly" || s === "land") && !offRef.current ? 1 : 0;
+    lockOn.current += (lockTarget - lockOn.current) * Math.min(1, dt * (lockTarget ? 1.5 : 6));
+    const settled = at === null || instant ? 1 : clamp01((now - at - INTRO - 1.2) / 0.8);
+    screenMat.uniforms.uLockMix.value = lockOn.current * settled;
     if (s === "idle" && nav === "explore") {
       exploreStep(dt);
       reflect.opacity = 1;
@@ -996,13 +1044,13 @@ function Scene({
 function PlaneLabel({ spot }: { spot: { pos: [number, number, number] } }) {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const t = window.setTimeout(() => setShow(true), 3600);
+    const t = window.setTimeout(() => setShow(true), (INTRO + 4) * 1000);
     return () => window.clearTimeout(t);
   }, []);
   if (!show) return null;
   return (
-    <Html position={[spot.pos[0], DESK.top + 0.06, spot.pos[2]]} center style={{ pointerEvents: "none" }} zIndexRange={[15, 0]}>
-      <div className="animate-pulse whitespace-nowrap rounded-full bg-white/70 px-2 py-[2px] text-[10px] font-semibold text-black/70 backdrop-blur">Fly ✈︎</div>
+    <Html position={[spot.pos[0], DESK.top + 0.1, spot.pos[2]]} center style={{ pointerEvents: "none" }} zIndexRange={[15, 0]}>
+      <GlassTag label="Fly" show />
     </Html>
   );
 }
@@ -1105,7 +1153,13 @@ export default function Room({
     return () => window.clearTimeout(t);
   }, [ready]);
 
-  const idle = stage === "idle" && active && revealed && mode === "none";
+  const [introDone, setIntroDone] = useState(false);
+  useEffect(() => {
+    if (!revealed) return;
+    const t = window.setTimeout(() => setIntroDone(true), (skipIntro || reduced ? 0.4 : INTRO + 2.4) * 1000);
+    return () => window.clearTimeout(t);
+  }, [revealed, skipIntro, reduced]);
+  const idle = stage === "idle" && active && revealed && introDone && mode === "none";
   const live = active;
   const exit = useCallback(() => exitRef.current?.(), []);
 
@@ -1218,13 +1272,22 @@ export default function Room({
     <div
       className="absolute inset-0 touch-none select-none"
       style={{ cursor: mode === "plane" ? "crosshair" : mode !== "none" && mode !== "music" ? "default" : !idle ? "default" : dragging ? "grabbing" : "grab" }}
-      onPointerDown={onDown}
+      onPointerDown={(e) => {
+        // a click during the arrival skips straight to the desk
+        if (revealed && !introDone) {
+          apiRef.current?.skip();
+          setIntroDone(true);
+        }
+        onDown(e);
+      }}
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerCancel={onUp}
       onWheel={(e) => {
         if (!orbiting) return;
-        input.current.zoom += e.deltaY;
+        // like Maps with natural scrolling: a two-finger pull toward you zooms
+        // out, a push away zooms in; a trackpad pinch arrives as ctrl+wheel
+        input.current.zoom += e.ctrlKey ? e.deltaY * 2.5 : -e.deltaY;
         input.current.last = performance.now();
       }}
     >
@@ -1302,7 +1365,7 @@ export default function Room({
       </div>
 
       <AnimatePresence>
-        {revealed && active && mode === "none" && (stage === "idle" || stage === "unfocus") && (
+        {revealed && introDone && active && mode === "none" && (stage === "idle" || stage === "unfocus") && (
           <NavBar
             key="nav"
             nav={nav}
@@ -1349,7 +1412,7 @@ export default function Room({
         {mode === "plane" && <FlightUI key="plane" onLand={exit} mobile={isMobile} />}
       </AnimatePresence>
 
-      <Preloader progress={progress} done={revealed} caption={progress > 0.5 ? caption : undefined} />
+      <Preloader progress={progress} done={revealed} caption={caption} />
     </div>
   );
 }

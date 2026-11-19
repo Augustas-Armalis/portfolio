@@ -61,14 +61,26 @@ export function PowerOverlay() {
           className="fixed inset-0 z-[6000] flex items-center justify-center bg-black"
         >
           {restarting && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4, duration: 0.3 }} className="flex flex-col items-center gap-12">
-              <span className="text-[76px] font-semibold leading-none tracking-[-0.04em] text-white">A</span>
-              <div className="h-[4px] w-[168px] overflow-hidden rounded-full bg-white/20">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, filter: "blur(6px)" }}
+              animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+              transition={{ delay: 0.35, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              className="relative flex flex-col items-center gap-14"
+            >
+              {/* a faint light behind the mark, like a display warming up */}
+              <motion.span
+                aria-hidden
+                className="absolute -top-24 h-64 w-64 rounded-full bg-[radial-gradient(closest-side,rgb(255_255_255/0.1),transparent)]"
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+              />
+              <span className="relative text-[84px] font-semibold leading-none tracking-[-0.045em] text-white">A</span>
+              <div className="relative h-[5px] w-[180px] overflow-hidden rounded-full bg-white/[0.16]">
                 <motion.div
                   className="h-full w-full origin-left rounded-full bg-white"
-                  initial={{ scaleX: 0.04 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ delay: 0.5, duration: 1.9, ease: [0.4, 0, 0.6, 1] }}
+                  initial={{ scaleX: 0.03 }}
+                  animate={{ scaleX: [0.03, 0.42, 0.58, 1] }}
+                  transition={{ delay: 0.6, duration: 1.8, times: [0, 0.35, 0.6, 1], ease: [0.4, 0, 0.6, 1] }}
                 />
               </div>
             </motion.div>

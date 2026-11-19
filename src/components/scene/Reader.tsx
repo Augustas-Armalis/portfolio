@@ -1,6 +1,6 @@
 "use client";
 
-import { useFrame } from "@react-three/fiber";
+import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { play } from "@/lib/sfx";
@@ -109,6 +109,14 @@ function drawPage(page: Page | undefined, novel: Novel | null, left: boolean, re
     g.fillRect(0, 0, PX.w, PX.h);
     g.restore();
   }
+  if (!left) {
+    // gutter: the page curves into the spine
+    const gr = g.createLinearGradient(0, 0, PX.w * 0.14, 0);
+    gr.addColorStop(0, "rgba(90,70,40,0.16)");
+    gr.addColorStop(1, "rgba(90,70,40,0)");
+    g.fillStyle = gr;
+    g.fillRect(0, 0, PX.w, PX.h);
+  }
   g.fillStyle = "#2a2622";
   g.textBaseline = "alphabetic";
   if (!page || !novel) return c;
@@ -216,7 +224,13 @@ export function Reader({
   const cover = useRef<THREE.Group>(null);
   const novel = useRef<Novel | null>(null);
   const pages = useRef<Page[]>([]);
-  const st = useRef({ spread: 0, open: 0, openTarget: 0, turn: null as null | { dir: 1 | -1; t0: number }, closing: false });
+  const st = useRef({ spread: 0, open: 0, openTarget: 0, turn: null as null | { dir: 1 | -1; t0: number; from: number; to: number; drag: boolean }, closing: false });
+  const root = useRef<THREE.Group>(null);
+  const shadowMat = useMemo(() => {
+    const c = m.blob.clone();
+    c.opacity = 0;
+    return c;
+  }, [m]);
   const texCache = useRef(new Map<string, THREE.CanvasTexture>());
   // pages are lit like under a reading lamp, so they read at any time of day
   const left = useMemo(() => new THREE.MeshBasicMaterial({ color: "#f3efe6", toneMapped: false }), []);
@@ -298,13 +312,16 @@ export function Reader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reading]);
 
-  const turn = (dir: 1 | -1) => {
+  // progress of the turning page: 0 = lying on the right, 1 = on the left
+  const prog = () => (turnMat.uniforms.uP.value as number);
+  const begin = (dir: 1 | -1, drag: boolean) => {
     const s = st.current;
-    if (s.turn || s.open < 0.98 || !pages.current.length) return;
-    if (dir === 1 && 2 * s.spread + 1 >= pages.current.length) return;
-    if (dir === -1 && s.spread === 0) return;
-    s.turn = { dir, t0: nowS() };
-    play("page");
+    if (s.turn || s.open < 0.98 || !pages.current.length) return false;
+    if (dir === 1 && 2 * s.spread + 1 >= pages.current.length) return false;
+    if (dir === -1 && s.spread === 0) return false;
+    const p0 = dir === 1 ? 0 : 1;
+    turnMat.uniforms.uP.value = p0;
+    s.turn = { dir, t0: nowS(), from: p0, to: drag ? p0 : 1 - p0, drag };
     if (dir === 1) {
       turnMat.uniforms.uFront.value = tex(2 * s.spread, false);
       turnMat.uniforms.uBack.value = tex(2 * s.spread + 1, true);
@@ -315,6 +332,30 @@ export function Reader({
       left.map = s.spread - 1 === 0 ? blank : tex(2 * s.spread - 3, true);
     }
     left.needsUpdate = right.needsUpdate = true;
+    return true;
+  };
+  const turn = (dir: 1 | -1) => {
+    if (begin(dir, false)) play("page");
+  };
+  // let go of a dragged page: finish the turn past halfway, else fall back
+  const release = () => {
+    const t = st.current.turn;
+    if (!t || !t.drag) return;
+    const p = prog();
+    const forward = t.dir === 1 ? p > 0.35 : p > 0.65;
+    t.drag = false;
+    t.from = p;
+    t.to = forward ? 1 : 0;
+    t.t0 = nowS();
+    if ((t.dir === 1 && forward) || (t.dir === -1 && !forward)) play("page");
+  };
+  const dragTo = (e: ThreeEvent<PointerEvent>) => {
+    const t = st.current.turn;
+    if (!t || !t.drag || !root.current) return;
+    const local = root.current.worldToLocal(e.point.clone());
+    // x from the spine: +PW = page lying right, -PW = lying left
+    const x = THREE.MathUtils.clamp((local.x - SPINE_X) / PW, -1, 1);
+    turnMat.uniforms.uP.value = Math.acos(x) / Math.PI;
   };
 
   apiRef.current = {
@@ -345,22 +386,30 @@ export function Reader({
     const ang = easeInOutCubic(clamp01(s.open)) * Math.PI + peek * (1 - s.open);
     if (cover.current) cover.current.rotation.z = ang;
     if (s.turn) {
-      const k = clamp01((nowS() - s.turn.t0) / 0.75);
-      const e = easeInOutCubic(k);
-      turnMat.uniforms.uP.value = s.turn.dir === 1 ? e : 1 - e;
       turnMat.uniforms.uCurl.value = 1;
-      if (k >= 1) {
-        s.spread += s.turn.dir;
-        s.turn = null;
-        show(s.spread);
+      if (!s.turn.drag) {
+        const k = clamp01((nowS() - s.turn.t0) / (0.6 * Math.max(0.35, Math.abs(s.turn.to - s.turn.from))));
+        turnMat.uniforms.uP.value = s.turn.from + (s.turn.to - s.turn.from) * easeInOutCubic(k);
+        if (k >= 1) {
+          const done = (s.turn.dir === 1 && s.turn.to === 1) || (s.turn.dir === -1 && s.turn.to === 0);
+          if (done) s.spread += s.turn.dir;
+          s.turn = null;
+          show(s.spread);
+        }
       }
-    }
+      // the lifted page throws a soft shadow onto the page beneath
+      shadowMat.opacity = Math.sin(prog() * Math.PI) * 0.28;
+    } else shadowMat.opacity = 0;
   });
 
   const open = st.current.open > 0.02 || reading;
   const turning = !!st.current.turn;
   return (
-    <group>
+    <group ref={root} onPointerUp={release} onPointerLeave={release}>
+      {/* ribbon bookmark, out of the head of the spine and over the foot */}
+      <mesh material={m.ribbon} position={[SPINE_X + 0.032, BT + 0.0009, 0.016]} rotation={[0, 0.05, 0]}>
+        <boxGeometry args={[0.0055, 0.0004, BD + 0.03]} />
+      </mesh>
       {/* back board + page block */}
       <mesh material={m.paperBlack} position={[0, 0.0007, 0]} castShadow receiveShadow>
         <boxGeometry args={[BW, 0.0014, BD]} />
@@ -373,21 +422,53 @@ export function Reader({
       </mesh>
       {/* right page surface */}
       {open && (
-        <mesh material={right} position={[0.0012, BT - 0.0003, 0]} rotation={[-Math.PI / 2, 0, 0]} onClick={(e) => (e.stopPropagation(), turn(1))}>
+        <mesh
+          material={right}
+          position={[0.0012, BT - 0.0003, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          onPointerDown={(e) => {
+            if (!reading) return;
+            e.stopPropagation();
+            begin(1, true);
+            dragTo(e);
+          }}
+          onPointerMove={dragTo}
+        >
           <planeGeometry args={[PW, PD]} />
         </mesh>
       )}
       {/* turning page, pivoting on the spine */}
-      {turning && <mesh geometry={turnGeo} material={turnMat} position={[SPINE_X, BT + 0.0004, 0]} frustumCulled={false} />}
+      {turning && (
+        <mesh geometry={turnGeo} material={turnMat} position={[SPINE_X, BT + 0.0004, 0]} frustumCulled={false} onPointerMove={dragTo} />
+      )}
+      <mesh material={shadowMat} position={[SPINE_X + PW * 0.4, BT + 0.0002, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[PW * 0.9, PD * 1.05]} />
+      </mesh>
       {/* cover, hinged on the spine; its inside carries the left page */}
       <group ref={cover} position={[SPINE_X, BT, 0]}>
         <mesh material={m.cover} position={[BW / 2, 0.0007, 0]} castShadow>
           <boxGeometry args={[BW, 0.0014, BD]} />
         </mesh>
         {open && (
-          <mesh material={left} position={[BW / 2 + 0.0012, -0.0003, 0]} rotation={[Math.PI / 2, 0, Math.PI]} onClick={(e) => (e.stopPropagation(), turn(-1))}>
-            <planeGeometry args={[PW, PD]} />
-          </mesh>
+          <>
+            {/* the pages already read: a thin block with paper edges */}
+            <mesh material={m.pages} position={[BW / 2 + 0.0012, -0.0028, 0]}>
+              <boxGeometry args={[BW - 0.0024, 0.0044, BD - 0.004]} />
+            </mesh>
+            <mesh
+              material={left}
+              position={[BW / 2 + 0.0012, -0.0052, 0]}
+              rotation={[Math.PI / 2, 0, Math.PI]}
+              onPointerDown={(e) => {
+                if (!reading) return;
+                e.stopPropagation();
+                if (begin(-1, true)) dragTo(e);
+              }}
+              onPointerMove={dragTo}
+            >
+              <planeGeometry args={[PW, PD]} />
+            </mesh>
+          </>
         )}
       </group>
     </group>

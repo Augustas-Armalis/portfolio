@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { getAnalyser, tapMediaElement } from "@/lib/audio";
 import { play } from "@/lib/sfx";
 
@@ -187,30 +188,35 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
     if (track) start();
   }, [track, start]);
 
-  // live waveform
+  // live spectrum: soft rounded bars
   useEffect(() => {
     let raf = 0;
     const an = getAnalyser();
-    const buf = an ? new Uint8Array(an.fftSize) : null;
+    const buf = an ? new Uint8Array(an.frequencyBinCount) : null;
+    const lvl = new Float32Array(18);
     const draw = () => {
       raf = requestAnimationFrame(draw);
       const c = wave.current;
-      if (!c || !an || !buf) return;
+      if (!c) return;
       const g = c.getContext("2d")!;
       const w = (c.width = c.clientWidth * 2);
       const h = (c.height = c.clientHeight * 2);
-      an.getByteTimeDomainData(buf);
+      if (an && buf) an.getByteFrequencyData(buf);
       g.clearRect(0, 0, w, h);
-      g.strokeStyle = "rgba(255,255,255,0.85)";
-      g.lineWidth = 2;
-      g.beginPath();
-      for (let x = 0; x < w; x++) {
-        const v = buf[Math.floor((x / w) * buf.length)] / 128 - 1;
-        const y = h / 2 + v * h * 0.9;
-        if (x) g.lineTo(x, y);
-        else g.moveTo(x, y);
+      const n = lvl.length;
+      const bw = w / n;
+      for (let i = 0; i < n; i++) {
+        const lo = Math.floor(Math.pow(i / n, 1.8) * 120) + 1;
+        const v = buf ? buf[lo] / 255 : 0;
+        lvl[i] += (v - lvl[i]) * (v > lvl[i] ? 0.5 : 0.12);
+        const bh = Math.max(h * 0.12, lvl[i] * h * 0.95);
+        g.fillStyle = "rgba(255,255,255,0.88)";
+        const x = i * bw + bw * 0.22;
+        const r = Math.min(bw * 0.28, bh / 2);
+        g.beginPath();
+        g.roundRect(x, (h - bh) / 2, bw * 0.56, bh, r);
+        g.fill();
       }
-      g.stroke();
     };
     draw();
     return () => cancelAnimationFrame(raf);
@@ -218,64 +224,115 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   const dur = track?.duration ?? 1;
+  const bar = useRef<HTMLDivElement>(null);
+  const seek = (clientX: number) => {
+    const el = bar.current;
+    if (!el || !media) return;
+    const r = el.getBoundingClientRect();
+    media.currentTime = Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * dur;
+  };
+  const glass =
+    "border border-white/30 bg-white/16 shadow-[0_24px_60px_-20px_rgb(0_0_0/0.55),inset_0_1px_0_rgb(255_255_255/0.45),inset_0_-1px_0_rgb(255_255_255/0.08)] backdrop-blur-2xl backdrop-saturate-[1.8]";
+  const icon = "press pointer-events-auto grid place-items-center rounded-full text-white/90 transition-colors hov:hover:bg-white/15 hov:hover:text-white";
   return (
     <>
       <TopBar title="Music" hint="Headphones on" onExit={onExit} />
-      <Bottom>
-        <div className={`${pill} pointer-events-auto flex w-full max-w-[560px] items-center gap-3 rounded-[22px] p-2.5 pr-4`} onClick={(e) => e.stopPropagation()}>
-          {track && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={track.cover} alt="" className="h-12 w-12 shrink-0 rounded-[10px] object-cover" />
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate text-[13px] font-semibold">{track?.title ?? "Loading…"}</div>
-                <div className="truncate text-[11px] text-white/60">{track?.artist}</div>
-              </div>
-              <canvas ref={wave} className="h-6 w-24 shrink-0 opacity-80" />
+      <motion.div
+        className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-3"
+        initial={{ opacity: 0, y: 40, scale: 0.94 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 40, scale: 0.94 }}
+        transition={{ type: "spring", stiffness: 300, damping: 28 }}
+      >
+        <div className={`${glass} pointer-events-auto w-full max-w-[600px] rounded-[28px] p-3 text-white`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-3.5">
+            <AnimatePresence mode="popLayout" initial={false}>
+              {track && (
+                <motion.img
+                  key={track.cover}
+                  src={track.cover}
+                  alt=""
+                  className="h-[60px] w-[60px] shrink-0 rounded-[14px] object-cover shadow-[0_10px_24px_-8px_rgb(0_0_0/0.6)]"
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: playing ? 1 : 0.92 }}
+                  exit={{ opacity: 0, scale: 0.85 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 26 }}
+                />
+              )}
+            </AnimatePresence>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[15px] font-semibold tracking-[-0.01em] [text-shadow:0_1px_8px_rgb(0_0_0/0.25)]">{track?.title ?? "Loading…"}</div>
+              <div className="truncate text-[12px] text-white/70">{track?.artist}</div>
             </div>
-            <div className="mt-1.5 flex items-center gap-2 text-[10px] tabular-nums text-white/60">
-              <span>{fmt(t)}</span>
-              <input
-                type="range"
-                min={0}
-                max={dur}
-                step={0.1}
-                value={Math.min(t, dur)}
-                onChange={(e) => {
-                  if (media) media.currentTime = +e.target.value;
+            <canvas ref={wave} className="h-8 w-[88px] shrink-0" aria-hidden />
+            <div className="flex items-center">
+              <button type="button" aria-label="Previous" className={`${icon} h-9 w-9`} onClick={() => setI((x) => x - 1)}>
+                <SkipBack size={18} fill="currentColor" />
+              </button>
+              <button
+                type="button"
+                aria-label={playing ? "Pause" : "Play"}
+                className={`${icon} h-11 w-11`}
+                onClick={() => {
+                  if (!media) return;
+                  if (playing) {
+                    media.pause();
+                    setPlaying(false);
+                  } else start();
                 }}
-                className="h-1 flex-1 cursor-pointer accent-white"
-                aria-label="Seek"
-              />
-              <span>{fmt(dur)}</span>
+              >
+                {playing ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
+              </button>
+              <button type="button" aria-label="Next" className={`${icon} h-9 w-9`} onClick={() => setI((x) => x + 1)}>
+                <SkipForward size={18} fill="currentColor" />
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-0.5">
-            <button type="button" aria-label="Previous" className={`${btn} px-2.5`} onClick={() => setI((x) => x - 1)}>
-              ‹‹
-            </button>
-            <button
-              type="button"
-              aria-label={playing ? "Pause" : "Play"}
-              className={`${btn} grid h-9 w-9 place-items-center bg-white px-0 text-black hov:hover:bg-white hov:hover:text-black`}
-              onClick={() => {
-                if (!media) return;
-                if (playing) {
-                  media.pause();
-                  setPlaying(false);
-                } else start();
+          <div className="mt-2.5 flex items-center gap-2.5 px-1 text-[10.5px] font-medium tabular-nums text-white/65">
+            <span className="w-8">{fmt(t)}</span>
+            <div
+              ref={bar}
+              className="group relative h-4 flex-1 cursor-pointer"
+              onPointerDown={(e) => {
+                (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                seek(e.clientX);
               }}
+              onPointerMove={(e) => {
+                if (e.buttons) seek(e.clientX);
+              }}
+              role="slider"
+              aria-label="Seek"
+              aria-valuemin={0}
+              aria-valuemax={dur}
+              aria-valuenow={Math.round(t)}
             >
-              {playing ? "❚❚" : "▶"}
-            </button>
-            <button type="button" aria-label="Next" className={`${btn} px-2.5`} onClick={() => setI((x) => x + 1)}>
-              ››
-            </button>
+              <div className="absolute inset-x-0 top-1/2 h-[5px] -translate-y-1/2 overflow-hidden rounded-full bg-white/22 transition-[height] group-hover:h-[7px]">
+                <div className="h-full rounded-full bg-white/90" style={{ width: `${Math.min(100, (t / dur) * 100)}%` }} />
+              </div>
+            </div>
+            <span className="w-8 text-right">{fmt(dur)}</span>
           </div>
+          {tracks.length > 1 && (
+            <div className="mt-2 flex gap-1.5 px-0.5">
+              {tracks.map((tr, k) => {
+                const on = track?.id === tr.id;
+                return (
+                  <button
+                    key={tr.id}
+                    type="button"
+                    onClick={() => setI(k)}
+                    className={`press pointer-events-auto flex min-w-0 items-center gap-2 rounded-full py-1 pl-1 pr-3 text-[11.5px] font-medium transition-colors ${on ? "bg-white/85 text-black" : "bg-white/10 text-white/80 hov:hover:bg-white/18"}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={tr.cover} alt="" className="h-5 w-5 rounded-full object-cover" />
+                    <span className="truncate">{tr.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
-      </Bottom>
+      </motion.div>
     </>
   );
 }

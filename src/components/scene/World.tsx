@@ -3,7 +3,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { DESK, GLSL_LAKE, GLSL_NOISE, GLSL_PATH, LAKE, MONITOR, lakeK, pathX } from "./shared";
 import { GLSL_SKY, SKY_U } from "./sky";
 
@@ -98,6 +98,8 @@ export function makeSkyMaterial(env = false) {
           vec3 sunC = mix(uGlow, vec3(1.0, 0.95, 0.88), 0.55);
           col += sunC * disc * 38.0 * (1.0 - cover * 0.85) * sunVis;
           col += uGlow * (pow(max(sd, 0.0), 900.0) * 5.0 + pow(max(sd, 0.0), 160.0) * 0.8) * sunVis;
+          // arrival mist
+          col = mix(col, uHorizon * 1.05 + uSkyCol * 0.2, clamp(uMist * 3.0, 0.0, 0.9) * (1.0 - smoothstep(0.1, 0.7, h)));
         #endif
         col += (hash12(gl_FragCoord.xy + fract(uTime)) - 0.5) / 255.0;
         gl_FragColor = vec4(col, 1.0);
@@ -192,7 +194,7 @@ export function Ground({ fogDensity }: { fogDensity: number }) {
             vec3 col = alb * (uSkyCol * 0.85 + uKeyCol * max(uKeyDir.y, 0.0) * sh * 0.9);
             float dist = length(vWorld - cameraPosition);
             vec3 fd = normalize(vec3(vWorld.x - cameraPosition.x, 0.015, vWorld.z - cameraPosition.z));
-            col = mix(col, skyBase(fd), 1.0 - exp(-dist * uFog));
+            col = mix(col, skyBase(fd), 1.0 - exp(-dist * (uFog + uMist)));
             gl_FragColor = vec4(col, 1.0);
             #include <tonemapping_fragment>
             #include <colorspace_fragment>
@@ -327,7 +329,7 @@ function makeRangeMaterial(rg: Range) {
         vec3 d = normalize(vWorld - cameraPosition);
         vec3 air = skyBase(normalize(vec3(d.x, max(d.y, 0.0) * 0.6 + 0.01, d.z)));
         float haze = clamp(uHaze + (1.0 - smoothstep(0.0, uTop * 0.6, vWorld.y)) * 0.16, 0.0, 0.95);
-        col = mix(col, air, haze);
+        col = mix(col, air, max(haze, clamp(uMist * 5.0, 0.0, 1.0)));
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -395,31 +397,164 @@ function withWind(mat: THREE.MeshStandardMaterial, amount: number) {
   return mat;
 }
 
+// Foliage textures, painted once: birch leaf clusters and pine needle sprays.
+function leafTexture(kind: "birch" | "pine") {
+  const S = 256;
+  const c = document.createElement("canvas");
+  c.width = c.height = S;
+  const g = c.getContext("2d")!;
+  const r = rng(kind === "birch" ? 5 : 9);
+  if (kind === "birch") {
+    for (let i = 0; i < 260; i++) {
+      const a = r() * Math.PI * 2;
+      const d = Math.sqrt(r()) * S * 0.42;
+      const x = S / 2 + Math.cos(a) * d;
+      const y = S / 2 + Math.sin(a) * d * 0.9;
+      const l = 40 + r() * 28;
+      g.fillStyle = `hsl(${78 + r() * 26}, ${40 + r() * 25}%, ${l}%)`;
+      g.beginPath();
+      g.ellipse(x, y, 5 + r() * 5, 3 + r() * 3, r() * Math.PI, 0, Math.PI * 2);
+      g.fill();
+    }
+  } else {
+    // a branch spray: central twig with needles, tapering to the tip
+    g.strokeStyle = "#3a2c20";
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(0, S / 2);
+    g.lineTo(S, S / 2);
+    g.stroke();
+    for (let i = 0; i < 520; i++) {
+      const t = r();
+      const x = t * S;
+      const w = (1 - t * 0.85) * S * 0.46;
+      const side = r() < 0.5 ? -1 : 1;
+      const len = (0.3 + r() * 0.7) * w;
+      g.strokeStyle = `hsl(${118 + r() * 30}, ${26 + r() * 20}%, ${14 + r() * 16}%)`;
+      g.lineWidth = 1.6;
+      g.beginPath();
+      g.moveTo(x, S / 2);
+      g.lineTo(x + len * 0.35, S / 2 + side * len);
+      g.stroke();
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+function barkTexture() {
+  const c = document.createElement("canvas");
+  c.width = 64;
+  c.height = 256;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#e9e6de";
+  g.fillRect(0, 0, 64, 256);
+  const r = rng(3);
+  for (let i = 0; i < 40; i++) {
+    g.fillStyle = `rgba(30,28,26,${0.5 + r() * 0.4})`;
+    g.fillRect(r() * 64, r() * 256, 6 + r() * 18, 1.5 + r() * 3);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// A quad from `a` along `dir` (length L, width W, tilted by `up`), with
+// normals pointing away from `center` so the crown shades like a volume.
+function card(pos: number[], nor: number[], uv: number[], idx: number[], a: THREE.Vector3, dir: THREE.Vector3, side: THREE.Vector3, L: number, W: number, center: THREE.Vector3) {
+  const base = pos.length / 3;
+  const pts = [
+    a.clone().addScaledVector(side, -W / 2),
+    a.clone().addScaledVector(side, W / 2),
+    a.clone().addScaledVector(dir, L).addScaledVector(side, W / 2),
+    a.clone().addScaledVector(dir, L).addScaledVector(side, -W / 2),
+  ];
+  const uvs = [0, 0, 0, 1, 1, 1, 1, 0];
+  pts.forEach((p, i) => {
+    pos.push(p.x, p.y, p.z);
+    const n = p.clone().sub(center).normalize();
+    nor.push(n.x, n.y * 0.6 + 0.4, n.z);
+    uv.push(uvs[i * 2], uvs[i * 2 + 1]);
+  });
+  idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+}
+
+function buildPine() {
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  const r = rng(21);
+  const H = 9;
+  for (let lvl = 0; lvl < 11; lvl++) {
+    const y = 1.6 + lvl * 0.68;
+    const k = 1 - lvl / 11;
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2 + lvl * 0.7 + r() * 0.4;
+      const out = new THREE.Vector3(Math.cos(ang), -0.32 - r() * 0.1, Math.sin(ang)).normalize();
+      const side = new THREE.Vector3(-Math.sin(ang), 0, Math.cos(ang));
+      const L = 0.5 + k * 2.1;
+      card(pos, nor, uv, idx, new THREE.Vector3(0, y, 0), out, side, L, 0.55 + k * 0.9, new THREE.Vector3(0, y - 0.3, 0));
+    }
+  }
+  // tip
+  card(pos, nor, uv, idx, new THREE.Vector3(0, H - 1, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0), 1.3, 0.5, new THREE.Vector3(0, H - 1.5, 0));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+
+function buildBirchCrown() {
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  const r = rng(33);
+  const center = new THREE.Vector3(0, 5.2, 0);
+  for (let i = 0; i < 46; i++) {
+    const u = r() * 2 - 1;
+    const th = r() * Math.PI * 2;
+    const rad = 0.45 + r() * 0.85;
+    const p = new THREE.Vector3(Math.sqrt(1 - u * u) * Math.cos(th) * rad, u * rad * 1.6, Math.sqrt(1 - u * u) * Math.sin(th) * rad).add(center);
+    const dir = new THREE.Vector3(r() - 0.5, r() - 0.6, r() - 0.5).normalize();
+    const side = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+    if (side.lengthSq() < 0.01) side.set(1, 0, 0);
+    card(pos, nor, uv, idx, p.clone().addScaledVector(dir, -0.45), dir, side, 0.95, 0.95, center);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+
+function buildBirchTrunk() {
+  const parts = [new THREE.CylinderGeometry(0.045, 0.085, 6.6, 7, 4).translate(0, 3.3, 0)];
+  const r = rng(8);
+  for (let i = 0; i < 6; i++) {
+    const y = 3.2 + i * 0.45;
+    const ang = r() * Math.PI * 2;
+    const b = new THREE.CylinderGeometry(0.012, 0.022, 1.1, 4).translate(0, 0.55, 0);
+    b.rotateZ(0.9 + r() * 0.4);
+    b.rotateY(ang);
+    b.translate(0, y, 0);
+    parts.push(b);
+  }
+  const g = mergeGeometries(parts.map((p) => p.toNonIndexed()))!;
+  g.computeVertexNormals();
+  return g;
+}
+
 export function Trees() {
   const data = useMemo(() => {
-    // pine: thin trunk, stacked narrow cones
-    const pineParts = [new THREE.CylinderGeometry(0.06, 0.11, 2.2, 6).translate(0, 1.1, 0)];
-    [0, 1, 2, 3].forEach((i) => pineParts.push(new THREE.ConeGeometry(0.95 - i * 0.18, 2.3 - i * 0.25, 8).translate(0, 2.0 + i * 1.35, 0)));
-    const pine = mergeGeometries(pineParts.map((g) => g.toNonIndexed()))!;
-    pine.computeVertexNormals();
-    // birch: pale slender trunk, a few loose crowns
-    const trunk = new THREE.CylinderGeometry(0.05, 0.09, 6.5, 7).translate(0, 3.25, 0);
-    const crowns = [
-      [0.0, 5.6, 0.0, 1.1],
-      [0.35, 4.6, 0.2, 0.8],
-      [-0.3, 4.9, -0.2, 0.75],
-    ].map(([x, y, z, r]) => {
-      const g = new THREE.IcosahedronGeometry(r, 2);
-      const p = g.attributes.position;
-      for (let i = 0; i < p.count; i++) {
-        const v = new THREE.Vector3().fromBufferAttribute(p, i);
-        const k = 1 + 0.22 * (noised(v.x * 2.3 + x * 5, v.y * 2.3 + v.z * 1.7)[0] - 0.5) * 2;
-        p.setXYZ(i, v.x * k, v.y * k * 1.25, v.z * k);
-      }
-      return g.translate(x, y, z);
-    });
-    const birchCrown = mergeGeometries(crowns.map((g) => g.toNonIndexed()))!;
-    birchCrown.computeVertexNormals();
     const r = rng(77);
     const pines: { x: number; z: number; s: number }[] = [];
     const birches: { x: number; z: number; s: number }[] = [];
@@ -442,47 +577,61 @@ export function Trees() {
         const x = gx + (r() - 0.5) * spread * 1.6;
         const z = gz + (r() - 0.5) * spread * 0.5;
         if (lakeK(x, z) < 1.2 || Math.abs(x - pathX(z)) < 2) continue;
-        (kind === "p" ? pines : birches).push({ x, z, s: kind === "p" ? 1.6 + r() * 1.6 : 0.9 + r() * 0.5 });
+        (kind === "p" ? pines : birches).push({ x, z, s: kind === "p" ? 1.4 + r() * 1.4 : 0.9 + r() * 0.5 });
       }
     });
+    const leafB = leafTexture("birch");
+    const leafP = leafTexture("pine");
+    const bark = barkTexture();
+    const pineTrunk = new THREE.CylinderGeometry(0.07, 0.16, 9, 6).translate(0, 4.5, 0);
     return {
-      pine,
-      trunk,
-      birchCrown,
       pines,
       birches,
-      matPine: withWind(new THREE.MeshStandardMaterial({ color: "#1d2a1f", roughness: 1 }), 0.0015),
-      matTrunk: withWind(new THREE.MeshStandardMaterial({ color: "#e4e1d8", roughness: 0.8 }), 0.002),
-      matCrown: withWind(new THREE.MeshStandardMaterial({ color: "#58702f", roughness: 1 }), 0.002),
+      pine: buildPine(),
+      pineTrunk,
+      birchTrunk: buildBirchTrunk(),
+      birchCrown: buildBirchCrown(),
+      matPine: withWind(new THREE.MeshStandardMaterial({ map: leafP, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }), 0.0012),
+      matPineTrunk: withWind(new THREE.MeshStandardMaterial({ color: "#3b2d22", roughness: 1 }), 0.0012),
+      matBirch: withWind(new THREE.MeshStandardMaterial({ map: leafB, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }), 0.002),
+      matBirchTrunk: withWind(new THREE.MeshStandardMaterial({ map: bark, roughness: 0.85 }), 0.002),
     };
   }, []);
-  const refP = useRef<THREE.InstancedMesh>(null);
-  const refT = useRef<THREE.InstancedMesh>(null);
-  const refC = useRef<THREE.InstancedMesh>(null);
+  const refs = [useRef<THREE.InstancedMesh>(null), useRef<THREE.InstancedMesh>(null), useRef<THREE.InstancedMesh>(null), useRef<THREE.InstancedMesh>(null)];
   useEffect(() => {
     const o = new THREE.Object3D();
+    const col = new THREE.Color();
     data.pines.forEach((t, i) => {
       o.position.set(t.x, 0, t.z);
-      o.scale.set(t.s * 0.9, t.s * (1.1 + (i % 5) * 0.06), t.s * 0.9);
+      o.scale.set(t.s * 0.95, t.s * (1.05 + (i % 5) * 0.06), t.s * 0.95);
       o.rotation.set(0, i * 2.3, 0);
       o.updateMatrix();
-      refP.current?.setMatrixAt(i, o.matrix);
+      refs[0].current?.setMatrixAt(i, o.matrix);
+      refs[1].current?.setMatrixAt(i, o.matrix);
+      refs[0].current?.setColorAt(i, col.setHSL(0.3 + (i % 7) * 0.01, 0.35, 0.42 + (i % 3) * 0.05));
     });
     data.birches.forEach((t, i) => {
       o.position.set(t.x, 0, t.z);
       o.scale.set(t.s, t.s * (1 + (i % 4) * 0.08), t.s);
-      o.rotation.set(0, i * 1.9, (i % 3 - 1) * 0.04);
+      o.rotation.set(0, i * 1.9, ((i % 3) - 1) * 0.04);
       o.updateMatrix();
-      refT.current?.setMatrixAt(i, o.matrix);
-      refC.current?.setMatrixAt(i, o.matrix);
+      refs[2].current?.setMatrixAt(i, o.matrix);
+      refs[3].current?.setMatrixAt(i, o.matrix);
+      refs[3].current?.setColorAt(i, col.setHSL(0.2 + (i % 5) * 0.015, 0.45, 0.55 + (i % 3) * 0.06));
     });
-    [refP, refT, refC].forEach((r) => r.current && (r.current.instanceMatrix.needsUpdate = true));
+    refs.forEach((r) => {
+      if (!r.current) return;
+      r.current.instanceMatrix.needsUpdate = true;
+      if (r.current.instanceColor) r.current.instanceColor.needsUpdate = true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
   return (
     <>
-      <instancedMesh ref={refP} args={[data.pine, data.matPine, data.pines.length]} frustumCulled={false} castShadow={false} />
-      <instancedMesh ref={refT} args={[data.trunk, data.matTrunk, data.birches.length]} frustumCulled={false} />
-      <instancedMesh ref={refC} args={[data.birchCrown, data.matCrown, data.birches.length]} frustumCulled={false} />
+      <instancedMesh ref={refs[0]} args={[data.pine, data.matPine, data.pines.length]} frustumCulled={false} />
+      <instancedMesh ref={refs[1]} args={[data.pineTrunk, data.matPineTrunk, data.pines.length]} frustumCulled={false} />
+      <instancedMesh ref={refs[2]} args={[data.birchTrunk, data.matBirchTrunk, data.birches.length]} frustumCulled={false} />
+      <instancedMesh ref={refs[3]} args={[data.birchCrown, data.matBirch, data.birches.length]} frustumCulled={false} />
     </>
   );
 }
@@ -527,7 +676,7 @@ export function Lake({ fogDensity }: { fogDensity: number }) {
             col = mix(col, vec3(0.04, 0.045, 0.03) * (uSkyCol + uKeyCol * 0.3), smoothstep(0.92, 1.04, lk));
             float dist = length(vWorld - cameraPosition);
             vec3 fd = normalize(vec3(vWorld.x - cameraPosition.x, 0.015, vWorld.z - cameraPosition.z));
-            col = mix(col, skyBase(fd), 1.0 - exp(-dist * uFog));
+            col = mix(col, skyBase(fd), 1.0 - exp(-dist * (uFog + uMist)));
             gl_FragColor = vec4(col, 1.0);
             #include <tonemapping_fragment>
             #include <colorspace_fragment>

@@ -12,15 +12,21 @@ import {
   Copy,
   Github,
   Image as ImageIcon,
+  Info,
   Instagram,
+  Lock,
+  RotateCw,
   Linkedin,
   Mail,
+  MessageCircle,
   Music2,
   Pause,
   Play,
   Send,
   ListOrdered,
   Skull,
+  SkipBack,
+  SkipForward,
   Star,
   Trash2,
   Undo2,
@@ -63,7 +69,7 @@ import MusicShader from "./scene/MusicShader";
 import { Bars, DeskArt } from "./Desktop";
 import { useOS } from "@/store";
 import { AppIcon, Glyph, ICONS, iconBackground } from "./icons";
-import { Badge, Btn, Button, glass, Group, IconTile, InfoGrid, List, ListRow, SectionHeader, Squircle, StatsRow, useContextMenu, QuickLook, Row, SearchField, Segmented, SplitView, Switch, Toolbar, Visual, useChrome, type LookItem } from "./ui";
+import { Badge, Btn, Button, dragFile, glass, Group, IconTile, InfoGrid, List, ListRow, SectionHeader, Squircle, StatsRow, useContextMenu, QuickLook, Row, SearchField, Segmented, SplitView, Switch, Toolbar, Visual, useChrome, type LookItem } from "./ui";
 
 const Eyebrow = ({ children }: { children: React.ReactNode }) => (
   <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">{children}</div>
@@ -95,15 +101,26 @@ type StoryItem = { key: string; p: Project; app?: AppId; eyebrow: string; status
 // Real imagery for projects without a screenshot of their own: one of the OS wallpapers, with the app's icon on it
 const STORY_ART: Record<string, string> = {
   lunor: "/wallpapers/founder-foggy-sunrise.jpg",
-  contles: "/wallpapers/engineer-pawel-curves.jpg",
-  filzy: "/wallpapers/engineer-pawel-folds.jpg",
+  contles: "/wallpapers/founder-farnaz-kohankhaki.jpg",
+  filzy: "/wallpapers/art-bernd-dittrich.jpg",
   rug: "/wallpapers/founder-mountain-glow.jpg",
-  slideskipper: "/wallpapers/engineer-pawel-structure.jpg",
+  slideskipper: "/wallpapers/art-thom-milkovic.jpg",
   musicengine: "/wallpapers/art-tinky-rain-blue.jpg",
   reel: "/wallpapers/art-satyajit-rain.jpg",
   openwhip: "/wallpapers/founder-mountain-sunset.jpg",
-  doom: "/wallpapers/art-thom-milkovic.jpg",
+  doom: "/wallpapers/founder-uran-wang.jpg",
 };
+// screenshots whose lower part is empty page: show only the top share
+const CROP: Record<string, number> = { "/img/work-kaching.jpg": 0.6 };
+function ShotImg({ src, alt, className = "", ...rest }: { src: string; alt: string; className?: string } & React.ImgHTMLAttributes<HTMLImageElement>) {
+  const crop = CROP[src];
+  return (
+    <div className={`overflow-hidden ${className}`} style={{ aspectRatio: crop ? `16 / ${10 * crop}` : "16 / 10" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={alt} {...rest} className={crop ? "block h-auto w-full" : "block h-full w-full object-cover object-top"} />
+    </div>
+  );
+}
 const storyImage = (it: StoryItem) => it.p.image ?? STORY_ART[it.key] ?? "/wallpapers/founder-uran-wang.jpg";
 // a screenshot of a light UI needs a deeper scrim than a photo
 const isShot = (it: StoryItem) => !!it.p.image;
@@ -116,10 +133,10 @@ function useToday() {
 
 // Behind a screenshot: a wallpaper photo, so the title sits on picture, not on UI text
 const SHOT_BG: Record<string, string> = {
-  sellify: "/wallpapers/engineer-pawel-curves.jpg",
-  kaching: "/wallpapers/engineer-pawel-folds.jpg",
+  sellify: "/wallpapers/founder-mountain-glow.jpg",
+  kaching: "/wallpapers/art-tinky-rain-blue.jpg",
   larpo: "/wallpapers/founder-uran-wang.jpg",
-  capto: "/wallpapers/founder-mountain-glow.jpg",
+  capto: "/wallpapers/founder-mountain-sunset.jpg",
 };
 
 // One card face for every story. Photo stories put the app icon on the picture; screenshot stories float the
@@ -140,8 +157,7 @@ function CardFace({ it, big, open }: { it: StoryItem; big?: boolean; open?: bool
           radius={12}
           className={`absolute left-1/2 w-[84%] -translate-x-1/2 overflow-hidden shadow-[0_24px_60px_-20px_rgb(0_0_0/0.7),0_0_0_0.5px_rgb(255_255_255/0.2)] ${open ? "top-[34%]" : "top-[40%]"}`}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={storyImage(it)} alt="" draggable={false} className="aspect-[16/10] w-full object-cover object-top" />
+          <ShotImg src={storyImage(it)} alt="" draggable={false} />
         </Squircle>
       )}
       <motion.div layoutId={`head-${it.key}`} className={`absolute inset-x-0 top-0 ${pad} ${open && compact ? "pt-[calc(env(safe-area-inset-top)+64px)]" : ""}`}>
@@ -326,8 +342,7 @@ function Story({ it, standalone }: { it: StoryItem; standalone?: boolean }) {
                 className={`press lift sq-card shrink-0 snap-start overflow-hidden rounded-[14px] shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)] ${compact ? "w-[82%]" : "w-[min(520px,70%)]"}`}
                 data-sq=""
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt={`${p.name} ${i + 1}`} draggable={false} className="aspect-[16/10] w-full object-cover object-top" />
+                <ShotImg src={src} alt={`${p.name} ${i + 1}`} {...dragFile(`${p.name} ${i + 1}.jpg`, src)} />
               </button>
             ))}
           </div>
@@ -351,70 +366,90 @@ function Work() {
   return <Today title="Work" items={items} />;
 }
 
-function Shots() {
-  const [view, setView] = useState<"grid" | "large">("grid");
-  const [q, setQ] = useState("");
-  const [look, setLook] = useState<number | null>(null);
+// ---------- Photos: a tight grid; a photo zooms out of its tile into the viewer ----------
+
+type Photo = { title: string; src: string };
+function PhotosApp({ title, sub, photos, actions, credit }: { title: string; sub?: string; photos: Photo[]; actions?: React.ReactNode; credit?: string }) {
   const { compact } = useChrome();
+  const [q, setQ] = useState("");
+  const [size, setSize] = useState<"grid" | "large">("grid");
+  const [look, setLook] = useState<number | null>(null);
   const ctx = useContextMenu();
-  const list = shots.items.filter((s) => s.title.toLowerCase().includes(q.trim().toLowerCase()));
+  const list = photos.filter((s) => s.title.toLowerCase().includes(q.trim().toLowerCase()));
   const looks: LookItem[] = list.map((s) => ({ title: s.title, src: s.src }));
   return (
-    <div className="@container relative flex h-full min-h-0 flex-col">
-      <Toolbar title="Shots" sub={shots.handle}>
-        {!compact && (
+    <div className="@container relative flex h-full min-h-0 flex-col bg-[var(--bg)]">
+      {!compact && (
+        <Toolbar title={title} sub={sub ?? `${photos.length} photos`}>
           <Segmented
-            id="shots"
-            value={view}
-            onChange={setView}
+            id={`ph-${title}`}
+            value={size}
+            onChange={setSize}
             options={[
               { value: "grid", label: "Grid" },
               { value: "large", label: "Large" },
             ]}
           />
-        )}
-        {!compact && <SearchField id="shots-search" value={q} onChange={setQ} />}
-        <Button size="sm" href={shots.href} icon={<ArrowUpRight size={14} />}>
-          Open on X
-        </Button>
-      </Toolbar>
+          <SearchField id={`ph-search-${title}`} value={q} onChange={setQ} />
+          {actions}
+        </Toolbar>
+      )}
       {compact && (
-        <div className="px-4 pb-3">
-          <SearchField id="shots-search" value={q} onChange={setQ} />
+        <div className="space-y-3 px-4 pb-3">
+          {sub && <div className="t-foot text-ink-2">{sub}</div>}
+          <SearchField id={`ph-search-${title}`} value={q} onChange={setQ} />
         </div>
       )}
-      <div className={`min-h-0 flex-1 overflow-auto ${compact ? "px-4 pb-8" : "p-4"}`}>
-        <div className={`grid gap-x-3 gap-y-4 ${view === "grid" ? "grid-cols-2 @lg:grid-cols-3" : "grid-cols-1"}`}>
-          {list.map((s, i) => (
+      <div className="min-h-0 flex-1 overflow-auto">
+        <div className={`grid gap-[2px] ${compact ? "grid-cols-3" : size === "grid" ? "grid-cols-[repeat(auto-fill,minmax(150px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(280px,1fr))]"}`}>
+          {list.map((ph, i) => (
             <button
               type="button"
-              key={s.title}
+              key={ph.src}
               onClick={() => setLook(i)}
               onContextMenu={(e) =>
                 ctx.open(e, [
                   { label: "Quick Look", hint: "Space", run: () => setLook(i) },
-                  "sep",
-                  { label: "Open on X", run: () => window.open(shots.href, "_blank", "noreferrer") },
+                  { label: "Open in New Tab", run: () => window.open(ph.src, "_blank", "noreferrer") },
                 ])
               }
-              className="press group cursor-zoom-in text-left"
+              className="group relative aspect-square overflow-hidden bg-[var(--fill-2)] outline-none"
             >
-              <div className="overflow-hidden rounded-[12px]">
-                <Visual
-                  src={s.src}
-                  alt={s.title}
-                  className={`w-full transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hov:group-hover:scale-[1.02] ${view === "grid" ? "aspect-[4/3]" : "aspect-[16/10]"}`}
-                />
-              </div>
-              <div className="mt-1.5 truncate px-0.5 text-[12px] font-medium text-ink-2">{s.title}</div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={ph.src}
+                alt={ph.title}
+                loading="lazy"
+                {...dragFile(`${ph.title}.jpg`, ph.src)}
+                className="h-full w-full object-cover transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hov:group-hover:scale-[1.03]"
+              />
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent px-2 pb-1.5 pt-6 text-left text-[11px] font-medium text-white opacity-0 transition-opacity duration-150 hov:group-hover:opacity-100">
+                {ph.title}
+              </span>
             </button>
           ))}
         </div>
-        {!list.length && <div className="py-16 text-center text-[13px] text-ink-3">No shots match “{q.trim()}”.</div>}
+        {!list.length && <div className="t-sub py-16 text-center text-ink-3">{`No photos match “${q.trim()}”.`}</div>}
+        {credit && <div className="m-sub px-4 py-4 text-center text-ink-3">{credit}</div>}
       </div>
       <QuickLook items={looks} index={look} onIndex={setLook} onClose={() => setLook(null)} />
       {ctx.node}
     </div>
+  );
+}
+
+function Shots() {
+  return (
+    <PhotosApp
+      title="Shots"
+      sub={shots.handle}
+      photos={shots.items}
+      actions={
+        <Btn size="sm" href={shots.href} icon={<ArrowUpRight size={14} />}>
+          Open on X
+        </Btn>
+      }
+    />
   );
 }
 
@@ -514,9 +549,146 @@ function ProjectApp({ id }: { id: AppId }) {
   if (!p) return null;
   const lab = labApps.includes(id);
   const it: StoryItem = { key: id, p, app: id, eyebrow: lab ? "From the Lab" : p.status === "Live" ? "Live now" : "Founder", status: p.status };
+  if (p.link && p.embeddable) return <LiveSite it={it} />;
   return (
-    <div className="h-full overflow-y-auto bg-white">
+    <div className="h-full overflow-y-auto bg-[var(--bg)]">
       <Story it={it} standalone />
+    </div>
+  );
+}
+
+// ---------- Safari-style: the live site in the window, with an Info inspector ----------
+
+function Inspector({ it }: { it: StoryItem }) {
+  const p = it.p;
+  const rows = [
+    p.role && { k: "Role", v: p.role },
+    p.years && { k: "When", v: p.years },
+    p.stack && { k: "Built with", v: p.stack },
+    it.status && { k: "Status", v: it.status },
+    ...p.numbers.map((n) => ({ k: n.label, v: n.value })),
+  ].filter((x): x is { k: string; v: string } => !!x);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        {it.app && <AppIcon id={it.app} size={48} />}
+        <div className="min-w-0">
+          <div className="t-headline truncate text-ink">{p.name}</div>
+          <div className="t-foot truncate text-ink-2">{it.eyebrow}</div>
+        </div>
+      </div>
+      {p.what && <p className="t-sub text-ink-2">{p.what}</p>}
+      <InfoGrid rows={rows} cols={1} />
+    </div>
+  );
+}
+
+function LiveSite({ it }: { it: StoryItem }) {
+  const { compact } = useChrome();
+  const href = it.p.link!.href;
+  const domain = href.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const [info, setInfo] = useState(!compact);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [reload, setReload] = useState(0);
+  // a site that never loads (blocked from framing) falls back to its story
+  useEffect(() => {
+    setLoaded(false);
+    const t = window.setTimeout(() => setFailed((f) => f || !loadedRef.current), 9000);
+    return () => window.clearTimeout(t);
+  }, [reload]);
+  const loadedRef = useRef(false);
+  if (failed)
+    return (
+      <div className="h-full overflow-y-auto bg-[var(--bg)]">
+        <Story it={it} standalone />
+      </div>
+    );
+  const frame = (
+    <div className="relative min-h-0 flex-1 bg-[var(--bg)]">
+      {!loaded && (
+        <div className="absolute inset-0 space-y-3 p-8" aria-hidden>
+          <div className="skeleton h-8 w-1/3 rounded-[8px]" />
+          <div className="skeleton h-48 w-full rounded-[16px]" />
+          <div className="skeleton h-4 w-2/3 rounded-[4px]" />
+          <div className="skeleton h-4 w-1/2 rounded-[4px]" />
+        </div>
+      )}
+      <iframe
+        key={reload}
+        src={href}
+        title={it.p.name}
+        loading="lazy"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        onLoad={() => {
+          loadedRef.current = true;
+          setLoaded(true);
+        }}
+        className={`absolute inset-0 h-full w-full border-0 transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+      />
+    </div>
+  );
+  if (compact)
+    return (
+      <div className="fixed inset-x-0 bottom-0 top-[calc(env(safe-area-inset-top)+54px)] flex flex-col">
+        {frame}
+        <div data-glass="" className={`${glass("pop")} absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+36px)] flex h-12 items-center gap-1 rounded-[16px] px-1.5`}>
+          <Btn variant="plain" size="md" iconOnly label="Info" onClick={() => setInfo(true)} icon={<Info size={18} />} />
+          <span className="t-sub min-w-0 flex-1 truncate text-center font-medium text-ink">{domain}</span>
+          <Btn variant="plain" size="md" iconOnly label="Open in Safari" href={href} icon={<ArrowUpRight size={18} />} />
+        </div>
+        <AnimatePresence>
+          {info && (
+            <>
+              <motion.div key="scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setInfo(false)} className="fixed inset-0 z-[50] bg-black/25" />
+              <motion.div
+                key="sheet"
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", bounce: 0, duration: 0.42 }}
+                drag="y"
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.6 }}
+                onDragEnd={(_, i) => (i.offset.y > 90 || i.velocity.y > 600) && setInfo(false)}
+                className="sq-panel fixed inset-x-0 bottom-0 z-[51] max-h-[75%] overflow-auto rounded-t-[24px] bg-[var(--bg-elevated)] px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-3"
+              >
+                <div className="mx-auto mb-4 h-[5px] w-9 rounded-full bg-[var(--fill)]" />
+                <Inspector it={it} />
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div data-drag className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--separator)] pl-[84px] pr-3">
+        <Btn variant="plain" size="sm" iconOnly label="Reload" onClick={() => setReload((r) => r + 1)} icon={<RotateCw size={14} />} />
+        <div className="mx-auto flex h-[30px] w-[min(420px,60%)] items-center justify-center gap-1.5 rounded-[8px] bg-[var(--fill-2)] px-3">
+          <Lock size={11} className="text-ink-3" />
+          <span className="m-body truncate text-ink">{domain}</span>
+        </div>
+        <Btn variant="plain" size="sm" iconOnly label="Open in a new tab" href={href} icon={<ArrowUpRight size={15} />} />
+        <Btn variant={info ? "tinted" : "plain"} size="sm" iconOnly label="Info" onClick={() => setInfo((v) => !v)} icon={<Info size={15} />} />
+      </div>
+      <div className="flex min-h-0 flex-1">
+        {frame}
+        <AnimatePresence initial={false}>
+          {info && (
+            <motion.aside
+              key="inspector"
+              initial={{ x: 280, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 280, opacity: 0 }}
+              transition={{ type: "spring", bounce: 0, duration: 0.36 }}
+              className="w-[280px] shrink-0 overflow-auto border-l border-[var(--separator)] bg-[var(--bg-sidebar)] p-5"
+            >
+              <Inspector it={it} />
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -774,125 +946,207 @@ export function usePlayer() {
 }
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
-function Records() {
-  const { compact } = useChrome();
+// ---------- Music: now playing over the artwork's own colours, a queue beside it ----------
+
+function Scrubber({ dark = true }: { dark?: boolean }) {
   const p = usePlayer();
   const cur = trackOf(p.id);
-  const lead = cur ?? tracks[0];
   const [scrub, setScrub] = useState<number | null>(null);
-  // closing the window quits the app, like Music; on the phone it keeps playing under the Dynamic Island
-  useEffect(() => () => void (!useOS.getState().isMobile && player.stop()), []);
-  const total = p.dur || cur?.duration || 0;
+  const total = p.dur || cur?.duration || tracks[0]?.duration || 0;
   const shown = scrub ?? p.t;
   const commit = () => {
     if (scrub !== null) player.seek(scrub);
     setScrub(null);
   };
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {!compact && <Toolbar title="Records" sub={`${tracks.length} pieces`} />}
-      <div className="min-h-0 flex-1 overflow-auto">
-        <div className={`relative overflow-hidden bg-[#070b16] ${compact ? "mx-4 rounded-[14px]" : ""}`}>
-          <div className="absolute inset-0">
-            <MusicShader intensity={p.playing ? 1 : 0.6} palette="night" />
-          </div>
-          <div className={`relative flex gap-5 text-white ${compact ? "flex-col items-center p-6 text-center" : "items-end p-6"}`}>
-            <AnimatePresence mode="popLayout" initial={false}>
-              <motion.img
-                key={lead.cover}
-                src={lead.cover}
-                alt=""
-                draggable={false}
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-                className="aspect-square w-[148px] shrink-0 rounded-[8px] object-cover shadow-[0_16px_40px_-12px_rgb(0_0_0/0.7),0_0_0_0.5px_rgb(255_255_255/0.14)]"
-              />
-            </AnimatePresence>
-            <div className="min-w-0 pb-1">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">{cur ? (p.playing ? "Now Playing" : "Paused") : "Pieces"}</div>
-              <div className="mt-1 text-[22px] font-semibold leading-tight tracking-[-0.02em] [text-wrap:balance]">{lead.title}</div>
-              <div className="text-[13px] text-white/65">
-                {lead.artist}, {lead.year}
-              </div>
-              <div className={`mt-3.5 flex gap-2 ${compact ? "justify-center" : ""}`}>
-                <button
-                  type="button"
-                  onClick={() => player.toggle(lead.id)}
-                  className="press inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-white px-3.5 text-[13px] font-semibold text-ink shadow-[0_1px_2px_rgb(0_0_0/0.2)] hov:hover:bg-[#F1F1F4]"
-                >
-                  {p.playing && cur ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
-                  {p.playing && cur ? "Pause" : "Play"}
-                </button>
-                {art.spotify.href && (
-                  <a href={art.spotify.href} target="_blank" rel="noreferrer" className="press inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-white/15 px-3 text-[13px] font-medium text-white hov:hover:bg-white/20">
-                    <ArrowUpRight size={14} /> Spotify
-                  </a>
-                )}
-              </div>
+    <div>
+      <input
+        type="range"
+        aria-label="Position"
+        min={0}
+        max={Math.max(1, total)}
+        step={0.1}
+        value={Math.min(shown, total || 1)}
+        disabled={!cur}
+        onChange={(e) => setScrub(+e.target.value)}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        className={`scrub w-full ${dark ? "scrub-light" : ""}`}
+        style={{ ["--p" as string]: `${total ? (Math.min(shown, total) / total) * 100 : 0}%` }}
+      />
+      <div className={`m-sub mt-0.5 flex justify-between tabular-nums ${dark ? "text-white/55" : "text-ink-3"}`}>
+        <span>{clock(shown)}</span>
+        <span>-{clock(Math.max(0, total - shown))}</span>
+      </div>
+    </div>
+  );
+}
+
+function Transport({ size = 1 }: { size?: number }) {
+  const p = usePlayer();
+  const i = Math.max(0, tracks.findIndex((t) => t.id === p.id));
+  const go = (d: number) => player.play(tracks[(i + d + tracks.length) % tracks.length].id);
+  return (
+    <div className="flex items-center justify-center gap-7 text-white">
+      <button type="button" aria-label="Previous" onClick={() => go(-1)} className="press opacity-90 hov:hover:opacity-100">
+        <SkipBack size={26 * size} fill="currentColor" />
+      </button>
+      <button type="button" aria-label={p.playing ? "Pause" : "Play"} onClick={() => player.toggle()} className="press">
+        {p.playing ? <Pause size={40 * size} fill="currentColor" /> : <Play size={40 * size} fill="currentColor" />}
+      </button>
+      <button type="button" aria-label="Next" onClick={() => go(1)} className="press opacity-90 hov:hover:opacity-100">
+        <SkipForward size={26 * size} fill="currentColor" />
+      </button>
+    </div>
+  );
+}
+
+function NowPlaying({ compact }: { compact: boolean }) {
+  const p = usePlayer();
+  const lead = trackOf(p.id) ?? tracks[0];
+  return (
+    <div className="relative flex h-full flex-col overflow-hidden text-white">
+      {/* the artwork's own colours, blurred, behind everything */}
+      <AnimatePresence initial={false}>
+        <motion.div key={lead.cover} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }} className="absolute inset-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={lead.cover} alt="" className="absolute inset-[-20%] h-[140%] w-[140%] object-cover blur-[60px] saturate-[1.6]" />
+          <div className="absolute inset-0 bg-black/35" />
+        </motion.div>
+      </AnimatePresence>
+      <div className={`relative flex flex-1 flex-col ${compact ? "px-7 pb-10 pt-[calc(env(safe-area-inset-top)+70px)]" : "justify-center px-8 py-8"}`}>
+        <motion.img
+          key={lead.id}
+          src={lead.cover}
+          alt={lead.title}
+          draggable={false}
+          animate={{ scale: p.playing || !p.id ? 1 : 0.86 }}
+          transition={{ type: "spring", bounce: 0.25, duration: 0.6 }}
+          className={`mx-auto aspect-square w-full object-cover shadow-[0_30px_60px_-20px_rgb(0_0_0/0.6)] ${compact ? "max-w-[320px] rounded-[12px]" : "max-w-[280px] rounded-[10px]"}`}
+        />
+        <div className={`mx-auto w-full ${compact ? "mt-9 max-w-[320px]" : "mt-6 max-w-[280px]"}`}>
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className={`truncate font-semibold tracking-[-0.02em] ${compact ? "text-[20px]" : "text-[17px]"}`}>{lead.title}</div>
+              <div className={`truncate text-white/60 ${compact ? "text-[17px]" : "text-[13px]"}`}>{lead.artist}</div>
             </div>
+            {!lead.confirmed && <span className="m-sub shrink-0 rounded-[6px] bg-white/15 px-1.5 py-0.5 text-white/80">Unreleased</span>}
+          </div>
+          <div className="mt-4">
+            <Scrubber />
+          </div>
+          <div className="mt-4">
+            <Transport size={compact ? 1 : 0.8} />
           </div>
         </div>
-        <ol className={`pb-4 ${compact ? "mx-4 mt-4 sq-list overflow-hidden rounded-[10px] bg-white pb-0" : "mt-3 px-3"}`}>
-          {tracks.map((t, i) => {
-            const on = p.id === t.id;
-            return (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  onClick={() => player.toggle(t.id)}
-                  className={`group flex w-full items-center gap-3 text-left ${compact ? "press-row min-h-[60px] pl-4" : `h-[52px] rounded-[8px] px-3 ${on ? "bg-[#F1F1F4]" : "hov:hover:bg-[#F7F7F9]"}`}`}
-                >
-                  <span className="flex w-5 shrink-0 justify-center text-[13px] tabular-nums text-ink-3">
-                    {on && p.playing ? <Bars /> : <span className={on ? "text-[#0A84FF]" : ""}>{i + 1}</span>}
-                  </span>
+      </div>
+    </div>
+  );
+}
+
+function Queue({ compact }: { compact: boolean }) {
+  const p = usePlayer();
+  return (
+    <div className={compact ? "" : "h-full overflow-auto bg-[var(--bg)] px-3 pb-4 pt-[52px]"} data-drag={compact ? undefined : ""}>
+      {!compact && <div className="m-headline px-2 pb-2 text-ink">Up Next</div>}
+      <List mac={!compact}>
+        {tracks.map((t, i) => {
+          const on = p.id === t.id;
+          return (
+            <ListRow
+              key={t.id}
+              mac={!compact}
+              onClick={() => player.toggle(t.id)}
+              icon={
+                <span className="relative shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={t.cover} alt="" draggable={false} className="h-9 w-9 shrink-0 rounded-[5px] object-cover shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)]" />
-                  <span className={`flex min-w-0 flex-1 items-center gap-3 self-stretch pr-3 ${compact && i ? "border-t-[0.5px] border-[#C6C6C8]" : ""}`}>
-                    <span className="min-w-0 flex-1">
-                      <span className={`flex items-center gap-2 text-ink ${compact ? "text-[17px] tracking-[-0.02em]" : "text-[13px]"} ${on ? "font-semibold" : ""}`}>
-                        <span className="truncate">{t.title}</span>
-                        {!t.confirmed && <Badge>Unreleased</Badge>}
-                      </span>
-                      {t.note && <span className={`block truncate text-ink-3 ${compact ? "text-[13px]" : "text-[11px]"}`}>{t.note}</span>}
+                  <img src={t.cover} alt="" className={`${compact ? "h-12 w-12 rounded-[8px]" : "h-9 w-9 rounded-[6px]"} object-cover shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)]`} />
+                  {on && p.playing && (
+                    <span className="absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/40">
+                      <Bars light />
                     </span>
-                    <span className="text-[12px] tabular-nums text-ink-3">{t.durationLabel}</span>
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
+                  )}
+                </span>
+              }
+              title={<span className={on ? "font-semibold text-[var(--accent)]" : ""}>{t.title}</span>}
+              sub={t.note}
+              detail={<span className="tabular-nums">{t.durationLabel}</span>}
+            />
+          );
+        })}
+      </List>
+      {art.spotify.href && (
+        <div className="mt-3 px-1">
+          <Btn size="sm" href={art.spotify.href} icon={<ArrowUpRight size={14} />}>
+            Spotify
+          </Btn>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Records() {
+  const { compact } = useChrome();
+  const p = usePlayer();
+  const cur = trackOf(p.id);
+  const [full, setFull] = useState(false);
+  // closing the window quits the app, like Music; on the phone it keeps playing under the Dynamic Island
+  useEffect(() => () => void (!useOS.getState().isMobile && player.stop()), []);
+  if (!compact)
+    return (
+      <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <div data-drag className="min-h-0">
+          <NowPlaying compact={false} />
+        </div>
+        <Queue compact={false} />
       </div>
-      <div className={`flex shrink-0 items-center gap-2.5 border-t border-black/[0.06] bg-[#FBFBFC] px-3 ${compact ? "h-[56px]" : "h-[52px]"}`}>
-        <button
-          type="button"
+    );
+  return (
+    <div className="px-4 pb-28">
+      <Queue compact />
+      {/* the mini player; tap it for Now Playing */}
+      <motion.button
+        type="button"
+        layoutId="np"
+        onClick={() => setFull(true)}
+        data-glass=""
+        className={`${glass("pop")} fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+40px)] z-[30] flex h-14 items-center gap-3 rounded-[16px] px-2 text-left`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={(cur ?? tracks[0]).cover} alt="" className="h-10 w-10 rounded-[8px] object-cover" />
+        <span className="t-sub min-w-0 flex-1 truncate font-medium text-ink">{cur?.title ?? "Not Playing"}</span>
+        <span
+          role="button"
           aria-label={p.playing ? "Pause" : "Play"}
-          onClick={() => player.toggle()}
-          className="press flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-ink hov:hover:bg-black/[0.05]"
+          onClick={(e) => {
+            e.stopPropagation();
+            player.toggle();
+          }}
+          className="flex h-10 w-10 items-center justify-center text-ink"
         >
-          {p.playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="translate-x-px" />}
-        </button>
-        {!compact && <span className={`w-32 shrink-0 truncate text-[12px] font-medium ${cur ? "text-ink" : "text-ink-3"}`}>{cur?.title ?? "Not Playing"}</span>}
-        <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-ink-3">{clock(shown)}</span>
-        <input
-          type="range"
-          id="records-scrub"
-          aria-label="Position"
-          min={0}
-          max={Math.max(1, total)}
-          step={0.1}
-          value={Math.min(shown, total || 1)}
-          disabled={!cur}
-          onChange={(e) => setScrub(+e.target.value)}
-          onPointerUp={commit}
-          onKeyUp={commit}
-          className="scrub min-w-0 flex-1"
-          style={{ ["--p" as string]: `${total ? (Math.min(shown, total) / total) * 100 : 0}%` }}
-        />
-        <span className="w-10 shrink-0 text-[11px] tabular-nums text-ink-3">-{clock(Math.max(0, total - shown))}</span>
-      </div>
+          {p.playing ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
+        </span>
+      </motion.button>
+      <AnimatePresence>
+        {full && (
+          <motion.div
+            key="np-full"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", bounce: 0, duration: 0.45 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={(_, info) => (info.offset.y > 120 || info.velocity.y > 700) && setFull(false)}
+            className="fixed inset-0 z-[45] overflow-hidden rounded-t-[24px]"
+          >
+            <span className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+50px)] z-10 h-[5px] w-9 -translate-x-1/2 rounded-full bg-white/40" />
+            <NowPlaying compact />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -962,11 +1216,11 @@ function Novel() {
     <div className={`mx-auto max-w-[620px] ${compact ? "px-4 pb-10" : "px-8 py-8"}`}>
       <div className={`flex gap-7 ${compact ? "flex-col items-center text-center" : "items-start"}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={novel.cover} alt={novel.title} draggable={false} className="book-cover aspect-[2/3] w-[168px] shrink-0 rounded-[4px] bg-[#0b0d12] object-cover" />
+        <img src={novel.cover} alt={novel.title} draggable={false} data-sq="" className="book-cover aspect-[2/3] w-[168px] shrink-0 rounded-[10px] bg-[#0b0d12] object-cover" />
         <div className={`min-w-0 ${compact ? "" : "pt-1"}`}>
-          <h1 className={`${SERIF} text-[26px] font-semibold leading-[1.15] tracking-[-0.01em] text-ink [text-wrap:balance]`}>{novel.title}</h1>
-          <p className="mt-1.5 text-[13px] text-ink-2">{novel.author}</p>
-          <p className="text-[12px] text-ink-3">Iliustracijos: {novel.illustrator}</p>
+          <h1 className={`${SERIF} text-[28px] font-semibold leading-[1.12] tracking-[-0.015em] text-ink [text-wrap:balance]`}>{novel.title}</h1>
+          <p className="t-sub mt-2 text-ink-2">{novel.author}</p>
+          <p className="t-foot text-ink-3">Iliustracijos: {novel.illustrator}</p>
           <div className={`mt-4 flex items-center gap-3 ${compact ? "justify-center" : ""}`}>
             <Button variant="primary" size="sm" onClick={() => book && setCh(saved?.ch ?? 0)} icon={<BookOpen size={14} />}>
               {saved ? "Continue" : "Read"}
@@ -1065,7 +1319,7 @@ function ChapterBody({ c }: { c: Chapter }) {
     <>
       {c.image && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={c.image} alt="" draggable={false} className="mx-auto mb-7 block w-[min(240px,60%)] mix-blend-multiply" />
+        <img src={c.image} alt="" draggable={false} className="mx-auto mb-7 block w-[min(240px,60%)] mix-blend-multiply dark:mix-blend-screen dark:invert" />
       )}
       <h2 className={`mb-6 text-center ${SERIF} text-[24px] font-semibold tracking-[-0.01em] text-ink`}>{c.title}</h2>
       {c.paragraphs.map((p, i) => (
@@ -1213,13 +1467,10 @@ function PagedReader({ book, ch, setCh, start, onPos, onClose }: { book: Book; c
   );
 }
 
+// The Art persona's Gallery: the novel's chapter illustrations, credited to their illustrator.
+const illustrations: Photo[] = Array.from({ length: 20 }, (_, i) => ({ title: `${i + 1} Skyrius`, src: `/content/novel/ch${String(i + 1).padStart(2, "0")}.png` }));
 function Gallery() {
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <Toolbar title="Gallery" />
-      <Empty icon={<ImageIcon size={22} strokeWidth={1.5} />} title="No art yet" body="Paintings and sketches will appear here." />
-    </div>
-  );
+  return <PhotosApp title="Gallery" sub="Illustrations for the novel" photos={illustrations} credit={`Iliustracijos: ${novel.illustrator}`} />;
 }
 
 // Opens an app as a window on the desktop, or as a sheet on the phone.
@@ -1371,6 +1622,27 @@ function Contact() {
         </Button>
       </Toolbar>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+        {/* the contact card: who you're writing to, and the other ways to reach him */}
+        <div className="flex items-center gap-4 border-b border-[var(--separator)] px-5 py-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-[#A8ADB8] to-[#7E838E] text-[24px] font-semibold text-white">A</div>
+          <div className="min-w-0 flex-1">
+            <div className="m-title truncate text-ink">{owner.name}</div>
+            <div className="m-body truncate text-ink-2">{owner.role}</div>
+          </div>
+          <div className="flex gap-3">
+            {[
+              { label: "message", icon: <MessageCircle size={16} />, run: () => document.getElementById("contact-body")?.focus() },
+              { label: "call", icon: <CalendarDays size={16} />, href: bookCall.href },
+              { label: "mail", icon: <Mail size={16} />, href: hrefOf(email) },
+              { label: "X", icon: <XMark size={13} />, href: owner.x.href },
+            ].map((a) => (
+              <div key={a.label} className="flex flex-col items-center gap-1">
+                <Btn variant="tinted" capsule iconOnly size="md" label={a.label} href={a.href} onClick={a.run} icon={a.icon} className="!h-9 !w-9" />
+                <span className="m-sub text-[var(--accent)]">{a.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
         <div className={field}>
           <span className="w-[58px] text-right text-ink-3">To:</span>
           <span className="inline-flex h-[22px] items-center rounded-[6px] bg-[#0A84FF]/[0.1] px-2 text-[13px] font-medium text-[#0A84FF]">{owner.name}</span>
@@ -1513,13 +1785,13 @@ function About() {
   const openContact = useOpenApp("contact");
   return (
     // laid out like About This Mac: the machine (here, the person), its name, a short spec sheet, two buttons, the fine print
-    <div data-drag className={`flex h-full flex-col items-center overflow-auto bg-white px-6 text-center ${compact ? "pb-10 pt-2" : "pb-5 pt-11"}`}>
+    <div data-drag className={`flex h-full flex-col items-center overflow-auto bg-[var(--bg)] px-6 text-center ${compact ? "pb-10 pt-2" : "pb-5 pt-11"}`}>
       <div className="relative flex h-[112px] w-[112px] items-center justify-center rounded-full bg-[radial-gradient(120%_120%_at_30%_15%,#ffffff_0%,#e9eaee_45%,#c9ccd3_100%)] text-[46px] font-semibold tracking-[-0.03em] text-ink shadow-[0_14px_34px_-14px_rgb(16_18_24/0.45),inset_0_-2px_6px_rgb(0_0_0/0.06),0_0_0_0.5px_rgb(0_0_0/0.08)]">
         A
       </div>
-      <h1 className="mt-5 text-[26px] font-bold leading-none tracking-[-0.025em] text-ink">{owner.name}</h1>
-      <p className="mt-1.5 text-[12px] text-ink-3">{owner.role}</p>
-      <dl className="mt-6 grid w-full max-w-[290px] grid-cols-[96px_1fr] gap-x-3 gap-y-[5px] text-[12px] leading-[16px]">
+      <h1 className={`mt-5 text-ink ${compact ? "t-large" : "m-large"}`}>{owner.name}</h1>
+      <p className={`mt-1 text-ink-2 ${compact ? "t-sub" : "m-body"}`}>{owner.role}</p>
+      <dl className={`mt-6 grid w-full max-w-[290px] grid-cols-[96px_1fr] gap-x-3 gap-y-[6px] ${compact ? "t-foot" : "text-[12px] leading-[16px]"}`}>
         {spec.map((r) => (
           <div key={r.label} className="contents">
             <dt className="text-right font-medium text-ink">{r.label}</dt>

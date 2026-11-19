@@ -174,7 +174,7 @@ export function makeGrassMaterial(fogDensity: number) {
 
         float dist = length(vWorld - cameraPosition);
         vec3 fd = normalize(vec3(vWorld.x - cameraPosition.x, 0.015, vWorld.z - cameraPosition.z));
-        col = mix(col, skyBase(fd), 1.0 - exp(-dist * uFog));
+        col = mix(col, skyBase(fd), 1.0 - exp(-dist * (uFog + uMist)));
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -298,7 +298,7 @@ export function Flowers({ mobile, wind, fogDensity }: { mobile: boolean; wind: n
           vec3 col = alb * (uSkyCol * 0.7 + uKeyCol * 0.55 * smoothstep(-0.02, 0.08, uKeyDir.y));
           float dist = length(vWorld - cameraPosition);
           vec3 fd = normalize(vec3(vWorld.x - cameraPosition.x, 0.015, vWorld.z - cameraPosition.z));
-          col = mix(col, skyBase(fd), 1.0 - exp(-dist * uFog));
+          col = mix(col, skyBase(fd), 1.0 - exp(-dist * (uFog + uMist)));
           gl_FragColor = vec4(col, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>

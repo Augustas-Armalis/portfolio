@@ -21,7 +21,7 @@ import { AppIcon, AppView } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
 import MusicShader from "./scene/MusicShader";
 import { PowerOverlay } from "./Login";
-import { Chrome, EASE_OUT, QuickLook, Segmented, glass, sfx, useContextMenu, useGlassScope, type LookItem, type MenuAction } from "./ui";
+import { Chrome, EASE_OUT, FILE_MIME, QuickLook, Segmented, glass, sfx, useContextMenu, useGlassScope, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
 
 // ---------- menu bar ----------
@@ -875,10 +875,37 @@ export function DeskArt({ item }: { item: DeskItem }) {
 function DesktopIcons({ user, area }: { user: UserId; area: RefObject<HTMLDivElement | null> }) {
   const trash = useOS((s) => s.trash);
   const deleted = useOS((s) => s.deleted);
-  const items = desktopItems[user].filter((it) => !trash.includes(it.id) && !deleted.includes(it.id));
+  const files = useOS((s) => s.files);
+  const items: DeskItem[] = [
+    ...desktopItems[user],
+    ...files.filter((f) => f.user === user).map((f) => ({ id: f.id, name: f.name, kind: "image" as const, open: { look: "image" as const, src: f.src } })),
+  ].filter((it) => !trash.includes(it.id) && !deleted.includes(it.id));
   const open = useOS((s) => s.open);
   const dark = useWallpaper(user).dark;
   const [pos, setPos] = useState<Record<string, Cell>>(() => Object.fromEntries(items.map((it, i) => [it.id, { c: 0, r: i }])));
+  // a file dropped from an app lands in the grid cell under the pointer (or the nearest free one)
+  const onDrop = (e: React.DragEvent) => {
+    const raw = e.dataTransfer.getData(FILE_MIME);
+    if (!raw) return;
+    e.preventDefault();
+    let f: { name: string; src: string };
+    try {
+      f = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const box = layer.current!.getBoundingClientRect();
+    const c = Math.max(0, Math.floor((box.width - EDGE - (e.clientX - box.left)) / CELL_W));
+    const r = Math.max(0, Math.floor((e.clientY - box.top - EDGE) / CELL_H));
+    const id = useOS.getState().addFile({ ...f, user });
+    setPos((p) => {
+      const taken = new Set(Object.values(p).map(cellKey));
+      let cell = { c, r };
+      for (let i = 0; taken.has(cellKey(cell)) && i < 200; i++) cell = { c: cell.c, r: cell.r + 1 };
+      return { ...p, [id]: cell };
+    });
+    setSel([id]);
+  };
   const [sel, setSel] = useState<string[]>([]);
   const [look, setLook] = useState<LookItem | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -907,7 +934,7 @@ function DesktopIcons({ user, area }: { user: UserId; area: RefObject<HTMLDivEle
     const sy = e.clientY - box.top;
     const el = e.currentTarget as HTMLElement;
     el.setPointerCapture(e.pointerId);
-    const rects = items.map((it) => ({ id: it.id, ...at(pos[it.id]) }));
+    const rects = items.map((it) => ({ id: it.id, ...at(pos[it.id] ?? { c: 1, r: 0 }) }));
     let raf = 0;
     let last = keep.join();
     let cur = { x: sx, y: sy };
@@ -1006,7 +1033,7 @@ function DesktopIcons({ user, area }: { user: UserId; area: RefObject<HTMLDivEle
       const oy = dy.get();
       setPos((p) => {
         const next = { ...p };
-        const taken = new Set(items.filter((x) => !group.includes(x.id)).map((x) => cellKey(p[x.id])));
+        const taken = new Set(items.filter((x) => !group.includes(x.id)).map((x) => cellKey(p[x.id] ?? { c: 1, r: 0 })));
         for (const id of group) {
           const c = Math.min(maxC, Math.max(0, Math.round(p[id].c - ox / CELL_W)));
           const r = Math.min(maxR, Math.max(0, Math.round(p[id].r + oy / CELL_H)));
@@ -1028,10 +1055,22 @@ function DesktopIcons({ user, area }: { user: UserId; area: RefObject<HTMLDivEle
 
   const menuItem = menu && items.find((x) => x.id === menu.id);
   return (
-    <div ref={layer} data-desk="" onPointerDown={onLayerDown} className="absolute inset-0">
+    <div
+      ref={layer}
+      data-desk=""
+      onPointerDown={onLayerDown}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes(FILE_MIME)) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }
+      }}
+      onDrop={onDrop}
+      className="absolute inset-0"
+    >
       {items.map((it) => {
         const on = sel.includes(it.id);
-        const p = at(pos[it.id]);
+        const p = at(pos[it.id] ?? { c: 1, r: 0 });
         return (
           <motion.button
             type="button"
@@ -1054,7 +1093,7 @@ function DesktopIcons({ user, area }: { user: UserId; area: RefObject<HTMLDivEle
             </span>
             <span
               className={`line-clamp-2 max-w-[88px] rounded-[4px] px-[5px] py-px text-center text-[12px] font-medium leading-[15px] tracking-[-0.003em] [text-wrap:balance] ${
-                on ? "bg-[#0A84FF] text-white" : dark ? "text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.55),0_0_1px_rgb(0_0_0/0.4)]" : "text-ink [text-shadow:0_0_6px_rgb(255_255_255/0.9),0_0_2px_rgb(255_255_255/0.9)]"
+                on ? "bg-[#0A84FF] text-white" : dark ? "text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.55),0_0_1px_rgb(0_0_0/0.4)]" : "text-[#1a1b1e] [text-shadow:0_0_6px_rgb(255_255_255/0.9),0_0_2px_rgb(255_255_255/0.9)] dark:text-white dark:[text-shadow:0_1px_2px_rgb(0_0_0/0.6)]"
               }`}
             >
               {it.name}
@@ -1170,7 +1209,7 @@ export default function Desktop({ user }: { user: UserId }) {
       )}
       <MenuBar user={user} />
       {/* isolate: windows stack among themselves, always under the menu bar and the dock */}
-      <div ref={area} className="absolute inset-x-0 bottom-0 top-[24px] isolate">
+      <div ref={area} id="os-window-layer" className="absolute inset-x-0 bottom-0 top-[24px] isolate">
         <DesktopIcons key={user} user={user} area={area} />
         <AnimatePresence>
           {windows.map((w, i) => (

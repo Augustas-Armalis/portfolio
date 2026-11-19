@@ -795,3 +795,21 @@ svg.lucide.bold {
 .tinted .icon-glyph svg.glyph-mark {
   fill: var(--accent) !important;
 }
+.scrub-light::-webkit-slider-runnable-track {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.9) var(--p, 0%), rgb(255 255 255 / 0.25) var(--p, 0%));
+}
+.scrub-light::-moz-range-track {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.9) var(--p, 0%), rgb(255 255 255 / 0.25) var(--p, 0%));
+}
+
+/* dark mode dims the wallpaper a little, like macOS's dark desktop pictures */
+.wp-photo {
+  position: absolute;
+}
+.dark .wp-photo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.32);
+  pointer-events: none;
+}

@@ -37,7 +37,7 @@ function Island() {
   useEffect(() => {
     if (!track) setBig(false);
   }, [track]);
-  const size = { idle: [126, 37, 19], music: [236, 37, 19], sent: [196, 37, 19], big: [356, 172, 44] }[mode];
+  const size = { idle: [126, 37, 19], music: [196, 37, 19], sent: [184, 37, 19], big: [356, 172, 44] }[mode];
   const onTap = () => {
     if (held.current) return;
     if (mode === "big") return setBig(false);
@@ -426,7 +426,7 @@ function AppWindow({ id, origin, onClosed }: { id: AppId; origin: Origin | null;
 
   const darkApp = id === "terminal" || id === "doom";
   // sidebar apps become iOS grouped lists: grey ground, title on the same ground
-  const grouped = ["work", "taste", "settings", "contact"].includes(id);
+  const grouped = ["work", "taste", "settings", "contact", "records", "lab"].includes(id);
   const ground = darkApp ? "bg-[#1C1D20] text-white" : grouped ? "bg-[#F2F2F7] text-ink" : "bg-white text-ink";
   return (
     <motion.div className="absolute inset-0 z-[60] will-change-transform" style={{ x, y, scale, clipPath }}>

@@ -253,6 +253,7 @@ function build() {
     paperBlack: new THREE.MeshStandardMaterial({ color: "#0d0e11", roughness: 0.55 }),
     cover,
     elastic: new THREE.MeshStandardMaterial({ color: "#111113", roughness: 0.7 }),
+    ribbon: new THREE.MeshStandardMaterial({ color: "#7d2230", roughness: 0.55 }),
     pencil: new THREE.MeshPhysicalMaterial({ color: "#2c2e33", roughness: 0.35, clearcoat: 0.6 }),
     pencilWood: new THREE.MeshStandardMaterial({ color: "#d8b88e", roughness: 0.8 }),
     graphite: new THREE.MeshStandardMaterial({ color: "#2a2a2c", metalness: 0.5, roughness: 0.35 }),
@@ -283,12 +284,15 @@ export function makeScreenMaterial(size: [number, number]) {
       uPx: { value: 1000 },
       uMark: { value: 0 },
       uProg: { value: 0 },
+      uLock: { value: null as THREE.Texture | null },
+      uLockMix: { value: 0 },
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
       void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
       uniform vec2 uSize; uniform float uPx; uniform float uMark; uniform float uProg;
+      uniform sampler2D uLock; uniform float uLockMix;
       varying vec2 vUv;
       float seg(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h); }
       float rbox(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
@@ -310,7 +314,9 @@ export function makeScreenMaterial(size: [number, number]) {
         v = mix(v, 1.0, mark * uMark);
         v = mix(v, 1.0, track * 0.2 * uMark);
         v = mix(v, 1.0, fill * uMark);
-        gl_FragColor = vec4(vec3(v), 1.0);
+        vec3 col = vec3(v);
+        if (uLockMix > 0.001) col = mix(col, texture2D(uLock, vUv).rgb, uLockMix);
+        gl_FragColor = vec4(col, 1.0);
       }`,
   });
 }

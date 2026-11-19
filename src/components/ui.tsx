@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, animate, motion, useDragControls, useMotionValue, useTransform } from "motion/react";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -23,7 +23,7 @@ const InSplit = createContext(false);
 export function Badge({ children, tone = "grey" }: { children: ReactNode; tone?: "grey" | "ink" | "live" }) {
   const cls =
     tone === "ink"
-      ? "bg-ink text-white"
+      ? "bg-ink text-[var(--bg)]"
       : tone === "live"
         ? "bg-[#E9F6EE] text-[#1F7A45] ring-1 ring-inset ring-[#1F7A45]/15"
         : "bg-field text-ink-2 ring-1 ring-inset ring-black/[0.06]";
@@ -167,15 +167,29 @@ export function SearchField({ value, onChange, placeholder = "Search", id }: { v
   );
 }
 
-// Quick Look: a floating preview of an image or a document. Space or Escape closes it, arrows step through.
+// Quick Look. On the desktop it's a real window: drag it by the glass title bar, resize from the corner, close with
+// the red light or Space/Esc, fill the screen with the green one, step through with the arrows. One at a time:
+// opening another item reuses it, like macOS. On the phone it's a full-screen viewer.
 export type LookItem = { title: string; src?: string; node?: ReactNode };
+export const FILE_MIME = "application/x-aos-file";
+// an image that can be dragged out of an app onto the desktop, where it lands as a file
+export function dragFile(name: string, src: string) {
+  return {
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData(FILE_MIME, JSON.stringify({ name, src }));
+      e.dataTransfer.effectAllowed = "copy";
+    },
+  };
+}
 export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[]; index: number | null; onIndex?: (i: number) => void; onClose: () => void }) {
   const { compact } = useChrome();
   const it = index === null ? null : items[index];
   useEffect(() => {
     if (index === null) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+      const t = (e.target as HTMLElement)?.tagName;
+      if (t === "INPUT" || t === "TEXTAREA") return;
       if (e.key === "Escape" || e.key === " ") {
         e.preventDefault();
         onClose();
@@ -187,73 +201,275 @@ export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[
     return () => window.removeEventListener("keydown", onKey);
   }, [index, items.length, onClose, onIndex]);
   const many = items.length > 1 && !!onIndex;
-  return (
-    <AnimatePresence>
-      {it && index !== null && (
-        <motion.div
-          key="ql"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.12 } }}
-          transition={{ duration: 0.16 }}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            if (e.target === e.currentTarget) onClose();
-          }}
-          className={`fixed inset-0 z-[2400] flex items-center justify-center ${compact ? "bg-black" : "px-10 pb-[96px] pt-10"}`}
-        >
+  const [zoomed, setZoomed] = useState(false);
+  if (compact)
+    return (
+      <AnimatePresence>
+        {it && index !== null && (
           <motion.div
-            initial={{ scale: 0.96, y: 6 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.98 }}
-            transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-            className={
-              compact
-                ? "flex h-full w-full flex-col"
-                : "sq-card flex max-h-full w-[min(760px,100%)] flex-col overflow-hidden rounded-[13px] bg-[#F7F7F9] shadow-[0_0_0_0.5px_rgb(0_0_0/0.2),0_24px_70px_-16px_rgb(16_18_24/0.45)]"
-            }
+            key="ql"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.12 } }}
+            transition={{ duration: 0.16 }}
+            className="fixed inset-0 z-[2400] flex flex-col bg-black"
           >
-            {compact ? (
-              <button type="button" aria-label="Close" onClick={onClose} data-glass="" className={`${glass("btn-dark")} absolute right-4 top-[calc(env(safe-area-inset-top)+58px)] z-10 flex h-9 w-9 items-center justify-center rounded-full text-white`}>
-                <X size={17} className="bold" />
-              </button>
-            ) : (
-              <div className="relative flex h-[38px] shrink-0 items-center justify-center border-b border-black/[0.06] px-12">
-                <button
-                  type="button"
-                  aria-label="Close"
-                  onClick={onClose}
-                  className="group/x absolute left-3 flex h-3 w-3 items-center justify-center rounded-full bg-[#FF5F57] ring-[0.5px] ring-inset ring-black/[0.12]"
-                >
-                  <svg viewBox="0 0 12 12" className="h-[8px] w-[8px] opacity-0 hov:group-hover/x:opacity-100" aria-hidden="true">
-                    <path d="M3 3l6 6M9 3l-6 6" stroke="rgb(0 0 0 / 0.5)" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-                  </svg>
-                </button>
-                <span className="truncate text-[13px] font-semibold text-ink">{it.title}</span>
-                {many && (
-                  <span className="absolute right-2 flex">
-                    <button type="button" aria-label="Previous" onClick={() => onIndex!((index - 1 + items.length) % items.length)} className="flex h-6 w-7 items-center justify-center rounded-[6px] text-ink-2 hov:hover:bg-black/[0.05]">
-                      <ChevronLeft size={16} />
-                    </button>
-                    <button type="button" aria-label="Next" onClick={() => onIndex!((index + 1) % items.length)} className="flex h-6 w-7 items-center justify-center rounded-[6px] text-ink-2 hov:hover:bg-black/[0.05]">
-                      <ChevronRight size={16} />
-                    </button>
-                  </span>
-                )}
-              </div>
-            )}
-            <div className={`min-h-0 flex-1 overflow-auto ${compact ? "flex items-center justify-center" : ""}`}>
-              {it.node ??
-                (it.src && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={it.src} alt={it.title} draggable={false} className={`block w-full object-contain ${compact ? "max-h-full" : "max-h-[calc(100vh-180px)]"}`} />
-                ))}
+            <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={onClose} icon={<X size={17} className="bold" />} className="absolute right-4 top-[calc(env(safe-area-inset-top)+58px)] z-10 !h-9 !w-9" />
+            <motion.div
+              drag={many && !zoomed ? "x" : false}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.5}
+              onDragEnd={(_, info) => {
+                if (!onIndex) return;
+                if (info.offset.x < -80) onIndex((index + 1) % items.length);
+                if (info.offset.x > 80) onIndex((index - 1 + items.length) % items.length);
+              }}
+              className="flex min-h-0 flex-1 touch-pan-y items-center justify-center"
+            >
+              {it.node ?? (it.src && <ZoomImage key={it.src} src={it.src} alt={it.title} onZoom={setZoomed} />)}
+            </motion.div>
+            <div className="pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-center text-[15px] font-semibold text-white">
+              {it.title}
+              {many && <span className="ml-2 font-normal text-white/50">{`${index + 1} of ${items.length}`}</span>}
             </div>
-            {compact && <div className="pb-[max(24px,env(safe-area-inset-bottom))] pt-3 text-center text-[15px] font-semibold text-white">{it.title}</div>}
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+    );
+  if (typeof document === "undefined") return null;
+  // it lives in the desktop's window layer, so it takes part in the same focus order as every window
+  const host = document.getElementById("os-window-layer") ?? document.body;
+  return createPortal(
+    <AnimatePresence>{it && index !== null && <LookWindow key="qlw" it={it} index={index} count={items.length} onIndex={many ? onIndex : undefined} onClose={onClose} />}</AnimatePresence>,
+    host,
+  );
+}
+
+// Pinch with two fingers (scale follows the fingers 1:1, around their midpoint), drag to pan while zoomed,
+// double-tap to toggle 2x. Letting go under 1x springs back. Pointer events only, motion values, no re-renders.
+function ZoomImage({ src, alt, onZoom }: { src: string; alt: string; onZoom?: (zoomed: boolean) => void }) {
+  const scale = useMotionValue(1);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const pts = useRef(new Map<number, { x: number; y: number }>());
+  const start = useRef<{ d: number; s: number; mx: number; my: number; x: number; y: number } | null>(null);
+  const lastTap = useRef(0);
+  const settle = () => {
+    const s = scale.get();
+    if (s <= 1.02) {
+      animate(scale, 1, SPRING_UI);
+      animate(x, 0, SPRING_UI);
+      animate(y, 0, SPRING_UI);
+      onZoom?.(false);
+    } else if (s > 4) animate(scale, 4, SPRING_UI);
+  };
+  const two = () => {
+    const [a, b] = [...pts.current.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  };
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <motion.img
+      src={src}
+      alt={alt}
+      draggable={false}
+      style={{ scale, x, y, touchAction: "none" }}
+      onPointerDown={(e) => {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pts.current.size === 2) {
+          const t = two();
+          start.current = { d: t.d, s: scale.get(), mx: t.mx, my: t.my, x: x.get(), y: y.get() };
+          onZoom?.(true);
+        } else if (pts.current.size === 1) {
+          const now = e.timeStamp;
+          if (now - lastTap.current < 280) {
+            const z = scale.get() > 1.05 ? 1 : 2;
+            animate(scale, z, SPRING_UI);
+            if (z === 1) {
+              animate(x, 0, SPRING_UI);
+              animate(y, 0, SPRING_UI);
+            }
+            onZoom?.(z > 1);
+          }
+          lastTap.current = now;
+          start.current = { d: 0, s: scale.get(), mx: e.clientX, my: e.clientY, x: x.get(), y: y.get() };
+        }
+      }}
+      onPointerMove={(e) => {
+        if (!pts.current.has(e.pointerId) || !start.current) return;
+        pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const st = start.current;
+        if (pts.current.size >= 2) {
+          const t = two();
+          scale.set(Math.max(0.6, Math.min(5, st.s * (t.d / Math.max(st.d, 1)))));
+          x.set(st.x + (t.mx - st.mx));
+          y.set(st.y + (t.my - st.my));
+        } else if (scale.get() > 1.02) {
+          x.set(st.x + (e.clientX - st.mx));
+          y.set(st.y + (e.clientY - st.my));
+        }
+      }}
+      onPointerUp={(e) => {
+        pts.current.delete(e.pointerId);
+        if (pts.current.size === 1) {
+          const [p] = [...pts.current.values()];
+          start.current = { d: 0, s: scale.get(), mx: p.x, my: p.y, x: x.get(), y: y.get() };
+        }
+        if (pts.current.size === 0) settle();
+      }}
+      onPointerCancel={(e) => {
+        pts.current.delete(e.pointerId);
+        if (pts.current.size === 0) settle();
+      }}
+      className="max-h-full w-full select-none object-contain"
+    />
+  );
+}
+
+const SPRING_UI = { type: "spring", bounce: 0, duration: 0.42 } as const;
+
+function LookWindow({ it, index, count, onIndex, onClose }: { it: LookItem; index: number; count: number; onIndex?: (i: number) => void; onClose: () => void }) {
+  const controls = useDragControls();
+  const bounds = useRef<HTMLDivElement>(null);
+  // the area above the dock line, under the menu bar
+  const W = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const H = typeof window !== "undefined" ? window.innerHeight - 24 - 92 : 700;
+  const w = useMotionValue(Math.min(760, W - 120));
+  const h = useMotionValue(Math.min(it.node ? 620 : 520, H - 24));
+  const x = useMotionValue((W - w.get()) / 2);
+  const y = useMotionValue(Math.max(8, (H - h.get()) / 2));
+  // focus order: opening or clicking it brings it to the front, above every window; a window clicked later goes over it
+  const [z, setZ] = useState(() => useOS.getState().topZ + 1);
+  const windows = useOS((s) => s.windows);
+  const focus = () => {
+    const top = useOS.getState().topZ;
+    if (z >= top) return;
+    const t = top + 1;
+    useOS.setState({ topZ: t });
+    setZ(t);
+  };
+  // claim the front on open (in an effect, so a double render can't claim it twice)
+  useEffect(() => {
+    if (z > useOS.getState().topZ) useOS.setState({ topZ: z });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // in front of every open window = focused (its lights are lit, theirs go grey)
+  const focused = !windows.some((w) => !w.min && w.z >= z);
+  const [full, setFull] = useState(false);
+  const saved = useRef<number[] | null>(null);
+  const toggleFull = () => {
+    if (!full) {
+      saved.current = [x.get(), y.get(), w.get(), h.get()];
+      animate(x, 0, SPRING_UI);
+      animate(y, 0, SPRING_UI);
+      animate(w, window.innerWidth, SPRING_UI);
+      animate(h, window.innerHeight - 24 - 92, SPRING_UI);
+    } else if (saved.current) {
+      const [a, b, c, d] = saved.current;
+      animate(x, a, SPRING_UI);
+      animate(y, b, SPRING_UI);
+      animate(w, c, SPRING_UI);
+      animate(h, d, SPRING_UI);
+    }
+    setFull(!full);
+  };
+  // resize from the right edge, the bottom edge or the corner; never past the dock line
+  const resize = (edge: "e" | "s" | "se") => (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    focus();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const sx = e.clientX;
+    const sy = e.clientY;
+    const w0 = w.get();
+    const h0 = h.get();
+    const maxW = window.innerWidth - x.get();
+    const maxH = window.innerHeight - 24 - 92 - y.get();
+    const move = (ev: PointerEvent) => {
+      if (edge !== "s") w.set(Math.min(maxW, Math.max(320, w0 + ev.clientX - sx)));
+      if (edge !== "e") h.set(Math.min(maxH, Math.max(240, h0 + ev.clientY - sy)));
+    };
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+  };
+  const light = (c: string, label: string, glyph: string, on?: () => void) => (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={on}
+      disabled={!on}
+      className="flex h-3 w-3 items-center justify-center rounded-full ring-[0.5px] ring-inset ring-black/[0.12]"
+      style={{ background: on && focused ? c : "#DCDCDF" }}
+    >
+      <svg viewBox="0 0 12 12" className="h-[8px] w-[8px] opacity-0 hov:group-hover/ql:opacity-100" aria-hidden="true">
+        <path d={glyph} stroke="rgb(0 0 0 / 0.5)" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+      </svg>
+    </button>
+  );
+  return (
+    <div ref={bounds} className="pointer-events-none absolute inset-x-0 bottom-[92px] top-0" style={{ zIndex: z }}>
+      <motion.div
+        drag
+        dragListener={false}
+        dragControls={controls}
+        dragMomentum={false}
+        dragConstraints={bounds}
+        dragElastic={0}
+        initial={{ opacity: 0, scale: 0.94 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.14 } }}
+        transition={SPRING_UI}
+        onPointerDown={focus}
+        style={{ x, y, width: w, height: h }}
+        className={`win pointer-events-auto absolute left-0 top-0 flex flex-col overflow-hidden ${focused ? "is-focused" : ""}`}
+        data-sq=""
+      >
+        {/* one frame: the image runs edge to edge under a glass title bar */}
+        <div className="absolute inset-0 bg-[var(--surface-2)]">
+          {it.node ? (
+            <div className="h-full overflow-auto pt-[38px]">{it.node}</div>
+          ) : (
+            it.src && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={it.src} alt={it.title} {...dragFile(it.title, it.src)} className="h-full w-full object-contain pt-[38px]" />
+            )
+          )}
+        </div>
+        <div
+          onPointerDown={(e) => !(e.target as HTMLElement).closest("button") && controls.start(e)}
+          onDoubleClick={toggleFull}
+          data-glass=""
+          className="glass glass-bar group/ql relative z-10 flex h-[38px] shrink-0 items-center justify-center px-20"
+        >
+          <span className="absolute left-3 flex gap-[8px]">
+            {light("#FF5F57", "Close", "M3 3l6 6M9 3l-6 6", onClose)}
+            {light("#FEBC2E", "Minimise", "M2.5 6h7")}
+            {light("#28C840", full ? "Exit full screen" : "Full screen", "M3.5 8.5l5-5M3.5 4v4.5H8", toggleFull)}
+          </span>
+          <span className="m-headline truncate text-ink">{it.title}</span>
+          {onIndex && (
+            <span className="absolute right-2 flex items-center gap-0.5">
+              <span className="m-sub mr-1 tabular-nums text-ink-3">{`${index + 1} of ${count}`}</span>
+              <Btn variant="plain" size="sm" iconOnly label="Previous" onClick={() => onIndex((index - 1 + count) % count)} icon={<ChevronLeft size={15} />} />
+              <Btn variant="plain" size="sm" iconOnly label="Next" onClick={() => onIndex((index + 1) % count)} icon={<ChevronRight size={15} />} />
+            </span>
+          )}
+        </div>
+        {!full && (
+          <>
+            <div onPointerDown={resize("e")} className="absolute bottom-3 right-0 top-[38px] z-20 w-[6px] cursor-ew-resize touch-none" />
+            <div onPointerDown={resize("s")} className="absolute bottom-0 left-3 right-3 z-20 h-[6px] cursor-ns-resize touch-none" />
+            <div onPointerDown={resize("se")} className="absolute bottom-0 right-0 z-20 h-4 w-4 cursor-nwse-resize touch-none" />
+          </>
+        )}
+      </motion.div>
+    </div>
   );
 }
 

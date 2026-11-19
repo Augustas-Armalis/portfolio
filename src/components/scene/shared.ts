@@ -5,7 +5,8 @@ import type { UserId } from "@/content";
 export const DESK = { w: 1.4, d: 0.7, top: 0.74, t: 0.036 };
 
 // Studio-style 27" display. Active area is 16:9.
-export const MONITOR = { w: 0.6232, h: 0.3627, d: 0.0168, aw: 0.5966, ah: 0.3356, tilt: -0.07, y: 1.035, z: -0.11 };
+// Studio-style 27" display: 16:9 panel, ~1.6% uniform black bezel, 2 cm deep aluminium back.
+export const MONITOR = { w: 0.6166, h: 0.3556, d: 0.02, aw: 0.5966, ah: 0.3356, tilt: -0.07, y: 1.035, z: -0.11 };
 // Phone (mobile only), leaning on a small stand.
 export const PHONE = { w: 0.0716, h: 0.1476, d: 0.0083, r: 0.0105, aw: 0.0672, ah: 0.1432, ar: 0.0088, lean: -0.26 };
 
