@@ -1022,3 +1022,12 @@ a.list-row:active {
   background: #636366;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), inset 0 0.5px 0 rgb(255 255 255 / 0.12);
 }
+
+/* the phone has no scrollbars: iOS only flashes an indicator while a finger moves the content */
+.phone-app,
+.phone-app * {
+  scrollbar-width: none;
+}
+.phone-app ::-webkit-scrollbar {
+  display: none;
+}
