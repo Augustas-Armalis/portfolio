@@ -123,8 +123,8 @@ float pathW(float z){ return 0.32 + abs(z) * 0.006; }
 
 // Where the paper plane rests on the desk (desk-top coordinates).
 export const PLANE_SPOT: Record<"desktop" | "mobile", { pos: [number, number, number]; rot: number }> = {
-  desktop: { pos: [0.255, 0, 0.255], rot: -0.42 },
-  mobile: { pos: [0.205, 0, 0.27], rot: -0.35 },
+  desktop: { pos: [0.262, 0, 0.215], rot: -0.42 },
+  mobile: { pos: [0.25, 0, 0.2], rot: -0.35 },
 };
 
 // A still lake off to the back left: it reflects the sky.

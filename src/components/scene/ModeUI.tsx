@@ -445,7 +445,7 @@ export function FlightUI({ onLand, mobile, free, onFree, station }: { onLand: ()
       <div className="pointer-events-none absolute bottom-6 left-5 z-30 max-sm:bottom-20 max-sm:left-3">
         <AnimatePresence mode="wait">
           {(s || sea) && (
-            <Glass key={s?.id ?? "sea"} radius={22} className="px-4 py-2.5" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING}>
+            <Glass key={s?.id ?? "sea"} radius={22} lens={false} className="px-4 py-2.5" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING}>
               <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em]">{s ? s.title : "Tranquility"}</div>
               <div className="mt-0.5 text-[12.5px] leading-tight text-white/70">M. K. Čiurlionis, {s ? s.year : "1904"}</div>
             </Glass>

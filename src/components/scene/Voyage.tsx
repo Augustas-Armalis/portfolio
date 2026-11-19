@@ -67,10 +67,10 @@ class Kit {
   }
 }
 
-function makeTempera() {
+function makeTempera(haze = 1) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U },
+    uniforms: { ...SKY_U, uHaze: { value: haze } },
     vertexShader: /* glsl */ `
       attribute vec4 aCol;
       varying vec3 vWorld; varying vec3 vN; varying vec4 vCol;
@@ -80,6 +80,7 @@ function makeTempera() {
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: /* glsl */ `
+      uniform float uHaze;
       varying vec3 vWorld; varying vec3 vN; varying vec4 vCol;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -101,7 +102,7 @@ function makeTempera() {
         vec3 d = normalize(vWorld - cameraPosition);
         vec3 air = skyBase(normalize(vec3(d.x, max(d.y, 0.0) * 0.5 + 0.012, d.z)));
         float low = exp(-max(vWorld.y, 0.0) * 0.07);
-        float f = 1.0 - exp(-dist * (0.0032 * (0.5 + low) + uMist));
+        float f = 1.0 - exp(-dist * (0.0032 * (0.5 + low) * uHaze + uMist));
         col = mix(col, air, clamp(f, 0.0, 1.0) * (1.0 - 0.45 * near * clamp(vCol.a, 0.0, 1.0)));
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -619,6 +620,8 @@ export function Voyage({ mobile }: { mobile: boolean }) {
     };
     return {
       tempera,
+      // the island keeps its darkness across the water
+      dark: makeTempera(0.22),
       eyes,
       at,
       sun: buildSun(),
@@ -669,7 +672,7 @@ export function Voyage({ mobile }: { mobile: boolean }) {
       <mesh material={b.sea} position={[0, 0.06, ROUTE.shoreZ - 1500]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
         <planeGeometry args={[3600, 3000]} />
       </mesh>
-      <mesh geometry={b.island} material={b.tempera} position={[ROUTE.islandX, 0, ROUTE.islandZ]} rotation={[0, ISLAND_YAW, 0]} />
+      <mesh geometry={b.island} material={b.dark} position={[ROUTE.islandX, 0, ROUTE.islandZ]} rotation={[0, ISLAND_YAW, 0]} />
       <points geometry={b.eyeGeo} material={b.eyeMat} frustumCulled={false} renderOrder={6} />
     </>
   );
