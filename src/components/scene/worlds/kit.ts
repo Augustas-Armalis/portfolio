@@ -398,7 +398,8 @@ export function haloGeometry(list: Halo[]) {
   return g;
 }
 // kind 0: a halo with a hot core. kind 1: a sun as he drew them: a pale disc, a ring, straight rays. kind 2: a wide soft glow, no core.
-export function makeHaloMaterial(kind: 0 | 1 | 2 = 0) {
+// kind 3: the sun of the Fairy Tale: a small pale disc in a wide fan of fine dotted rays.
+export function makeHaloMaterial(kind: 0 | 1 | 2 | 3 = 0) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -433,6 +434,18 @@ export function makeHaloMaterial(kind: 0 | 1 | 2 = 0) {
             : kind === 2
               ? `float a = (exp(-r * r * 5.5) * 0.6 + exp(-r * 3.0) * 0.12) * edge;
                vec3 c = vCol.rgb * a;`
+              : kind === 3
+                ? `float ang = atan(vUv.y, vUv.x);
+               float cell = ang / 6.2832 * 56.0;
+               float lat = abs(fract(cell) - 0.5);
+               float pick = fract(sin(floor(cell) * 12.9898) * 43758.5453);
+               float reach = mix(0.5, 0.96, pick);
+               // each ray a row of small dabs, thinning as it goes out
+               float dab = 0.55 + 0.45 * sin(r * 150.0 + pick * 40.0);
+               float ray = (1.0 - smoothstep(0.1, 0.24, lat)) * smoothstep(0.075, 0.11, r) * (1.0 - smoothstep(reach * 0.5, reach, r)) * dab;
+               float disc = 1.0 - smoothstep(0.045, 0.058, r);
+               float a = disc * 1.6 + ray * 0.34 + exp(-r * r * 18.0) * 0.5 * edge + exp(-r * 4.0) * 0.1 * edge;
+               vec3 c = mix(vCol.rgb, vec3(1.0, 0.96, 0.82), disc * 0.7) * a;`
               : `float ang = atan(vUv.y, vUv.x) + vSeed * 6.283 + uTime * 0.02 * (vSeed - 0.5);
                float rays = 8.0 + floor(vSeed * 3.0) * 2.0;
                float cell = ang / 6.2832 * rays;

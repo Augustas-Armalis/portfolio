@@ -268,7 +268,7 @@ export function Mist({ puffs }: { puffs: Puff[] }) {
   const b = useDisposable(() => ({ geo: puffGeometry(puffs), mat: makePuffMaterial() }), [puffs]);
   return <mesh geometry={b.geo} material={b.mat} renderOrder={3} />;
 }
-export function Halos({ list, kind = 0 }: { list: Halo[]; kind?: 0 | 1 | 2 }) {
+export function Halos({ list, kind = 0 }: { list: Halo[]; kind?: 0 | 1 | 2 | 3 }) {
   const b = useDisposable(() => ({ geo: haloGeometry(list), mat: makeHaloMaterial(kind) }), [list, kind]);
   return <mesh geometry={b.geo} material={b.mat} renderOrder={6} />;
 }
