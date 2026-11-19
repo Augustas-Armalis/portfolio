@@ -1272,3 +1272,8 @@ a.list-row:active {
     border-radius: 26px;
   }
 }
+/* pills and circles stay round: only boxes take the continuous corner */
+.glass.rounded-full,
+.btn-capsule {
+  corner-shape: round;
+}
