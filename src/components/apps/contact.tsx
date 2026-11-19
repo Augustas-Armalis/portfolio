@@ -125,7 +125,7 @@ export function Contact() {
 
   const field = "flex h-9 items-center gap-2 border-b border-black/[0.06] px-4 text-[13px]";
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="@container/contact flex h-full min-h-0 flex-col">
       <Toolbar title="New Message">
         <Button size="sm" variant="primary" onClick={send} icon={copied === "send" ? <Check size={13} strokeWidth={2.4} /> : <Send size={13} />}>
           {copied === "send" ? "Copied" : "Send"}
@@ -133,9 +133,9 @@ export function Contact() {
       </Toolbar>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         {/* the contact card: who you're writing to, and the other ways to reach him */}
-        <div className="flex items-center gap-4 border-b border-[var(--separator)] px-5 py-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-[var(--separator)] px-5 py-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-[#A8ADB8] to-[#7E838E] text-[24px] font-semibold text-white">A</div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-[150px] flex-1">
             <div className="m-title truncate text-ink">{owner.name}</div>
             <div className="m-body truncate text-ink-2">{owner.role}</div>
           </div>
@@ -176,7 +176,7 @@ export function Contact() {
         />
         <div className="space-y-3 border-t border-black/[0.06] bg-[#F7F7F9] p-4">
           {sentNote}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2 @max-[559px]/contact:grid-cols-1">
             <QuickAction href={bookCall.href} icon={<CalendarDays size={16} strokeWidth={1.9} />} label={bookCall.label} sub={bookCall.sub} />
             <QuickAction href={owner.x.href} icon={<XMark size={14} />} label="Message on X" sub={owner.x.label} />
             {CONTACT_EMAIL ? (
@@ -190,7 +190,7 @@ export function Contact() {
               <QuickAction href={CONTACTS.linkedin.href ?? "#"} icon={<Linkedin size={15} strokeWidth={1.9} />} label="LinkedIn" sub={CONTACTS.linkedin.value} />
             )}
           </div>
-          <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 @container">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 @max-[459px]/contact:grid-cols-1">
             {contactList
               .filter((c) => c.id !== "x" && (CONTACT_EMAIL ? true : c.id !== "linkedin"))
               .map((c) => (

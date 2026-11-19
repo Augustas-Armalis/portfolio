@@ -20,6 +20,17 @@ export const useChrome = () => useContext(Chrome);
 // Inside a SplitView's detail the traffic lights sit over the sidebar, so the toolbar needs no inset.
 // inside a SplitView: `toggle` shows or hides its sidebar while the window is too narrow to keep it in view
 const InSplit = createContext<{ open: boolean; toggle: () => void } | null>(null);
+// for an app that draws its own sidebar: wrap it in <SplitFrame>, give the <aside> the split-side class and
+// data-shown, and its toolbars get the same sidebar button
+export function SplitFrame({ shown, setShown, children, className = "" }: { shown: boolean; setShown: (v: boolean) => void; children: ReactNode; className?: string }) {
+  const split = useMemo(() => ({ open: shown, toggle: () => setShown(!shown) }), [shown, setShown]);
+  return (
+    <div className={`@container/split relative ${className}`}>
+      {shown && <button type="button" aria-label="Hide sidebar" tabIndex={-1} onClick={() => setShown(false)} className="absolute inset-0 z-[19] hidden cursor-default @max-[619px]/split:block" />}
+      <InSplit.Provider value={split}>{children}</InSplit.Provider>
+    </div>
+  );
+}
 // On the phone a pushed screen hands its title and its way back to the app's navigation bar (PhoneOS), so
 // Back sits top-left where iOS puts it and the large title names the screen you are on.
 export type PhoneDetail = { title: string; back: () => void } | null;
@@ -213,7 +224,7 @@ export function Toolbar({ title, sub, children, inset }: { title?: ReactNode; su
   return (
     <div
       data-drag
-      className={`toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-black/[0.06] pr-3 ${pad ? "pl-[84px]" : "pl-5 @max-[619px]/split:pl-[84px]"}`}
+      className={`toolbar flex h-[52px] min-w-0 shrink-0 items-center gap-2 [overflow-x:clip] border-b border-black/[0.06] pr-3 ${pad ? "pl-[84px]" : "pl-5 @max-[619px]/split:pl-[84px]"}`}
     >
       {inSplit && (
         // only while the sidebar is tucked away (the window is narrow): brings it back over the content
@@ -234,8 +245,8 @@ export function SearchField({ value, onChange, placeholder = "Search", id }: { v
   return (
     <label
       htmlFor={id}
-      className={`search flex shrink-0 items-center gap-1.5 text-ink-3 ${
-        compact ? "h-9 w-full rounded-[12px] bg-[#767680]/[0.12] px-2" : "h-8 w-[190px] rounded-full bg-black/[0.05] px-2.5 focus-within:ring-[3px] focus-within:ring-[var(--accent)]/30"
+      className={`search flex items-center gap-1.5 text-ink-3 ${
+        compact ? "h-9 w-full shrink-0 rounded-[12px] bg-[#767680]/[0.12] px-2" : "h-8 w-[190px] min-w-[88px] shrink rounded-full bg-black/[0.05] px-2.5 focus-within:ring-[3px] focus-within:ring-[var(--accent)]/30"
       }`}
     >
       <Search size={compact ? 16 : 13} strokeWidth={2} className="shrink-0" />
@@ -1434,7 +1445,7 @@ export function StatsRow({ stats }: { stats: { k: string; v: string; sub?: strin
 }
 export function InfoGrid({ rows, cols = 2 }: { rows: { k: string; v: ReactNode }[]; cols?: 1 | 2 }) {
   return (
-    <dl className={`grid ${cols === 2 ? "grid-cols-2 gap-x-8" : "grid-cols-1"}`}>
+    <dl className={`grid ${cols === 2 ? "grid-cols-2 gap-x-8 @max-[519px]:grid-cols-1" : "grid-cols-1"}`}>
       {rows.map((f) => (
         <div key={f.k} className="t-sub flex items-baseline justify-between gap-4 py-3 shadow-[inset_0_-0.5px_0_var(--separator-opaque)]">
           <dt className="text-[var(--label-2)]">{f.k}</dt>

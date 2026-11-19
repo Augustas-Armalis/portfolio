@@ -72,9 +72,9 @@ function Story({ it, standalone }: { it: StoryItem; standalone?: boolean }) {
     it.status && { k: "Status", v: it.status },
     p.link && { k: "Website", v: p.link.label },
   ].filter((x): x is { k: string; v: string } => !!x);
-  const pad = compact ? "px-5" : "px-10";
+  const pad = compact ? "px-5" : "px-10 @max-[559px]:px-6";
   return (
-    <article className="bg-white pb-12">
+    <article className="@container bg-white pb-12">
       <div data-drag={standalone && !compact ? "" : undefined} className={`relative w-full overflow-hidden ${compact ? "aspect-[4/5]" : "h-[420px]"}`}>
         <CardFace it={it} big open />
       </div>
@@ -264,7 +264,7 @@ function RepoView({ it }: { it: StoryItem }) {
           {actions}
         </Toolbar>
       )}
-      <div className={`min-h-0 flex-1 overflow-auto ${compact ? "px-4 pb-10" : "px-6 pb-8 pt-1"}`}>
+      <div className={`@container min-h-0 flex-1 overflow-auto ${compact ? "px-4 pb-10" : "px-6 pb-8 pt-1"}`}>
         <div className="flex items-center gap-4">
           {it.app && <AppIcon id={it.app} size={compact ? 60 : 64} />}
           <div className="min-w-0 flex-1">
@@ -273,7 +273,7 @@ function RepoView({ it }: { it: StoryItem }) {
           </div>
         </div>
         {compact && <div className="mt-4 flex flex-wrap gap-2">{actions}</div>}
-        <div className={`mt-5 grid gap-5 ${compact ? "" : "grid-cols-[minmax(0,1fr)_220px]"}`}>
+        <div className={`mt-5 grid gap-5 ${compact ? "" : "grid-cols-[minmax(0,1fr)_220px] @max-[559px]:grid-cols-1"}`}>
           <div className="min-w-0 space-y-5">
             {p.repo && (
               <div>
@@ -395,6 +395,21 @@ function LiveSite({ it }: { it: StoryItem }) {
     return () => window.clearTimeout(t);
   }, [reload]);
   const loadedRef = useRef(false);
+  // when the window gets too narrow for both, the site keeps the room and Info waits behind its button
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = root.current;
+    if (!el || compact) return;
+    let was = el.clientWidth < 700;
+    if (was) setInfo(false);
+    const ro = new ResizeObserver(() => {
+      const narrow = el.clientWidth < 700;
+      if (narrow && !was) setInfo(false);
+      was = narrow;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [compact, failed]);
   if (failed)
     return (
       <div className="h-full overflow-y-auto bg-[var(--bg)]">
@@ -461,7 +476,7 @@ function LiveSite({ it }: { it: StoryItem }) {
       </div>
     );
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={root} className="@container/site flex h-full min-h-0 flex-col">
       <div data-drag className="toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--separator)] pl-[84px] pr-3">
         <Btn variant="plain" size="sm" iconOnly label="Reload" onClick={() => setReload((r) => r + 1)} icon={<RotateCw size={14} />} />
         <div className="search mx-auto flex h-[30px] w-[min(420px,60%)] items-center justify-center gap-1.5 rounded-[10px] bg-[var(--fill-2)] px-3">
@@ -471,7 +486,7 @@ function LiveSite({ it }: { it: StoryItem }) {
         <Btn variant="plain" size="sm" iconOnly label="Open in a new tab" href={href} icon={<ArrowUpRight size={15} />} />
         <Btn variant={info ? "tinted" : "plain"} size="sm" iconOnly label="Info" onClick={() => setInfo((v) => !v)} icon={<Info size={15} />} />
       </div>
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         {frame}
         <AnimatePresence initial={false}>
           {info && (
@@ -481,7 +496,7 @@ function LiveSite({ it }: { it: StoryItem }) {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 280, opacity: 0 }}
               transition={{ type: "spring", bounce: 0, duration: 0.36 }}
-              className="inspector w-[272px] shrink-0 overflow-auto p-5"
+              className="inspector w-[272px] shrink-0 overflow-auto p-5 @max-[699px]/site:absolute @max-[699px]/site:inset-y-0 @max-[699px]/site:right-0 @max-[699px]/site:z-10 @max-[699px]/site:max-w-[calc(100%-16px)] @max-[699px]/site:shadow-[var(--shadow-3)]"
             >
               <Inspector it={it} />
             </motion.aside>

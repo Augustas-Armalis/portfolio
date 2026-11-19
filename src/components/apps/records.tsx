@@ -3,7 +3,7 @@
 // Records: Now Playing and the queue.
 
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, ChevronLeft, Pause, Play, SkipBack, SkipForward, Volume1, Volume2 } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ListMusic, Pause, Play, SkipBack, SkipForward, Volume1, Volume2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { art, novel, tracks } from "@/content";
 import { Bars } from "../Desktop";
@@ -249,6 +249,7 @@ export function Records() {
   const p = usePlayer();
   const cur = trackOf(p.id);
   const [full, setFull] = useState(false);
+  const [queue, setQueue] = useState(false);
   // closing the window quits the app, like Music; on the phone it keeps playing under the Dynamic Island
   useEffect(() => () => void (!useOS.getState().isMobile && player.stop()), []);
   // Now Playing is dark to the top edge: the status bar turns white over it
@@ -259,14 +260,19 @@ export function Records() {
   }, [compact, full]);
   if (!compact)
     return (
-      <div className="relative h-full min-h-0">
+      <div className="@container/rec relative h-full min-h-0">
         <MusicBackdrop />
-        <div className="relative grid h-full min-h-0 grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        <div className="relative grid h-full min-h-0 grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] @max-[659px]/rec:grid-cols-1">
           <div data-drag className="min-h-0">
             <NowPlaying compact={false} />
           </div>
-          <GlassQueue />
+          {/* two columns while there is room; in a narrow window Up Next slides over from the right */}
+          {queue && <button type="button" aria-label="Hide Up Next" tabIndex={-1} onClick={() => setQueue(false)} className="absolute inset-0 z-[9] hidden cursor-default @max-[659px]/rec:block" />}
+          <div data-shown={queue} className="rec-queue min-h-0">
+            <GlassQueue />
+          </div>
         </div>
+        <Btn variant="glass-dark" capsule iconOnly size="md" label={queue ? "Hide Up Next" : "Up Next"} icon={<ListMusic size={16} />} onClick={() => setQueue((v) => !v)} className="!absolute right-3 top-2.5 z-[11] !hidden @max-[659px]/rec:!inline-flex" />
       </div>
     );
   return (

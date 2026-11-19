@@ -70,18 +70,19 @@ export const projectApps: AppId[] = projectGroups.flatMap((g) => g.apps);
 export const gameApps: AppId[] = ["doom", "blocks"];
 
 type Size = { w: number; h: number };
-// The smallest a window may be dragged. Like a Mac app, each refuses to shrink below the size at which its
-// layout still works (two columns in Records, a sidebar and a grid in Finder, a readable line in Novel).
+// The smallest a window may be dragged. Below about 620 to 700px an app changes its layout with container
+// queries (the sidebar tucks behind a toolbar button, two columns become one), so these floors are where the
+// single-column layout still works.
 const MIN_SIZE: Partial<Record<AppId, Size>> = {
-  projects: { w: 660, h: 440 },
-  games: { w: 660, h: 440 },
-  records: { w: 780, h: 540 },
-  novel: { w: 760, h: 500 },
+  projects: { w: 440, h: 380 },
+  games: { w: 440, h: 380 },
+  records: { w: 400, h: 540 },
+  novel: { w: 420, h: 440 },
   shots: { w: 600, h: 440 },
   gallery: { w: 560, h: 420 },
-  settings: { w: 660, h: 460 },
-  contact: { w: 640, h: 540 },
-  taste: { w: 560, h: 360 },
+  settings: { w: 440, h: 420 },
+  contact: { w: 420, h: 500 },
+  taste: { w: 380, h: 340 },
   kit: { w: 420, h: 340 },
   piano: { w: 560, h: 280 },
   terminal: { w: 440, h: 280 },
@@ -97,7 +98,7 @@ export function minSize(id: AppId): Size {
   if (own) return own;
   // projects: a live site or a story needs room for its inspector or its screenshot; a repository a little less
   const p = projects[id];
-  if (p) return p.kind === "code" ? { w: 620, h: 460 } : { w: 740, h: 500 };
+  if (p) return p.kind === "code" ? { w: 420, h: 420 } : { w: 480, h: 440 };
   return { w: 480, h: 360 };
 }
 

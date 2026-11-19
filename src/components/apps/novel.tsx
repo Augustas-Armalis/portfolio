@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { BookOpen, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { novel } from "@/content";
-import { Btn, glass, Toolbar, useChrome } from "../ui";
+import { Btn, glass, SplitFrame, Toolbar, useChrome } from "../ui";
 import { Empty } from "./shared";
 
 type Chapter = { id: string; title: string; paragraphs: string[]; words: number; image?: string };
@@ -53,6 +53,8 @@ const minutes = (w: number) => `${Math.max(1, Math.round(w / 230))} min`;
 const SERIF = "font-[Literata,Georgia,serif]";
 
 export function Novel() {
+  // in a narrow window the contents list is tucked away behind the toolbar's sidebar button
+  const [side, setSide] = useState(false);
   const { compact } = useChrome();
   useReadingFont();
   const [book, setBook] = useState<Book | null>(null);
@@ -80,14 +82,14 @@ export function Novel() {
 
   const library = (
     <div className={`mx-auto max-w-[620px] ${compact ? "px-4 pb-10" : "px-8 py-8"}`}>
-      <div className={`flex gap-7 ${compact ? "flex-col items-center text-center" : "items-start"}`}>
+      <div className={`flex gap-7 ${compact ? "flex-col items-center text-center" : "items-start @max-[459px]:flex-col @max-[459px]:items-center @max-[459px]:text-center"}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={novel.cover} alt={novel.title} draggable={false} data-sq="" className="book-cover aspect-[2/3] w-[168px] shrink-0 rounded-[12px] bg-[#0b0d12] object-cover" />
         <div className={`min-w-0 ${compact ? "" : "pt-1"}`}>
           <h1 className={`${SERIF} text-[28px] font-semibold leading-[1.12] tracking-[-0.015em] text-ink [text-wrap:balance]`}>{novel.title}</h1>
           <p className="t-sub mt-2 text-ink-2">{novel.author}</p>
           <p className="t-foot text-ink-3">Iliustracijos: {novel.illustrator}</p>
-          <div className={`mt-4 flex items-center gap-3 ${compact ? "justify-center" : ""}`}>
+          <div className={`mt-4 flex items-center gap-3 ${compact ? "justify-center" : "@max-[459px]:justify-center"}`}>
             <Btn variant="prominent" capsule size="md" onClick={() => book && setCh(saved?.ch ?? 0)} icon={<BookOpen size={14} />} className="!px-4">
               {saved ? "Continue" : "Read"}
             </Btn>
@@ -137,8 +139,8 @@ export function Novel() {
   }
 
   return (
-    <div className="flex h-full min-h-0">
-      <aside data-drag className="flex w-[220px] shrink-0 flex-col overflow-auto border-r border-black/[0.06] bg-[#F4F4F6] px-2.5 pb-3 pt-[52px]">
+    <SplitFrame shown={side} setShown={setSide} className="flex h-full min-h-0">
+      <aside data-drag data-shown={side} onClick={() => setSide(false)} className="split-side flex w-[220px] shrink-0 flex-col overflow-auto border-r border-black/[0.06] bg-[#F4F4F6] px-2.5 pb-3 pt-[52px]">
         <button
           type="button"
           onClick={() => setCh(null)}
@@ -171,12 +173,12 @@ export function Novel() {
           ) : (
             <motion.div key="lib" className="absolute inset-0 flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
               <Toolbar title="Library" sub={novel.years} />
-              <div className="min-h-0 flex-1 overflow-auto">{library}</div>
+              <div className="@container min-h-0 flex-1 overflow-auto">{library}</div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
-    </div>
+    </SplitFrame>
   );
 }
 
