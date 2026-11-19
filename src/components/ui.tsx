@@ -2,7 +2,7 @@
 
 import { AnimatePresence, animate, motion, useDragControls, useMotionValue, useTransform } from "motion/react";
 import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { apps, type AppId } from "@/content";
 import { useOS } from "@/store";
@@ -53,24 +53,94 @@ export function Button({
   );
 }
 
+// Shared glass springs. One family, so every morph in the OS moves the same way.
+// SPRING_GLASS: a surface changing size (capsule into menu, the Dynamic Island). LEAD/TRAIL: the two edges of a
+// selection drop; the edge in front leaves first and the one behind catches up, so the drop stretches as it slides.
+export const SPRING_GLASS = { type: "spring", bounce: 0.26, duration: 0.5 } as const;
+export const SPRING_LEAD = { type: "spring", bounce: 0.18, duration: 0.36 } as const;
+export const SPRING_TRAIL = { type: "spring", bounce: 0.3, duration: 0.58 } as const;
+
+export const reducedMotion = () =>
+  typeof window !== "undefined" && (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.classList.contains("reduce-fx"));
+
+// The selection drop of a segmented control or tab bar. It sits behind the options (which carry data-seg) and
+// moves by its two edges, each on its own spring. Only this one small leaf changes size; nothing reflows.
+export function GlassThumb({ index, className = "" }: { index: number; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const l = useMotionValue(0);
+  const r = useMotionValue(0);
+  const placed = useRef(false);
+  // written straight to the element: no render, and both edges land in the same frame
+  useLayoutEffect(() => {
+    const draw = () => {
+      const el = ref.current;
+      if (!el) return;
+      el.style.transform = `translateX(${l.get()}px)`;
+      el.style.width = `${Math.max(0, r.get() - l.get())}px`;
+    };
+    const a = l.on("change", draw);
+    const b = r.on("change", draw);
+    return () => {
+      a();
+      b();
+    };
+  }, [l, r]);
+  const place = (jump: boolean) => {
+    const el = ref.current?.parentElement?.querySelectorAll<HTMLElement>("[data-seg]")[idx.current];
+    if (!el) return;
+    const nl = el.offsetLeft;
+    const nr = nl + el.offsetWidth;
+    if (jump || reducedMotion()) {
+      l.stop();
+      r.stop();
+      l.jump(nl);
+      r.jump(nr);
+      return;
+    }
+    const right = nl > l.get();
+    animate(l, nl, right ? SPRING_TRAIL : SPRING_LEAD);
+    animate(r, nr, right ? SPRING_LEAD : SPRING_TRAIL);
+  };
+  const idx = useRef(index);
+  useLayoutEffect(() => {
+    idx.current = index;
+    place(!placed.current);
+    placed.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+  // the control changed size (a window resize, a font landing): the drop follows without animating
+  useEffect(() => {
+    const host = ref.current?.parentElement;
+    if (!host) return;
+    let w = host.offsetWidth;
+    const ro = new ResizeObserver(() => {
+      if (host.offsetWidth === w) return;
+      w = host.offsetWidth;
+      place(true);
+    });
+    ro.observe(host);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return <span ref={ref} aria-hidden className={`pointer-events-none absolute left-0 ${className}`} />;
+}
+
 export function Segmented<T extends string>({ value, options, onChange, id }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; id: string }) {
+  const { compact } = useChrome();
   return (
-    <div className="seg flex h-7 items-center rounded-[8px] bg-[var(--fill-2)] p-[2px]">
+    <div role="radiogroup" data-seg-id={id} className={`seg relative flex items-center bg-[var(--fill-2)] p-[2px] ${compact ? "h-9 rounded-[10px]" : "h-7 rounded-[8px]"}`}>
+      <GlassThumb index={options.findIndex((o) => o.value === value)} className={`seg-thumb inset-y-[2px] ${compact ? "rounded-[8px]" : "rounded-[6px]"}`} />
       {options.map((o) => (
         <button
           type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          data-seg=""
           key={o.value}
           onClick={() => onChange(o.value)}
-          className="relative h-6 px-2.5 text-[12px] font-medium"
+          className={`relative font-medium transition-colors duration-200 ${compact ? "h-8 min-w-[72px] px-4 text-[14px]" : "h-6 px-2.5 text-[12px]"} ${value === o.value ? "text-ink" : "text-ink-2"}`}
         >
-          {value === o.value && (
-            <motion.span
-              layoutId={`seg-${id}`}
-              className="seg-thumb absolute inset-0 rounded-[6px]"
-              transition={{ type: "spring", bounce: 0.26, duration: 0.5 }}
-            />
-          )}
-          <span className={`relative ${value === o.value ? "text-ink" : "text-ink-2"}`}>{o.label}</span>
+          {o.label}
         </button>
       ))}
     </div>
@@ -1007,8 +1077,6 @@ export function sfx(name: SfxName) {
 
 export const SPRING = { type: "spring", bounce: 0, duration: 0.42 } as const;
 export const SPRING_SOFT = { type: "spring", bounce: 0.12, duration: 0.55 } as const;
-// glass morphs (a capsule growing into a menu, the segmented thumb, the Dynamic Island): a little elastic
-export const SPRING_GLASS = { type: "spring", bounce: 0.26, duration: 0.5 } as const;
 
 // ---------- Squircle: Figma-style smoothed corners (smoothing 0.6) ----------
 // The path math follows figma-squircle (MIT): each corner is a straight run, a cubic into a short circular arc,
@@ -1108,6 +1176,7 @@ export function TabBar<T extends string>({ id, value, onChange, items }: { id: s
       data-glass=""
       className="glass glass-pop fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+36px)] z-[30] flex h-[60px] items-stretch rounded-full p-1"
     >
+      <GlassThumb index={items.findIndex((it) => it.value === value)} className="inset-y-1 rounded-full bg-[var(--fill)]" />
       {items.map((it) => {
         const on = it.value === value;
         return (
@@ -1115,10 +1184,11 @@ export function TabBar<T extends string>({ id, value, onChange, items }: { id: s
             type="button"
             key={it.value}
             aria-current={on ? "page" : undefined}
+            data-seg=""
+            data-tab={id}
             onClick={() => onChange(it.value)}
-            className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[3px] rounded-full ${on ? "text-[var(--accent)]" : "text-ink-2"}`}
+            className={`tab-item relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[3px] rounded-full transition-colors duration-200 ${on ? "text-[var(--accent)]" : "text-ink-2"}`}
           >
-            {on && <motion.span layoutId={`tab-${id}`} transition={SPRING_GLASS} className="absolute inset-0 rounded-full bg-[var(--fill)]" />}
             <span className="relative">{it.icon}</span>
             <span className="relative max-w-full truncate px-1 text-[10px] font-semibold leading-none">{it.label}</span>
           </button>
