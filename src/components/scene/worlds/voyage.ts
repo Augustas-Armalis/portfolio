@@ -745,7 +745,8 @@ export function voyageSky(live: SkyState, dt: number): SkyState {
   }
   let s = target;
   if (voyage.skyFrom) {
-    voyage.skyT = Math.min(1, voyage.skyT + dt / 0.5);
+    // unhurried: the closed cloud is the whole picture while this runs, and a quick change of its colour reads as a flash
+    voyage.skyT = Math.min(1, voyage.skyT + dt / 0.8);
     const t = voyage.skyT;
     s = mixSky(voyage.skyFrom, target, t * t * (3 - 2 * t));
     if (t >= 1) voyage.skyFrom = null;
