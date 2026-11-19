@@ -4,7 +4,7 @@ import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransfo
 import { useEffect, useRef, useState } from "react";
 import { apps, dockApps, mainWork, owner, projects, sharedApps, tracks, type AppId } from "@/content";
 import { useOS, useWallpaper } from "@/store";
-import { AppIcon, AppView, LiveWallpaper, player, usePlayer } from "./Apps";
+import { AppIcon, AppView, LiveWallpaper, player, usePlayer, warmApps } from "./Apps";
 import { Bars } from "./Desktop";
 import { Monogram, PowerOverlay } from "./Login";
 import { Glyph, ICONS, iconBackground } from "./icons";
@@ -506,6 +506,7 @@ function AppWindow({ id, origin, onClosed }: { id: AppId; origin: Origin | null;
 
 export default function PhoneOS() {
   useGlassScope();
+  useEffect(warmApps, []);
   const phase = useOS((s) => s.phase);
   const user = useOS((s) => s.user);
   const phoneApp = useOS((s) => s.phoneApp);

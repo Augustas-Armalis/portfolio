@@ -18,7 +18,7 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { allApps, apps, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, sharedApps, type AppId, type DeskItem, type UserId } from "@/content";
 import { focusedApp, useOS, useWallpaper, type Win } from "@/store";
-import { AppIcon, AppView, LiveWallpaper } from "./Apps";
+import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
 import { Monogram, PowerOverlay } from "./Login";
 import { Btn, Chrome, EASE_OUT, FILE_MIME, QuickLook, SPRING_GLASS, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useMorph, type LookItem, type MenuAction } from "./ui";
@@ -1523,6 +1523,7 @@ export default function Desktop(_: { user?: UserId }) {
   const area = useRef<HTMLDivElement>(null);
   const wp = useWallpaper();
 
+  useEffect(warmApps, []);
   // ⌘W closes, ⌘M minimises the focused window (where the browser lets the page have the key).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
