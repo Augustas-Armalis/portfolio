@@ -6,7 +6,7 @@ import { Check, Download, Grid3x3, Pause, Play, SkipBack, SkipForward } from "lu
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { play } from "@/lib/sfx";
-import { STATIONS } from "./flightPath";
+import { WORLDS, setGuide, useFlightFlags, useVoyageTick, useWorld, voyage } from "./worlds/voyage";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
 import { photoCtl, postCtl, type Capture } from "./Post";
 
@@ -697,12 +697,6 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
   );
 }
 
-     </Glass>
-      </div>
-    </>
-  );
-}
-
 // ---------- book ----------
 
 export function BookUI({ info, onExit, onPrev, onNext, onApp }: { info: { spread: number; spreads: number; ready: boolean }; onExit: () => void; onPrev: () => void; onNext: () => void; onApp: () => void }) {
@@ -756,30 +750,85 @@ export function SketchUI({ onExit, onClear, onSave }: { onExit: () => void; onCl
 
 // ---------- flight ----------
 
-export function FlightUI({ onLand, mobile, free, onFree, station }: { onLand: () => void; mobile: boolean; free: boolean; onFree: (f: boolean) => void; station: number }) {
-  const seg = (on: boolean) => `lg-btn pointer-events-auto h-7 px-3 text-[12.5px] font-medium ${on ? "lg-on" : "text-white/90"}`;
-  const s = station >= 0 && station < STATIONS.length ? STATIONS[station] : null;
-  const sea = station === STATIONS.length;
+// The flight's few controls: how fast, whether the quiet hand may take over,
+// and the way home. On entering a world its name is shown for a while, quietly.
+export function FlightUI({ onLand, mobile, flying }: { onLand: () => void; mobile: boolean; flying: boolean }) {
+  const world = useWorld();
+  const entered = useVoyageTick();
+  const flags = useFlightFlags();
+  const guide = (flags & 1) > 0;
+  const guided = (flags & 2) > 0;
+  // the throttle is also worked from the keys and the wheel: the slider follows
+  const [thr, setThr] = useState(voyage.throttle);
+  useEffect(() => {
+    let raf = 0;
+    let last = voyage.throttle;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (Math.abs(voyage.throttle - last) > 0.004) setThr((last = voyage.throttle));
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  // the title card: once the cloud has opened on a world, for a few seconds
+  const [card, setCard] = useState(false);
+  useEffect(() => {
+    if (!flying) {
+      setCard(false);
+      return;
+    }
+    const a = window.setTimeout(() => setCard(true), entered ? 1900 : 900);
+    const b = window.setTimeout(() => setCard(false), (entered ? 1900 : 900) + 7500);
+    return () => {
+      window.clearTimeout(a);
+      window.clearTimeout(b);
+      setCard(false);
+    };
+  }, [world, entered, flying]);
+  const def = WORLDS[world];
+  const sub = world === "home" ? "The path of angels" : def.year ? `M. K. Čiurlionis, ${def.year}` : "";
   return (
     <>
-      <TopBar title="Paper plane" hint={mobile ? "Drag to lean" : free ? "Mouse or W A S D to steer" : "Mouse or arrows to lean · it follows the road"} exitLabel="Land" onExit={onLand} />
+      <TopBar title="Paper plane" hint={mobile ? "Drag to steer" : "Mouse steers · W S or scroll for speed"} exitLabel="Land" onExit={onLand} />
       <Bottom>
-        <Glass className="pointer-events-auto flex items-center gap-0.5 p-1" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-          <button type="button" className={seg(!free)} onClick={() => onFree(false)}>
-            Follow the road
-          </button>
-          <button type="button" className={seg(free)} onClick={() => onFree(true)}>
-            Free flight
+        <Glass className="pointer-events-auto flex items-center gap-2.5 p-1 pl-4" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <label className="flex items-center gap-2.5">
+            <span className="text-[12.5px] font-medium text-white/75">Speed</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={thr}
+              onChange={(e) => {
+                voyage.throttle = +e.target.value;
+                setThr(+e.target.value);
+              }}
+              className="h-1 w-28 min-w-0 cursor-pointer accent-white max-sm:w-24"
+              aria-label="Speed"
+              aria-valuetext={thr < 0.2 ? "Slow glide" : thr < 0.6 ? "Cruise" : "Fast"}
+            />
+          </label>
+          <button
+            type="button"
+            aria-pressed={guide}
+            title="When you let go of the controls for a moment, the plane follows the path of light on its own"
+            className={`lg-btn pointer-events-auto flex h-7 items-center gap-1.5 whitespace-nowrap px-3 text-[12.5px] font-medium ${guide ? "lg-on" : "lg-chip text-white/90"}`}
+            onClick={() => setGuide(!guide)}
+          >
+            {/* lit while the quiet hand has the plane */}
+            <span className={`h-1.5 w-1.5 rounded-full transition-colors duration-500 ${guide && guided ? "bg-amber-500" : guide ? "bg-black/25" : "bg-white/35"}`} />
+            Follow the path
           </button>
         </Glass>
       </Bottom>
-      {/* where you are: the painting this stretch of the road is built from */}
+      {/* where you are: the painting this world is built from */}
       <div className="pointer-events-none absolute bottom-6 left-5 z-30 max-sm:bottom-20 max-sm:left-3">
         <AnimatePresence mode="wait">
-          {(s || sea) && (
-            <Glass key={s?.id ?? "sea"} radius={22} lens={false} className="px-4 py-2.5" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING}>
-              <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em]">{s ? s.title : "Tranquility"}</div>
-              <div className="mt-0.5 text-[12.5px] leading-tight text-white/70">M. K. Čiurlionis, {s ? s.year : "1904"}</div>
+          {card && (
+            <Glass key={world} radius={22} lens={false} className="px-4 py-2.5" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING}>
+              <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em]">{def.title}</div>
+              {sub && <div className="mt-0.5 text-[12.5px] leading-tight text-white/70">{sub}</div>}
             </Glass>
           )}
         </AnimatePresence>

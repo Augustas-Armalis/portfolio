@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { ROUTE, STATIONS, clearOfRoad, roadX } from "./flightPath";
+import { AVENUE, HOME_GATE_Z, clearOfRoad, roadX } from "./flightPath";
 import { GLSL_NOISE, lakeK, pathX } from "./shared";
 import { GLSL_SKY, SKY_U } from "./sky";
 
@@ -106,7 +106,7 @@ function blob(c: THREE.Vector3, rx: number, ry: number, rz: number, seed: number
   return g;
 }
 
-function buildPine(seed: number, detail: number) {
+export function buildPine(seed: number, detail: number) {
   const r = rng(seed);
   const H = 11 + r() * 2.5;
   const lean = (r() - 0.5) * 1.3;
@@ -136,7 +136,7 @@ function buildPine(seed: number, detail: number) {
   return mergeGeometries(parts.map(paint))!;
 }
 
-function buildSpruce(seed: number, detail: number) {
+export function buildSpruce(seed: number, detail: number) {
   const r = rng(seed);
   const H = 9.5 + r() * 3;
   const parts: Part[] = [{ geo: limb([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.04, H * 0.5, 0), new THREE.Vector3(0, H, 0)], 0.13, 0.02, 6, 6), col: [0.09, 0.075, 0.065], col2: [0.14, 0.11, 0.09], fol: 0 }];
@@ -152,7 +152,7 @@ function buildSpruce(seed: number, detail: number) {
   return mergeGeometries(parts.map(paint))!;
 }
 
-function buildBirch(seed: number, detail: number) {
+export function buildBirch(seed: number, detail: number) {
   const r = rng(seed);
   const H = 8 + r() * 2;
   const lean = (r() - 0.5) * 1.6;
@@ -181,7 +181,7 @@ function buildBirch(seed: number, detail: number) {
   return mergeGeometries(parts.map(paint))!;
 }
 
-function makeTreeMaterial(fog: number) {
+export function makeTreeMaterial(fog: number) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
     uniforms: { ...SKY_U, uFog: { value: fog } },
@@ -258,8 +258,8 @@ function makeTreeMaterial(fog: number) {
   });
 }
 
-type Kind = "pine" | "spruce" | "birch";
-type Tree = { x: number; z: number; s: number; kind: Kind; v: number; rot: number; tint: number };
+export type Kind = "pine" | "spruce" | "birch";
+export type Tree = { x: number; z: number; s: number; kind: Kind; v: number; rot: number; tint: number };
 
 // Loose groves, composed for the view from the desk (a clear lane to the lake
 // and the far hills, taller trees framing left and right) and for the flight
@@ -267,7 +267,6 @@ type Tree = { x: number; z: number; s: number; kind: Kind; v: number; rot: numbe
 function place(mobile: boolean) {
   const r = rng(77);
   const trees: Tree[] = [];
-  const forestZ = STATIONS[0].z;
   const ok = (x: number, z: number, avenue = false) => {
     if (lakeK(x, z) < 1.25) return false;
     if (Math.abs(x - pathX(z)) < 2.5 && Math.abs(z) < 60) return false;
@@ -299,19 +298,26 @@ function place(mobile: boolean) {
   grove(14, -78, 9, 5, ["spruce", "pine"], 1.1, 1.5);
   grove(-30, 24, 8, 5, ["birch", "pine"], 0.9, 1.2);
   grove(34, 22, 8, 5, ["pine", "birch"], 0.9, 1.2);
-  // the forest station: the road runs straight through a tall, close stand
-  for (let i = 0; i < (mobile ? 10 : 18); i++) {
+  // the avenue: the road runs long and calm between tall pines and white
+  // birches, standing in stands of a kind, close to the verge, two and three deep
+  const len = AVENUE.from - AVENUE.to;
+  const steps = mobile ? 26 : 44;
+  for (let i = 0; i < steps; i++) {
     const side = i % 2 ? 1 : -1;
-    const z = forestZ + 30 - i * 3.6;
-    grove(roadX(z) + side * (9 + r() * 5), z, 4, mobile ? 2 : 3, i % 3 === 0 ? ["birch"] : ["pine", "spruce", "pine"], 1.15, 1.7, true);
+    const z = AVENUE.from - (i / steps) * len - r() * 3;
+    // species by stretch, not by tree: a run of birches, then pines, a dark spruce or two between
+    const run = Math.floor((i + (side > 0 ? 3 : 0)) / 6) % 3;
+    const kinds: Kind[] = run === 0 ? ["birch", "birch", "birch", "pine"] : run === 1 ? ["pine", "pine", "pine", "spruce"] : ["pine", "birch", "spruce"];
+    grove(roadX(z) + side * (8.5 + r() * 2.5), z, 2.6, mobile ? 2 : 3, kinds, 1.2, 1.75, true);
+    if (i % 2 === 0) grove(roadX(z) + side * (17 + r() * 8), z + (r() - 0.5) * 8, 5, mobile ? 2 : 4, kinds, 1.1, 1.6, true);
   }
-  // stands all the way down the road, either side, and around the valley
-  const stands = mobile ? 20 : 40;
+  // deeper stands behind the avenue and round the gate, so the road reads as a way through a wood
+  const stands = mobile ? 12 : 26;
   for (let i = 0; i < stands; i++) {
-    const z = -24 - (i / stands) * (-ROUTE.shoreZ - 60);
+    const z = -40 - (i / stands) * (-HOME_GATE_Z + 10);
     const side = i % 2 ? 1 : -1;
     const k: Kind[] = i % 4 === 0 ? ["birch", "birch", "pine"] : i % 4 === 1 ? ["spruce", "spruce", "pine"] : ["pine", "spruce", "birch"];
-    grove(roadX(z) + side * (26 + r() * 38), z + (r() - 0.5) * 14, 7 + r() * 6, mobile ? 3 : 5 + Math.floor(r() * 4), k, 1.0, 1.6);
+    grove(roadX(z) + side * (34 + r() * 44), z + (r() - 0.5) * 14, 8 + r() * 7, mobile ? 3 : 5 + Math.floor(r() * 4), k, 1.0, 1.6);
   }
   for (let i = 0; i < (mobile ? 8 : 14); i++) {
     const a = 0.9 + (i / 14) * 4.5 + r() * 0.2; // behind and beside the desk, not down the road
@@ -373,4 +379,52 @@ export function Trees({ mobile, fogDensity }: { mobile: boolean; fogDensity: num
       ))}
     </>
   );
+}
+
+// ---------- trees for the painted worlds ----------
+// The same three kinds, standing on a world's own ground. They are gathered
+// into chunks of land so that whole stands out of view (or beyond the air's
+// reach) are never sent to the card.
+export function buildGrove(trees: (Tree & { y: number })[], opts: { mobile: boolean; fog: number; cell?: number; tint?: [number, number, number] }) {
+  const detail = opts.mobile ? 1 : 2;
+  const variants: Record<Kind, THREE.BufferGeometry[]> = {
+    pine: [buildPine(11, detail), buildPine(47, detail)],
+    spruce: [buildSpruce(5, detail), buildSpruce(37, detail)],
+    birch: [buildBirch(7, detail), buildBirch(41, detail)],
+  };
+  const mat = makeTreeMaterial(opts.fog);
+  const cell = opts.cell ?? 170;
+  const o = new THREE.Object3D();
+  const col = new THREE.Color();
+  const tint = opts.tint ?? [1, 1, 1];
+  const buckets = new Map<string, (Tree & { y: number })[]>();
+  for (const t of trees) {
+    const key = `${t.kind}:${t.v % 2}:${Math.floor(t.x / cell)}:${Math.floor(t.z / cell)}`;
+    let b = buckets.get(key);
+    if (!b) buckets.set(key, (b = []));
+    b.push(t);
+  }
+  const sets: THREE.InstancedMesh[] = [];
+  buckets.forEach((list, key) => {
+    const [kind, v] = key.split(":");
+    const im = new THREE.InstancedMesh(variants[kind as Kind][+v], mat, list.length);
+    list.forEach((t, i) => {
+      o.position.set(t.x, t.y - 0.08, t.z);
+      o.rotation.set(0, t.rot, 0);
+      o.scale.set(t.s * (0.92 + t.tint * 0.16), t.s * (0.94 + ((i * 7) % 5) * 0.04), t.s * (0.92 + t.tint * 0.16));
+      o.updateMatrix();
+      im.setMatrixAt(i, o.matrix);
+      im.setColorAt(i, col.setRGB((0.86 + t.tint * 0.3) * tint[0], (0.9 + t.tint * 0.16) * tint[1], (0.86 - t.tint * 0.12) * tint[2]));
+    });
+    im.instanceMatrix.needsUpdate = true;
+    if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    im.computeBoundingSphere();
+    sets.push(im);
+  });
+  const dispose = () => {
+    sets.forEach((x) => x.dispose());
+    Object.values(variants).forEach((l) => l.forEach((g) => g.dispose()));
+    mat.dispose();
+  };
+  return { sets, mat, dispose };
 }

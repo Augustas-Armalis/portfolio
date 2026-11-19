@@ -79,7 +79,8 @@ const KEYS: Key[] = [
   { e: 60, zenith: C(0.05, 0.16, 0.45), upper: C(0.15, 0.33, 0.68), horizon: C(0.6, 0.72, 0.84), glow: C(1.0, 0.92, 0.8), sun: C(1.0, 0.96, 0.9), sunI: 3.3, amb: C(0.4, 0.5, 0.7), cloudLit: C(1.3, 1.28, 1.25), cloudShade: C(0.58, 0.63, 0.73), night: 0, exposure: 0.84 },
 ];
 
-export type SkyState = Omit<Key, "e"> & { elev: number; sunDir: THREE.Vector3; moonDir: THREE.Vector3; keyDir: THREE.Vector3; keyCol: THREE.Color; keyI: number; label: string };
+// fx: how much of the sky's own furniture shows: [soft cloud layers, the long bars over the horizon, the sun's disc, stars]
+export type SkyState = Omit<Key, "e"> & { elev: number; sunDir: THREE.Vector3; moonDir: THREE.Vector3; keyDir: THREE.Vector3; keyCol: THREE.Color; keyI: number; label: string; fx: [number, number, number, number] };
 
 const tmpA = new THREE.Color();
 export function skyState(h: number): SkyState {
@@ -123,6 +124,90 @@ export function skyState(h: number): SkyState {
     night,
     exposure: n(a.exposure, b.exposure),
     label,
+    fx: [1, 1, 1, 1],
+  };
+}
+
+// ---------- the air of a painted world ----------
+// In flight every world brings its whole sky with it: not an hour of our day
+// but a palette taken from its painting. An Air is written the way you would
+// mix it (linear colour, before the lens), and becomes a SkyState.
+export type Air = {
+  label: string;
+  zenith: [number, number, number];
+  upper: [number, number, number];
+  horizon: [number, number, number];
+  glow: [number, number, number];
+  amb: [number, number, number]; // the colour of shade
+  key: [number, number, number]; // the colour of the light
+  keyI: number;
+  sunAz: number; // degrees, 0 = straight ahead (-z), positive to the right
+  sunEl: number; // degrees above the horizon (below zero: no sun in this sky)
+  keyAz?: number; // the light itself, when it is not the sun (a moon, a glow)
+  keyEl?: number;
+  cloudLit: [number, number, number];
+  cloudShade: [number, number, number];
+  night: number;
+  exposure: number;
+  fx: [number, number, number, number];
+};
+const dirOf = (az: number, el: number) => {
+  const a = az * deg;
+  const e = el * deg;
+  return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)).normalize();
+};
+export function airState(a: Air): SkyState {
+  const sunDir = dirOf(a.sunAz, a.sunEl);
+  const keyDir = dirOf(a.keyAz ?? a.sunAz, Math.max(4, a.keyEl ?? a.sunEl));
+  return {
+    elev: a.sunEl,
+    sunDir,
+    moonDir: a.sunEl < 0 ? keyDir.clone() : new THREE.Vector3(0.3, 0.3, -0.9).normalize(),
+    keyDir,
+    keyCol: C(...a.key),
+    keyI: a.keyI,
+    zenith: C(...a.zenith),
+    upper: C(...a.upper),
+    horizon: C(...a.horizon),
+    glow: C(...a.glow),
+    sun: C(...a.key),
+    sunI: a.keyI,
+    amb: C(...a.amb),
+    cloudLit: C(...a.cloudLit),
+    cloudShade: C(...a.cloudShade),
+    night: a.night,
+    exposure: a.exposure,
+    label: a.label,
+    fx: a.fx,
+  };
+}
+// One sky into another (t 0..1): used only behind closed mist, so the cloud itself changes colour smoothly.
+export function mixSky(a: SkyState, b: SkyState, t: number): SkyState {
+  if (t <= 0) return a;
+  if (t >= 1) return b;
+  const c = (x: THREE.Color, y: THREE.Color) => x.clone().lerp(y, t);
+  const d = (x: THREE.Vector3, y: THREE.Vector3) => x.clone().lerp(y, t).normalize();
+  const n = (x: number, y: number) => x + (y - x) * t;
+  return {
+    elev: n(a.elev, b.elev),
+    sunDir: d(a.sunDir, b.sunDir),
+    moonDir: d(a.moonDir, b.moonDir),
+    keyDir: d(a.keyDir, b.keyDir),
+    keyCol: c(a.keyCol, b.keyCol),
+    keyI: n(a.keyI, b.keyI),
+    zenith: c(a.zenith, b.zenith),
+    upper: c(a.upper, b.upper),
+    horizon: c(a.horizon, b.horizon),
+    glow: c(a.glow, b.glow),
+    sun: c(a.sun, b.sun),
+    sunI: n(a.sunI, b.sunI),
+    amb: c(a.amb, b.amb),
+    cloudLit: c(a.cloudLit, b.cloudLit),
+    cloudShade: c(a.cloudShade, b.cloudShade),
+    night: n(a.night, b.night),
+    exposure: n(a.exposure, b.exposure),
+    label: t < 0.5 ? a.label : b.label,
+    fx: [n(a.fx[0], b.fx[0]), n(a.fx[1], b.fx[1]), n(a.fx[2], b.fx[2]), n(a.fx[3], b.fx[3])],
   };
 }
 
@@ -145,6 +230,8 @@ export const SKY_U = {
   uMist: { value: 0 },
   // 0..1, the energy of whatever music is playing
   uPulse: { value: 0 },
+  // clouds, bars, sun disc, stars: see SkyState.fx
+  uSkyFx: { value: new THREE.Vector4(1, 1, 1, 1) },
 };
 
 export function applySky(s: SkyState) {
@@ -160,6 +247,7 @@ export function applySky(s: SkyState) {
   SKY_U.uCloudLit.value.copy(s.cloudLit);
   SKY_U.uCloudShade.value.copy(s.cloudShade);
   SKY_U.uNight.value = s.night;
+  SKY_U.uSkyFx.value.set(s.fx[0], s.fx[1], s.fx[2], s.fx[3]);
 }
 applySky(skyState(14));
 
@@ -167,7 +255,7 @@ applySky(skyState(14));
 export const GLSL_SKY = /* glsl */ `
 uniform vec3 uSunDir; uniform vec3 uMoonDir; uniform vec3 uKeyDir; uniform vec3 uKeyCol; uniform vec3 uSkyCol;
 uniform vec3 uZenith; uniform vec3 uUpper; uniform vec3 uHorizon; uniform vec3 uGlow;
-uniform vec3 uCloudLit; uniform vec3 uCloudShade; uniform float uNight; uniform float uTime; uniform float uMist; uniform float uPulse;
+uniform vec3 uCloudLit; uniform vec3 uCloudShade; uniform float uNight; uniform float uTime; uniform float uMist; uniform float uPulse; uniform vec4 uSkyFx;
 vec3 skyBase(vec3 d){
   float h = d.y;
   float hp = max(h, 0.0);

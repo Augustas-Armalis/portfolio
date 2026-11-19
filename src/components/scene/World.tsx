@@ -3,7 +3,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { ROUTE } from "./flightPath";
+import { HOME_GATE_Z } from "./flightPath";
 import { DESK, GLSL_LAKE, GLSL_NOISE, GLSL_PATH, LAKE, MONITOR, lakeK, pathX } from "./shared";
 import { GLSL_SKY, SKY_U } from "./sky";
 
@@ -74,7 +74,7 @@ export function makeSkyMaterial(env = false) {
             float dust = fbm(d.xz * 3.0 + d.y * 2.0 + 7.0) * fbm(d.zy * 8.0 + 3.0);
             vec3 mw = mix(vec3(0.05, 0.065, 0.13), vec3(0.2, 0.17, 0.24), dust * 2.0) * band * (0.25 + dust * 2.2);
             st += starLayer(d, 520.0, 0.85) * band * 0.55;
-            col += (st + mw * (1.0 + uPulse * 0.6)) * uNight * hz;
+            col += (st + mw * (1.0 + uPulse * 0.6)) * uNight * hz * uSkyFx.w;
           }
           // moon: disc with soft maria and a halo
           if (uNight > 0.01) {
@@ -82,23 +82,23 @@ export function makeSkyMaterial(env = false) {
             vec3 tang = normalize(cross(uMoonDir, vec3(0.0, 1.0, 0.0)));
             vec2 mp = vec2(dot(d, tang), dot(d, cross(tang, uMoonDir))) * 400.0;
             float maria = fbm(mp * 0.25 + 3.0);
-            col += vec3(0.9, 0.92, 1.0) * disc * (2.2 - maria * 0.9) * uNight;
-            col += vec3(0.4, 0.48, 0.7) * (pow(max(md, 0.0), 400.0) * 0.7 + pow(max(md, 0.0), 40.0) * 0.1 + pow(max(md, 0.0), 6.0) * 0.035) * uNight * (1.0 + uPulse * 0.5);
+            col += vec3(0.9, 0.92, 1.0) * disc * (2.2 - maria * 0.9) * uNight * uSkyFx.z;
+            col += vec3(0.4, 0.48, 0.7) * (pow(max(md, 0.0), 400.0) * 0.7 + pow(max(md, 0.0), 40.0) * 0.1 + pow(max(md, 0.0), 6.0) * 0.035) * uNight * (1.0 + uPulse * 0.5) * uSkyFx.z;
           }
           // two cloud layers: high wispy, lower soft
           vec2 uv = d.xz / (h + 0.09);
           float n1 = clouds(uv * vec2(0.55, 1.1), uTime);
           float n2 = fbm(uv * vec2(0.25, 0.5) * 0.7 - vec2(uTime * 0.003, 0.0) + 31.0);
           float fadeH = smoothstep(0.02, 0.22, h) * (1.0 - smoothstep(0.6, 0.98, h));
-          float cov1 = smoothstep(0.58, 0.82, n1) * fadeH * 0.6;
-          float cov2 = smoothstep(0.55, 0.78, n2) * fadeH;
+          float cov1 = smoothstep(0.58, 0.82, n1) * fadeH * 0.6 * uSkyFx.x;
+          float cov2 = smoothstep(0.55, 0.78, n2) * fadeH * uSkyFx.x;
           float lit = clamp((n2 - fbm(uv * vec2(0.25, 0.5) * 0.7 - vec2(uTime * 0.003, 0.0) + 31.0 + uSunDir.xz * 0.1)) * 4.0 + 0.5, 0.0, 1.0);
           vec3 cc = mix(uCloudShade, uCloudLit, lit);
           cc += uGlow * pow(max(sd, 0.0), 8.0) * 1.4 * sunVis;
           col = mix(col, mix(uCloudShade, uCloudLit, 0.7), cov1 * 0.55);
           col = mix(col, cc, cov2 * 0.75);
           // long quiet bars of cloud stacked above the horizon, as he painted them
-          float bars = smoothstep(0.52, 0.7, fbm(vec2(atan(d.z, d.x) * 2.2 + uTime * 0.002, h * 26.0 + 2.0))) * smoothstep(0.015, 0.06, h) * (1.0 - smoothstep(0.14, 0.3, h));
+          float bars = smoothstep(0.52, 0.7, fbm(vec2(atan(d.z, d.x) * 2.2 + uTime * 0.002, h * 26.0 + 2.0))) * smoothstep(0.015, 0.06, h) * (1.0 - smoothstep(0.14, 0.3, h)) * uSkyFx.y;
           col = mix(col, mix(uCloudShade, uCloudLit, 0.55) + uGlow * pow(max(sd, 0.0), 6.0) * 0.8 * sunVis, bars * 0.5);
           float cover = max(max(cov1, cov2), bars * 0.6);
           col += uGlow * uPulse * 0.1 * (1.0 - smoothstep(0.0, 0.5, h));
@@ -114,8 +114,8 @@ export function makeSkyMaterial(env = false) {
           // sun disc + bloom
           float disc = smoothstep(0.99955, 0.99975, sd);
           vec3 sunC = mix(uGlow, vec3(1.0, 0.95, 0.88), 0.55);
-          col += sunC * disc * 38.0 * (1.0 - cover * 0.85) * sunVis;
-          col += uGlow * (pow(max(sd, 0.0), 900.0) * 5.0 + pow(max(sd, 0.0), 160.0) * 0.8) * sunVis;
+          col += sunC * disc * 38.0 * (1.0 - cover * 0.85) * sunVis * uSkyFx.z;
+          col += uGlow * (pow(max(sd, 0.0), 900.0) * 5.0 + pow(max(sd, 0.0), 160.0) * 0.8) * sunVis * uSkyFx.z;
           // arrival mist
           col = mix(col, uHorizon * 1.05 + uSkyCol * 0.2, clamp(uMist * 3.0, 0.0, 0.9) * (1.0 - smoothstep(0.1, 0.7, h)));
         #endif
@@ -129,8 +129,11 @@ export function makeSkyMaterial(env = false) {
 
 export function Sky() {
   const mat = useMemo(() => makeSkyMaterial(false), []);
+  const ref = useRef<THREE.Mesh>(null);
+  // the dome travels with the eye: the worlds of the flight lie far from the desk
+  useFrame(({ camera }) => ref.current?.position.copy(camera.position));
   return (
-    <mesh material={mat} renderOrder={-10} frustumCulled={false}>
+    <mesh ref={ref} material={mat} renderOrder={-10} frustumCulled={false}>
       <sphereGeometry args={[1500, 48, 24]} />
     </mesh>
   );
@@ -195,8 +198,6 @@ export function Ground({ fogDensity }: { fogDensity: number }) {
           ${GLSL_PATH}
           ${GLSL_LAKE}
           void main(){
-            // the land ends at the shore: beyond it there is only the sea's own surface
-            if (vWorld.z < ${(ROUTE.shoreZ - 3).toFixed(1)}) discard;
             float r = length(vWorld.xz);
             float n = fbm(vWorld.xz * 0.08);
             float n2 = vnoise(vWorld.xz * 0.6);
@@ -212,7 +213,7 @@ export function Ground({ fogDensity }: { fogDensity: number }) {
             float px = abs(vWorld.x - pathX(vWorld.z)) / pathW(vWorld.z);
             float edge = 1.0 - smoothstep(0.55 + n2 * 0.35, 1.05 + n2 * 0.3, px);
             vec3 dirt = texture2D(uDirtTex, vWorld.xz * 0.5).rgb * 0.75;
-            alb = mix(alb, mix(dirt, vec3(0.2, 0.16, 0.1), smoothstep(20.0, 60.0, -vWorld.z)), edge * (vWorld.z > 0.0 ? 1.0 - smoothstep(30.0, 60.0, vWorld.z) : 1.0 - smoothstep(520.0, 548.0, -vWorld.z)));
+            alb = mix(alb, mix(dirt, vec3(0.2, 0.16, 0.1), smoothstep(20.0, 60.0, -vWorld.z)), edge * (vWorld.z > 0.0 ? 1.0 - smoothstep(30.0, 60.0, vWorld.z) : 1.0 - smoothstep(${(-HOME_GATE_Z + 6).toFixed(1)}, ${(-HOME_GATE_Z + 34).toFixed(1)}, -vWorld.z)));
             float lk = lakeK(vWorld.xz);
             alb = mix(alb, vec3(0.05, 0.05, 0.04), 1.0 - smoothstep(1.0, 1.25, lk));
             float sh = deskShadow(vWorld);
@@ -295,9 +296,9 @@ function ridged(x: number, y: number, oct: number) {
   return v;
 }
 
-type Range = { r0: number; r1: number; height: number; freq: number; seed: number; haze: number; snow: number; gap: [number, number] };
+export type Range = { r0: number; r1: number; height: number; freq: number; seed: number; haze: number; snow: number; gap: [number, number] };
 
-function rangeGeometry(rg: Range, segA: number, segR: number) {
+export function rangeGeometry(rg: Range, segA: number, segR: number) {
   const pos: number[] = [];
   const idx: number[] = [];
   for (let j = 0; j <= segR; j++) {
@@ -332,14 +333,21 @@ function rangeGeometry(rg: Range, segA: number, segR: number) {
   return g;
 }
 
-export function makeRangeMaterial(rg: { haze: number; snow: number; height: number }) {
+export function makeRangeMaterial(rg: { haze: number; snow: number; height: number; forest?: [number, number, number]; rock?: [number, number, number] }) {
   return new THREE.ShaderMaterial({
-    uniforms: { ...SKY_U, uHaze: { value: rg.haze }, uSnow: { value: rg.snow }, uTop: { value: rg.height } },
+    uniforms: {
+      ...SKY_U,
+      uHaze: { value: rg.haze },
+      uSnow: { value: rg.snow },
+      uTop: { value: rg.height },
+      uForestK: { value: new THREE.Color(...(rg.forest ?? [1, 1, 1])) },
+      uRockK: { value: new THREE.Color(...(rg.rock ?? [1, 1, 1])) },
+    },
     vertexShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vN;
       void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vN = normal; gl_Position = projectionMatrix * viewMatrix * wp; }`,
     fragmentShader: /* glsl */ `
-      uniform float uHaze; uniform float uSnow; uniform float uTop;
+      uniform float uHaze; uniform float uSnow; uniform float uTop; uniform vec3 uForestK; uniform vec3 uRockK;
       varying vec3 vWorld; varying vec3 vN;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -347,8 +355,8 @@ export function makeRangeMaterial(rg: { haze: number; snow: number; height: numb
         vec3 n = normalize(vN);
         float hN = clamp(vWorld.y / uTop, 0.0, 1.0);
         float strata = vnoise(vec2(vWorld.y * 0.35, vWorld.x * 0.01));
-        vec3 forest = mix(vec3(0.045, 0.075, 0.04), vec3(0.1, 0.105, 0.045), vnoise(vWorld.xz * 0.02));
-        vec3 rock = mix(vec3(0.1, 0.1, 0.105), vec3(0.16, 0.145, 0.13), strata);
+        vec3 forest = mix(vec3(0.045, 0.075, 0.04), vec3(0.1, 0.105, 0.045), vnoise(vWorld.xz * 0.02)) * uForestK;
+        vec3 rock = mix(vec3(0.1, 0.1, 0.105), vec3(0.16, 0.145, 0.13), strata) * uRockK;
         vec3 alb = mix(forest, rock, smoothstep(0.12, 0.45, hN + (1.0 - n.y) * 0.35));
         float sn = uSnow * smoothstep(0.32, 0.5, hN + (vnoise(vWorld.xz * 0.08) - 0.5) * 0.22) * smoothstep(0.35, 0.7, n.y);
         alb = mix(alb, vec3(0.86, 0.89, 0.94), sn);
@@ -371,7 +379,7 @@ export function Mountains({ mobile }: { mobile: boolean }) {
       // layered like his hills: each ridge paler than the one before it
       { r0: 152, r1: 222, height: 24, freq: 0.017, seed: 3.1, haze: 0.2, snow: 0, gap: [0.2, 0.5] },
       { r0: 250, r1: 380, height: 62, freq: 0.0105, seed: 11.7, haze: 0.4, snow: 0.3, gap: [0.15, 0.4] },
-      { r0: 460, r1: 690, height: 150, freq: 0.006, seed: 27.3, haze: 0.56, snow: 0.9, gap: [0.5, 0.82] },
+      { r0: 460, r1: 690, height: 150, freq: 0.006, seed: 27.3, haze: 0.56, snow: 0.9, gap: [0.1, 0.34] },
     ];
     const segA = mobile ? 540 : 900;
     return ranges.map((rg) => ({ geo: rangeGeometry(rg, segA, mobile ? 22 : 34), mat: makeRangeMaterial(rg) }));

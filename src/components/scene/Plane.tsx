@@ -3,18 +3,21 @@
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
-import { ROUTE, roadX, roadY } from "./flightPath";
 import { DESK, clamp01, easeInOutCubic, nowS, spring } from "./shared";
-import { SKY_U } from "./sky";
+import { WORLDS, entryOf, gateOf, groundAt, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
 // A folded paper plane that lives on the desk. Click it and it takes off down
-// the road. By default it rides a rail (nobody gets lost): the pointer, the
-// arrow keys or a finger only lean it left, right, up and down, and it eases
-// back to the middle when you let go. "Free flight" hands over the stick:
-// bank to turn, pitch to climb, with the land gently turning you back toward
-// the road at its edges. Out past the gate the rail circles the island.
+// the road, and from there it is yours: it glides. The pointer (or A / D, or a
+// finger) banks it and the bank turns it; the pointer's height pitches it; W / S
+// or the wheel open and close the throttle, from barely moving to quick. It has
+// a little weight: every change eases in, nothing snaps. The ground, the tall
+// things and the edge of each world turn it aside gently and never stop it.
+// Leave the controls alone for a few seconds and a quiet hand takes over and
+// carries it along the path of light to the next gate; touch them and it lets
+// go at once. Passing a gate, cloud closes, the next world is made under it,
+// and the cloud opens.
 
-export type FlightInput = { sx: number; sy: number };
+export type FlightInput = { sx: number; sy: number; thr?: number; climb?: number; wheel?: number; moved?: number; keys?: boolean };
 export type PlaneApi = {
   launch: (cam: THREE.PerspectiveCamera) => void;
   fly: (dt: number, input: FlightInput, cam: THREE.PerspectiveCamera) => void;
@@ -24,12 +27,19 @@ export type PlaneApi = {
   boost: () => number;
   pos: THREE.Vector3;
   landMist: () => number;
-  // jump along the rail to a z (used to check the stations; also handy for deep links later)
+  // dev: jump along the home road to a z, or straight into a world (optionally part-way along its path, 0..1)
   warp: (z: number) => void;
+  jump: (id: WorldId, along?: number) => void;
 };
 
-const CRUISE = 11.5;
 const damp = (a: number, b: number, lambda: number, dt: number) => a + (b - a) * (1 - Math.exp(-lambda * dt));
+const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+const smooth01 = (t: number) => {
+  const k = clamp01(t);
+  return k * k * (3 - 2 * k);
+};
+export const SPEED = { min: 3.2, max: 28 };
+export const speedOf = (throttle: number) => SPEED.min + (SPEED.max - SPEED.min) * Math.pow(clamp01(throttle), 1.35);
 
 // A classic dart, folded from one sheet: the keel pinched underneath, wings
 // with a slight dihedral, their tips creased up. Flat-shaded so every fold
@@ -54,28 +64,10 @@ function planeGeometry() {
   return g;
 }
 
-// Wind you can see: long soft streaks hanging over the road. Fly through one
-// and it carries you.
-function makeCurrents() {
-  const out: THREE.CatmullRomCurve3[] = [];
-  for (let i = 0; i < 9; i++) {
-    const z0 = -34 - i * 54;
-    const side = i % 2 ? 1 : -1;
-    const pts: THREE.Vector3[] = [];
-    for (let j = 0; j <= 5; j++) {
-      const z = z0 - j * 8;
-      pts.push(new THREE.Vector3(roadX(z) + side * (5 - j * 1.6) + Math.sin(j * 1.3 + i) * 1.2, roadY(z) + 0.8 + Math.sin(j * 0.9 + i * 2) * 1.1, z));
-    }
-    out.push(new THREE.CatmullRomCurve3(pts, false, "centripetal"));
-  }
-  return out;
-}
-
 export function Plane({
   spot,
   apiRef,
   flying,
-  free,
   onPick,
   hoverable,
   introAt,
@@ -88,264 +80,481 @@ export function Plane({
   spot: { pos: [number, number, number]; rot: number };
   apiRef: MutableRefObject<PlaneApi | null>;
   flying: boolean;
-  free: boolean;
+  free?: boolean;
   onPick: () => void;
   hoverable: boolean;
 }) {
   const geo = useMemo(planeGeometry, []);
   const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#f6f3ea", roughness: 0.9, side: THREE.DoubleSide, flatShading: true }), []);
   const group = useRef<THREE.Group>(null);
-  const curves = useMemo(makeCurrents, []);
-  const samples = useMemo(() => curves.map((c) => c.getSpacedPoints(40)), [curves]);
-  const tubes = useMemo(() => curves.map((c) => new THREE.TubeGeometry(c, 90, 0.05, 5, false)), [curves]);
-  const streak = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        uniforms: { ...SKY_U, uOpacity: { value: 0 } },
-        vertexShader: /* glsl */ `
-          varying vec2 vUv; varying vec3 vWorld;
-          void main(){ vUv = uv; vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
-        fragmentShader: /* glsl */ `
-          uniform float uOpacity; uniform float uTime; uniform float uNight;
-          varying vec2 vUv; varying vec3 vWorld;
-          void main(){
-            float s = fract(vUv.x * 5.0 - uTime * 0.35);
-            float a = smoothstep(0.0, 0.7, s) * (1.0 - smoothstep(0.7, 1.0, s));
-            a *= smoothstep(0.0, 0.12, vUv.x) * smoothstep(1.0, 0.88, vUv.x);
-            float d = length(vWorld - cameraPosition);
-            a *= smoothstep(0.6, 3.0, d) * (1.0 - smoothstep(60.0, 110.0, d));
-            vec3 c = mix(vec3(1.0, 0.97, 0.9), vec3(0.7, 0.8, 1.0), uNight);
-            gl_FragColor = vec4(c * a * uOpacity * 0.5, 1.0);
-          }`,
-      }),
-    [],
-  );
   const hover = useRef(false);
-  const freeRef = useRef(free);
 
   const st = useMemo(
     () => ({
       pos: new THREE.Vector3(),
-      prev: new THREE.Vector3(),
-      vel: new THREE.Vector3(0, 0, -1),
       yaw: 0,
       pitch: 0,
       roll: 0,
+      rollV: 0,
+      pitchV: 0,
       speed: 0,
       t: 0,
-      s: 0, // metres run along the rail
-      ox: 0,
-      oy: 0,
-      wasFree: false,
+      idle: 9, // seconds since the controls were last touched
+      pathI: 0,
+      seek: 0,
+      gateSide: -1,
+      camYaw: 0,
+      camPitch: 0,
       camFrom: new THREE.Vector3(),
       lookFrom: new THREE.Vector3(),
-      landFrom: new THREE.Vector3(),
-      landYaw: 0,
-      landFar: 0,
-      landK: 0,
       fov: 36,
       look: new THREE.Vector3(),
-      nose: new THREE.Vector3(),
+      nose: new THREE.Vector3(0, 0, -1),
       tmp: new THREE.Vector3(),
       tmp2: new THREE.Vector3(),
-      want: new THREE.Vector3(),
-      boost: 0,
       snap: false,
+      // landing
+      landMode: "near" as "near" | "cloud",
+      landPhase: 0,
+      landT: 0,
+      landDur: 3,
+      b0: new THREE.Vector3(),
+      b1: new THREE.Vector3(),
+      b2: new THREE.Vector3(),
+      b3: new THREE.Vector3(),
+      lastYaw: 0,
     }),
     [],
   );
   const rest = useMemo(() => new THREE.Vector3(spot.pos[0], DESK.top + 0.013, spot.pos[2]), [spot]);
 
-  const chase = (dt: number, cam: THREE.PerspectiveCamera) => {
-    const back = st.tmp.set(Math.sin(st.yaw), 0, Math.cos(st.yaw)); // opposite of the nose
-    const want = st.tmp2.copy(st.pos).addScaledVector(back, 1.55);
-    want.y += 0.46 + Math.sin(st.t * 1.7) * 0.03;
-    want.y = Math.max(want.y, 0.55);
-    cam.position.lerp(want, st.snap ? 1 : 1 - Math.exp(-dt * 4.5));
-    st.want.copy(st.pos).addScaledVector(st.nose, 2.2);
-    st.look.lerp(st.want, st.snap ? 1 : 1 - Math.exp(-dt * 7));
+  const updateNose = () => st.nose.set(-Math.sin(st.yaw) * Math.cos(st.pitch), Math.sin(st.pitch), -Math.cos(st.yaw) * Math.cos(st.pitch));
+
+  // the chase camera swings on a boom behind the plane: it follows the
+  // heading a beat late, so a turn shows the plane banking into it, and it
+  // never falls behind however fast the plane goes
+  const chase = (dt: number, cam: THREE.PerspectiveCamera, blend = 1) => {
+    if (st.snap) {
+      st.camYaw = st.yaw;
+      st.camPitch = st.pitch * 0.55;
+    }
+    st.camYaw += wrap(st.yaw - st.camYaw) * (1 - Math.exp(-dt * 3.2));
+    st.camPitch = damp(st.camPitch, st.pitch * 0.55, 2.6, dt);
+    const dist = 1.5 + st.speed * 0.024;
+    const cp = Math.cos(st.camPitch);
+    const want = st.tmp2.set(st.pos.x + Math.sin(st.camYaw) * cp * dist, st.pos.y - Math.sin(st.camPitch) * dist + 0.44 + Math.sin(st.t * 1.7) * 0.02, st.pos.z + Math.cos(st.camYaw) * cp * dist);
+    // the lens keeps clear of the ground too
+    const id = voyage.cur;
+    const o = originOf(id);
+    const floor = (id === "home" ? 0 : groundAt(WORLDS[id], want.x - o.x, want.z - o.z)) + 0.5;
+    if (want.y < floor) want.y = floor;
+    if (blend < 1) cam.position.lerpVectors(st.camFrom, want, blend);
+    else cam.position.copy(want);
+    st.tmp.copy(st.pos).addScaledVector(st.nose, 2.4);
+    st.look.lerp(st.tmp, st.snap ? 1 : 1 - Math.exp(-dt * 8));
     st.snap = false;
-    cam.up.set(Math.sin(st.roll) * 0.28, 1, 0).normalize();
+    const lean = Math.sin(st.roll) * 0.26;
+    cam.up.set(Math.cos(st.camYaw) * lean, 1, -Math.sin(st.camYaw) * lean).normalize();
     cam.lookAt(st.look);
-    const fovT = 46 + Math.min(1, st.speed / 16) * 16 + st.boost * 5;
-    st.fov += (fovT - st.fov) * (1 - Math.exp(-dt * 3));
+    const fovT = 50 + clamp01((st.speed - SPEED.min) / (SPEED.max - SPEED.min)) * 16;
+    st.fov += (fovT - st.fov) * (1 - Math.exp(-dt * 2.4));
     cam.fov = st.fov;
     cam.updateProjectionMatrix();
   };
 
-  const updateNose = () => st.nose.set(-Math.sin(st.yaw) * Math.cos(st.pitch), Math.sin(st.pitch), -Math.cos(st.yaw) * Math.cos(st.pitch));
-
-  // the rail: straight down the road, then round the island
-  const S1 = rest.z - ROUTE.endZ;
-  const railPoint = (s: number, out: THREE.Vector3) => {
-    if (s < S1) {
-      const z = rest.z - s;
-      const k = clamp01(s / 26);
-      const e = k * k * (3 - 2 * k);
-      return out.set(rest.x + (roadX(z) - rest.x) * e, rest.y + (roadY(z) - rest.y) * e, z);
-    }
-    const phi = (s - S1) / ROUTE.orbitR;
-    return out.set(ROUTE.islandX - ROUTE.orbitR * Math.cos(phi), roadY(ROUTE.endZ), ROUTE.islandZ - ROUTE.orbitR * Math.sin(phi));
+  const place = (id: WorldId, lp: THREE.Vector3, yaw: number) => {
+    st.pos.copy(lp).add(originOf(id));
+    st.yaw = yaw;
+    st.pitch = st.roll = st.rollV = st.pitchV = 0;
+    st.pathI = 0;
+    st.seek = 0;
+    st.gateSide = -1;
+    st.snap = true;
+    updateNose();
   };
 
-  const windBoost = () => {
-    let near = 16;
-    for (const pts of samples) {
-      if (Math.abs(pts[0].z - st.pos.z) > 60) continue;
-      for (const p of pts) near = Math.min(near, p.distanceToSquared(st.pos));
+  // where on the path of light the plane is nearest (kept as an index that only creeps, so a loop or a hairpin can't confuse it)
+  const nearestOnPath = (pts: THREE.Vector3[], lx: number, ly: number, lz: number, loop: boolean, dt: number) => {
+    const n = pts.length;
+    const d2 = (i: number) => {
+      const p = pts[((i % n) + n) % n];
+      return (p.x - lx) ** 2 + (p.y - ly) ** 2 * 0.25 + (p.z - lz) ** 2;
+    };
+    let best = st.pathI;
+    let bd = d2(best);
+    for (let i = st.pathI - 3; i <= st.pathI + 24; i++) {
+      if (!loop && (i < 0 || i >= n)) continue;
+      const d = d2(i);
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
     }
-    return clamp01(1 - Math.sqrt(near) / 2.2);
+    // far off the path: look along all of it now and then, and take it up wherever it is nearest
+    st.seek -= dt;
+    if (bd > 70 * 70 && st.seek <= 0) {
+      st.seek = 0.6;
+      for (let i = 0; i < n; i += 2) {
+        const d = d2(i);
+        if (d < bd) {
+          bd = d;
+          best = i;
+        }
+      }
+    }
+    st.pathI = loop ? ((best % n) + n) % n : Math.min(n - 1, Math.max(0, best));
   };
 
-  const flyRail = (dt: number, input: FlightInput, launching: boolean) => {
-    if (st.wasFree) {
-      // pick the rail back up from wherever free flight left us
-      st.s = THREE.MathUtils.clamp(rest.z - st.pos.z, 0, S1 - 1);
-      railPoint(st.s, st.tmp);
-      st.ox = st.pos.x - st.tmp.x;
-      st.oy = st.pos.y - st.tmp.y;
-      st.wasFree = false;
-    }
-    const cruise = CRUISE + st.boost * 3.5;
-    st.speed = damp(st.speed, launching ? 7 : cruise, launching ? 1.2 : 1.6, dt);
-    st.s += st.speed * dt;
-    const orbit = st.s >= S1;
-    railPoint(st.s, st.tmp);
-    railPoint(st.s + 2, st.tmp2);
-    const fx = st.tmp2.x - st.tmp.x;
-    const fz = st.tmp2.z - st.tmp.z;
-    const fl = Math.hypot(fx, fz) || 1;
-    // lean off the line: right is +x when heading down the road
-    const reach = clamp01((st.s - 10) / 30);
-    st.ox = damp(st.ox, input.sx * 15 * reach, input.sx ? 2.4 : 1.3, dt);
-    st.oy = damp(st.oy, input.sy * 5.5 * reach, input.sy ? 2.4 : 1.3, dt);
-    st.want.set(st.tmp.x + (-fz / fl) * st.ox, Math.max(1.1 * reach + st.tmp.y * (1 - reach), st.tmp.y + st.oy), st.tmp.z + (fx / fl) * st.ox);
-    st.prev.copy(st.pos);
-    st.pos.lerp(st.want, 1 - Math.exp(-dt * (launching ? 9 : 5)));
-    st.vel.subVectors(st.pos, st.prev).divideScalar(Math.max(dt, 1e-3));
-    const hv = Math.hypot(st.vel.x, st.vel.z);
-    if (hv > 0.5) {
-      let dy = Math.atan2(-st.vel.x, -st.vel.z) - st.yaw;
-      dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-      st.yaw += dy * (1 - Math.exp(-dt * 6));
-      st.pitch = damp(st.pitch, Math.atan2(st.vel.y, hv) * 1.15, 5, dt);
-      // bank into the lean, and into the long turn round the island
-      const lateral = (st.vel.x * (-fz / fl) + st.vel.z * (fx / fl)) * 0.085;
-      st.roll = damp(st.roll, THREE.MathUtils.clamp(lateral + (orbit ? 0.32 : 0), -0.7, 0.7), 4, dt);
-    }
-  };
+  // one step of gliding in the world that stands
+  const glide = (dt: number, input: FlightInput, opts: { launching?: boolean; hands?: boolean } = {}) => {
+    const id = voyage.cur;
+    const def = WORLDS[id];
+    const o = originOf(id);
+    const lx = st.pos.x - o.x;
+    const lz = st.pos.z - o.z;
+    const ground = (x: number, z: number) => (id === "home" ? 0 : groundAt(def, x, z));
 
-  const flyFree = (dt: number, input: FlightInput) => {
-    if (!st.wasFree) st.wasFree = true;
-    st.roll += (input.sx * 0.85 - st.roll) * (1 - Math.exp(-dt * 3));
-    st.yaw -= st.roll * 1.15 * dt;
-    st.pitch += (input.sy * 0.5 - st.pitch) * (1 - Math.exp(-dt * 2.2));
-    const acc = -Math.sin(st.pitch) * 7.5 - (st.speed - CRUISE) * 0.45 + st.boost * 7;
-    st.speed = THREE.MathUtils.clamp(st.speed + acc * dt, 4, 19);
-    // the edges of the world lean you back toward the road
-    const lat = st.pos.x - roadX(st.pos.z);
-    const over = Math.max(clamp01((Math.abs(lat) - ROUTE.corridor * 0.6) / (ROUTE.corridor * 0.4)), clamp01((st.pos.z - 20) / 30), clamp01((ROUTE.islandZ - 170 - st.pos.z) / 60));
-    if (over > 0) {
-      const tz = st.pos.z > 0 ? st.pos.z - 60 : st.pos.z < ROUTE.islandZ - 150 ? st.pos.z + 80 : st.pos.z - 40;
-      let dy = Math.atan2(-(roadX(tz) - st.pos.x), -(tz - st.pos.z)) - st.yaw;
-      dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-      st.yaw += dy * Math.min(1, over * 2.2 * dt);
-      st.roll += (Math.sign(-dy) * 0.55 * over - st.roll) * dt * 2;
+    // throttle: keys ease it, the wheel nudges it
+    voyage.throttle = clamp01(voyage.throttle + (input.thr ?? 0) * 0.42 * dt - (input.wheel ?? 0) * 0.0009);
+
+    // the stick, with a soft centre so small corrections are small
+    const shape = (v: number) => v * (0.5 + 0.5 * v * v);
+    let sx = shape(input.sx);
+    let sy = shape(input.sy);
+    const climb = input.climb ?? 0;
+    const touching = Math.abs(input.sx) > 0.03 || Math.abs(input.sy) > 0.03 || climb !== 0;
+    // a pointer lying still off-centre is not steering: after a while it is let go of
+    const stale = !input.keys && performance.now() - (input.moved ?? 0) > 7000;
+    if (touching && !stale && !opts.hands) st.idle = 0;
+    else st.idle += dt;
+    const want = opts.hands || opts.launching || (voyage.guide && st.idle > 3.2) ? 1 : 0;
+    voyage.assist = damp(voyage.assist, want, want ? 0.85 : 5.5, dt);
+    noteAssist();
+    const a = voyage.assist;
+
+    // the quiet hand: aim a little way down the path of light
+    const path = pathOf(id);
+    nearestOnPath(path.pts, lx, st.pos.y, lz, !!def.loop, dt);
+    if (a > 0.001) {
+      const n = path.pts.length;
+      const ahead = Math.round((24 + st.speed * 1.7) / 4);
+      const ti = def.loop ? (st.pathI + ahead) % n : Math.min(n - 1, st.pathI + ahead);
+      const tp = path.pts[ti];
+      const dx = tp.x - lx;
+      const dz = tp.z - lz;
+      const err = wrap(Math.atan2(-dx, -dz) - st.yaw);
+      const ax = THREE.MathUtils.clamp(-err * 1.5, -1, 1);
+      const ay = THREE.MathUtils.clamp((Math.atan2(tp.y - st.pos.y, Math.hypot(dx, dz) + 6) / 0.5) * 1.5, -1, 1);
+      sx = sx * (1 - a) + ax * a;
+      sy = sy * (1 - a) + ay * a;
     }
-    if (st.pos.y < 1.3) st.pitch += (0.35 - st.pitch) * dt * 4;
-    if (st.pos.y > 46) st.pitch += (-0.3 - st.pitch) * dt * 2;
+
+    // the edge of the world leans the plane back toward its middle
+    let edge = 0;
+    if (voyage.phase === "open") {
+      const ex = lx - def.centre[0];
+      const ez = lz - def.centre[1];
+      const r = Math.hypot(ex, ez);
+      edge = smooth01((r - def.radius * 0.86) / (def.radius * 0.2));
+      if (edge > 0) {
+        const outward = (-Math.sin(st.yaw) * ex - Math.cos(st.yaw) * ez) / Math.max(r, 1);
+        const err = wrap(Math.atan2(ex, ez) - st.yaw);
+        const k = edge * (outward > -0.2 ? 1 : 0.25);
+        sx = sx * (1 - k) + THREE.MathUtils.clamp(-err * 1.4, -1, 1) * k;
+      }
+    }
+
+    // tall things: lean away early, and be eased round them
+    const g0b = ground;
+    let pushX = 0;
+    let pushZ = 0;
+    for (const ob of def.obstacles) {
+      const ox = lx - ob.x;
+      const oz = lz - ob.z;
+      const d = Math.hypot(ox, oz);
+      const reach = 12 + st.speed * 0.9;
+      const top = g0b(ob.x, ob.z) + ob.h;
+      if (d > ob.r + reach || st.pos.y > top + 8) continue;
+      // a bell narrows toward its crown: the plane may pass close over its shoulder
+      const t = clamp01((st.pos.y - (top - ob.h)) / ob.h);
+      const rad = ob.bell ? ob.r * Math.sqrt(Math.max(0.02, 1 - Math.pow(t, 2.5))) : ob.r;
+      const k = smooth01(1 - (d - rad) / reach) * smooth01((top + 8 - st.pos.y) / 10);
+      const toward = (Math.sin(st.yaw) * ox + Math.cos(st.yaw) * oz) / Math.max(d, 1); // > 0 when flying at it
+      if (toward > 0) {
+        // which side of it are we headed for: bank to that side
+        const cross = -Math.sin(st.yaw) * oz + Math.cos(st.yaw) * ox;
+        sx = sx * (1 - k * 0.8) + (cross > 0 ? 1 : -1) * k * 0.8;
+      }
+      const f = k * k * (2 + st.speed * 0.7);
+      pushX += (ox / Math.max(d, 1)) * f;
+      pushZ += (oz / Math.max(d, 1)) * f;
+    }
+
+    // the ground, read under the plane and a little ahead of it
+    const gk = opts.launching ? smooth01((st.t - 0.2) / 2.6) : 1;
+    const hx = -Math.sin(st.yaw);
+    const hz = -Math.cos(st.yaw);
+    const g0 = ground(lx, lz);
+    const g1 = ground(lx + hx * st.speed * 0.9, lz + hz * st.speed * 0.9);
+    const g2 = ground(lx + hx * st.speed * 2.0, lz + hz * st.speed * 2.0);
+    const floor = Math.max(g0, g1, g2 - 2) + 1.5 * gk;
+    const band = 2.6 + st.speed * 0.16;
+    const low = clamp01(1 - (st.pos.y - floor) / band);
+    const low3 = low * low * low;
+    let pitchT = sy * 0.5 + climb * 0.34;
+    if (low > 0) pitchT = Math.max(pitchT, pitchT * (1 - low) + low3 * 0.6);
+    const high = clamp01((st.pos.y - (def.ceil - 24)) / 24);
+    if (high > 0) pitchT = Math.min(pitchT, pitchT * (1 - high) - high * 0.3);
+
+    // bank and pitch are sprung, a touch under critical: they arrive, they don't snap
+    const rollT = THREE.MathUtils.clamp(sx, -1, 1) * 0.92;
+    st.rollV += ((rollT - st.roll) * 10.5 - st.rollV * 6.0) * dt;
+    st.roll += st.rollV * dt;
+    st.pitchV += ((pitchT - st.pitch) * 8.5 - st.pitchV * 5.6) * dt;
+    st.pitch += st.pitchV * dt;
+    // the bank is the turn: slow flight turns tighter
+    st.yaw -= st.roll * (0.8 + 2.2 / Math.max(st.speed, 3)) * dt;
+    // speed follows the throttle; diving gathers a little, climbing spends a little
+    const vT = opts.launching ? Math.min(speedOf(voyage.throttle), 2 + st.t * 3.6) : speedOf(voyage.throttle) - Math.sin(st.pitch) * 5;
+    st.speed = damp(st.speed, Math.max(SPEED.min * 0.8, vT), opts.launching ? 1.8 : 0.9, dt);
     updateNose();
     st.pos.addScaledVector(st.nose, st.speed * dt);
-    st.pos.y = Math.max(st.pos.y + (st.boost * 0.8 - 0.2 * (1 - st.speed / 14)) * dt, 0.7);
+    // off the desk it lifts first, clear of everything standing there
+    if (opts.launching && st.t < 0.7) st.pos.y += 0.75 * (1 - st.t / 0.7) * dt;
+    st.pos.x += pushX * dt;
+    st.pos.z += pushZ * dt;
+    // eased up off the ground, never bumped
+    if (low > 0) st.pos.y += low3 * (2 + st.speed * 0.4) * dt * gk;
+    if (st.pos.y < floor) st.pos.y = damp(st.pos.y, floor, 10, dt);
+    return edge;
   };
 
-  freeRef.current = free;
+  // gates and the cloud between worlds
+  const passage = (dt: number) => {
+    const id = voyage.cur;
+    if (voyage.phase === "open") {
+      const gate = gateOf(id);
+      if (gate) {
+        const o = originOf(id);
+        const rx = st.pos.x - o.x - gate.pos.x;
+        const ry = st.pos.y - gate.pos.y;
+        const rz = st.pos.z - o.z - gate.pos.z;
+        const along = -Math.sin(gate.yaw) * rx - Math.cos(gate.yaw) * rz;
+        const lateral = Math.hypot(Math.cos(gate.yaw) * rx - Math.sin(gate.yaw) * rz, ry);
+        const side = along < 0 ? -1 : 1;
+        const through = lateral < 14 && ((st.gateSide < 0 && side > 0) || (Math.abs(along) < 3 && lateral < 10));
+        st.gateSide = lateral < 30 ? side : st.gateSide;
+        if (through) {
+          voyage.next = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1] ?? null;
+          if (voyage.next) voyage.phase = "closing";
+        }
+      }
+    } else if (voyage.phase === "closing") {
+      voyage.veil = Math.min(1, voyage.veil + dt / 1.2);
+      if (voyage.veil >= 1 && voyage.next) {
+        const to = voyage.next;
+        voyage.next = null;
+        swapWorld(to);
+        const e = entryOf(to);
+        place(to, e.pos, e.yaw);
+        voyage.phase = "hold";
+        voyage.held = 0;
+      }
+    } else if (voyage.phase === "hold") {
+      // the new world is drawn under the cloud for a few frames (its shaders and buffers are made there) before it opens
+      voyage.veil = 1;
+      voyage.held += dt;
+      if (voyage.held > 0.75 && voyage.frames >= 5 && !voyage.skyFrom) voyage.phase = "opening";
+    } else {
+      voyage.veil = Math.max(0, voyage.veil - dt / 2.1);
+      if (voyage.veil <= 0) voyage.phase = "open";
+    }
+  };
+  const airOf = (edge: number) => {
+    const v = voyage.veil;
+    voyage.mist = v * v * 0.03 + edge * edge * 0.004;
+  };
+
   apiRef.current = {
     pos: st.pos,
     launch: (cam) => {
       st.pos.copy(rest);
-      st.prev.copy(rest);
+      st.pos.y += 0.017;
       st.yaw = spot.rot;
       st.pitch = 0.3;
-      st.roll = 0;
-      st.speed = 2.4;
+      st.roll = st.rollV = st.pitchV = 0;
+      st.speed = 0.6;
       st.t = 0;
-      st.s = 0;
-      st.ox = st.oy = 0;
-      st.wasFree = false;
-      st.landK = 0;
+      st.idle = 9;
+      st.pathI = 0;
+      st.gateSide = -1;
       st.fov = cam.fov;
       st.camFrom.copy(cam.position);
+      st.camYaw = Math.atan2(cam.position.x - rest.x, cam.position.z - rest.z);
+      st.camPitch = 0;
       st.look.copy(rest);
+      st.landPhase = 0;
+      voyage.flying = true;
+      voyage.assist = 1;
+      voyage.throttle = 0.42;
       updateNose();
     },
     fly: (dt, input, cam) => {
       st.t += dt;
-      const launching = st.t < 1.6;
-      st.boost = damp(st.boost, launching ? 0 : windBoost(), 3, dt);
-      if (freeRef.current && !launching) flyFree(dt, input);
-      else flyRail(dt, launching ? { sx: 0, sy: 0 } : input, launching);
-      updateNose();
-      // camera: blend from the orbit view into the chase cam during launch
-      const k = easeInOutCubic(clamp01(st.t / 1.5));
-      if (k < 1) {
-        chase(dt, cam);
-        cam.position.lerpVectors(st.camFrom, cam.position, k);
-      } else chase(dt, cam);
-      streak.uniforms.uOpacity.value += (1 - streak.uniforms.uOpacity.value) * dt * 1.5;
+      const launching = st.t < 2.4 && voyage.cur === "home" && voyage.phase === "open";
+      // in the first moments, and while cloud is over the lens, the plane flies itself
+      const hands = st.t < 0.9 || voyage.phase === "closing";
+      const edge = glide(dt, hands ? { ...input, sx: 0, sy: 0, climb: 0 } : input, { launching, hands });
+      passage(dt);
+      airOf(edge);
+      chase(dt, cam, easeInOutCubic(clamp01(st.t / 1.7)));
     },
     beginLand: (cam) => {
       st.t = 0;
-      st.landFrom.copy(st.pos);
-      st.landYaw = st.yaw;
-      st.landFar = clamp01((st.pos.distanceTo(rest) - 30) / 60);
+      st.landT = 0;
+      const far = voyage.cur !== "home" || st.pos.distanceTo(rest) > 80 || voyage.phase !== "open";
+      st.landMode = far ? "cloud" : "near";
+      st.landPhase = far ? 0 : 2;
+      voyage.next = null;
+      voyage.phase = "open";
       st.camFrom.copy(cam.position);
       st.lookFrom.copy(st.look);
+      if (!far) {
+        // straight home: a long curve from wherever it is, arriving along the plane's own resting line
+        const d = st.pos.distanceTo(rest);
+        st.b0.copy(st.pos);
+        st.b1.copy(st.pos).addScaledVector(st.nose, d * 0.4);
+        st.b2.set(rest.x + Math.sin(spot.rot) * d * 0.3, rest.y + 0.017 + d * 0.1, rest.z + Math.cos(spot.rot) * d * 0.3);
+        st.b3.copy(rest).setY(rest.y + 0.017);
+        st.landDur = THREE.MathUtils.clamp(1.9 + d * 0.045, 2.4, 5.2);
+        st.lastYaw = st.yaw;
+      }
     },
     land: (dt, cam, home) => {
       st.t += dt;
-      // from far out it comes home through a bank of cloud; close by it simply arcs back
-      const dur = 2.2 + st.landFar * 1.4;
-      const k = easeInOutCubic(clamp01(st.t / dur));
-      st.landK = k;
-      st.pos.lerpVectors(st.landFrom, rest, k);
-      st.pos.y += Math.sin(Math.PI * k) * (1.2 + st.landFar * 6) * (1 - k * 0.3);
-      let dy = spot.rot - st.landYaw;
-      dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-      st.yaw = st.landYaw + dy * k;
-      st.pitch = (1 - k) * -0.15;
-      st.roll *= 1 - Math.min(1, dt * 3);
+      if (st.landPhase === 0) {
+        // on, into the cloud
+        glide(dt, { sx: 0, sy: 0 }, { hands: true });
+        voyage.veil = Math.min(1, voyage.veil + dt / 1.0);
+        airOf(0);
+        chase(dt, cam);
+        if (voyage.veil >= 1) {
+          swapWorld("home");
+          st.landPhase = 1;
+          voyage.held = 0;
+          voyage.frames = 0;
+          // it comes down out of the cloud over the visitor's shoulder
+          st.b0.set(rest.x - 1.9, rest.y + 1.7, rest.z + 3.2);
+          st.b3.copy(rest).setY(rest.y + 0.017);
+          st.b1.copy(st.b0).lerp(st.b3, 0.4).setY(st.b0.y - 0.25);
+          st.b2.set(rest.x + Math.sin(spot.rot) * 0.95, rest.y + 0.017 + 0.3, rest.z + Math.cos(spot.rot) * 0.95);
+          st.landDur = 3.2;
+          st.pos.copy(st.b0);
+          st.lastYaw = spot.rot;
+          st.speed = 0;
+        }
+        return false;
+      }
+      if (st.landPhase === 1) {
+        // home is drawn under the cloud first
+        voyage.veil = 1;
+        voyage.held += dt;
+        cam.position.copy(home.pos);
+        cam.up.set(0, 1, 0);
+        st.look.copy(home.look);
+        cam.lookAt(st.look);
+        st.fov = 36;
+        cam.fov = 36;
+        st.camFrom.copy(home.pos);
+        st.lookFrom.copy(home.look);
+        if (voyage.held > 0.6 && voyage.frames >= 4 && !voyage.skyFrom) {
+          st.landPhase = 2;
+          st.landT = 0;
+        }
+        return false;
+      }
+      st.landT += dt;
+      const u = clamp01(st.landT / st.landDur);
+      // quick away, long and soft at the end
+      const k = 1 - Math.pow(1 - u, 2.6) * (1 + 1.6 * u);
+      const kk = clamp01(k);
+      const a = (1 - kk) ** 3;
+      const b = 3 * (1 - kk) ** 2 * kk;
+      const c = 3 * (1 - kk) * kk ** 2;
+      const d = kk ** 3;
+      const prev = st.tmp.copy(st.pos);
+      st.pos.set(a * st.b0.x + b * st.b1.x + c * st.b2.x + d * st.b3.x, a * st.b0.y + b * st.b1.y + c * st.b2.y + d * st.b3.y, a * st.b0.z + b * st.b1.z + c * st.b2.z + d * st.b3.z);
+      const vx = st.pos.x - prev.x;
+      const vy = st.pos.y - prev.y;
+      const vz = st.pos.z - prev.z;
+      const hv = Math.hypot(vx, vz);
+      st.speed = Math.hypot(hv, vy) / Math.max(dt, 1e-3);
+      if (hv > 1e-5) {
+        const yawT = Math.atan2(-vx, -vz);
+        // heading from the curve, settling on the resting heading as it slows
+        const settle = smooth01((u - 0.72) / 0.28);
+        const want = yawT + wrap(spot.rot - yawT) * settle;
+        st.yaw += wrap(want - st.yaw) * (1 - Math.exp(-dt * 9));
+        st.pitch = damp(st.pitch, Math.atan2(vy, hv) * (1 - settle), 7, dt);
+        const turn = wrap(st.yaw - st.lastYaw) / Math.max(dt, 1e-3);
+        st.roll = damp(st.roll, THREE.MathUtils.clamp(-turn * 0.32, -0.6, 0.6) * (1 - settle), 5, dt);
+        st.lastYaw = st.yaw;
+      }
+      if (u >= 1) {
+        st.yaw = spot.rot;
+        st.pitch = st.roll = 0;
+      }
       updateNose();
-      cam.position.lerpVectors(st.camFrom, home.pos, k);
-      cam.position.y += Math.sin(Math.PI * k) * st.landFar * 8;
-      st.look.lerpVectors(st.lookFrom, home.look, k);
+      const ck = easeInOutCubic(clamp01(st.landT / Math.min(st.landDur, 3.2)));
+      cam.position.lerpVectors(st.camFrom, home.pos, ck);
+      st.look.lerpVectors(st.lookFrom, home.look, ck);
       cam.up.set(0, 1, 0);
       cam.lookAt(st.look);
       st.fov += (36 - st.fov) * Math.min(1, dt * 3);
       cam.fov = st.fov;
-      streak.uniforms.uOpacity.value *= 1 - Math.min(1, dt * 2);
-      if (k >= 1) st.landK = 0;
-      return k >= 1;
+      if (st.landMode === "cloud") voyage.veil = Math.max(0, voyage.veil - dt / 1.7);
+      airOf(0);
+      const done = u >= 1 && voyage.veil <= 0;
+      if (done) {
+        voyage.flying = false;
+        voyage.assist = 0;
+        voyage.mist = 0;
+        st.landPhase = 0;
+      }
+      return done;
     },
     warp: (z) => {
-      st.s = rest.z - z;
+      const p = pathOf("home").pts;
+      let best = 0;
+      for (let i = 0; i < p.length; i++) if (Math.abs(p[i].z - z) < Math.abs(p[best].z - z)) best = i;
+      place("home", p[best], 0);
+      st.pathI = best;
       st.t = Math.max(st.t, 3);
-      st.ox = st.oy = 0;
-      st.speed = CRUISE;
-      railPoint(st.s, st.pos);
-      st.prev.copy(st.pos);
-      railPoint(st.s + 2, st.tmp);
-      st.yaw = Math.atan2(-(st.tmp.x - st.pos.x), -(st.tmp.z - st.pos.z));
-      st.pitch = 0;
-      updateNose();
-      st.snap = true;
+      st.speed = speedOf(voyage.throttle);
+    },
+    jump: (id, along = 0) => {
+      voyage.next = null;
+      voyage.phase = "hold";
+      voyage.veil = 1;
+      voyage.held = 0;
+      swapWorld(id);
+      voyage.frames = 0;
+      if (along > 0 || id === "home") {
+        const p = pathOf(id).pts;
+        const i = Math.min(p.length - 2, Math.round(along * (p.length - 1)));
+        place(id, p[i], Math.atan2(-(p[i + 1].x - p[i].x), -(p[i + 1].z - p[i].z)));
+        st.pathI = i;
+      } else {
+        const e = entryOf(id);
+        place(id, e.pos, e.yaw);
+      }
+      st.t = Math.max(st.t, 3);
+      st.idle = 9;
+      st.speed = speedOf(voyage.throttle);
     },
     speed: () => st.speed,
-    boost: () => st.boost,
-    landMist: () => Math.sin(Math.PI * st.landK) * st.landFar,
+    boost: () => 0,
+    landMist: () => 0,
   };
 
   useFrame(() => {
@@ -370,7 +579,6 @@ export function Plane({
       g.position.copy(rest);
       g.position.y += 0.017 + (hover.current && hoverable ? 0.008 : 0);
       g.rotation.set(0, spot.rot, 0);
-      if (streak.uniforms.uOpacity.value > 0.001) streak.uniforms.uOpacity.value *= 0.95;
       return;
     }
     g.position.copy(st.pos);
@@ -406,10 +614,6 @@ export function Plane({
           <boxGeometry args={[0.17, 0.07, 0.25]} />
         </mesh>
       </group>
-      {flying &&
-        tubes.map((t, i) => (
-          <mesh key={i} geometry={t} material={streak} frustumCulled={false} renderOrder={5} />
-        ))}
     </>
   );
 }
