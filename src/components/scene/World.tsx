@@ -365,7 +365,9 @@ export function makeRangeMaterial(rg: { haze: number; snow: number; height: numb
         vec3 d = normalize(vWorld - cameraPosition);
         vec3 air = skyBase(normalize(vec3(d.x, max(d.y, 0.0) * 0.6 + 0.01, d.z)));
         float haze = clamp(uHaze + (1.0 - smoothstep(0.0, uTop * 0.55, vWorld.y)) * 0.34, 0.0, 0.95);
-        col = mix(col, air, max(haze, clamp(uMist * 5.0, 0.0, 1.0)));
+        // the arrival mist (and the veil at a gate) lies between the eye and the ridge like any other air:
+        // a ridge is never darker than the trees standing in front of it
+        col = mix(col, air, max(haze, 1.0 - exp(-length(vWorld - cameraPosition) * uMist)));
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
