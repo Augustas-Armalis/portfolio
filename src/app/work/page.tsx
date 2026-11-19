@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { novel, owner, projectGroups, projects, tracks, apps } from "@/content";
 
-export const metadata = { title: "Work – Augustas" };
+export const metadata = {
+  title: "Work",
+  description:
+    "Projects by Augustas Armalis: product design at Sellify, the Kaching website, Larpo studio, Lunor, Capto, Contles, Filzy, music and a novel.",
+  alternates: { canonical: "/work/" },
+};
 
 const Row = ({ name, line, meta }: { name: string; line?: string; meta?: string }) => (
   <li className="flex flex-col gap-0.5 border-t border-line py-3 sm:flex-row sm:items-baseline sm:gap-6">
