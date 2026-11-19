@@ -3,6 +3,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { ROUTE } from "./flightPath";
 import { DESK, GLSL_LAKE, GLSL_NOISE, GLSL_PATH, LAKE, MONITOR, lakeK, pathX } from "./shared";
 import { GLSL_SKY, SKY_U } from "./sky";
 
@@ -194,6 +195,8 @@ export function Ground({ fogDensity }: { fogDensity: number }) {
           ${GLSL_PATH}
           ${GLSL_LAKE}
           void main(){
+            // the land ends at the shore: beyond it there is only the sea's own surface
+            if (vWorld.z < ${(ROUTE.shoreZ - 3).toFixed(1)}) discard;
             float r = length(vWorld.xz);
             float n = fbm(vWorld.xz * 0.08);
             float n2 = vnoise(vWorld.xz * 0.6);

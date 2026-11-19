@@ -454,7 +454,7 @@ function Scene({
   }, [scene, fog]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __os: useOS, __start: () => startRef.current?.() });
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __fs: flightSky, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.() });
   }, [input, cam, v]);
 
   // compile everything behind the preloader, then report ready. compileAsync
@@ -822,9 +822,11 @@ function Scene({
       }
       if (stage.current === "land") at = -1;
     }
+    // a station's hour is reached by gliding there from whatever the sky is
+    // doing now, and one station's hour glides into the next: never a snap
+    if (fs.w < 0.02) fs.hour = h;
     fs.w += (fw - fs.w) * (1 - Math.exp(-dtS * 1.6));
-    // one station's hour glides into the next rather than snapping
-    if (fw > 0) fs.hour = fs.w < 0.02 ? fh : (fs.hour + (((fh - fs.hour + 36) % 24) - 12) * (1 - Math.exp(-dtS * 0.9)) + 24) % 24;
+    if (fw > 0) fs.hour = (fs.hour + (((fh - fs.hour + 36) % 24) - 12) * (1 - Math.exp(-dtS * 1.4)) + 24) % 24;
     if (fs.w > 0.002) h = (h + ((((fs.hour - h + 36) % 24) - 12) * fs.w) + 24) % 24;
     if (at !== fs.at) {
       fs.at = at;

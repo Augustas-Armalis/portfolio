@@ -474,8 +474,8 @@ function makeSea(eyes: THREE.Vector3[]) {
         for (int i = 0; i < 2; i++) {
           vec3 L = normalize(uEyes[i] - vWorld);
           vec3 rr = reflect(-V, normalize(vec3(n.x * 3.0, 1.0, n.z * 14.0)));
-          float s = pow(max(dot(rr, L), 0.0), 1400.0);
-          col += vec3(1.0, 0.8, 0.45) * s * 2.6 * (1.0 + uPulse);
+          float s = pow(max(dot(rr, L), 0.0), 2600.0);
+          col += vec3(1.0, 0.8, 0.45) * s * 1.9 * (1.0 + uPulse);
         }
         // foam and wet sand where it meets the land
         float shore = smoothstep(uShore - 14.0, uShore - 1.0, vWorld.z + (h0 - 0.6) * 5.0);
@@ -518,11 +518,11 @@ function buildIsland() {
 }
 
 // The island turns its head toward whoever comes through the gate.
-const ISLAND_YAW = Math.atan2(ROUTE.islandX - 1.5, ROUTE.gateZ - ROUTE.islandZ) + Math.PI / 2 + 0.25;
+const ISLAND_YAW = Math.atan2(1.5 - ROUTE.islandX, ROUTE.gateZ - ROUTE.islandZ) - 0.1;
 export function eyePositions() {
   const out: THREE.Vector3[] = [];
   for (const xn of [0.36, 0.56]) {
-    const v = new THREE.Vector3(xn * 96, 2.6, 21.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), ISLAND_YAW);
+    const v = new THREE.Vector3(xn * 96, 2.4, 27.5).applyAxisAngle(new THREE.Vector3(0, 1, 0), ISLAND_YAW);
     out.push(v.add(new THREE.Vector3(ROUTE.islandX, 0, ROUTE.islandZ)));
   }
   return out;
