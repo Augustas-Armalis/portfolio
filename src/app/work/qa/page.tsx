@@ -21,7 +21,7 @@ export default function QA() {
   if (mobile === null) return null;
   return (
     <main className="fixed inset-0 overflow-hidden bg-page">
-      {mobile ? <PhoneOS /> : phase === "os" && user ? <Desktop user={user} /> : <Login />}
+      {mobile ? <PhoneOS /> : phase === "os" && user ? <Desktop /> : <Login />}
     </main>
   );
 }

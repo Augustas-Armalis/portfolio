@@ -483,6 +483,7 @@ export function SplitView({
   detail,
   width = 200,
   header,
+  startPushed,
 }: {
   sections: { title?: string; items: SideItem[] }[];
   selected: string;
@@ -491,9 +492,11 @@ export function SplitView({
   width?: number;
   // sits above the source list (System Settings' account row); on the phone it leads the list
   header?: ReactNode;
+  // on the phone, open on the selected item's detail (a folder opens on its contents, with Back to the list)
+  startPushed?: boolean;
 }) {
   const { compact } = useChrome();
-  const [pushed, setPushed] = useState(false);
+  const [pushed, setPushed] = useState(!!startPushed);
   const [folded, setFolded] = useState<string[]>([]);
   if (compact) {
     return (
@@ -857,8 +860,13 @@ function useAppearance() {
     try {
       const saved = localStorage.getItem("aos.appearance");
       if (saved === "light" || saved === "dark" || saved === "auto") useOS.setState({ appearance: saved });
+      if (localStorage.getItem("aos.reduce") === "1") useOS.setState({ reduceEffects: true });
     } catch {}
   }, []);
+  const reduce = useOS((s) => s.reduceEffects);
+  useEffect(() => {
+    document.documentElement.classList.toggle("reduce-fx", reduce);
+  }, [reduce]);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => document.documentElement.classList.toggle("dark", appearance === "dark" || (appearance === "auto" && mq.matches));

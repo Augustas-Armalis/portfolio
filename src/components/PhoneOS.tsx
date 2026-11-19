@@ -2,11 +2,11 @@
 
 import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransform, type AnimationPlaybackControls } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { apps, mainWork, owner, projects, sharedApps, tracks, users, type AppId, type UserId } from "@/content";
+import { apps, dockApps, mainWork, owner, projects, sharedApps, tracks, type AppId } from "@/content";
 import { useOS, useWallpaper } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, player, usePlayer } from "./Apps";
 import { Bars } from "./Desktop";
-import { Avatar, LoginBackdrop, PowerOverlay } from "./Login";
+import { Monogram, LoginBackdrop, PowerOverlay } from "./Login";
 import { Glyph, ICONS, iconBackground } from "./icons";
 import { Check, Pause, Play, X } from "lucide-react";
 import { Chrome, EASE_OUT, glass, useGlassScope } from "./ui";
@@ -146,7 +146,7 @@ function Lock() {
   const time = useClock(false);
   const date = useDate();
   return (
-    <div className="absolute inset-0 flex flex-col items-center text-ink">
+    <div className="absolute inset-0 flex flex-col items-center text-ink" role="button" tabIndex={0} aria-label="Open" onClick={() => login()} onKeyDown={(e) => e.key === "Enter" && login()}>
       <LoginBackdrop />
       <motion.div
         initial={{ opacity: 0, y: -10, filter: "blur(8px)" }}
@@ -175,29 +175,18 @@ function Lock() {
           </div>
         ))}
       </motion.div>
-      <div className="relative mt-auto w-full px-5 pb-[max(20px,env(safe-area-inset-bottom))]">
-        <div className="mb-3 text-center text-[13px] font-medium text-ink-2">Tap a profile to unlock</div>
-        <div className="grid grid-cols-3 gap-2.5">
-          {(Object.keys(users) as UserId[]).map((id, i) => (
-            <motion.button
-              type="button"
-              key={id}
-              onClick={() => {
-                login(id);
-              }}
-              initial={{ opacity: 0, y: 16, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.55, ease: EASE_OUT, delay: (seamless ? 0.55 : 0.4) + i * 0.07 }}
-              whileTap={{ scale: 0.96 }}
-              data-glass=""
-              className={`${glass("lock")} flex h-[118px] flex-col items-center justify-center gap-2.5 rounded-[22px] px-2`}
-            >
-              <Avatar id={id} size={50} />
-              <span className="flex h-[30px] w-full items-center justify-center text-center text-[12px] font-semibold leading-[15px] text-ink [text-wrap:balance]">{users[id].name}</span>
-            </motion.button>
-          ))}
-        </div>
-        <div className="mx-auto mt-6 h-[5px] w-[134px] rounded-full bg-ink/80" />
+      <div className="relative mt-auto flex w-full flex-col items-center px-5 pb-[max(20px,env(safe-area-inset-bottom))]">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: EASE_OUT, delay: seamless ? 0.55 : 0.4 }}
+          className="flex flex-col items-center"
+        >
+          <Monogram size={56} />
+          <div className="mt-2.5 text-[17px] font-semibold tracking-[-0.01em] text-ink">{owner.name}</div>
+          <div className="mt-6 text-[15px] font-medium text-ink-2">Tap to open</div>
+        </motion.div>
+        <div className="mt-4 h-[5px] w-[134px] rounded-full bg-ink/80" />
       </div>
     </div>
   );
@@ -270,31 +259,38 @@ function HomeIcon({ id, label, onOpen, light }: { id: AppId; label?: string; onO
   );
 }
 
-function Home({ user, onOpen }: { user: UserId; onOpen: (id: AppId, o: Origin) => void }) {
-  const logout = useOS((s) => s.logout);
-  const u = users[user];
-  const wp = useWallpaper(user);
+// The home screen: a widget about him, his apps, and the system ones in the dock.
+const HOME_APPS: AppId[] = [...dockApps, "taste"];
+function Home({ onOpen }: { onOpen: (id: AppId, o: Origin) => void }) {
+  const wp = useWallpaper();
   const dark = wp.dark;
   const dock: AppId[] = [...sharedApps, "about"];
+  const ref = useRef<HTMLButtonElement>(null);
   return (
     <div className="wp-photo absolute inset-0 flex flex-col" style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}>
       {wp.src.startsWith("live:") && <LiveWallpaper />}
       <div className="relative px-5 pt-[calc(env(safe-area-inset-top)+64px)]">
         <button
           type="button"
-          onClick={logout}
+          ref={ref}
+          onClick={() => {
+            const r = ref.current!.getBoundingClientRect();
+            onOpen("about", { x: r.x, y: r.y, w: r.width, h: r.height });
+          }}
           data-glass=""
-          className={`press flex w-full items-center gap-3 rounded-[22px] p-4 text-left ${dark ? `${glass("widget-dark")} text-white` : `${glass("widget")} text-ink`}`}
+          className={`glass-press flex w-full items-center gap-3.5 rounded-[24px] p-4 text-left ${dark ? `${glass("widget-dark")} text-white` : `${glass("widget")} text-ink`}`}
         >
-          <Avatar id={user} size={46} />
+          <Monogram size={48} />
           <span className="min-w-0 flex-1">
-            <span className="block text-[17px] font-semibold leading-tight tracking-[-0.01em]">{u.name}</span>
+            <span className="block text-[17px] font-semibold leading-tight tracking-[-0.01em]">{owner.name}</span>
+            <span className={`mt-0.5 block text-[13px] leading-[17px] ${dark ? "text-white/70" : "text-ink-2"}`}>
+              {owner.role}. The work is in Projects.
+            </span>
           </span>
-
         </button>
       </div>
       <div className="relative grid grid-cols-4 gap-x-2 gap-y-[22px] px-5 pt-7">
-        {u.apps.map((id, i) => (
+        {HOME_APPS.map((id, i) => (
           <motion.div key={id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.04 + i * 0.03 }}>
             <HomeIcon id={id} onOpen={onOpen} light={dark} />
           </motion.div>
@@ -343,7 +339,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
       </button>
       <div ref={ref} className="absolute inset-0 overflow-y-auto overscroll-contain pb-12">
         {/* a contact card and an About sheet carry their own big name, so no large title over them */}
-        {id === "contact" || id === "about" || id === "work" || id === "lab" || projects[id] ? (
+        {id === "contact" || id === "about" || id === "blocks" || projects[id] ? (
           <div className={id === "contact" || id === "about" ? "h-[calc(env(safe-area-inset-top)+104px)]" : "h-[calc(env(safe-area-inset-top)+58px)]"} />
         ) : (
         <motion.h1
@@ -437,9 +433,9 @@ function AppWindow({ id, origin, onClosed }: { id: AppId; origin: Origin | null;
     else to(1);
   };
 
-  const darkApp = id === "terminal" || id === "doom";
+  const darkApp = id === "terminal" || id === "doom" || id === "blocks";
   // sidebar apps become iOS grouped lists: grey ground, title on the same ground
-  const grouped = ["work", "taste", "settings", "contact", "records", "lab"].includes(id);
+  const grouped = ["projects", "games", "taste", "settings", "contact", "records"].includes(id) || projects[id]?.kind === "code";
   const ground = darkApp ? "bg-[#1C1D20] text-white" : grouped ? "bg-[#F2F2F7] text-ink" : "bg-white text-ink";
   return (
     <motion.div className="phone-app absolute inset-0 z-[60] will-change-transform" style={{ x, y, scale, clipPath }}>
@@ -479,9 +475,9 @@ export default function PhoneOS() {
   const phoneApp = useOS((s) => s.phoneApp);
   const origin = useOS((s) => s.phoneOrigin);
   const openPhoneApp = useOS((s) => s.openPhoneApp);
-  const homeDark = useWallpaper(user ?? "engineer").dark;
+  const homeDark = useWallpaper().dark;
   const heroDark = useOS((s) => s.heroDark);
-  const lightBar = (phase === "os" && !!user && homeDark && !phoneApp) || phoneApp === "terminal" || phoneApp === "doom" || (!!phoneApp && heroDark);
+  const lightBar = (phase === "os" && !!user && homeDark && !phoneApp) || phoneApp === "terminal" || phoneApp === "doom" || phoneApp === "blocks" || (!!phoneApp && heroDark);
 
   return (
     <div className="no-callout absolute inset-0 overflow-hidden bg-page">
@@ -490,14 +486,14 @@ export default function PhoneOS() {
       <AnimatePresence initial={false}>
         {phase === "os" && user ? (
           <motion.div
-            key={`home-${user}`}
+            key="home"
             className="absolute inset-0"
             initial={{ opacity: 0, scale: 1.08 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}
             transition={{ type: "spring", bounce: 0, duration: 0.55 }}
           >
-            <Home user={user} onOpen={(id, o) => openPhoneApp(id, o)} />
+            <Home onOpen={(id, o) => openPhoneApp(id, o)} />
           </motion.div>
         ) : (
           <motion.div

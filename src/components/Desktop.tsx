@@ -15,12 +15,12 @@ import {
 import { Lock, Search, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { apps, desktopItems, labApps, mainWork, otherWork, owner, projects, sharedApps, users, type AppId, type DeskItem, type UserId } from "@/content";
+import { allApps, apps, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, sharedApps, type AppId, type DeskItem, type UserId } from "@/content";
 import { focusedApp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
-import { PowerOverlay } from "./Login";
-import { Chrome, EASE_OUT, FILE_MIME, QuickLook, Segmented, glass, sfx, useContextMenu, useGlassScope, type LookItem, type MenuAction } from "./ui";
+import { Monogram, PowerOverlay } from "./Login";
+import { Btn, Chrome, EASE_OUT, FILE_MIME, QuickLook, Segmented, glass, sfx, useContextMenu, useGlassScope, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
 
 // ---------- menu bar ----------
@@ -83,8 +83,8 @@ function MenuItem({ children, onClick, hint, href }: { children: ReactNode; onCl
 
 const Sep = () => <div className="mx-[9px] my-[5px] h-px bg-black/[0.1]" />;
 
-function ControlCenter({ user, close }: { user: UserId; close: () => void }) {
-  const { sound, setSound, playing, login, lockScreen, appearance, setAppearance } = useOS();
+function ControlCenter({ close }: { close: () => void }) {
+  const { sound, setSound, playing, lockScreen, appearance, setAppearance } = useOS();
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between rounded-[12px] bg-white/60 dark:bg-white/10 px-3 py-2.5 shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]">
@@ -134,24 +134,6 @@ function ControlCenter({ user, close }: { user: UserId; close: () => void }) {
           </div>
         </div>
       )}
-      <div className="rounded-[12px] bg-white/60 dark:bg-white/10 p-[5px] shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]">
-        <div className="flex h-[22px] items-center px-[9px] text-[11px] font-semibold text-ink-3">Users</div>
-        {(Object.keys(users) as UserId[]).map((u) => (
-          <button
-            type="button"
-            key={u}
-            onClick={() => {
-              close();
-              if (u !== user) login(u);
-            }}
-            className="flex h-[30px] w-full items-center gap-2 rounded-[6px] px-[9px] text-left text-[13px] text-ink hov:hover:bg-black/[0.05]"
-          >
-            <span className="h-5 w-5 shrink-0 rounded-full bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" style={{ backgroundImage: `url(${users[u].avatar})` }} />
-            <span className="flex-1">{users[u].name}</span>
-            {u === user && <span className="h-1.5 w-1.5 rounded-full bg-[#0A84FF]" />}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -211,7 +193,7 @@ function NotificationCenter({ close }: { close: () => void }) {
           </div>
         </Widget>
       </div>
-      <Widget onClick={go("work")}>
+      <Widget onClick={go("sellify")}>
         <div className="eyebrow !text-[11px] text-ink-3">Currently working on</div>
         <div className="mt-2 flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -239,7 +221,7 @@ function NotificationCenter({ close }: { close: () => void }) {
 
 // ---------- Apps (Launchpad) and the window overview (Mission Control) ----------
 
-function AppsOverlay({ user }: { user: UserId }) {
+function AppsOverlay() {
   const overlay = useOS((s) => s.overlay);
   const setOverlay = useOS((s) => s.setOverlay);
   const open = useOS((s) => s.open);
@@ -247,7 +229,7 @@ function AppsOverlay({ user }: { user: UserId }) {
   useEffect(() => {
     if (overlay !== "apps") setQ("");
   }, [overlay]);
-  const all: AppId[] = [...users[user].apps, ...(user === "founder" ? labApps : []), ...sharedApps, "about", "trash"];
+  const all: AppId[] = [...allApps, "trash"];
   const list = all.filter((id) => apps[id].title.toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <AnimatePresence>
@@ -413,8 +395,8 @@ function MissionControl() {
   );
 }
 
-function MenuBar({ user }: { user: UserId }) {
-  const { windows, setPalette, logout, shutdown, playing, open, sleep, restart, lockScreen } = useOS();
+function MenuBar() {
+  const { windows, setPalette, shutdown, playing, open, sleep, restart, lockScreen } = useOS();
   const [menu, setMenu] = useState<null | "a" | "go" | "cc" | "nc">(null);
   const close = () => setMenu(null);
   useOutside(menu !== null, close);
@@ -459,7 +441,6 @@ function MenuBar({ user }: { user: UserId }) {
             <MenuItem onClick={run(() => (lockScreen()))} hint="⌃⌘Q">
               Lock Screen
             </MenuItem>
-            <MenuItem onClick={run(() => (logout()))}>Log Out {users[user].name}</MenuItem>
           </Pop>
         </div>
         <span className="px-[9px] font-bold">{f ? apps[f].title : "Finder"}</span>
@@ -468,21 +449,11 @@ function MenuBar({ user }: { user: UserId }) {
             Go
           </button>
           <Pop open={menu === "go"} width={210}>
-            {users[user].apps.map((id) => (
+            {dockApps.map((id) => (
               <MenuItem key={id} onClick={run(() => open(id))}>
                 {apps[id].title}
               </MenuItem>
             ))}
-            {user === "founder" && (
-              <>
-                <Sep />
-                {labApps.map((id) => (
-                  <MenuItem key={id} onClick={run(() => open(id))}>
-                    {apps[id].title}
-                  </MenuItem>
-                ))}
-              </>
-            )}
             <Sep />
             {sharedApps.map((id) => (
               <MenuItem key={id} onClick={run(() => open(id))}>
@@ -523,7 +494,7 @@ function MenuBar({ user }: { user: UserId }) {
             <SlidersHorizontal size={14} strokeWidth={2} />
           </button>
           <Pop open={menu === "cc"} align="right" width={300} panel>
-            <ControlCenter user={user} close={close} />
+            <ControlCenter close={close} />
           </Pop>
         </div>
         <div className="relative">
@@ -610,7 +581,10 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
     const w = Math.round(Math.min(size.w, (W - 24) * 0.88));
     const h = Math.round(Math.min(size.h, (H - DOCK_SPACE - 16) * 0.94));
     const step = index % 6;
-    return clampRect({ left: Math.round((W - w) / 2 + step * 28), top: Math.round((H - DOCK_SPACE - h) * 0.42 + step * 24), w, h }, W, H);
+    // the window the desktop opens with sits beside the note, not over it
+    const beside = index === 0 && win.id === "records" && W - (NOTE_W + 48) - 140 >= w;
+    const x0 = beside ? NOTE_W + 48 + (W - (NOTE_W + 48) - 132 - w) / 2 : (W - w) / 2;
+    return clampRect({ left: Math.round(x0 + step * 28), top: Math.round((H - DOCK_SPACE - h) * 0.42 + step * 24), w, h }, W, H);
   });
   const [hidden, setHidden] = useState(false);
   // zoom is a FLIP: the window jumps to its new frame, then a transform carries it from the old one (no animated layout)
@@ -918,16 +892,15 @@ function DockIcon({ id, mouseX, running, dark, dragging }: { id: AppId; mouseX: 
   );
 }
 
-function Dock({ user }: { user: UserId }) {
+function Dock() {
   const windows = useOS((s) => s.windows);
   const mouseX = useMotionValue(Infinity);
   const running = new Set(windows.map((w) => w.id));
   const fine = useFinePointer();
-  const dark = useWallpaper(user).dark;
-  // the persona's apps can be dragged into a new order, like the real dock
-  const [order, setOrder] = useState<AppId[]>(users[user].apps);
+  const dark = useWallpaper().dark;
+  // the apps can be dragged into a new order, like the real dock
+  const [order, setOrder] = useState<AppId[]>(dockApps);
   const [dragging, setDragging] = useState(false);
-  useEffect(() => setOrder(users[user].apps), [user]);
   return (
     <motion.div
       initial={{ y: 90 }}
@@ -987,21 +960,26 @@ function useFinePointer() {
 
 // ---------- Spotlight (no open animation: it's keyboard driven) ----------
 
-function Spotlight({ user }: { user: UserId }) {
-  const { palette, setPalette, open, login } = useOS();
+function Spotlight() {
+  const { palette, setPalette, open } = useOS();
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const items = useMemo(() => {
-    const ids: AppId[] = [...users[user].apps, ...(user === "founder" ? labApps : []), ...sharedApps, "about"];
+    // apps first, then everything in the folders (projects, games, documents), under the folder's name
+    const seen = new Set<AppId>(allApps);
     const list: { label: string; hint: string; icon?: AppId; run: () => void }[] = [
-      ...ids.map((id) => ({ label: apps[id].title, hint: "Application", icon: id, run: () => open(id) })),
-      ...(Object.keys(users) as UserId[])
-        .filter((u) => u !== user)
-        .map((u) => ({ label: `Switch to ${users[u].name}`, hint: "User", run: () => login(u) })),
+      ...allApps.map((id) => ({ label: apps[id].title, hint: id === "projects" || id === "games" ? "Folder" : "Application", icon: id, run: () => open(id) })),
+      ...places.flatMap((pl) =>
+        pl.groups.flatMap((g) =>
+          g.items
+            .filter((it) => it.app && !seen.has(it.app))
+            .map((it) => ({ label: it.name, hint: `${pl.title} · ${it.kind}`, icon: it.app, run: () => open(it.app!) })),
+        ),
+      ),
       { label: "View as List", hint: "Page", run: () => (window.location.href = "/work") },
     ];
     return list.filter((i) => i.label.toLowerCase().includes(q.toLowerCase().trim()));
-  }, [q, user, open, login]);
+  }, [q, open]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1079,8 +1057,8 @@ const EDGE = 10;
 type Cell = { c: number; r: number };
 const cellKey = (p: Cell) => `${p.c}:${p.r}`;
 
-function Resume() {
-  const founder = users.founder.apps.filter((a) => projects[a]);
+export function Resume() {
+  const founder = projectGroups[1].apps.filter((a) => projects[a]);
   return (
     <div className="flex justify-center bg-[#E9EAED] p-6">
       <article className="w-full max-w-[560px] bg-white px-12 py-11 text-ink shadow-[0_1px_3px_rgb(0_0_0/0.12)]">
@@ -1145,16 +1123,16 @@ export function DeskArt({ item }: { item: DeskItem }) {
   ) : null;
 }
 
-function DesktopIcons({ user, area }: { user: UserId; area: RefObject<HTMLDivElement | null> }) {
+function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
   const trash = useOS((s) => s.trash);
   const deleted = useOS((s) => s.deleted);
   const files = useOS((s) => s.files);
   const items: DeskItem[] = [
-    ...desktopItems[user],
-    ...files.filter((f) => f.user === user).map((f) => ({ id: f.id, name: f.name, kind: "image" as const, open: { look: "image" as const, src: f.src } })),
+    ...desktopItems,
+    ...files.map((f) => ({ id: f.id, name: f.name, kind: "image" as const, open: { look: "image" as const, src: f.src } })),
   ].filter((it) => !trash.includes(it.id) && !deleted.includes(it.id));
   const open = useOS((s) => s.open);
-  const dark = useWallpaper(user).dark;
+  const dark = useWallpaper().dark;
   const [pos, setPos] = useState<Record<string, Cell>>(() => Object.fromEntries(items.map((it, i) => [it.id, { c: 0, r: i }])));
   // a file dropped from an app lands in the grid cell under the pointer (or the nearest free one)
   const onDrop = (e: React.DragEvent) => {
@@ -1170,7 +1148,7 @@ function DesktopIcons({ user, area }: { user: UserId; area: RefObject<HTMLDivEle
     const box = layer.current!.getBoundingClientRect();
     const c = Math.max(0, Math.floor((box.width - EDGE - (e.clientX - box.left)) / CELL_W));
     const r = Math.max(0, Math.floor((e.clientY - box.top - EDGE) / CELL_H));
-    const id = useOS.getState().addFile({ ...f, user });
+    const id = useOS.getState().addFile(f);
     setPos((p) => {
       const taken = new Set(Object.values(p).map(cellKey));
       let cell = { c, r };
@@ -1442,12 +1420,65 @@ function SpaceLook({ sel, items, run, active }: { sel: string[]; items: DeskItem
   return null;
 }
 
-export default function Desktop({ user }: { user: UserId }) {
+// A note on the desktop, like a widget: who this is and where to start. It sits left of the Music window the
+// desktop opens with, and can be closed for the visit.
+const NOTE_W = 300;
+function Welcome() {
+  const open = useOS((s) => s.open);
+  const dark = useWallpaper().dark;
+  const [gone, setGone] = useState(false);
+  return (
+    <AnimatePresence>
+      {!gone && (
+        <motion.aside
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.16 } }}
+          transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.35 }}
+          data-glass=""
+          style={{ width: NOTE_W }}
+          className={`${glass(dark ? "widget-dark" : "widget")} sq-panel group absolute left-6 top-6 rounded-[22px] p-5 ${dark ? "text-white" : "text-ink"}`}
+        >
+          <button
+            type="button"
+            aria-label="Close note"
+            onClick={() => setGone(true)}
+            className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-black/10 opacity-0 transition-opacity duration-150 focus-visible:opacity-100 hov:group-hover:opacity-100"
+          >
+            <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden>
+              <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+          <Monogram size={44} />
+          <h2 className="t-title3 mt-3">Hi, I&apos;m {owner.name}.</h2>
+          <p className={`t-sub mt-1 ${dark ? "text-white/75" : "text-ink-2"}`}>
+            {owner.role} from {owner.city}.
+          </p>
+          <p className={`t-sub mt-3 [text-wrap:pretty] ${dark ? "text-white/75" : "text-ink-2"}`}>
+            This is my portfolio, built as a small operating system. The music playing is mine. The work is in the Projects folder.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <Btn variant="prominent" capsule onClick={() => open("projects")}>
+              Open Projects
+            </Btn>
+            <Btn variant={dark ? "glass-dark" : "glass"} capsule onClick={() => open("contact")}>
+              Get in Touch
+            </Btn>
+          </div>
+        </motion.aside>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// `user` is still passed by the intro (Experience.tsx); there is one desktop, so it is not read.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function Desktop(_: { user?: UserId }) {
   useGlassScope();
   const windows = useOS((s) => s.windows);
   const topZ = useOS((s) => s.topZ);
   const area = useRef<HTMLDivElement>(null);
-  const wp = useWallpaper(user);
+  const wp = useWallpaper();
 
   // ⌘W closes, ⌘M minimises the focused window (where the browser lets the page have the key).
   useEffect(() => {
@@ -1486,20 +1517,21 @@ export default function Desktop({ user }: { user: UserId }) {
   return (
     <div className="wp-photo absolute inset-0 select-none overflow-hidden" style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}>
       {wp.src.startsWith("live:") && <LiveWallpaper />}
-      <MenuBar user={user} />
+      <MenuBar />
       {/* isolate: windows stack among themselves, always under the menu bar and the dock */}
       <div ref={area} id="os-window-layer" className="absolute inset-x-0 bottom-0 top-[24px] isolate">
-        <DesktopIcons key={user} user={user} area={area} />
+        <Welcome />
+        <DesktopIcons area={area} />
         <AnimatePresence>
           {windows.map((w, i) => (
             <Window key={w.id} win={w} index={i} area={area} focused={w.z === topZ && !w.min} />
           ))}
         </AnimatePresence>
       </div>
-      <AppsOverlay user={user} />
+      <AppsOverlay />
       <MissionControl />
-      <Dock user={user} />
-      <Spotlight user={user} />
+      <Dock />
+      <Spotlight />
       <PowerOverlay />
     </div>
   );

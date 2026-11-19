@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { apps, labApps, mainWork, novel, otherWork, owner, projects, tracks, users } from "@/content";
+import { novel, owner, projectGroups, projects, tracks, apps } from "@/content";
 
 export const metadata = { title: "Work – Augustas" };
 
@@ -19,7 +19,6 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 );
 
 export default function Work() {
-  const founder = users.founder.apps.filter((a) => projects[a]);
   return (
     <main className="min-h-screen bg-white px-[max(20px,env(safe-area-inset-left))] py-16 text-ink">
       <div className="mx-auto max-w-[760px]">
@@ -30,22 +29,15 @@ export default function Work() {
         <p className="mt-3 text-[16px] text-ink-2">
           {owner.role}, {owner.city}.
         </p>
-        <Section title={users.engineer.name}>
-          {[mainWork, ...otherWork].map((p) => (
-            <Row key={p.id} name={p.name} line={p.what} meta={p.years} />
-          ))}
-        </Section>
-        <Section title={users.founder.name}>
-          {founder.map((a) => (
-            <Row key={a} name={projects[a]!.name} line={projects[a]!.what ?? projects[a]!.role} meta={projects[a]!.status} />
-          ))}
-        </Section>
-        <Section title="Lab">
-          {labApps.map((a) => (
-            <Row key={a} name={apps[a].title} line={projects[a]?.what} meta={projects[a]?.stack} />
-          ))}
-        </Section>
-        <Section title={users.art.name}>
+        {projectGroups.map((g) => (
+          <Section key={g.id} title={g.title}>
+            {g.apps.map((a) => {
+              const p = projects[a];
+              return <Row key={a} name={p?.name ?? apps[a].title} line={p?.what ?? p?.role} meta={p?.years ?? p?.status ?? p?.stack} />;
+            })}
+          </Section>
+        ))}
+        <Section title="Music and writing">
           {tracks.map((t) => (
             <Row key={t.id} name={t.title} line={t.note} meta={`${t.durationLabel}, ${t.year}`} />
           ))}

@@ -2,20 +2,22 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect } from "react";
-import { loginWallpaper, users, type UserId } from "@/content";
+import { loginWallpaper, owner } from "@/content";
 import { useOS } from "@/store";
-import { EASE_OUT, sfx, useGlassScope } from "./ui";
+import { EASE_OUT, glass, sfx, useGlassScope } from "./ui";
 import { useClock, useDate } from "./useClock";
 
-// Persona picture: one image per persona (to be swapped for his photo later).
-export function Avatar({ id, size = 88 }: { id: UserId; size?: number }) {
+// His mark: a soft glass sphere with the initial (to be swapped for his photo later).
+export function Monogram({ size = 88 }: { size?: number }) {
   return (
     <div
-      className="shrink-0 rounded-full bg-cover bg-center shadow-[0_8px_20px_-8px_rgb(0_0_0/0.4),0_0_0_1px_rgb(0_0_0/0.06)]"
-      style={{ width: size, height: size, backgroundImage: `url(${users[id].avatar})` }}
+      className="flex shrink-0 items-center justify-center rounded-full bg-[radial-gradient(120%_120%_at_30%_15%,#ffffff_0%,#e9eaee_45%,#c9ccd3_100%)] font-semibold tracking-[-0.03em] text-[#17181b] shadow-[0_10px_26px_-12px_rgb(16_18_24/0.5),inset_0_-2px_6px_rgb(0_0_0/0.06),0_0_0_0.5px_rgb(0_0_0/0.08)]"
+      style={{ width: size, height: size, fontSize: size * 0.42 }}
       role="img"
-      aria-label={users[id].name}
-    />
+      aria-label={owner.name}
+    >
+      {owner.name[0]}
+    </div>
   );
 }
 
@@ -91,61 +93,65 @@ export function PowerOverlay() {
   );
 }
 
-// macOS-style user picker. One centred block: date and clock, then three users
-// of identical size on one baseline. Hover draws a ring; nothing moves.
+// The lock screen: the date and a big clock, his mark and name, and one way in. A click anywhere (or Return)
+// unlocks; there is nobody to choose.
 export default function Login() {
   useGlassScope();
-  const { login, shutdown, locked, user } = useOS();
+  const { login, shutdown, locked } = useOS();
   const seamless = useOS((s) => s.seamless);
   const time = useClock(false);
   const date = useDate();
-  const ids = Object.keys(users) as UserId[];
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => (e.key === "Enter" || e.key === " ") && login();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [login]);
 
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center text-ink">
+    <div className="absolute inset-0 flex flex-col items-center text-ink" onClick={() => login()}>
       <LoginBackdrop />
-      <div className="relative flex flex-col items-center gap-14">
-        <motion.div
-          initial={{ opacity: 0, y: -10, filter: "blur(8px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.7, ease: EASE_OUT, delay: seamless ? 0.35 : 0.2 }}
-          className="text-center"
+      <motion.div
+        initial={{ opacity: 0, y: -10, filter: "blur(8px)" }}
+        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+        transition={{ duration: 0.7, ease: EASE_OUT, delay: seamless ? 0.35 : 0.2 }}
+        className="relative mt-[11vh] text-center"
+      >
+        <div className="text-[20px] font-semibold tracking-[-0.01em] text-ink-2">{date}</div>
+        <div className="text-[112px] font-semibold leading-[0.95] tracking-[-0.045em] tabular-nums">{time}</div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: EASE_OUT, delay: seamless ? 0.55 : 0.4 }}
+        className="relative mt-auto flex flex-col items-center pb-[9vh]"
+      >
+        <Monogram size={64} />
+        <div className="mt-3 text-[17px] font-semibold tracking-[-0.01em]">{owner.name}</div>
+        <button
+          type="button"
+          autoFocus
+          onClick={(e) => {
+            e.stopPropagation();
+            login();
+          }}
+          data-glass=""
+          className={`${glass("lock")} glass-press mt-4 flex h-9 items-center rounded-full px-5 text-[13px] font-medium text-ink outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--accent)]/50`}
         >
-          <div className="text-[15px] font-semibold text-ink-2">{date}</div>
-          <div className="text-[96px] font-semibold leading-[0.95] tracking-[-0.045em] tabular-nums">{time}</div>
-        </motion.div>
-
-        <div className="flex items-start justify-center gap-6">
-          {ids.map((id, i) => (
-            <motion.button
-              type="button"
-              key={id}
-              onClick={() => {
-                login(id);
-              }}
-              initial={{ opacity: 0, y: 14, scale: 0.96 }}
-              animate={{ opacity: locked && id !== user ? 0.55 : 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.6, ease: EASE_OUT, delay: (seamless ? 0.55 : 0.4) + i * 0.08 }}
-              className="user-tile group flex w-[168px] flex-col items-center gap-3 rounded-[16px] px-2 py-3 outline-none"
-            >
-              <span className={`avatar-ring rounded-full p-[3px] ${locked && id === user ? "is-current" : ""}`}>
-                <Avatar id={id} size={84} />
-              </span>
-              <span className="block w-full truncate text-[15px] font-semibold">{users[id].name}</span>
-            </motion.button>
-          ))}
-        </div>
-
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: seamless ? 0.95 : 0.8, duration: 0.5 }} className="h-8">
-          {locked ? (
-            <span className="text-[13px] font-medium text-ink-2">Locked</span>
-          ) : (
-            <button type="button" onClick={() => (sfx("shutdown"), shutdown())} className="press flex h-8 items-center rounded-[10px] px-3 text-[13px] font-medium text-ink-2 hov:hover:text-ink">
-              Shut Down
-            </button>
-          )}
-        </motion.div>
-      </div>
+          {locked ? "Click to unlock" : "Click to enter"}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            sfx("shutdown");
+            shutdown();
+          }}
+          className="press mt-5 flex h-8 items-center rounded-full px-3 text-[13px] font-medium text-ink-2 hov:hover:text-ink"
+        >
+          Shut Down
+        </button>
+      </motion.div>
       <PowerOverlay />
     </div>
   );

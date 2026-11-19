@@ -10,6 +10,11 @@ import {
   ChevronRight,
   Check,
   Copy,
+  Download,
+  FileText,
+  Folder,
+  Gamepad2,
+  Gauge,
   Github,
   Image as ImageIcon,
   Info,
@@ -48,28 +53,32 @@ import {
   contactList,
   desktopItems,
   type Channel,
-  labApps,
-  mainWork,
+  allApps,
   novel,
-  otherWork,
   owner,
-  sharedApps,
+  places,
+  projectApps,
+  projectGroups,
   shots,
   spec,
   taste,
   tracks,
   projects,
-  users,
+  wallpapers,
   type AppId,
+  type FinderItem,
+  type PlaceId,
   type Project,
-  type UserId,
 } from "@/content";
 import { getAnalyser, note, tapMediaElement } from "@/lib/audio";
 import { playPiano, preloadPiano } from "@/lib/piano";
 import MusicShader from "./scene/MusicShader";
-import { Bars, DeskArt } from "./Desktop";
+import dynamic from "next/dynamic";
+import { Bars, DeskArt, Resume } from "./Desktop";
+import { Monogram } from "./Login";
 import { useOS } from "@/store";
-import { AppIcon, Glyph, ICONS, iconBackground } from "./icons";
+import { QUALITY_LABELS, setQualityChoice, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
+import { AppIcon, DocArt, FolderArt } from "./icons";
 import { Badge, Btn, Button, dragFile, glass, Group, IconTile, InfoGrid, List, ListRow, SectionHeader, Squircle, StatsRow, useContextMenu, QuickLook, Row, SearchField, Segmented, SplitView, Switch, Toolbar, Visual, useChrome, type LookItem } from "./ui";
 
 const Eyebrow = ({ children }: { children: React.ReactNode }) => (
@@ -183,117 +192,13 @@ function CardFace({ it, big, open }: { it: StoryItem; big?: boolean; open?: bool
   );
 }
 
-function Today({ title, items, header }: { title: string; items: StoryItem[]; header?: React.ReactNode }) {
-  const { compact } = useChrome();
-  const date = useToday();
-  const [open, setOpen] = useState<string | null>(null);
-  const cur = items.find((i) => i.key === open) ?? null;
-  // a long shelf (the Lab) reads as a collection in three columns; a couple of stories stay large
-  const many = !compact && items.length > 4;
-  return (
-    <div className={`relative ${compact ? "" : "h-full overflow-hidden bg-[#F2F2F7]"}`}>
-      <div className={compact ? "px-5 pb-10" : "h-full overflow-auto px-8 pb-10 pt-[52px]"} data-drag={compact ? undefined : ""}>
-        <div className="mb-5 flex items-end justify-between gap-4">
-          <div>
-            <div className="eyebrow min-h-[16px] text-[var(--label-2)]">{date}</div>
-            <h1 className="text-[34px] font-bold leading-[41px] tracking-[0.011em] text-ink">{title}</h1>
-          </div>
-          {header}
-        </div>
-        <div className={`grid ${compact ? "grid-cols-1 gap-5" : many ? "grid-cols-3 gap-5" : "grid-cols-2 gap-6"}`}>
-          {items.map((it, i) => {
-            const big = !compact && !many && i === 0 && items.length % 2 === 1;
-            return (
-              <motion.button
-                type="button"
-                key={it.key}
-                layoutId={`card-${it.key}`}
-                onClick={() => setOpen(it.key)}
-                whileHover={{ scale: 1.012 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{ type: "spring", bounce: 0.12, duration: 0.5 }}
-                className={`sq-panel group relative block overflow-hidden rounded-[18px] text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.08),0_18px_40px_-20px_rgb(16_18_24/0.6)] ${
-                  big ? "col-span-2 aspect-[16/8]" : compact || many ? "aspect-[4/5]" : "aspect-square"
-                } ${open === it.key ? "invisible" : ""}`}
-                style={{ borderRadius: 18 }}
-              >
-                <CardFace it={it} big={big} />
-              </motion.button>
-            );
-          })}
-        </div>
-      </div>
-      <AnimatePresence>
-        {cur && <StorySheet key={cur.key} it={cur} onClose={() => setOpen(null)} />}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// The card grows into the full story; on the phone it can be dragged down to put it back.
-function StorySheet({ it, onClose }: { it: StoryItem; onClose: () => void }) {
-  const { compact } = useChrome();
-  const y = useMotionValue(0);
-  const scale = useTransform(y, [0, 260], [1, 0.86]);
-  // the hero is dark: the phone status bar switches to white text while the story is open
-  useEffect(() => {
-    if (!compact) return;
-    useOS.getState().setHeroDark(true);
-    return () => useOS.getState().setHeroDark(false);
-  }, [compact]);
-  const radius = useTransform(y, [0, 40], [0, 24]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.25 }}
-        onClick={onClose}
-        className={`${compact ? "fixed" : "absolute"} inset-0 z-[40] bg-black/20`}
-      />
-      <motion.div
-        layoutId={`card-${it.key}`}
-        transition={{ type: "spring", bounce: 0.1, duration: 0.55 }}
-        drag={compact ? "y" : false}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0, bottom: 0.6 }}
-        dragDirectionLock
-        onDragEnd={(_, info) => {
-          if (info.offset.y > 110 || info.velocity.y > 700) onClose();
-        }}
-        style={compact ? { y, scale, borderRadius: radius } : { borderRadius: 0 }}
-        className={`${compact ? "fixed" : "absolute"} inset-0 z-[41] overflow-hidden bg-white`}
-      >
-        <div className="h-full overflow-y-auto overscroll-contain" onPointerDownCapture={(e) => compact && (e.currentTarget.scrollTop > 0 ? e.stopPropagation() : null)}>
-          <Story it={it} />
-        </div>
-        <button
-          type="button"
-          aria-label="Close story"
-          onClick={onClose}
-          data-glass=""
-          className={`${glass("btn-dark")} absolute z-10 flex h-9 w-9 items-center justify-center rounded-full text-white ${compact ? "right-4 top-[calc(env(safe-area-inset-top)+58px)]" : "right-5 top-5"}`}
-        >
-          <X size={17} className="bold" />
-        </button>
-      </motion.div>
-    </>
-  );
-}
-
 // One full story: hero, the app row with its button, then sections, screenshots, numbers and information.
 function Story({ it, standalone }: { it: StoryItem; standalone?: boolean }) {
   const { compact } = useChrome();
   const p = it.p;
   const pics = [p.image, ...(p.images ?? [])].filter((x): x is string => !!x);
   const [look, setLook] = useState<number | null>(null);
-  const cta = p.link ? { label: "Visit", href: p.link.href } : it.app && users.founder.apps.includes(it.app) ? { label: "Book a call", href: bookCall.href } : null;
+  const cta = p.link ? { label: "Visit", href: p.link.href } : it.app && projectGroups[1].apps.includes(it.app) ? { label: "Book a call", href: bookCall.href } : null;
   const stats = [
     ...p.numbers.map((n) => ({ k: n.label, v: n.value })),
     ...(p.years ? [{ k: "Since", v: p.years.split(/[ –]/)[0] }] : []),
@@ -313,7 +218,7 @@ function Story({ it, standalone }: { it: StoryItem; standalone?: boolean }) {
         <CardFace it={it} big open />
       </div>
       <div className={`${pad} flex items-center gap-3.5 border-b border-black/[0.08] py-5`}>
-        {it.app ? <AppIcon id={it.app} size={56} /> : <AppIcon id="work" size={56} />}
+        <AppIcon id={it.app ?? "projects"} size={56} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[17px] font-semibold tracking-[-0.02em] text-ink">{p.name}</div>
           <div className="truncate text-[13px] text-[var(--label-2)]">{p.stack ?? p.role ?? it.eyebrow}</div>
@@ -362,13 +267,6 @@ function Story({ it, standalone }: { it: StoryItem; standalone?: boolean }) {
       <QuickLook items={pics.map((src, i) => ({ title: `${p.name} ${i + 1}`, src }))} index={look} onIndex={setLook} onClose={() => setLook(null)} />
     </article>
   );
-}
-
-// ---------- Product engineer ----------
-
-function Work() {
-  const items: StoryItem[] = [mainWork, ...otherWork].map((p) => ({ key: p.id, p, eyebrow: "Case study" }));
-  return <Today title="Work" items={items} />;
 }
 
 // ---------- Photos: a tight grid; a photo zooms out of its tile into the viewer ----------
@@ -575,12 +473,118 @@ function Kit() {
 function ProjectApp({ id }: { id: AppId }) {
   const p = projects[id];
   if (!p) return null;
-  const lab = labApps.includes(id);
-  const it: StoryItem = { key: id, p, app: id, eyebrow: lab ? "From the Lab" : p.status === "Live" ? "Live now" : "Founder", status: p.status };
+  const group = projectGroups.find((g) => g.apps.includes(id));
+  const it: StoryItem = { key: id, p, app: id, eyebrow: p.kind === "case" ? "Case study" : group?.id === "lab" ? "From the Lab" : p.status === "Live" ? "Live now" : (group?.title ?? "Project"), status: p.status };
+  // a website shows itself beside its explanation; code shows its repository; everything else tells its story
   if (p.link && p.embeddable) return <LiveSite it={it} />;
+  if (p.kind === "code") return <RepoView it={it} />;
   return (
     <div className="h-full overflow-y-auto bg-[var(--bg)]">
       <Story it={it} standalone />
+    </div>
+  );
+}
+
+// ---------- Repository view: files, a README, and the way to the source ----------
+
+// The key files of a project of this kind. A stand-in for the listing until the repositories are public: it follows
+// from the stack in content.ts, nothing is fetched.
+function repoFiles(p: Project): { name: string; dir?: boolean; note: string }[] {
+  const st = (p.stack ?? "").toLowerCase();
+  const tail = [
+    { name: "README.md", note: "What it is and how to run it" },
+    { name: "LICENSE", note: "Licence" },
+  ];
+  if (st.includes("swift")) return [{ name: "Sources", dir: true, note: "The app" }, { name: "Resources", dir: true, note: "Assets" }, { name: "Package.swift", note: "Swift package manifest" }, ...tail];
+  if (st.includes("python")) return [{ name: "engine", dir: true, note: "The package" }, { name: "scores", dir: true, note: "Studied scores" }, { name: "tests", dir: true, note: "Rule checks" }, { name: "pyproject.toml", note: "Project and dependencies" }, ...tail];
+  if (st.includes("electron")) return [{ name: "src", dir: true, note: "Main and renderer" }, { name: "assets", dir: true, note: "Tray icons" }, { name: "package.json", note: "Scripts and dependencies" }, ...tail];
+  return [{ name: "src", dir: true, note: "Source" }, { name: "package.json", note: "Scripts and dependencies" }, { name: "tsconfig.json", note: "TypeScript settings" }, ...tail];
+}
+
+function RepoView({ it }: { it: StoryItem }) {
+  const { compact } = useChrome();
+  const p = it.p;
+  const files = repoFiles(p);
+  const langs = (p.stack ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  const slug = p.repo ? p.repo.replace(/^https?:\/\/github\.com\//, "") : p.name.toLowerCase().replace(/\s+/g, "-");
+  const actions = p.repo ? (
+    <>
+      <Btn size={compact ? "md" : "sm"} href={`${p.repo}/archive/refs/heads/main.zip`} icon={<Download size={14} />}>
+        Download
+      </Btn>
+      <Btn size={compact ? "md" : "sm"} variant="prominent" href={p.repo} icon={<Github size={14} />}>
+        View on GitHub
+      </Btn>
+    </>
+  ) : (
+    <Badge>Source not public yet</Badge>
+  );
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-[var(--bg-grouped)]">
+      <Toolbar title={p.name} sub={slug}>
+        {actions}
+      </Toolbar>
+      <div className={`min-h-0 flex-1 overflow-auto ${compact ? "px-4 pb-10" : "px-6 pb-8 pt-1"}`}>
+        <div className="flex items-center gap-4">
+          {it.app && <AppIcon id={it.app} size={compact ? 60 : 64} />}
+          <div className="min-w-0 flex-1">
+            <h1 className={compact ? "t-title2 text-ink" : "m-large text-ink"}>{p.name}</h1>
+            {p.what && <p className={`mt-0.5 text-ink-2 [text-wrap:pretty] ${compact ? "t-sub" : "m-body"}`}>{p.what}</p>}
+          </div>
+        </div>
+        {compact && <div className="mt-4 flex flex-wrap gap-2">{actions}</div>}
+        <div className={`mt-5 grid gap-5 ${compact ? "" : "grid-cols-[minmax(0,1fr)_220px]"}`}>
+          <div className="min-w-0 space-y-5">
+            <div>
+              <SectionHeader mac={!compact}>Files</SectionHeader>
+              <List mac={!compact}>
+                {files.map((f) => (
+                  <ListRow
+                    key={f.name}
+                    mac={!compact}
+                    icon={<span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--accent)]">{f.dir ? <Folder size={16} fill="currentColor" fillOpacity={0.18} /> : <FileText size={15} className="text-ink-2" />}</span>}
+                    title={<span className="font-mono text-[12.5px]">{f.name}</span>}
+                    detail={<span className={compact ? "t-foot" : "m-sub"}>{f.note}</span>}
+                  />
+                ))}
+              </List>
+            </div>
+            <div>
+              <SectionHeader mac={!compact}>README.md</SectionHeader>
+              <List mac={!compact} className="p-5">
+                <h2 className="t-title3 text-ink">{p.name}</h2>
+                {p.what && <p className="t-sub mt-2 text-ink-2 [text-wrap:pretty]">{p.what}</p>}
+                {langs.length > 0 && (
+                  <>
+                    <h3 className="m-headline mt-4 text-ink">Built with</h3>
+                    <ul className="t-sub mt-1 list-disc pl-5 text-ink-2">
+                      {langs.map((l) => (
+                        <li key={l}>{l}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </List>
+            </div>
+          </div>
+          <div className="space-y-5">
+            <div>
+              <SectionHeader mac={!compact}>About</SectionHeader>
+              <List mac={!compact} className="px-3 py-1">
+                <InfoGrid
+                  cols={1}
+                  rows={[
+                    ...(p.stack ? [{ k: "Stack", v: p.stack }] : []),
+                    ...p.numbers.map((n) => ({ k: n.label, v: n.value })),
+                    { k: "Kind", v: "Repository" },
+                    { k: "From", v: "The Lab" },
+                  ]}
+                />
+              </List>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -719,19 +723,6 @@ function LiveSite({ it }: { it: StoryItem }) {
       </div>
     </div>
   );
-}
-
-function LabFolder() {
-  const [q, setQ] = useState("");
-  const list = labApps.filter((id) => apps[id].title.toLowerCase().includes(q.trim().toLowerCase()));
-  const items: StoryItem[] = list.map((id) => ({
-    key: id,
-    app: id,
-    p: projects[id] ?? { id, name: apps[id].title, what: id === "doom" ? "Shareware DOOM, running in the browser." : undefined, numbers: [] },
-    eyebrow: "From the Lab",
-    ...(id === "doom" ? { action: { label: "Play", run: () => (useOS.getState().isMobile ? useOS.getState().openPhoneApp("doom") : useOS.getState().open("doom")) } } : {}),
-  }));
-  return <Today title="Lab" items={items} header={<SearchField id="lab-search" value={q} onChange={setQ} />} />;
 }
 
 // Shareware DOOM in js-dos, loaded only when the app opens.
@@ -1894,13 +1885,12 @@ function QuickAction({ href, onClick, icon, label, sub }: { href?: string; onCli
 // ---------- Trash ----------
 
 function TrashApp() {
-  const user = useOS((s) => s.user) ?? "engineer";
   const trash = useOS((s) => s.trash);
   const putBack = useOS((s) => s.putBack);
   const emptyTrash = useOS((s) => s.emptyTrash);
   const ctx = useContextMenu();
   const [sel, setSel] = useState<string | null>(null);
-  const items = trash.map((id) => desktopItems[user].find((d) => d.id === id)).filter((x): x is NonNullable<typeof x> => !!x);
+  const items = trash.map((id) => desktopItems.find((d) => d.id === id)).filter((x): x is NonNullable<typeof x> => !!x);
   return (
     <div className="flex h-full min-h-0 flex-col" onPointerDown={() => setSel(null)}>
       <Toolbar title="Trash" sub={items.length ? `${items.length} item${items.length > 1 ? "s" : ""}` : undefined}>
@@ -1983,7 +1973,7 @@ function About() {
 // ---------- shared ----------
 
 function Terminal() {
-  const { user, open, login, setSound, sound, openPhoneApp, isMobile } = useOS();
+  const { open, setSound, sound, openPhoneApp, isMobile } = useOS();
   const [lines, setLines] = useState<string[]>(() => [
     `Last login: ${new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).replace(/,/g, "")} on ttys000`,
     'Type "help" to see what you can do.',
@@ -1995,7 +1985,7 @@ function Terminal() {
     end.current?.scrollIntoView({ block: "end" });
   }, [lines]);
 
-  const all: AppId[] = user ? [...users[user].apps, ...(user === "founder" ? labApps : []), ...sharedApps, "about"] : sharedApps;
+  const all: AppId[] = [...allApps, ...projectApps.filter((a) => !allApps.includes(a))];
   const run = (raw: string) => {
     const [cmd, arg] = raw.trim().split(/\s+/);
     const out: string[] = [];
@@ -2007,7 +1997,6 @@ function Terminal() {
           "whoami          who runs this machine",
           "ls              apps in this profile",
           "open <app>      open an app",
-          "switch <user>   engineer, founder or art",
           "sound on|off    toggle sound",
           "clear           clear the screen",
         );
@@ -2027,13 +2016,6 @@ function Terminal() {
         } else out.push(`open: no app called "${arg ?? ""}". Try ls.`);
         break;
       }
-      case "switch":
-        if (arg && arg in users) {
-          login(arg as UserId);
-          return;
-        }
-        out.push("switch: pick engineer, founder or art");
-        break;
       case "sound": {
         const next = arg ? arg === "on" : !sound;
         setSound(next);
@@ -2139,11 +2121,11 @@ function Game() {
 }
 
 function SettingsApp() {
-  const { sound, setSound, logout, login, user, wallpaper, setWallpaper, appearance, setAppearance, tintedIcons, setTintedIcons } = useOS();
+  const { sound, setSound, wallpaper, setWallpaper, appearance, setAppearance, tintedIcons, setTintedIcons, reduceEffects, setReduceEffects } = useOS();
   const { compact } = useChrome();
   const [sel, setSel] = useState("appearance");
-  const ids = Object.keys(users) as UserId[];
-  const me = user ?? "engineer";
+  const choice = useQualityChoice();
+  const quality = useQuality();
   const tile = (color: string, icon: React.ReactNode) => (
     <IconTile color={color} size={compact ? 29 : 20}>
       {icon}
@@ -2165,7 +2147,7 @@ function SettingsApp() {
               {looks.map((l) => {
                 const on = appearance === l.v;
                 return (
-                  <button type="button" key={l.v} onClick={() => setAppearance(l.v)} className="press flex flex-col items-center gap-2">
+                  <button type="button" key={l.v} onClick={() => setAppearance(l.v)} aria-pressed={on} className="press flex flex-col items-center gap-2">
                     <Squircle
                       radius={10}
                       className={`relative aspect-[16/10] w-full overflow-hidden ${on ? "ring-[3px] ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-elevated)]" : "shadow-[var(--shadow-1)]"}`}
@@ -2195,18 +2177,19 @@ function SettingsApp() {
         </div>
         <List mac={!compact}>
           <ListRow mac={!compact} icon={tile("#5856D6", <Palette size={sz} />)} title="Tinted app icons" sub="Icons take the accent colour" detail={<Switch on={tintedIcons} onChange={setTintedIcons} label="Tinted app icons" />} />
+          <ListRow mac={!compact} icon={tile("#8E8E93", <Contrast size={sz} />)} title="Reduce effects" sub="Solid surfaces instead of glass, gentler motion" detail={<Switch on={reduceEffects} onChange={setReduceEffects} label="Reduce effects" />} />
         </List>
       </div>
     ) : sel === "wallpaper" ? (
       <div>
-        <SectionHeader mac={!compact}>{`Wallpaper for ${users[me].name}`}</SectionHeader>
+        <SectionHeader mac={!compact}>Desktop picture</SectionHeader>
         <List mac={!compact} className="p-3">
-          <div className={`grid grid-cols-2 gap-3 ${users[me].wallpapers.length % 4 === 0 ? "@xl:grid-cols-4" : "@md:grid-cols-3"}`}>
-            {users[me].wallpapers.map((w, i) => {
-              const on = wallpaper[me] === i;
+          <div className="grid grid-cols-2 gap-3 @md:grid-cols-3 @xl:grid-cols-4">
+            {wallpapers.map((w, i) => {
+              const on = wallpaper === i;
               const live = w.src.startsWith("live:");
               return (
-                <button type="button" key={w.src} onClick={() => setWallpaper(me, i)} className="press text-left">
+                <button type="button" key={w.src} onClick={() => setWallpaper(i)} aria-pressed={on} className="press text-left">
                   <Squircle
                     radius={10}
                     className={`relative block aspect-[16/10] overflow-hidden bg-cover bg-center ${on ? "ring-[3px] ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-elevated)]" : "shadow-[var(--shadow-1)]"} ${live ? "bg-[#070b16]" : ""}`}
@@ -2230,52 +2213,41 @@ function SettingsApp() {
         <ListRow mac={!compact} icon={tile("#FF2D55", <Volume2 size={sz} />)} title="Play sound" sub="The startup chime and music" detail={<Switch on={sound} onChange={setSound} label="Play sound" />} />
       </List>
     ) : (
-      <div className="space-y-6">
+      // Graphics: the quality of the 3D world the desk sits in (src/lib/quality.ts, shared with the scene)
+      <div>
+        <SectionHeader mac={!compact}>3D world quality</SectionHeader>
         <List mac={!compact}>
-          {ids.map((u) => (
+          {(Object.keys(QUALITY_LABELS) as QualityChoice[]).map((c) => (
             <ListRow
               mac={!compact}
-              key={u}
-              icon={<span className="h-7 w-7 shrink-0 rounded-full bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" style={{ backgroundImage: `url(${users[u].avatar})` }} />}
-              title={users[u].name}
-              detail={
-                u === user ? (
-                  <Badge>Logged in</Badge>
-                ) : (
-                  <Btn size="sm" onClick={() => login(u)}>
-                    Switch
-                  </Btn>
-                )
-              }
+              key={c}
+              onClick={() => setQualityChoice(c)}
+              title={QUALITY_LABELS[c]}
+              sub={c === "auto" ? `Follows this device, now ${QUALITY_LABELS[quality.preset]}` : undefined}
+              detail={choice === c ? <Check size={compact ? 18 : 14} className="bold text-[var(--accent)]" /> : undefined}
             />
           ))}
         </List>
-        <Btn variant="bordered" size="md" onClick={logout}>
-          {`Log Out ${users[me].name}…`}
-        </Btn>
+        <p className={`mt-2 px-1 text-ink-3 ${compact ? "t-foot px-4" : "m-sub"}`}>Applies to the desk and the field around it. Lower settings draw less grass, fewer effects and a softer picture.</p>
       </div>
     );
-  const title = { appearance: "Appearance", wallpaper: "Wallpaper", sound: "Sound", users: "Users" }[sel] ?? "";
+  const title = { appearance: "Appearance", wallpaper: "Wallpaper", sound: "Sound", graphics: "Graphics" }[sel] ?? "";
   return (
     <SplitView
       selected={sel}
       onSelect={setSel}
       header={
-        // the account row System Settings opens with: who is logged in
+        // the account row System Settings opens with
         compact ? (
           <List className="mt-2">
-            <ListRow
-              icon={<span className="my-2 h-14 w-14 shrink-0 rounded-full bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" style={{ backgroundImage: `url(${users[me].avatar})` }} />}
-              title={<span className="t-title3">{owner.name}</span>}
-              sub={users[me].name}
-            />
+            <ListRow icon={<span className="my-2"><Monogram size={56} /></span>} title={<span className="t-title3">{owner.name}</span>} sub={owner.role} />
           </List>
         ) : (
           <div className="flex items-center gap-2.5 px-2 pb-1">
-            <span className="h-9 w-9 shrink-0 rounded-full bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" style={{ backgroundImage: `url(${users[me].avatar})` }} />
+            <Monogram size={36} />
             <span className="min-w-0">
               <span className="m-headline block truncate text-ink">{owner.name}</span>
-              <span className="m-sub block truncate text-ink-2">{users[me].name}</span>
+              <span className="m-sub block truncate text-ink-2">{owner.city}</span>
             </span>
           </div>
         )
@@ -2286,7 +2258,7 @@ function SettingsApp() {
             { id: "appearance", label: "Appearance", icon: tile("#48484A", <Contrast size={sz} />) },
             { id: "wallpaper", label: "Wallpaper", icon: tile("#32ADE6", <Wallpaper size={sz} />) },
             { id: "sound", label: "Sound", icon: tile("#FF2D55", <Volume2 size={sz} />) },
-            { id: "users", label: "Users", icon: tile("#007AFF", <Users size={sz} />) },
+            { id: "graphics", label: "Graphics", icon: tile("#34C759", <Gauge size={sz} />) },
           ],
         },
       ]}
@@ -2300,19 +2272,205 @@ function SettingsApp() {
   );
 }
 
+// ---------- Finder: the folders (Projects, Games, Music, Photos, Documents) ----------
+
+const PLACE_ICON: Record<PlaceId, React.ReactNode> = {
+  projects: <Folder size={15} />,
+  games: <Gamepad2 size={15} />,
+  music: <Music2 size={15} />,
+  photos: <ImageIcon size={15} />,
+  documents: <FileText size={15} />,
+};
+function FinderIcon({ it, size }: { it: FinderItem; size: number }) {
+  if (it.look?.type === "resume") return <DocArt size={size} />;
+  if (it.art)
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={it.art} alt="" draggable={false} data-sq="" className="object-cover shadow-[0_0_0_0.5px_rgb(0_0_0/0.12),0_2px_6px_rgb(0_0_0/0.14)]" style={{ width: size * 0.86, height: size * 0.86, borderRadius: size * 0.16 }} />;
+  if (it.app) return <AppIcon id={it.app} size={size} />;
+  return <FolderArt size={size} />;
+}
+const openAny = (id: AppId) => {
+  const st = useOS.getState();
+  if (st.isMobile) st.openPhoneApp(id);
+  else st.open(id);
+};
+
+function Finder({ start }: { start: PlaceId }) {
+  const { compact } = useChrome();
+  const [place, setPlace] = useState<string>(start);
+  const [view, setView] = useState<"icons" | "list">("icons");
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState<string | null>(null);
+  const [look, setLook] = useState<LookItem | null>(null);
+  const cur = places.find((p) => p.id === place) ?? places[0];
+  const needle = q.trim().toLowerCase();
+  const groups = cur.groups.map((g) => ({ ...g, items: g.items.filter((it) => it.name.toLowerCase().includes(needle)) })).filter((g) => g.items.length);
+  const count = groups.reduce((a, g) => a + g.items.length, 0);
+  const picked = groups.flatMap((g) => g.items).find((it) => it.id === sel) ?? null;
+  const run = (it: FinderItem) => {
+    if (it.track) {
+      openAny("records");
+      player.play(it.track);
+    } else if (it.app) openAny(it.app);
+    else if (it.look) setLook(it.look.type === "resume" ? { title: it.name, node: <Resume /> } : { title: it.name, src: it.look.src });
+  };
+  const sections = [{ title: "Favourites", items: places.map((p) => ({ id: p.id, label: p.title, icon: <span className="text-[var(--accent)]">{PLACE_ICON[p.id]}</span> })) }];
+  const empty = <div className="t-sub py-16 text-center text-ink-3">{`Nothing here matches “${q.trim()}”.`}</div>;
+
+  // the phone: Files. One tap opens.
+  const phoneDetail = (
+    <div className="px-4 pb-10">
+      <div className="pb-3">
+        <SearchField id={`finder-q-${start}`} value={q} onChange={setQ} />
+      </div>
+      {groups.map((g, i) => (
+        <div key={g.title ?? i} className="mb-6">
+          {g.title && <SectionHeader>{g.title}</SectionHeader>}
+          <List>
+            {g.items.map((it) => (
+              <ListRow key={it.id} onClick={() => run(it)} icon={<span className="my-1.5 flex h-11 w-11 shrink-0 items-center justify-center"><FinderIcon it={it} size={44} /></span>} title={it.name} sub={it.kind} chevron />
+            ))}
+          </List>
+        </div>
+      ))}
+      {!count && empty}
+    </div>
+  );
+
+  const macDetail = (
+    <div className="flex h-full min-h-0 flex-col" onPointerDown={() => setSel(null)}>
+      <Toolbar title={cur.title} sub={`${count} item${count === 1 ? "" : "s"}`}>
+        <Segmented
+          id={`finder-view-${start}`}
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "icons", label: "Icons" },
+            { value: "list", label: "List" },
+          ]}
+        />
+        <SearchField id={`finder-q-${start}`} value={q} onChange={setQ} />
+      </Toolbar>
+      <div className="min-h-0 flex-1 overflow-auto px-5 pb-4">
+        {groups.map((g, i) => (
+          <section key={g.title ?? i} className="pb-3">
+            {g.title && <h2 className="m-headline flex h-8 items-center px-1 text-ink-2 shadow-[inset_0_-0.5px_0_var(--separator-opaque)]">{g.title}</h2>}
+            {view === "icons" ? (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(116px,1fr))] gap-y-2 pt-3">
+                {g.items.map((it) => {
+                  const on = sel === it.id;
+                  return (
+                    <button
+                      type="button"
+                      key={it.id}
+                      onPointerDown={(e) => (e.stopPropagation(), setSel(it.id))}
+                      onDoubleClick={() => run(it)}
+                      onKeyDown={(e) => e.key === "Enter" && run(it)}
+                      className="group flex flex-col items-center gap-1.5 rounded-[10px] px-1 py-2 outline-none"
+                    >
+                      <span className={`flex h-[78px] w-[78px] items-center justify-center rounded-[12px] transition-colors duration-100 ${on ? "bg-[var(--selection)]" : "hov:group-hover:bg-[var(--hover)]"}`} data-sq="">
+                        <FinderIcon it={it} size={60} />
+                      </span>
+                      <span className={`line-clamp-2 max-w-[108px] rounded-[5px] px-[6px] py-px text-center text-[12px] font-medium leading-[15px] ${on ? "bg-[var(--accent)] text-white" : "text-ink group-focus-visible:bg-[var(--accent)] group-focus-visible:text-white"}`}>{it.name}</span>
+                      <span className="m-sub -mt-1 text-ink-3">{it.kind}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="pt-1">
+                {g.items.map((it) => {
+                  const on = sel === it.id;
+                  return (
+                    <button
+                      type="button"
+                      key={it.id}
+                      onPointerDown={(e) => (e.stopPropagation(), setSel(it.id))}
+                      onDoubleClick={() => run(it)}
+                      onKeyDown={(e) => e.key === "Enter" && run(it)}
+                      className={`flex h-9 w-full items-center gap-2.5 rounded-[8px] px-2 text-left outline-none ${on ? "bg-[var(--accent)] text-white" : "text-ink odd:bg-[var(--fill-2)] focus-visible:bg-[var(--accent)] focus-visible:text-white"}`}
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                        <FinderIcon it={it} size={24} />
+                      </span>
+                      <span className="m-body min-w-0 flex-1 truncate font-medium">{it.name}</span>
+                      <span className={`m-body w-[150px] shrink-0 truncate ${on ? "text-white/80" : "text-ink-2"}`}>{it.kind}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        ))}
+        {!count && empty}
+      </div>
+      {/* the path bar: where you are, what's picked, and a plain way to open it */}
+      <div className="flex h-9 shrink-0 items-center gap-1.5 px-4 text-ink-2 shadow-[inset_0_0.5px_0_var(--separator-opaque)]" onPointerDown={(e) => e.stopPropagation()}>
+        <span className="m-sub">{owner.name}</span>
+        <ChevronRight size={11} className="text-ink-3" />
+        <span className="m-sub">{cur.title}</span>
+        {picked && (
+          <>
+            <ChevronRight size={11} className="text-ink-3" />
+            <span className="m-sub truncate font-medium text-ink">{picked.name}</span>
+          </>
+        )}
+        <span className="flex-1" />
+        {picked ? (
+          <Btn size="sm" variant="tinted" capsule onClick={() => run(picked)}>
+            Open
+          </Btn>
+        ) : (
+          <span className="m-sub text-ink-3">Double-click to open</span>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <SplitView
+        selected={place}
+        onSelect={(id) => {
+          setPlace(id);
+          setSel(null);
+          setQ("");
+        }}
+        sections={sections}
+        width={188}
+        startPushed
+        detail={compact ? phoneDetail : macDetail}
+      />
+      <QuickLook items={look ? [look] : []} index={look ? 0 : null} onClose={() => setLook(null)} />
+    </>
+  );
+}
+
+const Blocks = dynamic(() => import("./games/Blocks"), { ssr: false, loading: () => <div className="flex h-full items-center justify-center bg-black text-[13px] text-white/50">Loading…</div> });
+function BlocksApp() {
+  const { compact } = useChrome();
+  return (
+    <div className={`relative bg-black ${compact ? "fixed inset-0" : "h-full"}`}>
+      <Blocks compact={compact} />
+    </div>
+  );
+}
+
 export function AppView({ id }: { id: AppId }) {
   if (projects[id]) return <ProjectApp id={id} />;
   switch (id) {
-    case "work":
-      return <Work />;
+    case "projects":
+      return <Finder start="projects" />;
+    case "games":
+      return <Finder start="games" />;
+    case "blocks":
+      return <BlocksApp />;
     case "shots":
       return <Shots />;
     case "taste":
       return <Taste />;
     case "kit":
       return <Kit />;
-    case "lab":
-      return <LabFolder />;
     case "doom":
       return <Doom />;
     case "records":

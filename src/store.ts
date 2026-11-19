@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { users, type AppId, type UserId } from "@/content";
+import { wallpapers, type AppId, type UserId } from "@/content";
 
 export type Phase = "room" | "login" | "os";
 export type Win = { id: AppId; z: number; min: boolean; max: boolean };
@@ -8,6 +8,7 @@ type Origin = { x: number; y: number; w: number; h: number };
 type OS = {
   phase: Phase;
   isMobile: boolean | null;
+  // one desktop: this only says whether it's unlocked (the value is never shown)
   user: UserId | null;
   windows: Win[];
   topZ: number;
@@ -27,13 +28,16 @@ type OS = {
   locked: boolean;
   // Shut Down returns to the 3D intro with the screen off (read by the intro)
   introOff: boolean;
-  // chosen wallpaper per user (index into users[u].wallpapers)
-  wallpaper: Record<UserId, number>;
+  // chosen desktop picture (index into wallpapers)
+  wallpaper: number;
   // Light, Dark or Auto (follows the system); icons can be tinted
   appearance: "light" | "dark" | "auto";
   tintedIcons: boolean;
   setAppearance: (a: "light" | "dark" | "auto") => void;
   setTintedIcons: (on: boolean) => void;
+  // Reduce effects: glass becomes a solid material and the large motions become fades
+  reduceEffects: boolean;
+  setReduceEffects: (on: boolean) => void;
   // live activity in the Dynamic Island (besides music, which it reads from the player)
   activity: { kind: "sent" | "shutdown"; t: number } | null;
   setActivity: (a: { kind: "sent" | "shutdown" } | null) => void;
@@ -41,8 +45,8 @@ type OS = {
   heroDark: boolean;
   setHeroDark: (on: boolean) => void;
   // image files dropped onto the desktop (from Shots, Gallery, project previews)
-  files: { id: string; name: string; src: string; user: UserId }[];
-  addFile: (f: { name: string; src: string; user: UserId }) => string;
+  files: { id: string; name: string; src: string }[];
+  addFile: (f: { name: string; src: string }) => string;
   // full-screen overlays on the desktop: the Apps grid and the window overview
   overlay: "apps" | "mission" | null;
   setOverlay: (o: "apps" | "mission" | null) => void;
@@ -56,8 +60,7 @@ type OS = {
 
   setMobile: (m: boolean) => void;
   finishIntro: (target?: UserId) => void;
-  login: (u: UserId) => void;
-  logout: () => void;
+  login: (u?: UserId) => void;
   lockScreen: () => void;
   sleep: (on: boolean) => void;
   restart: () => void;
@@ -71,10 +74,11 @@ type OS = {
   setPlaying: (what: string | null) => void;
   setPalette: (open: boolean) => void;
   openPhoneApp: (id: AppId | null, origin?: Origin) => void;
-  setWallpaper: (u: UserId, i: number) => void;
+  setWallpaper: (i: number) => void;
 };
 
-const firstWindows = (u: UserId): Win[] => [{ id: users[u].apps[0], z: 11, min: false, max: false }];
+// the desktop opens already in use: his music is up
+const firstWindows = (): Win[] => [{ id: "records", z: 11, min: false, max: false }];
 
 export const useOS = create<OS>((set, get) => ({
   phase: "room",
@@ -93,7 +97,7 @@ export const useOS = create<OS>((set, get) => ({
   restarting: false,
   locked: false,
   introOff: false,
-  wallpaper: { engineer: 0, founder: 0, art: 0 },
+  wallpaper: 0,
   appearance: "light",
   tintedIcons: false,
   setAppearance: (a) => {
@@ -103,6 +107,13 @@ export const useOS = create<OS>((set, get) => ({
     } catch {}
   },
   setTintedIcons: (on) => set({ tintedIcons: on }),
+  reduceEffects: false,
+  setReduceEffects: (on) => {
+    set({ reduceEffects: on });
+    try {
+      localStorage.setItem("aos.reduce", on ? "1" : "0");
+    } catch {}
+  },
   activity: null,
   setActivity: (a) => set({ activity: a ? { ...a, t: Date.now() } : null }),
   heroDark: false,
@@ -127,13 +138,12 @@ export const useOS = create<OS>((set, get) => ({
     if (target) get().login(target);
     else set({ phase: "login" });
   },
-  login: (u) => {
+  login: () => {
     const { locked, user } = get();
-    // unlocking the same user brings their windows back
-    if (locked && user === u) return set({ phase: "os", locked: false });
-    set({ user: u, phase: "os", locked: false, phoneApp: null, topZ: 11, windows: firstWindows(u) });
+    // unlocking brings the windows back as they were
+    if (locked && user) return set({ phase: "os", locked: false });
+    set({ user: "engineer", phase: "os", locked: false, phoneApp: null, topZ: 11, windows: firstWindows() });
   },
-  logout: () => set({ user: null, phase: "login", windows: [], phoneApp: null, palette: false, seamless: false, locked: false }),
   lockScreen: () => set({ phase: "login", locked: true, palette: false, phoneApp: null, seamless: false }),
   sleep: (on) => set({ sleeping: on }),
   restart: () => {
@@ -181,7 +191,7 @@ export const useOS = create<OS>((set, get) => ({
   setPlaying: (what) => set({ playing: what }),
   setPalette: (open) => set({ palette: open }),
   openPhoneApp: (id, origin) => set(origin ? { phoneApp: id, phoneOrigin: origin } : { phoneApp: id }),
-  setWallpaper: (u, i) => set({ wallpaper: { ...get().wallpaper, [u]: i } }),
+  setWallpaper: (i) => set({ wallpaper: i }),
 }));
 
 // The app that is focused right now (top of the stack, not minimised).
@@ -191,9 +201,9 @@ export function focusedApp(windows: Win[]): AppId | null {
   return live.reduce((a, b) => (a.z > b.z ? a : b)).id;
 }
 
-export function useWallpaper(u: UserId) {
-  const i = useOS((s) => s.wallpaper[u]);
-  return users[u].wallpapers[i] ?? users[u].wallpapers[0];
+export function useWallpaper() {
+  const i = useOS((s) => s.wallpaper);
+  return wallpapers[i] ?? wallpapers[0];
 }
 
 // dev only: lets the QA pass drive the OS from the console

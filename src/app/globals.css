@@ -1031,3 +1031,28 @@ a.list-row:active {
 .phone-app ::-webkit-scrollbar {
   display: none;
 }
+
+/* Reduce effects (Settings > Appearance), and the system's reduced-transparency setting: one solid material
+   in place of glass, so nothing is blurred or refracted. */
+.reduce-fx .glass,
+.reduce-fx .inspector,
+.reduce-fx .win aside[data-drag],
+.reduce-fx .toolbar .btn-bordered,
+.reduce-fx .toolbar .btn-plain,
+.reduce-fx .toolbar .seg,
+.reduce-fx .toolbar .search {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background-image: none;
+  background-color: var(--surface-2) !important;
+}
+.reduce-fx .glass-widget-dark,
+.reduce-fx .glass-btn-dark {
+  background-color: #2a2c31 !important;
+}
+.reduce-fx *,
+.reduce-fx *::before,
+.reduce-fx *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+}

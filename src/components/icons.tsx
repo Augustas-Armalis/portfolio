@@ -1,11 +1,14 @@
 import {
   Aperture,
   BookOpen,
-  Briefcase,
   Clapperboard,
   Component,
   Disc3,
+  Box,
   Flower2,
+  Folder,
+  Megaphone,
+  ShoppingBag,
   Mail,
   Music,
   Gamepad2,
@@ -27,7 +30,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { labApps, type AppId } from "@/content";
+import type { AppId } from "@/content";
 import { marks } from "./marks";
 
 // One icon family: a squircle base (two-stop gradient), a glass glyph with a soft
@@ -35,7 +38,9 @@ import { marks } from "./marks";
 type Spec = { bg: [string, string]; glyph: LucideIcon | `mark:${string}`; fg: "light" | "dark" };
 
 export const ICONS: Record<AppId, Spec> = {
-  work: { bg: ["#ffb347", "#ff7417"], glyph: Briefcase, fg: "light" },
+  projects: { bg: ["#7ccbff", "#2f8fe8"], glyph: Folder, fg: "light" },
+  sellify: { bg: ["#8597ff", "#3c50d6"], glyph: Megaphone, fg: "light" },
+  kaching: { bg: ["#ffcf4d", "#f29a0c"], glyph: ShoppingBag, fg: "light" },
   shots: { bg: ["#ff7fb5", "#ee2f7c"], glyph: Images, fg: "light" },
   taste: { bg: ["#62e08c", "#1bb04f"], glyph: Palette, fg: "light" },
   kit: { bg: ["#52d9ea", "#0c9bc2"], glyph: Component, fg: "light" },
@@ -44,7 +49,7 @@ export const ICONS: Record<AppId, Spec> = {
   capto: { bg: ["#ffffff", "#e3e5ea"], glyph: "mark:capto", fg: "dark" },
   contles: { bg: ["#6c7bff", "#3443d8"], glyph: "mark:contles", fg: "light" },
   filzy: { bg: ["#1f2023", "#050505"], glyph: "mark:filzy", fg: "light" },
-  lab: { bg: ["#eef1f6", "#cfd6e2"], glyph: Layers, fg: "dark" },
+  filzymovie: { bg: ["#4a3486", "#150c2e"], glyph: Clapperboard, fg: "light" },
   rug: { bg: ["#d8b48c", "#9a6c45"], glyph: Layers, fg: "light" },
   slideskipper: { bg: ["#ffd36a", "#f2a531"], glyph: SkipForward, fg: "light" },
   musicengine: { bg: ["#4c5fd1", "#1f2b78"], glyph: Music2, fg: "light" },
@@ -52,6 +57,8 @@ export const ICONS: Record<AppId, Spec> = {
   reel: { bg: ["#ff6a5c", "#d3352a"], glyph: Clapperboard, fg: "light" },
   openwhip: { bg: ["#8a5cff", "#5328d1"], glyph: Zap, fg: "light" },
   doom: { bg: ["#8c1d12", "#2b0705"], glyph: Skull, fg: "light" },
+  blocks: { bg: ["#7fd88a", "#2f9c5c"], glyph: Box, fg: "light" },
+  games: { bg: ["#7ccbff", "#2f8fe8"], glyph: Gamepad2, fg: "light" },
   records: { bg: ["#ff5f7a", "#e5203f"], glyph: Music, fg: "light" },
   piano: { bg: ["#ffffff", "#dfe2e8"], glyph: Piano, fg: "dark" },
   novel: { bg: ["#ffb057", "#e8721f"], glyph: BookOpen, fg: "light" },
@@ -108,7 +115,8 @@ export function Glyph({ id, size }: { id: AppId; size: number }) {
 
 export function AppIcon({ id, size = 52, flat = false }: { id: AppId; size?: number; flat?: boolean }) {
   const s = ICONS[id];
-  if (id === "lab") return <FolderIcon size={size} flat={flat} />;
+  // Projects is a folder, so it looks like one (the Finder folder, as in the Dock's stacks)
+  if (id === "projects" || id === "games") return <FolderArt size={size} badge={id === "games" ? "games" : undefined} />;
   return (
     <div className={flat ? "" : "icon-wrap"} style={{ width: size, height: size, ["--ia" as string]: s.bg[0], ["--ib" as string]: s.bg[1] }} aria-hidden>
       <GlyphDefs />
@@ -123,26 +131,9 @@ export function AppIcon({ id, size = 52, flat = false }: { id: AppId; size?: num
   );
 }
 
-// Launchpad-style folder: a frosted tile with its apps inside.
-function FolderIcon({ size, flat }: { size: number; flat: boolean }) {
-  const mini = Math.round(size * 0.24);
-  return (
-    <div className={flat ? "" : "icon-wrap"} style={{ width: size, height: size }} aria-hidden>
-      <div className="icon-sq icon-folder">
-        <div className="grid grid-cols-3" style={{ gap: size * 0.04, padding: size * 0.11 }}>
-          {labApps.slice(0, 9).map((a) => (
-            <AppIcon key={a} id={a} size={mini} flat />
-          ))}
-        </div>
-        <div className="icon-spec" />
-      </div>
-    </div>
-  );
-}
-
 // ---------- desktop artwork (64px): a Finder folder and a document page ----------
 
-export function FolderArt({ size = 64 }: { size?: number }) {
+export function FolderArt({ size = 64, badge }: { size?: number; badge?: "games" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden>
       <defs>
@@ -158,6 +149,14 @@ export function FolderArt({ size = 64 }: { size?: number }) {
       <path d="M6 15.5C6 13 8 11 10.5 11h13.2c1.3 0 2.5.6 3.3 1.6l2.2 2.8c.6.7 1.4 1.1 2.3 1.1H53.5c2.5 0 4.5 2 4.5 4.5V49c0 2.5-2 4.5-4.5 4.5h-43C8 53.5 6 51.5 6 49V15.5z" fill="url(#fa-back)" />
       <path d="M6 23.5c0-2.2 1.8-4 4-4h44c2.2 0 4 1.8 4 4V49.5c0 2.2-1.8 4-4 4H10c-2.2 0-4-1.8-4-4V23.5z" fill="url(#fa-front)" />
       <path d="M10 20h44c2 0 3.5 1.4 3.9 3.2" stroke="#fff" strokeOpacity=".55" strokeWidth="1" fill="none" />
+      {/* a folder for one kind of thing carries its mark, pressed into the front like a system folder */}
+      {badge === "games" && (
+        <g fill="none" stroke="#2f7fd0" strokeOpacity=".7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M25 31h14a6 6 0 0 1 6 6v0a5 5 0 0 1-9 3l-1-1.5h-6L28 40a5 5 0 0 1-9-3v0a6 6 0 0 1 6-6z" />
+          <path d="M26 35.5v4M24 37.5h4" />
+          <circle cx="38.5" cy="37" r=".6" fill="#2f7fd0" />
+        </g>
+      )}
     </svg>
   );
 }
