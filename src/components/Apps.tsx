@@ -253,7 +253,7 @@ function Story({ it, standalone }: { it: StoryItem; standalone?: boolean }) {
                 className={`press lift sq-card shrink-0 snap-start overflow-hidden rounded-[14px] shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)] ${compact ? "w-[82%]" : "w-[min(520px,70%)]"}`}
                 data-sq=""
               >
-                <ShotImg src={src} alt={`${p.name} ${i + 1}`} {...dragFile(`${p.name} ${i + 1}.jpg`, src)} />
+                <ShotImg src={src} alt={`${p.name} ${i + 1}`} {...dragFile(`${p.name} ${i + 1}`, src)} />
               </button>
             ))}
           </div>
@@ -340,7 +340,7 @@ function PhotosApp({ title, sub, photos, actions, credit, aspect = "square" }: {
                 src={ph.src}
                 alt={ph.title}
                 loading="lazy"
-                {...dragFile(`${ph.title}.jpg`, ph.src)}
+                {...dragFile(ph.title, ph.src)}
                 className="h-full w-full object-cover transition-transform duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hov:group-hover:scale-[1.03]"
               />
               <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent px-2 pb-1.5 pt-6 text-left text-[11px] font-medium text-white opacity-0 transition-opacity duration-150 hov:group-hover:opacity-100">

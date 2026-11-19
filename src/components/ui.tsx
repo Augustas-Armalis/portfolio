@@ -258,7 +258,10 @@ export function SearchField({ value, onChange, placeholder = "Search", id }: { v
 export type LookItem = { title: string; src?: string; node?: ReactNode };
 export const FILE_MIME = "application/x-aos-file";
 // an image that can be dragged out of an app onto the desktop, where it lands as a file
-export function dragFile(name: string, src: string) {
+// The dragged file keeps the extension of the image it is (a title alone would land on the desktop without one).
+export function dragFile(title: string, src: string) {
+  const ext = /\.([a-z0-9]{2,5})(?:$|[?#])/i.exec(src)?.[1]?.toLowerCase();
+  const name = ext && !/\.[a-z0-9]{2,5}$/i.test(title) ? `${title}.${ext}` : title;
   return {
     draggable: true,
     onDragStart: (e: React.DragEvent) => {
