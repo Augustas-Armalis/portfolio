@@ -20,7 +20,7 @@ function CardFace({ it, big, open }: { it: StoryItem; big?: boolean; open?: bool
     <>
       <motion.div layoutId={`art-${it.key}`} className="absolute inset-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={shot ? SHOT_BG[it.key] ?? "/wallpapers/engineer-pawel-structure.jpg" : storyImage(it)} alt="" draggable={false} className="h-full w-full object-cover" />
+        <img src={shot ? SHOT_BG[it.key] ?? "/wallpapers/engineer-pawel-structure.webp" : storyImage(it)} alt="" draggable={false} className="h-full w-full object-cover" />
       </motion.div>
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.42)_0%,rgb(0_0_0/0.08)_38%,rgb(0_0_0/0)_55%,rgb(0_0_0/0.5)_100%)]" />
       {shot && (

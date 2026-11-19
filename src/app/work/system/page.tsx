@@ -75,7 +75,7 @@ export default function System() {
                 </Btn>
               </div>
             ))}
-            <div className="relative overflow-hidden rounded-[16px] bg-[url(/wallpapers/founder-mountain-glow.jpg)] bg-cover bg-center p-6">
+            <div className="relative overflow-hidden rounded-[16px] bg-[url(/wallpapers/founder-mountain-glow.webp)] bg-cover bg-center p-6">
               <div className="flex flex-wrap items-center gap-3">
                 <Btn variant="glass" capsule icon={<Play size={14} />}>
                   Glass

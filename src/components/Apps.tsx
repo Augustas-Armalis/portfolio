@@ -52,7 +52,7 @@ const Finder = lazy(() => loaders.finder().then((x) => x.Finder));
 
 // The live shader, with a still photo under it: if WebGL is missing or its context is lost, the photo shows
 // instead of a blank canvas.
-export function LiveWallpaper({ fallback = "/wallpapers/art-bernd-dittrich.jpg", intensity = 1 }: { fallback?: string; intensity?: number }) {
+export function LiveWallpaper({ fallback = "/wallpapers/art-bernd-dittrich.webp", intensity = 1 }: { fallback?: string; intensity?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [ok, setOk] = useState(true);
   useEffect(() => {

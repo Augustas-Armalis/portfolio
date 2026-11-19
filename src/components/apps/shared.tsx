@@ -22,19 +22,19 @@ export type StoryItem = { key: string; p: Project; app?: AppId; eyebrow: string;
 
 // Real imagery for projects without a screenshot of their own: one of the OS wallpapers, with the app's icon on it
 const STORY_ART: Record<string, string> = {
-  lunor: "/wallpapers/founder-foggy-sunrise.jpg",
-  contles: "/wallpapers/founder-farnaz-kohankhaki.jpg",
-  filzy: "/wallpapers/art-bernd-dittrich.jpg",
-  rug: "/wallpapers/founder-mountain-glow.jpg",
-  slideskipper: "/wallpapers/art-thom-milkovic.jpg",
-  musicengine: "/wallpapers/art-tinky-rain-blue.jpg",
-  reel: "/wallpapers/art-satyajit-rain.jpg",
-  openwhip: "/wallpapers/founder-mountain-sunset.jpg",
-  doom: "/wallpapers/founder-uran-wang.jpg",
+  lunor: "/wallpapers/founder-foggy-sunrise.webp",
+  contles: "/wallpapers/founder-farnaz-kohankhaki.webp",
+  filzy: "/wallpapers/art-bernd-dittrich.webp",
+  rug: "/wallpapers/founder-mountain-glow.webp",
+  slideskipper: "/wallpapers/art-thom-milkovic.webp",
+  musicengine: "/wallpapers/art-tinky-rain-blue.webp",
+  reel: "/wallpapers/art-satyajit-rain.webp",
+  openwhip: "/wallpapers/founder-mountain-sunset.webp",
+  doom: "/wallpapers/founder-uran-wang.webp",
 };
 
 // screenshots whose lower part is empty page: show only the top share
-export const CROP: Record<string, number> = { "/img/work-kaching.jpg": 0.6 };
+export const CROP: Record<string, number> = { "/img/work-kaching.webp": 0.6 };
 
 export function ShotImg({ src, alt, className = "", ...rest }: { src: string; alt: string; className?: string } & React.ImgHTMLAttributes<HTMLImageElement>) {
   const crop = CROP[src];
@@ -46,17 +46,17 @@ export function ShotImg({ src, alt, className = "", ...rest }: { src: string; al
   );
 }
 
-export const storyImage = (it: StoryItem) => it.p.image ?? STORY_ART[it.key] ?? "/wallpapers/founder-uran-wang.jpg";
+export const storyImage = (it: StoryItem) => it.p.image ?? STORY_ART[it.key] ?? "/wallpapers/founder-uran-wang.webp";
 
 // a screenshot of a light UI needs a deeper scrim than a photo
 export const isShot = (it: StoryItem) => !!it.p.image;
 
 // Behind a screenshot: a wallpaper photo, so the title sits on picture, not on UI text
 export const SHOT_BG: Record<string, string> = {
-  sellify: "/wallpapers/founder-mountain-glow.jpg",
-  kaching: "/wallpapers/art-tinky-rain-blue.jpg",
-  larpo: "/wallpapers/founder-uran-wang.jpg",
-  capto: "/wallpapers/founder-mountain-sunset.jpg",
+  sellify: "/wallpapers/founder-mountain-glow.webp",
+  kaching: "/wallpapers/art-tinky-rain-blue.webp",
+  larpo: "/wallpapers/founder-uran-wang.webp",
+  capto: "/wallpapers/founder-mountain-sunset.webp",
 };
 
 export type Photo = { title: string; src: string };
