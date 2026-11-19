@@ -1868,10 +1868,10 @@ function Contact() {
 }
 
 function QuickAction({ href, onClick, icon, label, sub }: { href?: string; onClick?: () => void; icon: React.ReactNode; label: string; sub: string }) {
-  const cls = "press lift sq flex flex-col items-start gap-2 rounded-[12px] bg-white p-3 text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.1),0_1px_2px_rgb(0_0_0/0.04)]";
+  const cls = "press lift sq flex flex-col items-start gap-2 rounded-[12px] bg-[var(--bg-elevated)] p-3 text-left shadow-[var(--shadow-1)]";
   const inner = (
     <>
-      <span className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-[#0A84FF]/[0.1] text-[#0A84FF]">{icon}</span>
+      <span className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-[var(--accent-tint)] text-[var(--accent)]">{icon}</span>
       <span className="min-w-0">
         <span className="block text-[13px] font-medium text-ink">{label}</span>
         <span className="block truncate text-[11px] text-ink-3">{sub}</span>
@@ -1950,7 +1950,7 @@ function About() {
   return (
     // laid out like About This Mac: the machine (here, the person), its name, a short spec sheet, two buttons, the fine print
     <div data-drag className={`flex h-full flex-col items-center overflow-auto bg-[var(--bg)] px-6 text-center ${compact ? "pb-10 pt-2" : "pb-5 pt-11"}`}>
-      <div className="relative flex h-[112px] w-[112px] items-center justify-center rounded-full bg-[radial-gradient(120%_120%_at_30%_15%,#ffffff_0%,#e9eaee_45%,#c9ccd3_100%)] text-[46px] font-semibold tracking-[-0.03em] text-ink shadow-[0_14px_34px_-14px_rgb(16_18_24/0.45),inset_0_-2px_6px_rgb(0_0_0/0.06),0_0_0_0.5px_rgb(0_0_0/0.08)]">
+      <div className="relative flex h-[112px] w-[112px] items-center justify-center rounded-full bg-[radial-gradient(120%_120%_at_30%_15%,#ffffff_0%,#e9eaee_45%,#c9ccd3_100%)] text-[46px] font-semibold tracking-[-0.03em] text-[#17181b] shadow-[0_14px_34px_-14px_rgb(16_18_24/0.45),inset_0_-2px_6px_rgb(0_0_0/0.06),0_0_0_0.5px_rgb(0_0_0/0.08)]">
         A
       </div>
       <h1 className={`mt-5 text-ink ${compact ? "t-large" : "m-large"}`}>{owner.name}</h1>

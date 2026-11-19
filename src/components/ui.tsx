@@ -55,7 +55,7 @@ export function Button({
 
 export function Segmented<T extends string>({ value, options, onChange, id }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; id: string }) {
   return (
-    <div className="seg flex h-7 items-center rounded-[8px] bg-black/[0.05] p-[2px]">
+    <div className="seg flex h-7 items-center rounded-[8px] bg-[var(--fill-2)] p-[2px]">
       {options.map((o) => (
         <button
           type="button"
@@ -66,7 +66,7 @@ export function Segmented<T extends string>({ value, options, onChange, id }: { 
           {value === o.value && (
             <motion.span
               layoutId={`seg-${id}`}
-              className="absolute inset-0 rounded-[6px] bg-white shadow-[0_1px_2px_rgb(0_0_0/0.1),0_0_0_0.5px_rgb(0_0_0/0.06)]"
+              className="seg-thumb absolute inset-0 rounded-[6px]"
               transition={{ type: "spring", bounce: 0, duration: 0.3 }}
             />
           )}
@@ -628,7 +628,7 @@ export function Group({ title, children, footer }: { title?: string; children: R
   return (
     <section>
       {title && <h3 className="mb-1.5 px-1 text-[13px] font-semibold text-ink">{title}</h3>}
-      <div className="sq divide-y divide-black/[0.06] overflow-hidden rounded-[10px] bg-white ring-[0.5px] ring-black/[0.1]">{children}</div>
+      <div className="sq divide-y divide-[var(--separator)] overflow-hidden rounded-[10px] bg-[var(--bg-elevated)] shadow-[var(--shadow-1)]">{children}</div>
       {footer && <p className="mt-1.5 px-1 text-[11px] leading-relaxed text-ink-3">{footer}</p>}
     </section>
   );
