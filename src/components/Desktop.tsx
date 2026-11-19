@@ -15,7 +15,7 @@ import {
 import { Lock, Search, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { allApps, apps, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, sharedApps, type AppId, type DeskItem, type UserId } from "@/content";
+import { allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, sharedApps, type AppId, type DeskItem, type UserId } from "@/content";
 import { focusedApp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
@@ -552,9 +552,9 @@ const MIN_W = 320;
 const MIN_H = 220;
 const DOCK_SPACE = 92;
 // Keep every window fully on screen, above the dock, never smaller than the minimum.
-function clampRect(r: Rect, W: number, H: number): Rect {
-  const w = Math.max(Math.min(r.w, W - 24), Math.min(MIN_W, W - 24));
-  const h = Math.max(Math.min(r.h, H - DOCK_SPACE - 16), Math.min(MIN_H, H - DOCK_SPACE - 16));
+function clampRect(r: Rect, W: number, H: number, min = { w: MIN_W, h: MIN_H }): Rect {
+  const w = Math.max(Math.min(r.w, W - 24), Math.min(min.w, W - 24));
+  const h = Math.max(Math.min(r.h, H - DOCK_SPACE - 16), Math.min(min.h, H - DOCK_SPACE - 16));
   const left = Math.min(Math.max(r.left, 12), Math.max(12, W - w - 12));
   const top = Math.min(Math.max(r.top, 8), Math.max(8, H - DOCK_SPACE - h));
   return { left, top, w, h };
@@ -573,6 +573,8 @@ const edgeCls: Record<Edge, string> = {
 };
 
 function Window({ win, index, area, focused }: { win: Win; index: number; area: RefObject<HTMLDivElement | null>; focused: boolean }) {
+  // each app has its own floor (content.ts): a window never gets smaller than its layout can take
+  const min = minSize(win.id);
   const { focus, close, toggleMin, toggleMax } = useOS();
   const app = apps[win.id];
   const controls = useDragControls();
@@ -591,7 +593,7 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
     // the window the desktop opens with sits beside the note, not over it
     const beside = index === 0 && win.id === "records" && W - (NOTE_W + 48) - 140 >= w;
     const x0 = beside ? NOTE_W + 48 + (W - (NOTE_W + 48) - 132 - w) / 2 : (W - w) / 2;
-    return clampRect({ left: Math.round(x0 + step * 28), top: Math.round((H - DOCK_SPACE - h) * 0.42 + step * 24), w, h }, W, H);
+    return clampRect({ left: Math.round(x0 + step * 28), top: Math.round((H - DOCK_SPACE - h) * 0.42 + step * 24), w, h }, W, H, min);
   });
   const [hidden, setHidden] = useState(false);
   // zoom is a FLIP: the window jumps to its new frame, then a transform carries it from the old one (no animated layout)
@@ -603,7 +605,7 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
   // fold a finished drag into the rect, then clamp
   const settle = () => {
     const { W, H } = areaSize();
-    setRect((r) => clampRect({ ...r, left: r.left + x.get(), top: r.top + y.get() }, W, H));
+    setRect((r) => clampRect({ ...r, left: r.left + x.get(), top: r.top + y.get() }, W, H, min));
     x.set(0);
     y.set(0);
   };
@@ -638,7 +640,7 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
     const dy = y.get();
     x.set(0);
     y.set(0);
-    if (dx || dy) setRect((r) => clampRect({ ...r, left: r.left + dx, top: r.top + dy }, W, H));
+    if (dx || dy) setRect((r) => clampRect({ ...r, left: r.left + dx, top: r.top + dy }, W, H, min));
     toggleMax(win.id);
   };
   useEffect(() => {
@@ -690,14 +692,14 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
       const dx = ev.clientX - sx;
       const dy = ev.clientY - sy;
       const r = { ...r0 };
-      if (edge.includes("e")) r.w = Math.max(MIN_W, r0.w + dx);
-      if (edge.includes("s")) r.h = Math.max(MIN_H, r0.h + dy);
+      if (edge.includes("e")) r.w = Math.max(min.w, r0.w + dx);
+      if (edge.includes("s")) r.h = Math.max(min.h, r0.h + dy);
       if (edge.includes("w")) {
-        r.w = Math.max(MIN_W, r0.w - dx);
+        r.w = Math.max(min.w, r0.w - dx);
         r.left = r0.left + (r0.w - r.w);
       }
       if (edge.includes("n")) {
-        r.h = Math.max(MIN_H, r0.h - dy);
+        r.h = Math.max(min.h, r0.h - dy);
         r.top = Math.max(0, r0.top + (r0.h - r.h));
       }
       next = r;

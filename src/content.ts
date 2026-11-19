@@ -70,6 +70,36 @@ export const projectApps: AppId[] = projectGroups.flatMap((g) => g.apps);
 export const gameApps: AppId[] = ["doom", "blocks"];
 
 type Size = { w: number; h: number };
+// The smallest a window may be dragged. Like a Mac app, each refuses to shrink below the size at which its
+// layout still works (two columns in Records, a sidebar and a grid in Finder, a readable line in Novel).
+const MIN_SIZE: Partial<Record<AppId, Size>> = {
+  projects: { w: 660, h: 440 },
+  games: { w: 660, h: 440 },
+  records: { w: 780, h: 540 },
+  novel: { w: 760, h: 500 },
+  shots: { w: 600, h: 440 },
+  gallery: { w: 560, h: 420 },
+  settings: { w: 660, h: 460 },
+  contact: { w: 640, h: 540 },
+  taste: { w: 560, h: 360 },
+  kit: { w: 420, h: 340 },
+  piano: { w: 560, h: 280 },
+  terminal: { w: 440, h: 280 },
+  doom: { w: 560, h: 420 },
+  blocks: { w: 600, h: 420 },
+  about: { w: 300, h: 470 },
+  trash: { w: 460, h: 320 },
+  game: { w: 380, h: 340 },
+};
+export function minSize(id: AppId): Size {
+  const own = MIN_SIZE[id];
+  if (own) return own;
+  // projects: a live site or a story needs room for its inspector or its screenshot; a repository a little less
+  const p = projects[id];
+  if (p) return p.kind === "code" ? { w: 620, h: 460 } : { w: 740, h: 500 };
+  return { w: 480, h: 360 };
+}
+
 export const apps: Record<AppId, { title: string; size: Size }> = {
   projects: { title: "Projects", size: { w: 980, h: 640 } },
   games: { title: "Games", size: { w: 980, h: 640 } },

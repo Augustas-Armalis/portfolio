@@ -93,7 +93,7 @@ function NowPlaying({ compact }: { compact: boolean }) {
   const p = usePlayer();
   const lead = trackOf(p.id) ?? tracks[0];
   return (
-    <div className="relative flex h-full flex-col overflow-hidden text-white">
+    <div className="relative flex h-full flex-col overflow-hidden text-white" style={compact ? undefined : { containerType: "size" }}>
       {compact && <MusicBackdrop />}
       <div className={`relative flex flex-1 flex-col ${compact ? "px-7 pb-10 pt-[calc(env(safe-area-inset-top)+70px)]" : "justify-center px-10 py-8"}`}>
         <motion.img
@@ -104,12 +104,14 @@ function NowPlaying({ compact }: { compact: boolean }) {
           animate={{ scale: p.playing || !p.id ? 1 : 0.86 }}
           transition={{ type: "spring", bounce: 0.25, duration: 0.6 }}
           data-sq=""
+          // in a short window the artwork gives way first, so the transport and the volume always fit
+          style={compact ? undefined : { width: "min(340px, 100%, 100cqh - 300px)" }}
           className={`mx-auto aspect-square w-full object-cover shadow-[0_30px_60px_-20px_rgb(0_0_0/0.6)] ${compact ? "max-w-[320px] rounded-[18px]" : "max-w-[340px] rounded-[18px]"}`}
         />
         <div className={`mx-auto w-full ${compact ? "mt-9 max-w-[320px]" : "mt-7 max-w-[340px]"}`}>
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[20px] font-semibold tracking-[-0.02em]">{lead.title}</div>
+              <div className="line-clamp-2 text-[20px] font-semibold leading-6 tracking-[-0.02em] [text-wrap:balance]">{lead.title}</div>
               <div className={`truncate text-white/60 ${compact ? "text-[17px]" : "text-[15px]"}`}>{lead.artist}</div>
             </div>
             {!lead.confirmed && <span className="m-sub shrink-0 rounded-[8px] bg-white/15 px-1.5 py-0.5 text-white/80">Unreleased</span>}
@@ -178,8 +180,8 @@ function GlassQueue() {
                 )}
               </span>
               <span className="min-w-0 flex-1">
-                <span className={`block truncate text-[17px] tracking-[-0.02em] ${on ? "font-semibold" : "font-medium text-white/90"}`}>{t.title}</span>
-                <span className="block truncate text-[13px] text-white/55">{t.note}</span>
+                <span className={`line-clamp-2 text-[17px] leading-[22px] tracking-[-0.02em] [text-wrap:balance] ${on ? "font-semibold" : "font-medium text-white/90"}`}>{t.title}</span>
+                <span className="line-clamp-2 text-[13px] leading-[18px] text-white/55">{t.note}</span>
               </span>
               <span className="text-[13px] tabular-nums text-white/50">{t.durationLabel}</span>
             </button>
