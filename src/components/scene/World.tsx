@@ -479,7 +479,7 @@ export function MistBands({ mobile = false }: { mobile?: boolean }) {
 
 // ---------- lake ----------
 
-// Still water: the sky reflected with fresnel, soft ripples, a sun or moon glint.
+// Still water: the sky reflected with fresnel, the tree line and the ridges mirrored in it, soft ripples, a sun or moon glint.
 export function Lake({ fogDensity }: { fogDensity: number }) {
   const mat = useMemo(
     () =>
@@ -494,6 +494,8 @@ export function Lake({ fogDensity }: { fogDensity: number }) {
           ${GLSL_NOISE}
           ${GLSL_SKY}
           ${GLSL_LAKE}
+          const vec2 LAKE_C = vec2(${LAKE.x.toFixed(1)}, ${LAKE.z.toFixed(1)});
+          const vec2 LAKE_R = vec2(${LAKE.rx.toFixed(1)}, ${LAKE.rz.toFixed(1)});
           void main(){
             float lk = lakeK(vWorld.xz);
             if (lk > 1.04) discard;
@@ -507,6 +509,36 @@ export function Lake({ fogDensity }: { fogDensity: number }) {
             vec3 r = reflect(-V, n);
             r.y = abs(r.y) + 0.002;
             vec3 sky = skyBase(normalize(r));
+            // The wood behind the far shore and the ridges beyond it stand in the water too: dark, hazed
+            // by the air between, their edges loosened by the ripples. Where the mirrored ray leaves the
+            // lake it meets the tree line a little way back (north and west the wood comes down to the
+            // water; toward the desk it is far off across the meadow), and above that the hills.
+            vec2 rd = normalize(r.xz + vec2(1e-5));
+            float tanEl = r.y / max(length(r.xz), 1e-3);
+            vec2 lp = (vWorld.xz - LAKE_C) / LAKE_R;
+            vec2 ld = rd / LAKE_R;
+            float qa = dot(ld, ld), qb = dot(lp, ld), qc = dot(lp, lp) - 1.0;
+            float water = max((-qb + sqrt(max(qb * qb - qa * qc, 0.0))) / qa, 0.0);
+            float D = water + mix(9.0, 75.0, smoothstep(-0.15, 0.55, rd.y));
+            vec2 hit = vWorld.xz + rd * D;
+            // stands of single trees, as they are on the land: a crown on a bare stem, sky between them
+            float along = hit.x * 0.42 + hit.y * 0.19;
+            float stand = smoothstep(0.28, 0.5, vnoise(hit * 0.075 + 3.7));
+            float tree = smoothstep(0.4, 0.62, vnoise(vec2(along, 7.3))) * stand;
+            float top = 9.0 + 6.0 * vnoise(vec2(along * 0.6, 1.7));
+            float up = tanEl * D;
+            float crown = smoothstep(top * 0.36, top * 0.52, up) * (1.0 - smoothstep(top * 0.86, top * 1.06, up));
+            float stem = (1.0 - smoothstep(top * 0.36, top * 0.52, up)) * smoothstep(0.7, 0.86, vnoise(vec2(along * 3.4, 2.0)));
+            float wood = tree * clamp(crown + stem * 0.45, 0.0, 1.0);
+            float ridge = 0.05 + 0.15 * fbm(vec2(atan(rd.x, -rd.y) * 2.6 + 11.0, 0.5));
+            float hill = 1.0 - smoothstep(ridge * 0.9, ridge * 1.1, tanEl);
+            vec3 airC = skyBase(normalize(vec3(rd.x, 0.02, rd.y)));
+            vec3 hillC = mix(vec3(0.07, 0.085, 0.09) * (uSkyCol * 1.5 + uKeyCol * 0.4), airC, 0.62);
+            vec3 woodC = mix(vec3(0.035, 0.06, 0.04) * (uSkyCol * 1.6 + uKeyCol * 0.35), airC, clamp(1.0 - exp(-D * 0.012), 0.0, 0.7));
+            // long slivers of sky lie across the mirror where the ripples tilt
+            float sliver = smoothstep(0.52, 0.8, vnoise(vec2(q.x * 0.16 + uTime * 0.04, q.y * 2.6 - uTime * 0.02)));
+            vec3 mirror = mix(mix(sky, hillC, hill * 0.8), woodC, wood * 0.8);
+            sky = mix(mirror, sky, sliver * 0.45);
             float sunVis = smoothstep(-0.03, 0.03, uSunDir.y);
             sky += mix(uGlow, vec3(1.0), 0.5) * pow(max(dot(r, uSunDir), 0.0), 600.0) * 30.0 * sunVis;
             sky += vec3(0.8, 0.85, 1.0) * pow(max(dot(r, uMoonDir), 0.0), 800.0) * 8.0 * uNight;
