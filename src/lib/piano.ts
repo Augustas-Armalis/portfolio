@@ -59,7 +59,22 @@ export function pianoReady(midi: number) {
 
 // Returns false if the sample isn't decoded yet (it starts loading), so a
 // caller can fall back or retry.
-export function playPiano(midi: number, { when = 0, vel = 0.8, dur = 3 }: { when?: number; vel?: number; dur?: number } = {}): boolean {
+// `to` sends the note to a bus of the caller's instead of the shared output
+// (the ambience routes its bed through its own reverb and fades); `gain` is an
+// absolute level that replaces the velocity curve; `attack` softens the hammer
+// and `release` is the length of the tail after `dur`.
+export function playPiano(
+  midi: number,
+  {
+    when = 0,
+    vel = 0.8,
+    dur = 3,
+    to,
+    gain,
+    attack = 0,
+    release = 0.8,
+  }: { when?: number; vel?: number; dur?: number; to?: AudioNode; gain?: number; attack?: number; release?: number } = {},
+): boolean {
   if (typeof window === "undefined") return false;
   try {
     const { ctx, out } = graph();
@@ -73,13 +88,18 @@ export function playPiano(midi: number, { when = 0, vel = 0.8, dur = 3 }: { when
       src.playbackRate.value = Math.pow(2, (midi - m) / 12);
       const g = ctx.createGain();
       const t = Math.max(ctx.currentTime, ctx.currentTime + when);
-      const v = 0.25 + vel * 0.75;
-      g.gain.setValueAtTime(v, t);
-      g.gain.setValueAtTime(v, t + dur);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.8);
-      src.connect(g).connect(out);
+      const v = gain ?? 0.25 + vel * 0.75;
+      if (attack > 0) {
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(v, t + attack);
+      } else {
+        g.gain.setValueAtTime(v, t);
+      }
+      g.gain.setValueAtTime(v, t + Math.max(dur, attack));
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur + release);
+      src.connect(g).connect(to ?? out);
       src.start(t);
-      src.stop(t + dur + 0.9);
+      src.stop(t + dur + release + 0.1);
     });
     return true;
   } catch {
