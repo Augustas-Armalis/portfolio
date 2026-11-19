@@ -1220,9 +1220,19 @@ function Scene({
           <PianoKeys playable={mode === "piano"} />
         </DeskModel>
       );
+    // on the phone's small desk the novel and the sketchbook lie against each other: whichever is opened, the other is lifted out of its way
     if (o.kind === "book")
-      return <Reader reading={reading && mode === "book"} peekAt={null} apiRef={reader} onInfo={onReaderInfo} onClosed={() => {}} />;
-    if (o.kind === "sketchbook") return <SketchbookLive open={mode === "sketch"} apiRef={sketch} />;
+      return (
+        <Held away={mobile && mode === "sketch"}>
+          <Reader reading={reading && mode === "book"} peekAt={null} apiRef={reader} onInfo={onReaderInfo} onClosed={() => {}} />
+        </Held>
+      );
+    if (o.kind === "sketchbook")
+      return (
+        <Held away={mobile && (mode === "book" || reading)}>
+          <SketchbookLive open={mode === "sketch"} apiRef={sketch} />
+        </Held>
+      );
     if (o.kind === "headphones")
       return (
         <>

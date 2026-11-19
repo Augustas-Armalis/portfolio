@@ -364,6 +364,10 @@ void main(){
   #endif
   float k = max(keep, soften);
   gl_FragColor = vec4(mix(raw, c, k), k);
+  // straight to the screen there is no later pass to read that flag, and the canvas must stay opaque over the page behind it
+  #ifdef FINISH
+    gl_FragColor.a = 1.0;
+  #endif
 }`;
 
 // The hand. Far away, and only there, a Kuwahara over a 5x5 window (four

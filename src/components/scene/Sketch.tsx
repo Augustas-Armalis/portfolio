@@ -5,6 +5,7 @@ import { useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { getMats } from "./materials";
 import { clamp01, easeInOutCubic } from "./shared";
+import { SKY_U } from "./sky";
 
 // The sketchbook. Closed: hard linen cover, elastic band, pencil on top. In
 // sketch mode the cover swings open and the right-hand page is a canvas you
@@ -53,7 +54,8 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 });
+    // after dark the page keeps a little light of its own, so the pencil can still be seen
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, emissive: "#ffffff", emissiveMap: tex, emissiveIntensity: 0 });
     return { canvas, base, tex, mat };
   }, []);
   const leftMat = useMemo(() => {
@@ -107,6 +109,7 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
 
   useFrame((_, dt) => {
     k.current += ((open ? 1 : 0) - k.current) * (1 - Math.exp(-dt * 4));
+    mat.emissiveIntensity = 0.3 * SKY_U.uNight.value * clamp01(k.current);
     const e = easeInOutCubic(clamp01(k.current));
     if (cover.current) cover.current.rotation.z = e * Math.PI;
     if (pencil.current) {

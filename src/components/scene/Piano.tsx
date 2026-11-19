@@ -96,7 +96,8 @@ export function PianoKeys({ playable }: { playable: boolean }) {
           />
           {playable && LABEL[k.midi] && (
             <Html position={[0, k.black ? 0.008 : 0.007, k.black ? 0.044 : 0.078]} center style={{ pointerEvents: "none" }} zIndexRange={[10, 0]}>
-              <div className={`text-[10px] font-semibold ${k.black ? "text-white/80" : "text-black/45"}`}>{LABEL[k.midi]}</div>
+              {/* which key of the computer plays it: nothing to show where there is no keyboard */}
+              <div className={`text-[10px] font-semibold [@media(hover:none)]:hidden ${k.black ? "text-white/80" : "text-black/45"}`}>{LABEL[k.midi]}</div>
             </Html>
           )}
         </group>

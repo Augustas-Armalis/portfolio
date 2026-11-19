@@ -704,24 +704,29 @@ export function BookUI({ info, onExit, onPrev, onNext, onApp }: { info: { spread
     <>
       <TopBar title="Žiemos naktys šviesesnės" hint="Click or drag a page, or use ← →" exitLabel="Close book" onExit={onExit} />
       <Bottom>
-        <Glass className="pointer-events-auto flex items-center gap-1 p-1" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-          <button type="button" className={btn} onClick={onPrev} aria-label="Previous page">
-            ←
-          </button>
-          <span className="min-w-[72px] text-center text-[12px] tabular-nums text-white/70">{info.ready ? `${info.spread + 1} / ${info.spreads}` : "Opening…"}</span>
-          <button type="button" className={btn} onClick={onNext} aria-label="Next page">
-            →
-          </button>
-          <span className="mx-1 h-4 w-px bg-white/25" />
-          <button type="button" className={btn} onClick={onApp}>
-            Read in the Novel app
-          </button>
-          <a className={btn + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.epub" download>
-            EPUB
-          </a>
-          <a className={btn + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.pdf" download>
-            PDF
-          </a>
+        {/* one row on a desk, two on a phone: the pages, then where else to read it */}
+        <Glass radius={22} className="pointer-events-auto flex items-center gap-1 p-1 max-sm:flex-col max-sm:gap-0.5" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1">
+            <button type="button" className={btn} onClick={onPrev} aria-label="Previous page">
+              ←
+            </button>
+            <span className="min-w-[72px] text-center text-[12px] tabular-nums text-white/70">{info.ready ? `${info.spread + 1} / ${info.spreads}` : "Opening…"}</span>
+            <button type="button" className={btn} onClick={onNext} aria-label="Next page">
+              →
+            </button>
+          </div>
+          <span className="mx-1 h-4 w-px bg-white/25 max-sm:hidden" />
+          <div className="flex items-center gap-1 whitespace-nowrap">
+            <button type="button" className={btn} onClick={onApp}>
+              Read in the Novel app
+            </button>
+            <a className={btn + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.epub" download>
+              EPUB
+            </a>
+            <a className={btn + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.pdf" download>
+              PDF
+            </a>
+          </div>
         </Glass>
       </Bottom>
     </>
