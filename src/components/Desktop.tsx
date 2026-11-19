@@ -505,7 +505,7 @@ function MenuBar() {
           </Pop>
         </div>
         <div className="relative">
-          <button type="button" aria-label="Notification Center" className={`${btn(menu === "nc")} tabular-nums`} {...item("nc")}>
+          <button type="button" aria-label={`${time}, Notification Center`} className={`${btn(menu === "nc")} tabular-nums`} {...item("nc")}>
             {time}
           </button>
           <Pop open={menu === "nc"} align="right" width={340} panel>
