@@ -403,6 +403,15 @@ function Scene({
         },
         view: (o: typeof dev.current.view) => (dev.current.view = o),
         post: postCtl,
+        // what one whole frame costs: draw calls and triangles over every pass of the lens
+        info: () => {
+          gl.info.autoReset = false;
+          gl.info.reset();
+          advance(performance.now());
+          const r = { calls: gl.info.render.calls, triangles: gl.info.render.triangles, geometries: gl.info.memory.geometries, textures: gl.info.memory.textures, programs: gl.info.programs?.length ?? 0 };
+          gl.info.autoReset = true;
+          return r;
+        },
         shot: async (name: string) => {
           advance(performance.now());
           const url = gl.domElement.toDataURL("image/jpeg", 0.9);

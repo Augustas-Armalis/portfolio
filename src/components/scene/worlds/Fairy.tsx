@@ -331,7 +331,8 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     // his sky: small round clouds laid out in rows, like a pattern on cloth
     const clouds: Cloud[] = [];
     // near rows overhead, and row behind row going down to the horizon
-    const rows = props.mobile ? 9 : 16;
+    // how many rows go out toward the horizon follows the quality's draw distance
+    const rows = Math.round((props.mobile ? 9 : 16) * Math.min(1.15, Math.max(0.6, props.far)));
     let z = 520;
     for (let row = 0; row < rows; row++) {
       const gap = 110 + row * (props.mobile ? 34 : 15);
@@ -372,7 +373,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       glows,
       suns: [{ p: sunP, size: 900, col: [1, 0.9, 0.62] as V3, k: 0.4 }],
     };
-  }, [props.mobile, props.trees]);
+  }, [props.mobile, props.trees, props.far]);
   return (
     <>
       <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={props} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} />

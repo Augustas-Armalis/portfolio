@@ -625,7 +625,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
 };
 
 // a painting's standing wall is a thing to fly round, like any other
-for (const def of Object.values(WORLDS)) for (const c of def.canvases) def.obstacles.push({ x: c.x, z: c.z, r: 15, h: 36 });
+for (const def of Object.values(WORLDS)) for (const c of def.canvases) def.obstacles.push({ x: c.x, z: c.z, r: 12, h: 36 });
 
 export const originOf = (id: WorldId) => (id === "home" ? ZERO : ORIGIN);
 const ZERO = new THREE.Vector3();

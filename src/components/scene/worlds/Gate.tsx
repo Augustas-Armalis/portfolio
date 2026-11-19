@@ -156,13 +156,14 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     for (let s = 0; s < stands; s++) {
       const side = s % 2 ? 1 : -1;
       const cz = 420 - r() * 640;
-      const cx = side * (28 + r() * r() * 260);
+      // how far out from the valley the wood is drawn follows the quality's draw distance
+      const cx = side * (28 + r() * r() * 260 * Math.min(1, props.far));
       const kinds: Kind[] = s % 3 === 0 ? ["spruce", "spruce", "pine"] : s % 3 === 1 ? ["pine", "pine", "spruce"] : ["pine", "birch", "birch"];
       const n = props.mobile ? 3 : 4 + Math.floor(r() * 5);
       for (let i = 0; i < n; i++) {
         const x = cx + (r() - 0.5) * 34;
         const z = cz + (r() - 0.5) * 30;
-        if (nearPath(x, z, 12) || Math.hypot(x + 46, z - 250) < 30 || Math.hypot(Math.abs(x) - PEAKS.off, z - PEAKS.z) < PEAKS.r * 0.9) continue;
+        if (nearPath(x, z, 12) || def.canvases.some((c) => Math.hypot(x - c.x, z - c.z) < 34) || Math.hypot(Math.abs(x) - PEAKS.off, z - PEAKS.z) < PEAKS.r * 0.9) continue;
         if (Math.hypot(x - tx, z - tz) < 50 || Math.hypot(x - ax, z - az) < 22) continue;
         trees.push({ x, z, y: g(x, z), s: 1.2 + r() * 0.9, kind: kinds[Math.floor(r() * kinds.length)], v: Math.floor(r() * 2), rot: r() * 6.28, tint: r() });
       }
@@ -197,7 +198,7 @@ export default function GateWorld({ props }: { props: WorldProps }) {
       halos,
       glows,
     };
-  }, [props.mobile, props.trees]);
+  }, [props.mobile, props.trees, props.far]);
   return (
     <>
       <WorldBase id="gate" def={def} pal={GATE_PAL} props={props} tip={[0.4, 0.36, 0.14]} pathTint={[1, 0.86, 0.6]} />

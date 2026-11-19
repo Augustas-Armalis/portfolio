@@ -237,6 +237,8 @@ export function makeTreeMaterial(fog: number) {
         // tempera: broad dabs of a second tone, no gloss
         float dab = vnoise(vWorld.xz * 1.7 + vWorld.y * 1.3) * 0.6 + vnoise(vWorld.xy * 4.5) * 0.4;
         alb *= mix(1.0, 0.78 + dab * 0.5, fol);
+        // by night the eye loses colour: the pale birch crowns go grey-blue with the rest instead of standing out lime
+        alb = mix(alb, vec3(dot(alb, vec3(0.3, 0.5, 0.2))) * vec3(0.42, 0.56, 0.62), uNight * 0.7 * fol);
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         float ndl = dot(n, uKeyDir);
         float lit = mix(max(ndl, 0.0), smoothstep(-0.35, 0.55, ndl), fol) * sunUp;
