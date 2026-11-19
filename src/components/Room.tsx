@@ -81,6 +81,8 @@ THREE.DefaultLoadingManager.onStart = (_u, d, t) => Object.assign(loads, { busy:
 THREE.DefaultLoadingManager.onProgress = (_u, d, t) => Object.assign(loads, { done: d, total: t });
 THREE.DefaultLoadingManager.onLoad = () => (loads.busy = false);
 const LABELS: Record<ObjKind | "display" | "plane", string> = { keys: "Piano", camera: "Camera", headphones: "Music", book: "Read", sketchbook: "Sketch", plane: "Fly", display: "Start" };
+// how high over each thing its hover tag floats (metres above the desk top)
+const TAG_Y: Record<ObjKind, number> = { keys: 0.12, book: 0.12, sketchbook: 0.12, camera: 0.17, headphones: 0.32 };
 const MODE_OF: Record<ObjKind, Mode> = { keys: "piano", camera: "camera", headphones: "music", book: "book", sketchbook: "sketch" };
 
 // ---------- load-in motion ----------
@@ -99,6 +101,7 @@ function Piece({
   instant,
   hoverable,
   label,
+  labelAt = [0, 0.2, 0],
   onPick,
   hidden,
   float,
@@ -110,6 +113,8 @@ function Piece({
   instant: boolean;
   hoverable: boolean;
   label?: string;
+  // where the hover tag floats, from the piece's own origin: just clear of the top of the thing
+  labelAt?: [number, number, number];
   onPick?: () => void;
   hidden?: boolean;
   float?: MutableRefObject<{ on: boolean; pos: THREE.Vector3; q: THREE.Quaternion } | null>;
@@ -179,7 +184,7 @@ function Piece({
     >
       {children}
       {hoverable && label && (
-        <Html position={[0, 0.2, 0]} center style={{ pointerEvents: "none" }} zIndexRange={[20, 0]}>
+        <Html position={labelAt} center style={{ pointerEvents: "none" }} zIndexRange={[20, 0]}>
           <GlassTag label={label} show={hover} />
         </Html>
       )}
@@ -1315,6 +1320,7 @@ function Scene({
         instant={instant}
         hoverable={idle}
         label={LABELS.display}
+        labelAt={mobile ? [0, DESK.top + 0.215, 0] : [0, MONITOR.y + MONITOR.h / 2 + 0.06, MONITOR.z]}
         onPick={() => startRef.current?.()}
       >
         {mobile ? (
@@ -1336,6 +1342,7 @@ function Scene({
             instant={instant}
             hoverable={idle && mode === "none"}
             label={LABELS[kind]}
+            labelAt={[0, TAG_Y[kind], 0]}
             onPick={() => enter(MODE_OF[kind])}
             float={kind === "headphones" ? floatRef : undefined}
           >
