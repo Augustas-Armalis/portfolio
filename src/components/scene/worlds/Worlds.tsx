@@ -5,9 +5,14 @@ import { useMemo, useRef, type ReactNode } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { LightGate, LightPath, WorldBase, type WorldProps } from "./common";
-import { WORLD_U, type GroundPalette } from "./kit";
+import { LightGate, LightPath, type WorldProps } from "./common";
+import { WORLD_U } from "./kit";
+import FairyWorld from "./Fairy";
+import GateWorld from "./Gate";
+import ParadiseWorld from "./Paradise";
+import RexWorld from "./Rex";
 import SeaWorld from "./Sea";
+import StarsWorld from "./Stars";
 import SunWorld from "./Sun";
 import { ORIGIN, WORLDS, useWorld, voyage, type WorldId } from "./voyage";
 
@@ -67,21 +72,7 @@ function Veil() {
   return <mesh ref={ref} geometry={geo} material={mat} frustumCulled={false} renderOrder={1000} visible={false} />;
 }
 
-const PAL: Record<string, GroundPalette> = {
-  sun: { a: [0.3, 0.25, 0.07], b: [0.42, 0.3, 0.09], c: [0.2, 0.22, 0.1] },
-  stars: { a: [0.2, 0.15, 0.07], b: [0.09, 0.1, 0.2], c: [0.14, 0.17, 0.12], high: [0.4, 0.31, 0.14], bands: 0.8 },
-  rex: { a: [0.14, 0.11, 0.09], b: [0.2, 0.16, 0.12], c: [0.1, 0.09, 0.08], shore: [0.26, 0.21, 0.17] },
-  fairy: { a: [0.11, 0.2, 0.06], b: [0.2, 0.25, 0.07], c: [0.08, 0.16, 0.08] },
-  paradise: { a: [0.2, 0.3, 0.07], b: [0.32, 0.34, 0.09], c: [0.14, 0.26, 0.08], shore: [0.62, 0.5, 0.24] },
-  gate: { a: [0.1, 0.15, 0.07], b: [0.17, 0.17, 0.08], c: [0.08, 0.12, 0.08], rock: [0.2, 0.19, 0.2] },
-  sea: { a: [0.3, 0.27, 0.16], b: [0.36, 0.3, 0.17], c: [0.26, 0.26, 0.17], shore: [0.4, 0.35, 0.22] },
-};
-
-function Placeholder({ id, props }: { id: WorldId; props: WorldProps }) {
-  return <WorldBase id={id} def={WORLDS[id]} pal={PAL[id]} props={props} />;
-}
-
-const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, sea: SeaWorld };
+const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld };
 
 export function Worlds(props: WorldProps) {
   const id = useWorld();
@@ -104,7 +95,7 @@ export function Worlds(props: WorldProps) {
         </>
       ) : (
         <group key={id} position={ORIGIN}>
-          {Comp ? <Comp props={props} /> : <Placeholder id={id} props={props} />}
+          {Comp && <Comp props={props} />}
         </group>
       )}
       <Veil />

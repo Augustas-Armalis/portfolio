@@ -19,6 +19,40 @@ export function rng(seed: number) {
   };
 }
 
+// value noise and a ridged sum of it, for carving rock in JS
+function hash2(x: number, y: number) {
+  const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+export function noise2(x: number, y: number) {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const a = hash2(ix, iy);
+  const b = hash2(ix + 1, iy);
+  const c = hash2(ix, iy + 1);
+  const d = hash2(ix + 1, iy + 1);
+  return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+}
+export function ridge2(x: number, y: number, oct = 4) {
+  let v = 0;
+  let amp = 0.5;
+  let f = 1;
+  let w = 1;
+  for (let i = 0; i < oct; i++) {
+    let n = 1 - Math.abs(noise2(x * f, y * f) * 2 - 1);
+    n = n * n * w;
+    w = Math.min(1, n * 2);
+    v += n * amp;
+    f *= 2.03;
+    amp *= 0.5;
+  }
+  return v;
+}
+
 // ---------- air ----------
 // Height fog, integrated along the ray, tinted by the sky in that direction:
 // far things melt into the sky's own colour, and the feet of things stand in
@@ -486,8 +520,9 @@ export function cloudGeometry(detail = 2) {
     v.fromBufferAttribute(p, i).normalize();
     const lump = 1 + 0.2 * Math.sin(v.x * 4.1 + 1) * Math.sin(v.z * 3.7 + 2) + 0.12 * Math.sin(v.x * 9.3 + v.y * 7.1);
     p.setXYZ(i, v.x * lump, (v.y < 0 ? v.y * 0.45 : v.y) * lump, v.z * lump);
+    // it shades as one round soft thing, not as its facets
+    g.attributes.normal.setXYZ(i, v.x, v.y * 0.8 + 0.2, v.z);
   }
-  g.computeVertexNormals();
   return g;
 }
 export function cloudMesh(list: Cloud[], mat: THREE.Material, detail = 2) {
@@ -504,21 +539,24 @@ export function cloudMesh(list: Cloud[], mat: THREE.Material, detail = 2) {
   im.computeBoundingSphere();
   return im;
 }
-export function makeCloudMaterial(o: { lit?: number; alpha?: number } = {}) {
+export function makeCloudMaterial(o: { lit?: number; alpha?: number; tint?: V3; drift?: number } = {}) {
   return new THREE.ShaderMaterial({
     transparent: (o.alpha ?? 1) < 1,
-    uniforms: { ...SKY_U, ...WORLD_U, uLitK: { value: o.lit ?? 1 }, uAlpha: { value: o.alpha ?? 1 } },
+    uniforms: { ...SKY_U, ...WORLD_U, uLitK: { value: o.lit ?? 1 }, uAlpha: { value: o.alpha ?? 1 }, uTint: { value: new THREE.Color(...(o.tint ?? [1, 1, 1])) }, uDrift: { value: o.drift ?? 0 } },
     vertexShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vN;
-      uniform float uTime;
+      uniform float uTime; uniform float uDrift;
       void main(){
         vec4 lp = instanceMatrix * vec4(position, 1.0);
+        // smoke and cloud are never quite still
+        float ph = instanceMatrix[3].x * 0.05 + instanceMatrix[3].y * 0.03;
+        lp.xyz += vec3(sin(uTime * 0.21 + ph), sin(uTime * 0.17 + ph * 1.7) * 0.5, cos(uTime * 0.19 + ph * 1.3)) * uDrift;
         vec4 wp = modelMatrix * lp;
         vWorld = wp.xyz; vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
         gl_Position = projectionMatrix * modelViewMatrix * lp;
       }`,
     fragmentShader: /* glsl */ `
-      uniform float uLitK; uniform float uAlpha;
+      uniform float uLitK; uniform float uAlpha; uniform vec3 uTint;
       varying vec3 vWorld; varying vec3 vN;
       ${GLSL_SKY}
       ${GLSL_AIR}
@@ -528,7 +566,7 @@ export function makeCloudMaterial(o: { lit?: number; alpha?: number } = {}) {
         float w = smoothstep(-0.4, 0.8, dot(n, uKeyDir));
         vec3 col = mix(uCloudShade, uCloudLit * uLitK, w);
         col += uGlow * pow(1.0 - max(dot(n, V), 0.0), 2.5) * pow(max(dot(V, -uKeyDir), 0.0), 4.0) * 0.9;
-        col = mix(col, airCol(normalize(vWorld - cameraPosition)), airAmt(vWorld) * 0.8);
+        col = mix(col * uTint, airCol(normalize(vWorld - cameraPosition)), airAmt(vWorld) * 0.8);
         gl_FragColor = vec4(col, uAlpha);
         ${END}
       }`,
@@ -610,8 +648,8 @@ function wing() {
   if (wingGeo) return wingGeo;
   const s = new THREE.Shape();
   s.moveTo(0, 0);
-  s.bezierCurveTo(0.34, 0.5, 0.52, 1.5, 0.2, 2.6);
-  s.bezierCurveTo(0.12, 2.0, -0.04, 1.2, -0.1, 0.5);
+  s.bezierCurveTo(0.3, 0.45, 0.44, 1.3, 0.17, 2.2);
+  s.bezierCurveTo(0.1, 1.7, -0.04, 1.0, -0.09, 0.45);
   s.bezierCurveTo(-0.12, 0.25, -0.06, 0.08, 0, 0);
   wingGeo = new THREE.ExtrudeGeometry(s, { depth: 0.035, bevelEnabled: false, curveSegments: 10 });
   return wingGeo;
@@ -639,9 +677,9 @@ export function angel(k: Kit, p: V3, s: number, yaw: number, robe: V3, o: { bow?
     [0.13, 1.52],
     [0.07, 1.56],
   ];
-  place(new THREE.LatheGeometry(robeProfile.map(([r, y]) => new THREE.Vector2(r, y)), 14), [0, 0, 0], [0, 0, 0], robe, glow, pale);
+  place(new THREE.LatheGeometry(robeProfile.map(([r, y]) => new THREE.Vector2(r * 1.15, y)), 14), [0, 0, 0], [0, 0, 0], robe, glow, [robe[0] * 0.6 + pale[0] * 0.4, robe[1] * 0.6 + pale[1] * 0.4, robe[2] * 0.6 + pale[2] * 0.4]);
   place(new THREE.SphereGeometry(0.115, 12, 10), [0, 1.68, 0.01], [0, 0, 0], [0.94, 0.8, 0.68], glow * 1.2);
-  const wc = o.wing ?? [1, 0.98, 0.93];
+  const wc = o.wing ?? [0.9 * 0.7 + pale[0] * 0.3, 0.88 * 0.7 + pale[1] * 0.3, 0.8 * 0.7 + pale[2] * 0.3];
   const open = o.open ?? 0.36;
-  for (const w of [-1, 1]) place(wing().clone(), [w * 0.1, 1.16, -0.13], [-0.1, -w * open, -w * 0.1], wc, glow * 1.6, undefined, [w, 1, 1]);
+  for (const w of [-1, 1]) place(wing().clone(), [w * 0.1, 1.16, -0.13], [-0.1, -w * open, -w * 0.1], wc, glow * 0.9, undefined, [w, 1, 1]);
 }
