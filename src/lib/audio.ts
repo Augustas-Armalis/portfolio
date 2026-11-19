@@ -11,8 +11,20 @@ import { playPiano } from "@/lib/piano";
 //   ambience    wind, meadow, forest, water, the bed piano   sink
 //   sfx         page turns, shutter, paper plane             sink
 //
-//   sink -> speakers. The sink is the only node connected to the output: it
-//   is 0 while the OS Sound setting is off and while the tab is hidden.
+//   Every channel has a fixed trim (MIX below), and the trims meet in one
+//   bus: bus -> soft limiter -> sink -> speakers. The sink is 0 while the OS
+//   Sound setting is off and while the tab is hidden. The analyser listens
+//   to music, flight and piano before their trims (it feeds the visuals, it
+//   is not on the way to the speakers).
+//
+// The mix (measured offline, see MIX and FILE_TRIM): a recording at full
+// scale sits near -22 dBFS RMS; music plays at 65 % of that; the ambience is
+// calibrated in lib/ambience.ts to about a tenth of it and ducks under music.
+//
+// Silent testing: `?mute=1` in the URL, or localStorage "aos-mute" = "1",
+// holds the last gain before the speakers at 0 and mutes every media element
+// (also ones made later). Everything upstream behaves as usual, so states and
+// gains can be read without a sound being made.
 //
 // Rules
 // - One music owner at a time: "headphones", "records" or "flight". Whoever
@@ -44,7 +56,8 @@ export type Voice = {
   owner: Owner | null;
   scene: boolean; // belongs to the 3D world: obeys the mute pill
   el: HTMLMediaElement;
-  gain: GainNode | null; // the voice's level: fades only
+  gain: GainNode | null; // the voice's level (times the file's trim): fades only
+  trim: number; // the trim of the file it was last levelled for
   gate: GainNode | null; // mute pill / Sound setting
   level: number; // where the level is heading
   want: boolean; // meant to be playing
@@ -59,6 +72,12 @@ type State = {
   analyser: AnalyserNode;
   sink: GainNode;
   channels: Record<Channel, GainNode>;
+  trims: Record<Channel, GainNode>; // the fixed mix, after the channel
+  bus: GainNode; // where the trims meet
+  limiter: DynamicsCompressorNode;
+  makeup: GainNode; // takes the compressor's own make-up gain back out
+  hush: GainNode; // the last node: 0 under ?mute=1 / aos-mute, else 1
+  wired: number; // version of the wiring (hot reload)
   voices: Map<string, Voice>;
   byEl: WeakMap<HTMLMediaElement, Voice>;
   owner: Owner | null;
@@ -68,23 +87,83 @@ type State = {
   played: Set<HTMLMediaElement>; // every element that ever played (development)
 };
 // Kept apart from the graph so reading the mute choice never opens a context.
-type Prefs = { muted: boolean; listeners: Set<() => void>; teardown: (() => void) | null };
+type Prefs = { muted: boolean; hush: boolean; listeners: Set<() => void>; teardown: (() => void) | null };
 
 const DEV = process.env.NODE_ENV !== "production";
 const CHANNELS: Channel[] = ["music", "flight", "ambience", "piano", "sfx"];
 const MUTE_KEY = "ag-ambience";
+const HUSH_KEY = "aos-mute";
+const WIRING = 2;
+
+// The fixed mix: what each channel is multiplied by on its way to the bus.
+// Music at a comfortable 65 %; the played piano and the few effects a little
+// under it; the ambience is calibrated at its source (lib/ambience.ts).
+export const MIX: Record<Channel, number> = { music: 0.65, flight: 0.65, piano: 0.6, ambience: 1, sfx: 0.6 };
+
+// Recordings are brought to the same loudness before the mix. Measured
+// offline (afconvert to PCM, whole-file RMS of the mono sum):
+//   nocturne-for-absent-things.mp3   -22.5 dBFS RMS, peak -3.0   -> 1
+//   afterlight.m4a                   -15.7 dBFS RMS, peak +0.3   -> 0.46 (-6.7 dB)
+const FILE_TRIM: [string, number][] = [["/afterlight.", 0.46]];
+export function fileTrim(url: string | null | undefined) {
+  if (!url) return 1;
+  for (const [k, v] of FILE_TRIM) if (url.includes(k)) return v;
+  return 1;
+}
+
+// The soft limiter on the bus: nothing below -10 dBFS is touched; above it
+// the level is leaned on (6 dB knee, 12:1), so several voices at once, a
+// hard-played chord or a hot recording can never reach full scale.
+const LIMIT = { threshold: -10, knee: 6, ratio: 12, attack: 0.004, release: 0.28 };
 type G = typeof globalThis & { __aosAudio?: State; __aosAudioPrefs?: Prefs };
 
 function prefs(): Prefs {
   const g = globalThis as G;
   if (g.__aosAudioPrefs) return g.__aosAudioPrefs;
   let muted = false;
+  let hush = false;
   try {
+    hush = /[?&]mute=1(&|$)/.test(window.location.search);
     muted = window.localStorage.getItem(MUTE_KEY) === "0";
+    hush ||= window.localStorage.getItem(HUSH_KEY) === "1";
   } catch {
     /* storage blocked */
   }
-  return (g.__aosAudioPrefs = { muted, listeners: new Set(), teardown: null });
+  if (hush) hushElements();
+  return (g.__aosAudioPrefs = { muted, hush, listeners: new Set(), teardown: null });
+}
+
+// Silent testing (?mute=1 / aos-mute): true for the whole page load.
+export function audioHushed() {
+  if (typeof window === "undefined") return false;
+  const p = prefs();
+  // a module reloaded over older prefs: read the switch now
+  if (p.hush === undefined) {
+    p.hush = false;
+    try {
+      p.hush = /[?&]mute=1(&|$)/.test(window.location.search) || window.localStorage.getItem(HUSH_KEY) === "1";
+    } catch {
+      /* storage blocked */
+    }
+    if (p.hush) hushElements();
+  }
+  return p.hush;
+}
+
+// Every media element is muted the moment it is asked to play, whoever made
+// it (the manager's voices are also muted when they are registered).
+function hushElements() {
+  const proto = HTMLMediaElement.prototype as HTMLMediaElement & { __aosHushed?: boolean };
+  if (proto.__aosHushed) return;
+  proto.__aosHushed = true;
+  const play = proto.play;
+  proto.play = function (this: HTMLMediaElement) {
+    this.muted = true;
+    return play.call(this);
+  };
+  // elements that start on their own (autoplay) announce it with "play"
+  document.addEventListener("play", (e) => e.target instanceof HTMLMediaElement && (e.target.muted = true), true);
+  document.querySelectorAll("audio, video").forEach((el) => ((el as HTMLMediaElement).muted = true));
 }
 
 const hasAudio = () => typeof window !== "undefined" && typeof AudioContext !== "undefined";
@@ -101,21 +180,21 @@ const soundOn = () => {
 // must not open a second AudioContext next to the first.
 function state(): State {
   const g = globalThis as G;
-  if (g.__aosAudio) return g.__aosAudio;
+  if (g.__aosAudio) {
+    // a graph built by an older copy of this module: same context, new wiring
+    if (g.__aosAudio.wired !== WIRING) wire(g.__aosAudio);
+    return g.__aosAudio;
+  }
   const ctx = new AudioContext();
   const sink = ctx.createGain();
   sink.gain.value = soundOn() && visible() ? 1 : 0;
-  sink.connect(ctx.destination);
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 1024;
   analyser.smoothingTimeConstant = 0.82;
-  analyser.connect(sink);
   const channels = {} as Record<Channel, GainNode>;
   const nodes = {} as Record<Channel, Set<Tracked>>;
   for (const c of CHANNELS) {
-    const n = ctx.createGain();
-    n.connect(c === "ambience" || c === "sfx" ? sink : analyser);
-    channels[c] = n;
+    channels[c] = ctx.createGain();
     nodes[c] = new Set();
   }
   const master = ctx.createGain();
@@ -130,6 +209,8 @@ function state(): State {
     analyser,
     sink,
     channels,
+    ...({} as Pick<State, "trims" | "bus" | "limiter" | "makeup" | "hush">),
+    wired: 0,
     voices: new Map(),
     byEl: new WeakMap(),
     owner: null,
@@ -138,9 +219,92 @@ function state(): State {
     nodes,
     played: new Set(),
   };
+  wire(s);
   g.__aosAudio = s;
   if (DEV) devHook(s);
   return s;
+}
+
+// channel -> trim -> bus -> limiter -> makeup -> sink -> hush -> speakers,
+// and music / flight / piano -> analyser (a listener only). Safe to run on a
+// graph an older copy of this module wired differently.
+function wire(s: State) {
+  const { ctx } = s;
+  for (const c of CHANNELS) s.channels[c].disconnect();
+  s.analyser.disconnect();
+  s.sink.disconnect();
+  s.bus?.disconnect();
+  s.makeup?.disconnect();
+  s.hush?.disconnect();
+  s.bus = ctx.createGain();
+  s.limiter = ctx.createDynamicsCompressor();
+  s.limiter.threshold.value = LIMIT.threshold;
+  s.limiter.knee.value = LIMIT.knee;
+  s.limiter.ratio.value = LIMIT.ratio;
+  s.limiter.attack.value = LIMIT.attack;
+  s.limiter.release.value = LIMIT.release;
+  // The browser's compressor adds make-up gain of its own. Start from the
+  // hard-knee formula (0.6 of the full-range reduction, in dB) and replace it
+  // with the measured figure as soon as the offline measurement returns.
+  s.makeup = ctx.createGain();
+  s.makeup.gain.value = Math.pow(10, (0.6 * LIMIT.threshold * (1 - 1 / LIMIT.ratio)) / 20);
+  const makeup = s.makeup;
+  void compressorGain(LIMIT).then((k) => k && makeup.gain.setTargetAtTime(1 / k, ctx.currentTime, 0.05));
+  s.hush = ctx.createGain();
+  s.hush.gain.value = audioHushed() ? 0 : 1;
+  s.trims = {} as Record<Channel, GainNode>;
+  for (const c of CHANNELS) {
+    const t = (s.trims[c] = ctx.createGain());
+    t.gain.value = MIX[c];
+    s.channels[c].connect(t).connect(s.bus);
+    if (c !== "ambience" && c !== "sfx") s.channels[c].connect(s.analyser);
+  }
+  s.bus.connect(s.limiter).connect(s.makeup).connect(s.sink).connect(s.hush).connect(ctx.destination);
+  // the analyser is kept pulled by a path that carries nothing
+  const zero = ctx.createGain();
+  zero.gain.value = 0;
+  s.analyser.connect(zero).connect(s.hush);
+  if (audioHushed()) s.voices.forEach((v) => (v.el.muted = true));
+  s.wired = WIRING;
+}
+
+// What a compressor with these settings does to a signal far below its
+// threshold (its built-in make-up gain), measured silently in an
+// OfflineAudioContext: exact in every browser, whatever its knee curve.
+const measured = new Map<string, Promise<number>>();
+export function compressorGain(o: { threshold: number; knee: number; ratio: number; attack: number; release: number }): Promise<number> {
+  const key = JSON.stringify(o);
+  let p = measured.get(key);
+  if (!p) {
+    p = (async () => {
+      try {
+        const sr = 48000;
+        const off = new OfflineAudioContext(1, sr / 2, sr);
+        const osc = off.createOscillator();
+        osc.frequency.value = 1000;
+        const a = off.createGain();
+        a.gain.value = 0.001; // -60 dBFS: far under any threshold used here
+        const c = off.createDynamicsCompressor();
+        c.threshold.value = o.threshold;
+        c.knee.value = o.knee;
+        c.ratio.value = o.ratio;
+        c.attack.value = o.attack;
+        c.release.value = o.release;
+        osc.connect(a).connect(c).connect(off.destination);
+        osc.start();
+        const d = (await off.startRendering()).getChannelData(0);
+        let sum = 0;
+        const from = Math.floor(d.length / 2);
+        for (let i = from; i < d.length; i++) sum += d[i] * d[i];
+        const k = Math.sqrt(sum / (d.length - from)) / (0.001 / Math.SQRT2);
+        return Number.isFinite(k) && k > 0.5 && k < 8 ? k : 0;
+      } catch {
+        return 0;
+      }
+    })();
+    measured.set(key, p);
+  }
+  return p;
 }
 
 // Shared graph for the other audio modules. Does not resume the context.
@@ -221,7 +385,8 @@ function applyGates() {
 
 function register(id: string, el: HTMLMediaElement, o: { channel: Channel; owner: Owner | null; scene: boolean }, through?: (ctx: AudioContext) => AudioNode) {
   const s = state();
-  const v: Voice = { id, el, gain: null, gate: null, level: 0, want: false, timer: 0, resume: false, ...o };
+  const v: Voice = { id, el, gain: null, gate: null, trim: 1, level: 0, want: false, timer: 0, resume: false, ...o };
+  if (audioHushed()) el.muted = true;
   try {
     const src = s.ctx.createMediaElementSource(el);
     v.gain = s.ctx.createGain();
@@ -240,8 +405,11 @@ function register(id: string, el: HTMLMediaElement, o: { channel: Channel; owner
     v.want = true;
     v.resume = false;
     if (v.owner) claim(v.owner);
-    // started from outside (the OS player): bring its level up
-    if (v.level <= 0 && !el.src.startsWith("blob:")) setLevel(v, 1, 0.25);
+    if (el.src.startsWith("blob:")) return;
+    // started from outside (the OS player): bring its level up; another
+    // recording on the same element: its own trim
+    if (v.level <= 0) setLevel(v, 1, 0.25);
+    else if (trimOf(v) !== v.trim) setLevel(v, v.level, 0.25);
   });
   el.addEventListener("pause", () => {
     // paused from outside while audible: nothing is left half-faded
@@ -297,15 +465,21 @@ export function tapMediaElement(el: HTMLMediaElement, through?: (ctx: AudioConte
   // the OS drives this element directly, so its level simply stays up
   if (v.gain && v.level === 0) {
     v.level = 1;
-    v.gain.gain.value = 1;
+    v.trim = trimOf(v);
+    v.gain.gain.value = v.trim;
   }
   return v.gain as AudioNode;
 }
 
+// Music voices carry their recording's loudness trim in their level.
+function trimOf(v: Voice) {
+  return v.owner ? fileTrim(v.el.getAttribute("src") || v.el.currentSrc) : 1;
+}
 function setLevel(v: Voice, level: number, seconds: number) {
   v.level = level;
-  if (v.gain) fadeParam(v.gain.gain, level, seconds);
-  else v.el.volume = Math.min(1, Math.max(0, level));
+  v.trim = trimOf(v);
+  if (v.gain) fadeParam(v.gain.gain, level * v.trim, seconds);
+  else v.el.volume = Math.min(1, Math.max(0, level * v.trim));
 }
 
 // The previous owner fades out and is paused.
@@ -539,7 +713,8 @@ function audible() {
   if (!hasAudio() || !(globalThis as G).__aosAudio) return false;
   const s = state();
   for (const v of s.voices.values()) {
-    if (v.owner && !v.el.paused && v.level > 0 && gateOf(v) > 0 && !(v.el.muted || v.el.volume === 0)) return true;
+    // (under ?mute=1 every element is muted: that is not the visitor's doing)
+    if (v.owner && !v.el.paused && v.level > 0 && gateOf(v) > 0 && !((v.el.muted && !audioHushed()) || v.el.volume === 0)) return true;
   }
   return false;
 }
@@ -626,9 +801,12 @@ export function playSketch(): { stop: () => void; length: number } {
 // Development only: window.__audio, for checking the life cycle from the
 // console (never present in a production build).
 //
-//   __audio.report()   { ctx, visible, sound, muted, owner, sink, channels,
+//   __audio.report()   { ctx, visible, sound, muted, hushed (?mute=1), owner,
+//                        sink, output (sink x hush: what reaches the speakers),
+//                        channels (gain now), mix (the fixed trims), limiter
+//                        { reduction dB, makeup },
 //                        voices: [{ id, owner, channel, paused, t, src, level
-//                        (gain now), target, gate, want }],
+//                        (gain now), target, trim, gate, want, muted }],
 //                        elements: every media element that ever played, with
 //                        the voice it belongs to (null = an orphan),
 //                        sources: live buffer/oscillator nodes per channel,
@@ -661,8 +839,12 @@ function devHook(s: State) {
       sound: soundOn(),
       muted: prefs().muted,
       owner: s.owner,
+      hushed: audioHushed(),
       sink: r3(s.sink.gain.value),
+      output: r3(s.sink.gain.value * s.hush.gain.value),
       channels: Object.fromEntries(CHANNELS.map((c) => [c, r3(s.channels[c].gain.value)])),
+      mix: Object.fromEntries(CHANNELS.map((c) => [c, r3(s.trims[c].gain.value)])),
+      limiter: { reduction: r3(s.limiter.reduction), makeup: r3(s.makeup.gain.value), ...LIMIT },
       voices: [...s.voices.values()].map((v) => ({
         id: v.id,
         owner: v.owner,
@@ -672,8 +854,10 @@ function devHook(s: State) {
         src: file(v.el),
         level: v.gain ? r3(v.gain.gain.value) : r3(v.el.volume),
         target: v.level,
+        trim: v.trim,
         gate: v.gate ? r3(v.gate.gain.value) : 1,
         want: v.want,
+        muted: v.el.muted,
       })),
       elements: [...s.played].map((el) => ({ voice: s.byEl.get(el)?.id ?? null, paused: el.paused, t: r3(el.currentTime), src: file(el) })),
       sources: Object.fromEntries(CHANNELS.map((c) => [c, [...s.nodes[c]].map((n) => n.label)])),
@@ -685,6 +869,10 @@ function devHook(s: State) {
     const problems: string[] = [];
     const live = [...s.voices.values()].filter((v) => v.owner && !v.el.paused);
     const loud = live.filter((v) => (v.gain ? v.gain.gain.value : v.el.volume) > 0.02);
+    if (audioHushed()) {
+      if (s.sink.gain.value * s.hush.gain.value !== 0) problems.push("?mute=1 but the output gain is not 0");
+      s.played.forEach((el) => !el.muted && problems.push(`?mute=1 but an element is not muted: ${file(el)}`));
+    }
     // an owner on its way out (fading, pause pending) may overlap the next one
     const owners = new Set(loud.filter((v) => v.want).map((v) => v.owner));
     if (owners.size > 1) problems.push(`several music owners audible: ${[...owners].join(", ")}`);

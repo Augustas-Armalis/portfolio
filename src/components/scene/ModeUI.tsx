@@ -524,7 +524,7 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
   const start = useCallback(() => {
     if (!track) return;
     // the same file carries on where it is; another one is swapped in under a short dip
-    voicePlayUrl(headphones(), track.file, { fade: 0.5 });
+    voicePlayUrl(headphones(), track.file, { fade: 1.2 });
   }, [track]);
 
   // start as soon as the headphones are picked up, and on track change

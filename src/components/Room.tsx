@@ -1018,6 +1018,7 @@ function Scene({
       boost: flying ? (planeApi.current?.boost() ?? 0) : 0,
       // the avenue is a wood; every painted world has a bed of its own
       place: voyage.cur === "home" ? (voyage.flying && cam.position.z < -46 ? "forest" : "meadow") : wdef.place,
+      world: voyage.cur,
     });
     const s = stage.current;
     const el = now - st.current;
