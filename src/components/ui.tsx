@@ -509,9 +509,9 @@ export function SplitView({
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-              className="min-h-[60vh] bg-white"
+              className="min-h-[60vh]"
             >
-              <button type="button" onClick={() => setPushed(false)} className="press flex h-11 items-center gap-0.5 pl-2 pr-3 text-[17px] tracking-[-0.02em] text-[#0A84FF]">
+              <button type="button" onClick={() => setPushed(false)} className="press flex h-11 items-center gap-0.5 pl-2 pr-3 text-[17px] tracking-[-0.02em] text-[var(--accent)]">
                 <ChevronLeft size={24} strokeWidth={2.2} className="-mr-0.5" /> Back
               </button>
               <InSplit.Provider value>{detail}</InSplit.Provider>
@@ -628,9 +628,10 @@ export function SplitView({
 
 // Settings-style grouped rows.
 export function Group({ title, children, footer }: { title?: string; children: ReactNode; footer?: string }) {
+  const { compact } = useChrome();
   return (
     <section>
-      {title && <h3 className="mb-1.5 px-1 text-[13px] font-semibold text-ink">{title}</h3>}
+      {title && <h3 className={compact ? "t-foot mb-[7px] px-4 uppercase text-[var(--label-2)]" : "mb-1.5 px-1 text-[13px] font-semibold text-ink"}>{title}</h3>}
       <div className="sq divide-y divide-[var(--separator)] overflow-hidden rounded-[10px] bg-[var(--bg-elevated)] shadow-[var(--shadow-1)]">{children}</div>
       {footer && <p className="mt-1.5 px-1 text-[11px] leading-relaxed text-ink-3">{footer}</p>}
     </section>
@@ -638,11 +639,12 @@ export function Group({ title, children, footer }: { title?: string; children: R
 }
 
 export function Row({ label, children, sub }: { label: ReactNode; children?: ReactNode; sub?: ReactNode }) {
+  const { compact } = useChrome();
   return (
-    <div className="flex min-h-[40px] items-center gap-3 px-2.5 py-1.5">
+    <div className={`flex items-center gap-3 ${compact ? "min-h-[48px] px-4 py-2" : "min-h-[40px] px-2.5 py-1.5"}`}>
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] text-ink">{label}</div>
-        {sub && <div className="text-[11px] text-ink-3">{sub}</div>}
+        <div className={compact ? "t-body text-ink" : "text-[13px] text-ink"}>{label}</div>
+        {sub && <div className={compact ? "t-foot text-ink-3" : "text-[11px] text-ink-3"}>{sub}</div>}
       </div>
       {children}
     </div>
@@ -1093,6 +1095,36 @@ export function Squircle({ radius = 12, className = "", style, children, ...rest
     <div ref={ref} className={className} style={{ borderRadius: radius, ...style }} {...rest}>
       {children}
     </div>
+  );
+}
+
+// ---------- TabBar: the phone's floating glass tab bar ----------
+// iOS 26: a capsule of glass above the home indicator; the selected tab is a clearer drop that slides between
+// the tabs on the glass spring.
+export function TabBar<T extends string>({ id, value, onChange, items }: { id: string; value: T; onChange: (v: T) => void; items: { value: T; label: string; icon: ReactNode }[] }) {
+  return (
+    <nav
+      aria-label="Sections"
+      data-glass=""
+      className="glass glass-pop fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+36px)] z-[30] flex h-[60px] items-stretch rounded-full p-1"
+    >
+      {items.map((it) => {
+        const on = it.value === value;
+        return (
+          <button
+            type="button"
+            key={it.value}
+            aria-current={on ? "page" : undefined}
+            onClick={() => onChange(it.value)}
+            className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[3px] rounded-full ${on ? "text-[var(--accent)]" : "text-ink-2"}`}
+          >
+            {on && <motion.span layoutId={`tab-${id}`} transition={SPRING_GLASS} className="absolute inset-0 rounded-full bg-[var(--fill)]" />}
+            <span className="relative">{it.icon}</span>
+            <span className="relative max-w-full truncate px-1 text-[10px] font-semibold leading-none">{it.label}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 

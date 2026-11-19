@@ -80,7 +80,7 @@ import { Monogram } from "./Login";
 import { useOS } from "@/store";
 import { QUALITY_LABELS, setQualityChoice, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { AppIcon, DocArt, FolderArt } from "./icons";
-import { Badge, Btn, Button, dragFile, glass, GlassMenu, Group, IconTile, InfoGrid, List, ListRow, SectionHeader, Squircle, StatsRow, useContextMenu, QuickLook, Row, SearchField, Segmented, SplitView, Switch, Toolbar, Visual, useChrome, type LookItem } from "./ui";
+import { Badge, Btn, Button, dragFile, glass, GlassMenu, TabBar, Group, IconTile, InfoGrid, List, ListRow, SectionHeader, Squircle, StatsRow, useContextMenu, QuickLook, Row, SearchField, Segmented, SplitView, Switch, Toolbar, Visual, useChrome, type LookItem } from "./ui";
 
 const Eyebrow = ({ children }: { children: React.ReactNode }) => (
   <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">{children}</div>
@@ -522,9 +522,11 @@ function RepoView({ it }: { it: StoryItem }) {
   );
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--bg-grouped)]">
-      <Toolbar title={p.name} sub={slug}>
-        {actions}
-      </Toolbar>
+      {!compact && (
+        <Toolbar title={p.name} sub={slug}>
+          {actions}
+        </Toolbar>
+      )}
       <div className={`min-h-0 flex-1 overflow-auto ${compact ? "px-4 pb-10" : "px-6 pb-8 pt-1"}`}>
         <div className="flex items-center gap-4">
           {it.app && <AppIcon id={it.app} size={compact ? 60 : 64} />}
@@ -1224,7 +1226,7 @@ function Queue({ compact }: { compact: boolean }) {
               icon={
                 <span className="relative shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={t.cover} alt="" className={`${compact ? "h-12 w-12 rounded-[8px]" : "h-9 w-9 rounded-[6px]"} object-cover shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)]`} />
+                  <img src={t.cover} alt="" className={`${compact ? "my-2 h-12 w-12 rounded-[8px]" : "h-9 w-9 rounded-[6px]"} object-cover shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)]`} />
                   {on && p.playing && (
                     <span className="absolute inset-0 flex items-center justify-center rounded-[inherit] bg-black/40">
                       <Bars light />
@@ -1945,7 +1947,7 @@ function About() {
   const openContact = useOpenApp("contact");
   return (
     // laid out like About This Mac: the machine (here, the person), its name, a short spec sheet, two buttons, the fine print
-    <div data-drag className={`flex h-full flex-col items-center overflow-auto bg-[var(--bg)] px-6 text-center ${compact ? "pb-10 pt-2" : "pb-5 pt-11"}`}>
+    <div data-drag className={`flex h-full flex-col items-center overflow-auto bg-[var(--bg)] px-6 text-center ${compact ? "pb-14 pt-2" : "pb-5 pt-11"}`}>
       <div className="relative flex h-[112px] w-[112px] items-center justify-center rounded-full bg-[radial-gradient(120%_120%_at_30%_15%,#ffffff_0%,#e9eaee_45%,#c9ccd3_100%)] text-[46px] font-semibold tracking-[-0.03em] text-[#17181b] shadow-[0_14px_34px_-14px_rgb(16_18_24/0.45),inset_0_-2px_6px_rgb(0_0_0/0.06),0_0_0_0.5px_rgb(0_0_0/0.08)]">
         A
       </div>
@@ -1959,14 +1961,25 @@ function About() {
           </div>
         ))}
       </dl>
-      <div className="mt-6 flex flex-wrap justify-center gap-2">
-        <Button size="sm" onClick={openContact} icon={<Send size={13} />}>
-          Get in Touch…
-        </Button>
-        <Button size="sm" href={owner.studio.href} icon={<ArrowUpRight size={14} />}>
-          More Info…
-        </Button>
-      </div>
+      {compact ? (
+        <div className="mt-8 flex w-full max-w-[320px] flex-col gap-2.5">
+          <Btn variant="prominent" size="lg" capsule onClick={openContact} icon={<Send size={16} />}>
+            Get in Touch
+          </Btn>
+          <Btn variant="tinted" size="lg" capsule href={owner.studio.href} icon={<ArrowUpRight size={17} />}>
+            {owner.studio.label}
+          </Btn>
+        </div>
+      ) : (
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Button size="sm" onClick={openContact} icon={<Send size={13} />}>
+            Get in Touch…
+          </Button>
+          <Button size="sm" href={owner.studio.href} icon={<ArrowUpRight size={14} />}>
+            More Info…
+          </Button>
+        </div>
+      )}
       <p className="mt-auto pt-6 text-[10px] leading-[14px] text-ink-3">
         ™ and © {new Date().getFullYear()} {owner.name}.
         <br />
@@ -2452,6 +2465,23 @@ function Finder({ start }: { start: PlaceId }) {
     </div>
   );
 
+  if (compact)
+    return (
+      <>
+        <h1 className="t-large px-4 pb-2 text-ink">{cur.title}</h1>
+        <div className="pb-24">{phoneDetail}</div>
+        <TabBar
+          id={`finder-${start}`}
+          value={place as PlaceId}
+          onChange={(id) => {
+            setPlace(id);
+            setQ("");
+          }}
+          items={places.map((p) => ({ value: p.id, label: p.title, icon: <span className="[&>svg]:h-[22px] [&>svg]:w-[22px]">{PLACE_ICON[p.id]}</span> }))}
+        />
+        <QuickLook items={look ? [look] : []} index={look ? 0 : null} onClose={() => setLook(null)} />
+      </>
+    );
   return (
     <>
       <SplitView
@@ -2463,8 +2493,7 @@ function Finder({ start }: { start: PlaceId }) {
         }}
         sections={sections}
         width={188}
-        startPushed
-        detail={compact ? phoneDetail : macDetail}
+        detail={macDetail}
       />
       <QuickLook items={look ? [look] : []} index={look ? 0 : null} onClose={() => setLook(null)} />
     </>
@@ -2475,7 +2504,7 @@ const Blocks = dynamic(() => import("./games/Blocks"), { ssr: false, loading: ()
 function BlocksApp() {
   const { compact } = useChrome();
   return (
-    <div className={`relative bg-black ${compact ? "fixed inset-0" : "h-full"}`}>
+    <div className={`bg-black ${compact ? "fixed inset-0" : "relative h-full"}`}>
       <Blocks compact={compact} />
     </div>
   );

@@ -339,8 +339,8 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
       </button>
       <div ref={ref} className="absolute inset-0 overflow-y-auto overscroll-contain pb-12">
         {/* a contact card and an About sheet carry their own big name, so no large title over them */}
-        {id === "contact" || id === "about" || id === "blocks" || projects[id] ? (
-          <div className={id === "contact" || id === "about" ? "h-[calc(env(safe-area-inset-top)+104px)]" : "h-[calc(env(safe-area-inset-top)+58px)]"} />
+        {id === "contact" || id === "about" || id === "blocks" || id === "projects" || id === "games" || projects[id] ? (
+          <div className={id === "contact" || id === "about" || (projects[id]?.kind === "code") ? "h-[calc(env(safe-area-inset-top)+104px)]" : "h-[calc(env(safe-area-inset-top)+58px)]"} />
         ) : (
         <motion.h1
           style={{ opacity: big }}
