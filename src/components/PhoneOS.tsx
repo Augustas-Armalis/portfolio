@@ -166,8 +166,8 @@ function Lock() {
         transition={{ duration: 0.7, ease: EASE_OUT, delay: seamless ? 0.35 : 0.2 }}
         className="relative mt-[calc(env(safe-area-inset-top)+84px)] text-center [text-shadow:0_1px_12px_rgb(0_0_0/0.25)]"
       >
-        <div className="text-[20px] font-semibold tracking-[-0.01em] text-white/85">{date}</div>
-        <div className="text-[92px] font-semibold leading-[0.95] tracking-[-0.045em] tabular-nums">{time}</div>
+        <div className="text-[20px] font-medium leading-6 tracking-[-0.01em] text-white/85">{date || "\u00a0"}</div>
+        <div className="mt-1 min-h-[96px] text-[96px] font-light leading-none tracking-[-0.05em] tabular-nums text-white/95">{time}</div>
       </motion.div>
       <div className="relative mt-auto flex w-full flex-col items-center px-4 pb-[max(10px,env(safe-area-inset-bottom))]">
         {/* lock screen widgets, at the bottom like iOS 26: what he's working on, and the studio */}
@@ -182,7 +182,7 @@ function Lock() {
             { k: "Studio", v: "Larpo", s: owner.city },
           ].map((w) => (
             <div key={w.k} data-glass="" className={`${glass("widget-dark")} rounded-[22px] px-4 py-3 text-left`}>
-              <div className="t-cap2 font-semibold uppercase tracking-[0.04em] text-white/60">{w.k}</div>
+              <div className="text-[12px] font-medium leading-4 text-white/60">{w.k}</div>
               <div className="t-headline mt-0.5 truncate text-white">{w.v}</div>
               <div className="t-foot truncate text-white/65">{w.s}</div>
             </div>

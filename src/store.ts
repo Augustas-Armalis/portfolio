@@ -26,6 +26,8 @@ type OS = {
   sleeping: boolean;
   restarting: boolean;
   locked: boolean;
+  // how the desktop was reached: from the lock screen (its face dissolves over the desktop) or straight from the intro
+  entry: "lock" | "boot";
   // Shut Down returns to the 3D intro with the screen off (read by the intro)
   introOff: boolean;
   // chosen desktop picture (index into wallpapers); -1 until one is chosen, which means the default for the device
@@ -77,6 +79,9 @@ type OS = {
   setWallpaper: (i: number) => void;
 };
 
+// The pictures a new visitor gets. The Mac's is the one the 3D display shows on its lock face (scene/lock.ts), so
+// the push-in, the lock screen and the desktop are one picture; the phone's is calmer still, for the icon labels.
+const MAC_WALLPAPER = Math.max(0, wallpapers.findIndex((w) => w.src.includes("foggy-sunrise")));
 const PHONE_WALLPAPER = Math.max(0, wallpapers.findIndex((w) => w.src.includes("mountain-glow")));
 
 // the desktop opens already in use: his music is up
@@ -98,6 +103,7 @@ export const useOS = create<OS>((set, get) => ({
   sleeping: false,
   restarting: false,
   locked: false,
+  entry: "boot",
   introOff: false,
   wallpaper: -1,
   appearance: "light",
@@ -141,10 +147,11 @@ export const useOS = create<OS>((set, get) => ({
     else set({ phase: "login" });
   },
   login: () => {
-    const { locked, user } = get();
+    const { locked, user, phase } = get();
+    const entry = phase === "login" ? "lock" : "boot";
     // unlocking brings the windows back as they were
-    if (locked && user) return set({ phase: "os", locked: false });
-    set({ user: "engineer", phase: "os", locked: false, phoneApp: null, topZ: 11, windows: firstWindows() });
+    if (locked && user) return set({ phase: "os", locked: false, entry });
+    set({ user: "engineer", phase: "os", locked: false, entry, phoneApp: null, topZ: 11, windows: firstWindows() });
   },
   lockScreen: () => set({ phase: "login", locked: true, palette: false, phoneApp: null, seamless: false }),
   sleep: (on) => set({ sleeping: on }),
@@ -208,7 +215,7 @@ export function focusedApp(windows: Win[]): AppId | null {
 export function useWallpaperIndex() {
   const i = useOS((s) => s.wallpaper);
   const mobile = useOS((s) => s.isMobile);
-  return wallpapers[i] ? i : mobile ? PHONE_WALLPAPER : 0;
+  return wallpapers[i] ? i : mobile ? PHONE_WALLPAPER : MAC_WALLPAPER;
 }
 export function useWallpaper() {
   return wallpapers[useWallpaperIndex()];

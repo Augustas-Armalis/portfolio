@@ -20,7 +20,7 @@ import { allApps, apps, desktopItems, dockApps, mainWork, otherWork, owner, plac
 import { focusedApp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
-import { Monogram, PowerOverlay } from "./Login";
+import { LockActions, LockFace, Monogram, PowerOverlay } from "./Login";
 import { Btn, Chrome, EASE_OUT, FILE_MIME, QuickLook, SPRING_GLASS, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useMorph, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
 
@@ -1516,6 +1516,26 @@ function Welcome() {
 
 // `user` is still passed by the intro (Experience.tsx); there is one desktop, so it is not read.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
+// Unlocking: the lock screen's face stays for a moment over the desktop it was covering, then lets go. The clock
+// drifts up and softens, the dimming lifts, and under it the menu bar, the Dock and the windows arrive in turn.
+function UnlockVeil() {
+  const [on, setOn] = useState(() => useOS.getState().entry === "lock");
+  if (!on) return null;
+  const reduce = reducedMotion();
+  return (
+    <motion.div
+      aria-hidden
+      initial={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+      animate={{ opacity: 0, y: reduce ? 0 : -28, scale: reduce ? 1 : 1.03, filter: reduce ? "blur(0px)" : "blur(6px)" }}
+      transition={{ duration: 0.55, ease: EASE_OUT }}
+      onAnimationComplete={() => setOn(false)}
+      className="pointer-events-none absolute inset-0 z-[5000]"
+    >
+      <LockFace still action={<LockActions inert />} />
+    </motion.div>
+  );
+}
+
 export default function Desktop(_: { user?: UserId }) {
   useGlassScope();
   const windows = useOS((s) => s.windows);
@@ -1574,6 +1594,7 @@ export default function Desktop(_: { user?: UserId }) {
       </div>
       <AppsOverlay />
       <MissionControl />
+      <UnlockVeil />
       <Dock />
       <Spotlight />
       <PowerOverlay />
