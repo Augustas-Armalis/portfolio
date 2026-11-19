@@ -12,7 +12,7 @@ import { useOS } from "@/store";
 import { ambienceMuted, ambienceScene, onAmbienceChange, setAmbienceMuted, startAmbience } from "@/lib/ambience";
 import { music, sampleMusic, stopOwner } from "@/lib/audio";
 import { flightMusicStop, flightMusicTo } from "@/lib/flightMusic";
-import { reportFrame, useQuality, type Quality } from "@/lib/quality";
+import { getQuality, getQualityChoice, reportFrame, setQualityChoice, useQuality, type Quality } from "@/lib/quality";
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { DeskModel } from "./scene/glb";
 import { Flowers, Grass } from "./scene/Grass";
@@ -52,7 +52,7 @@ import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
 import { Trees } from "./scene/Trees";
 import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
-import { WORLDS, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
+import { ORIGIN, WORLDS, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
 import { Birds, Ground, Lake, MistBands, Mountains, Sky, makeSkyMaterial } from "./scene/World";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
@@ -373,7 +373,7 @@ function Scene({
   }, [scene, fog]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.() });
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.(), __worlds: { defs: WORLDS, origin: ORIGIN }, __q: { get: getQuality, choice: getQualityChoice, set: setQualityChoice, report: reportFrame } });
     if (process.env.NODE_ENV === "production") return;
     // window.__scene: scrub the world deterministically and save stills.
     //   step(seconds, dt)  run the simulation forward in fixed steps (the pane itself only paints ~2 fps)
