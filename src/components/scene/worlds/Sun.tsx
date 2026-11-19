@@ -219,7 +219,7 @@ export default function SunWorld({ props }: { props: WorldProps }) {
     }
     // suns on stems in the grass, like flowers, in drifts all along the path
     const pts = pathOf("sun").pts;
-    const clear = (x: number, z: number) => Math.hypot(x + 44, z - 300) > 34 && BELLS.every(([bx, bz, R]) => Math.hypot(x - bx, z - bz) > R + 6);
+    const clear = (x: number, z: number) => def.canvases.every((c) => Math.hypot(x - c.x, z - c.z) > 34) && BELLS.every(([bx, bz, R]) => Math.hypot(x - bx, z - bz) > R + 6);
     const drifts = props.mobile ? 14 : 34;
     for (let d = 0; d < drifts; d++) {
       const p = pts[Math.floor(((d + 0.5) / drifts) * (pts.length - 12))];
@@ -231,9 +231,10 @@ export default function SunWorld({ props }: { props: WorldProps }) {
         const x = cx + (r() - 0.5) * 26;
         const z = cz + (r() - 0.5) * 26;
         if (!clear(x, z)) continue;
-        const h = 4.5 + r() * 5.5;
+        // a hair of a stem: the sun should read as a flower of light, not a lamp on a post
+        const h = 2.6 + r() * 3.4;
         const y = g(x, z);
-        k.box(0.09, h, 0.09, [x, y + h / 2, z], [0.3, 0.25, 0.12]);
+        k.add(new THREE.CylinderGeometry(0.012, 0.035, h, 4, 1, true), [x, y + h / 2, z], [0.34, 0.28, 0.12], { rot: [(r() - 0.5) * 0.16, 0, (r() - 0.5) * 0.16] });
         suns.push({ p: [x, y + h + 0.6, z], size: 1.7 + r() * 1.0, col: GOLD, k: 0.75 });
       }
     }
@@ -265,6 +266,32 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       bell(far, x, z, R, H, g(x, z) - 6, STONE, STONE_TOP, 28);
       comb(far, x, z, R, H, g(x, z) - 6, a + 2.2, 7, r);
       if (i % 3 === 0) suns.push({ p: [x + R * 0.3, g(x, z) + R * 3.2, z], size: 30, col: GOLD, k: 0.9 });
+    }
+    // the far strip at the upper left of the picture: a long low shelf of land on the horizon, a comb of
+    // thin strokes along it, a small temple, and its own row of drawn suns with a great one at the end
+    {
+      const sx = -470;
+      const sz = -300;
+      const yaw = Math.atan2(sx, sz + 40) + Math.PI; // broadside to the middle of the world
+      const c = Math.cos(yaw);
+      const sn = Math.sin(yaw);
+      const sy = g(sx, sz) + 5;
+      const L = (u: number, y: number, w = 0): V3 => [sx + c * u + sn * w, sy + y, sz - sn * u + c * w];
+      far.box(300, 5, 26, L(0, 0), DARK, { top: STONE, rot: [0, yaw, 0] });
+      far.box(330, 30, 34, L(0, -16), DARK, { top: DARK, rot: [0, yaw, 0] });
+      for (let i = 0; i < 26; i++) {
+        const u = -140 + i * 7.2 + (r() - 0.5) * 2;
+        if (Math.abs(u - 62) < 26) continue;
+        const h = 9 + r() * 12;
+        far.add(new THREE.ConeGeometry(1.0, h, 4), L(u, 2.5 + h / 2), DARK, { top: STONE });
+      }
+      // the temple: a plinth, a row of columns, a pediment
+      far.box(34, 3, 16, L(62, 4), STONE, { top: STONE_TOP, rot: [0, yaw, 0] });
+      for (let i = 0; i < 6; i++) far.add(new THREE.CylinderGeometry(1.1, 1.3, 17, 8), L(62 - 13.5 + i * 5.4, 14, 5), STONE, { top: STONE_TOP });
+      far.box(32, 2.4, 14, L(62, 23.6), STONE_TOP, { rot: [0, yaw, 0] });
+      far.add(new THREE.CylinderGeometry(8, 8, 32, 3, 1, false, Math.PI / 2), L(62, 27.2), STONE, { rot: [0, yaw, Math.PI / 2], scale: [0.6, 1, 1] });
+      suns.push({ p: L(-150, 34, 6), size: 62, col: GOLD, k: 0.85 });
+      for (let i = 0; i < 5; i++) suns.push({ p: L(-70 + i * 44, 44 + (i % 2) * 9, 6), size: 17, col: GOLD, k: 0.8 });
     }
     // low mist where the path runs between the gates
     for (let i = 0; i < 9; i++) puffs.push({ p: [(r() - 0.5) * 240, g(0, 150) + 5 + r() * 5, 60 + r() * 330], size: 40 + r() * 40, a: 0.6 });
