@@ -48,3 +48,10 @@ public/assets/polyhaven/: wood_table_001, fabric_leather_02, leather_white (diff
 
 ## M. K. Čiurlionis paintings (public domain), added 19 Nov
 public/assets/ciurlionis/*.jpg, from Wikimedia Commons; each source page is listed in public/assets/ciurlionis/paintings.json.
+
+## Ambience recordings (CC0), added 20 Nov
+- public/assets/ambience/meadow.mp3: summermeadow_crickets_birds, https://archive.org/details/summermeadow_crickets_birds
+- public/assets/ambience/forest-birds.mp3: forest birds, https://archive.org/details/soundica-fs-581727-forest-birds-wav
+
+## System app icons (GPL-3.0), added 20 Nov
+public/icons/system/*.svg: from WhiteSur icon theme by vinceliuice, https://github.com/vinceliuice/WhiteSur-icon-theme (GPL-3.0). Unmodified files, renamed.

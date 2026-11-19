@@ -54,5 +54,13 @@
   "width": 1280,
   "height": 1149,
   "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_OFFERING_-_1909.jpg"
+ },
+ {
+  "id": "tranquility",
+  "file": "/assets/ciurlionis/tranquility.jpg",
+  "title": "Tranquility (1904)",
+  "width": 960,
+  "height": 553,
+  "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Ciurlionis_-_Tranquility_(Ramybe).jpg"
  }
 ]
