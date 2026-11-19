@@ -55,7 +55,7 @@ export function Button({
 
 export function Segmented<T extends string>({ value, options, onChange, id }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; id: string }) {
   return (
-    <div className="flex h-7 items-center rounded-[8px] bg-black/[0.05] p-[2px]">
+    <div className="seg flex h-7 items-center rounded-[8px] bg-black/[0.05] p-[2px]">
       {options.map((o) => (
         <button
           type="button"
@@ -90,7 +90,7 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boo
     >
       <motion.span
         animate={{ x: on ? 16 : 0 }}
-        transition={{ type: "spring", bounce: 0, duration: 0.25 }}
+        transition={{ type: "spring", bounce: 0.3, duration: 0.35 }}
         className="absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/0.2)]"
       />
     </button>
@@ -127,7 +127,7 @@ export function Toolbar({ title, sub, children, inset }: { title?: ReactNode; su
   return (
     <div
       data-drag
-      className={`flex h-[52px] shrink-0 items-center gap-2 border-b border-black/[0.06] pr-3 ${pad ? "pl-[84px]" : "pl-4"}`}
+      className={`toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-black/[0.06] pr-3 ${pad ? "pl-[84px]" : "pl-5"}`}
     >
       <div className="min-w-0 flex-1">
         {title && <div className="truncate text-[13px] font-semibold leading-[16px] tracking-[-0.003em] text-ink">{title}</div>}
@@ -144,7 +144,7 @@ export function SearchField({ value, onChange, placeholder = "Search", id }: { v
   return (
     <label
       htmlFor={id}
-      className={`flex shrink-0 items-center gap-1.5 text-ink-3 ${
+      className={`search flex shrink-0 items-center gap-1.5 text-ink-3 ${
         compact ? "h-9 w-full rounded-[10px] bg-[#767680]/[0.12] px-2" : "h-7 w-[168px] rounded-[6px] bg-black/[0.05] px-2 focus-within:ring-[3px] focus-within:ring-[#0A84FF]/30"
       }`}
     >

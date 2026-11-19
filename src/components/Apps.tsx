@@ -664,9 +664,9 @@ function LiveSite({ it }: { it: StoryItem }) {
     );
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div data-drag className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--separator)] pl-[84px] pr-3">
+      <div data-drag className="toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--separator)] pl-[84px] pr-3">
         <Btn variant="plain" size="sm" iconOnly label="Reload" onClick={() => setReload((r) => r + 1)} icon={<RotateCw size={14} />} />
-        <div className="mx-auto flex h-[30px] w-[min(420px,60%)] items-center justify-center gap-1.5 rounded-[8px] bg-[var(--fill-2)] px-3">
+        <div className="search mx-auto flex h-[30px] w-[min(420px,60%)] items-center justify-center gap-1.5 rounded-[8px] bg-[var(--fill-2)] px-3">
           <Lock size={11} className="text-ink-3" />
           <span className="m-body truncate text-ink">{domain}</span>
         </div>
