@@ -3,14 +3,18 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Environment, Html, Sparkles } from "@react-three/drei";
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, Camera as CameraIcon, Headphones as Headphones2, PenLine, Piano, Power, Send, type LucideIcon } from "lucide-react";
+import { BookOpen, Camera as CameraIcon, Headphones as Headphones2, PenLine, Piano, Power, Send, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import * as THREE from "three";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { owner, type UserId } from "@/content";
 import { play } from "@/lib/sfx";
 import { useOS } from "@/store";
+import { ambienceMuted, ambienceScene, onAmbienceChange, setAmbienceMuted, startAmbience } from "@/lib/ambience";
 import { music, sampleMusic } from "@/lib/audio";
+import { flightMusicStop, flightMusicTo } from "@/lib/flightMusic";
+import { reportFrame, useQuality, type Quality } from "@/lib/quality";
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
+import { DeskModel } from "./scene/glb";
 import { Flowers, Grass } from "./scene/Grass";
 import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone, glint } from "./scene/models";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
@@ -30,6 +34,7 @@ import {
   RIG,
   bootProgress,
   clamp01,
+  lakeK,
   easeInOutCubic,
   easeInOutQuint,
   easeOutExpo,
@@ -42,7 +47,10 @@ import {
 import { TRACK, geist, geistReady } from "./scene/font";
 import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
-import { Birds, Ground, Lake, Mountains, Sky, Trees, makeSkyMaterial } from "./scene/World";
+import { ROUTE, SEA_HOUR, STATIONS, stationAt } from "./scene/flightPath";
+import { Trees } from "./scene/Trees";
+import { Voyage } from "./scene/Voyage";
+import { Birds, Ground, Lake, MistBands, Mountains, Sky, makeSkyMaterial } from "./scene/World";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
 // Everything on the desk does something: the display boots the OS, the piano
@@ -325,6 +333,10 @@ function Scene({
   onHandoff,
   onReaderInfo,
   onSky,
+  free,
+  onStation,
+  voyage,
+  q,
 }: {
   mobile: boolean;
   reduced: boolean;
@@ -346,6 +358,10 @@ function Scene({
   onHandoff: (t?: UserId) => void;
   onReaderInfo: (i: ReaderInfo) => void;
   onSky: (s: { label: string; night: number; hdr: "day" | "sunset" | "night" }) => void;
+  free: boolean;
+  onStation: (i: number) => void;
+  voyage: boolean;
+  q: Quality;
 }) {
   const { camera, size, gl, scene } = useThree();
   const cam = camera as THREE.PerspectiveCamera;
@@ -419,6 +435,7 @@ function Scene({
   const skyTick = useRef(-1);
   const musicClock = useRef(nowS());
   const musicDrift = useRef({ t: 0 });
+  const flightSky = useRef({ w: 0, hour: 12, at: -1 });
   const lastH = useRef(-1);
   const lastLabel = useRef("");
 
@@ -437,7 +454,7 @@ function Scene({
   }, [scene, fog]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __os: useOS, __start: () => startRef.current?.() });
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __os: useOS, __start: () => startRef.current?.() });
   }, [input, cam, v]);
 
   // compile everything behind the preloader, then report ready. compileAsync
@@ -595,6 +612,7 @@ function Scene({
     document.body.style.cursor = "";
     if (m === "plane") {
       play("plane");
+      flightMusicTo("road");
       planeApi.current?.launch(cam);
       onMode("plane");
       setStage("fly");
@@ -616,6 +634,7 @@ function Scene({
     const s = stage.current;
     if (s === "fly") {
       planeApi.current?.beginLand(cam);
+      flightMusicStop();
       setStage("land");
       return;
     }
@@ -784,7 +803,34 @@ function Scene({
     let h = clockHours();
     const DUSK = 21.6;
     if (lean > 0.0005 && h > 5 && h < DUSK) h += (DUSK - h) * lean;
-    const pulsing = SKY_U.uPulse.value > 0.004 || md.t > 0;
+    // in flight each station brings its own hour: the gold of the suns, the
+    // night of the stars, the long dusk over the sea
+    const fs = flightSky.current;
+    let fw = 0;
+    let fh = fs.hour;
+    let at = -1;
+    if ((stage.current === "fly" || stage.current === "land") && planeApi.current) {
+      const sa = stationAt(planeApi.current.pos.z);
+      if (sa.sea > sa.w) {
+        fw = sa.sea;
+        fh = SEA_HOUR;
+        at = STATIONS.length;
+      } else if (sa.index >= 0) {
+        fw = sa.w;
+        fh = STATIONS[sa.index].hour;
+        at = sa.w > 0.35 ? sa.index : -1;
+      }
+      if (stage.current === "land") at = -1;
+    }
+    fs.w += (fw - fs.w) * (1 - Math.exp(-dtS * 1.6));
+    // one station's hour glides into the next rather than snapping
+    if (fw > 0) fs.hour = fs.w < 0.02 ? fh : (fs.hour + (((fh - fs.hour + 36) % 24) - 12) * (1 - Math.exp(-dtS * 0.9)) + 24) % 24;
+    if (fs.w > 0.002) h = (h + ((((fs.hour - h + 36) % 24) - 12) * fs.w) + 24) % 24;
+    if (at !== fs.at) {
+      fs.at = at;
+      onStation(at);
+    }
+    const pulsing = SKY_U.uPulse.value > 0.004 || md.t > 0 || fs.w > 0.002;
     if (!pulsing && now - skyTick.current < 1 && skyTick.current > 0 && Math.abs(h - lastH.current) < 0.003) return;
     skyTick.current = now;
     lastH.current = h;
@@ -825,6 +871,16 @@ function Scene({
     const now = nowS();
     const dt = Math.min(rawDt, 0.1);
     updateSky(now);
+    // Auto quality listens to the real frame time while the scene is simply being looked at or flown through
+    if (stage.current === "idle" || stage.current === "fly") reportFrame(rawDt);
+    const flying = stage.current === "fly";
+    const lk = lakeK(cam.position.x, cam.position.z);
+    ambienceScene({
+      night: SKY_U.uNight.value,
+      water: Math.max(clamp01(1 - (lk - 1) / 2.5) * 0.8, clamp01((ROUTE.shoreZ + 50 - cam.position.z) / 70)),
+      speed: flying ? (planeApi.current?.speed() ?? 0) : 0,
+      boost: flying ? (planeApi.current?.boost() ?? 0) : 0,
+    });
     const s = stage.current;
     const el = now - st.current;
     const reflect = mats.reflect;
@@ -832,7 +888,7 @@ function Scene({
     // arrival mist thins out as the camera comes down
     const at = introAt.current;
     const mist = instant ? 0 : at === null ? 0.4 : 0.4 * (1 - smooth(clamp01((now - at) / (ARRIVE * 0.82))));
-    SKY_U.uMist.value = mist;
+    SKY_U.uMist.value = Math.max(mist, (planeApi.current?.landMist() ?? 0) * 0.55);
     fog.near = 20 * (1 - mist * 2.2) + 0.5;
     fog.far = 170 * (1 - mist * 2.2) + 6;
     // display glint once it has settled
@@ -987,20 +1043,27 @@ function Scene({
     }
   };
 
-  const shadowMap = mobile ? 1024 : 2048;
+  const shadowMap = Math.min(q.shadows || 512, mobile ? 1024 : 4096);
   const idle = stage.current === "idle" && active;
   const order: ObjKind[] = ["keys", "book", "sketchbook", "headphones", "camera"];
   const motionOf: Record<ObjKind, Motion> = { keys: "slide", book: "drop", sketchbook: "slide", headphones: "settle", camera: "drop" };
 
   const objEl = (o: Placement) => {
-    if (o.kind === "keys") return <PianoKeys playable={mode === "piano"} />;
+    if (o.kind === "keys")
+      return (
+        <DeskModel name="keyboard">
+          <PianoKeys playable={mode === "piano"} />
+        </DeskModel>
+      );
     if (o.kind === "book")
       return <Reader reading={reading && mode === "book"} peekAt={lands[1].at > 0 ? lands[1].at + 0.05 : null} apiRef={reader} onInfo={onReaderInfo} onClosed={() => {}} />;
     if (o.kind === "sketchbook") return <SketchbookLive open={mode === "sketch"} apiRef={sketch} />;
     if (o.kind === "headphones")
       return (
         <>
-          <Headphones />
+          <DeskModel name="headphones">
+            <Headphones />
+          </DeskModel>
           {mode !== "music" && <HeadphonesBlob />}
           {/* the band is thin and mostly air: the whole silhouette takes the click */}
           <mesh visible={false} position={[0, 0.1, 0]}>
@@ -1008,20 +1071,25 @@ function Scene({
           </mesh>
         </>
       );
-    return <CameraBody />;
+    return (
+      <DeskModel name="camera">
+        <CameraBody />
+      </DeskModel>
+    );
   };
 
   return (
     <>
       <Sky />
       <Mountains mobile={mobile} />
-      <Trees />
+      <Trees mobile={mobile || q.trees < 0.7} fogDensity={FOG * 0.42} />
+      {q.effects > 0.2 && <MistBands mobile={mobile || q.effects < 0.7} />}
       <Ground fogDensity={FOG * 0.55} />
       <Lake fogDensity={FOG * 0.7} />
-      <Grass mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} />
+      <Grass mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} density={q.grass} />
       <Flowers mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} />
       <Birds />
-      <SkyLife reduced={reduced} />
+      <SkyLife reduced={reduced} amount={q.effects} />
 
       {/* the HDRIs load in their own boundary so the scene never waits on them */}
       <Suspense fallback={null}>
@@ -1031,7 +1099,7 @@ function Scene({
       <directionalLight
         ref={sun}
         target={sunTarget}
-        castShadow
+        castShadow={q.shadows > 0}
         shadow-mapSize={[shadowMap, shadowMap]}
         shadow-bias={-0.0003}
         shadow-normalBias={0.015}
@@ -1058,7 +1126,13 @@ function Scene({
         label={LABELS.display}
         onPick={() => startRef.current?.()}
       >
-        {mobile ? <Phone screenMat={screenMat} screenRef={screen} /> : <Monitor screenMat={screenMat} screenRef={screen} />}
+        {mobile ? (
+          <Phone screenMat={screenMat} screenRef={screen} />
+        ) : (
+          <DeskModel name="display">
+            <Monitor screenMat={screenMat} screenRef={screen} />
+          </DeskModel>
+        )}
       </Piece>
       {order.map((kind, i) => {
         const o = place(kind);
@@ -1083,9 +1157,10 @@ function Scene({
           </Piece>
         );
       })}
-      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={INTRO + 1.5} instant={instant} />
+      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} free={free} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={INTRO + 1.5} instant={instant} />
       {idle && mode === "none" && <PlaneLabel spot={planeSpot} />}
       <DustPuffs lands={lands} />
+      {voyage && <Voyage mobile={mobile || q.trees < 0.7} />}
     </>
   );
 }
@@ -1132,16 +1207,16 @@ function SkyEnvironment({ envSky }: { envSky: THREE.Material }) {
 }
 
 // Pollen drifting in daylight, fireflies after dusk.
-function SkyLife({ reduced }: { reduced: boolean }) {
+function SkyLife({ reduced, amount }: { reduced: boolean; amount: number }) {
   const [night, setNight] = useState(false);
   useFrame(() => {
     const n = SKY_U.uNight.value > 0.5;
     if (n !== night) setNight(n);
   });
   return night ? (
-    <Sparkles count={70} scale={[9, 1.1, 9]} position={[0, 0.55, 0.5]} size={3.2} speed={reduced ? 0 : 0.35} opacity={0.9} color="#e4ff8f" noise={1.4} />
+    <Sparkles key="n" count={Math.round(60 + 200 * amount)} scale={[26, 1.5, 26]} position={[0, 0.7, -3]} size={3.4} speed={reduced ? 0 : 0.35} opacity={0.9} color="#e4ff8f" noise={1.4} />
   ) : (
-    <Sparkles count={80} scale={[4, 1.4, 3]} position={[0, 1.05, 0.2]} size={1.5} speed={reduced ? 0 : 0.18} opacity={0.5} color="#ffe2b0" noise={0.6} />
+    <Sparkles key="d" count={Math.round(30 + 60 * amount)} scale={[4, 1.4, 3]} position={[0, 1.05, 0.2]} size={1.5} speed={reduced ? 0 : 0.18} opacity={0.5} color="#ffe2b0" noise={0.6} />
   );
 }
 
@@ -1170,6 +1245,8 @@ export default function Room({
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const down = useRef({ x: 0, y: 0, pinch: 0 });
   const [stage, setStage] = useState<Stage>("idle");
+  const stageRef = useRef<Stage>("idle");
+  stageRef.current = stage;
   const [mode, setMode] = useState<Mode>("none");
   const [nav, setNav] = useState<"orbit" | "explore">("orbit");
   const navRef = useRef<{ explore: () => void; back: () => void } | null>(null);
@@ -1189,6 +1266,22 @@ export default function Room({
   const [skipIntro] = useState(introOff);
   const mounted = useRef(performance.now());
   const [caption, setCaption] = useState<string>();
+  const q = useQuality();
+  const [free, setFree] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [quiet, setQuiet] = useState(ambienceMuted);
+  useEffect(() => onAmbienceChange(() => setQuiet(ambienceMuted())), []);
+  // nothing is drawn while the tab is in the background
+  useEffect(() => {
+    const v = () => setHidden(document.visibilityState !== "visible");
+    v();
+    document.addEventListener("visibilitychange", v);
+    return () => document.removeEventListener("visibilitychange", v);
+  }, []);
+  useEffect(() => ambienceScene({ active }), [active]);
+  const [station, setStation] = useState(-1);
+  // the far world (stations, gate, sea) is built once the desk has settled
+  const [voyage, setVoyage] = useState(false);
 
   useEffect(() => {
     const h = clockHours();
@@ -1209,7 +1302,11 @@ export default function Room({
   useEffect(() => {
     if (!revealed) return;
     const t = window.setTimeout(() => setIntroDone(true), (skipIntro || reduced ? 0.4 : INTRO + 2.4) * 1000);
-    return () => window.clearTimeout(t);
+    const t2 = window.setTimeout(() => setVoyage(true), (skipIntro || reduced ? 1.2 : ARRIVE + 1.5) * 1000);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(t2);
+    };
   }, [revealed, skipIntro, reduced]);
   const idle = stage === "idle" && active && revealed && introDone && mode === "none";
   const live = active;
@@ -1330,6 +1427,8 @@ export default function Room({
           apiRef.current?.skip();
           setIntroDone(true);
         }
+        // sound may only begin on a gesture: this is the first one
+        startAmbience();
         onDown(e);
       }}
       onPointerMove={onMove}
@@ -1344,8 +1443,8 @@ export default function Room({
     >
       <Canvas
         key={isMobile ? "m" : "d"}
-        frameloop={live ? "always" : "never"}
-        dpr={[1, isMobile ? 1.25 : 1.5]}
+        frameloop={live && !hidden ? "always" : "never"}
+        dpr={[Math.min(1, q.dpr), Math.min(q.dpr, isMobile ? 1.5 : 2)]}
         shadows={{ type: THREE.PCFSoftShadowMap }}
         camera={{ fov: RIG[isMobile ? "mobile" : "desktop"].fov, near: 0.01, far: 3000, position: [0, 1.2, 2.2] }}
         gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
@@ -1375,6 +1474,13 @@ export default function Room({
           onHandoff={onHandoff}
           onReaderInfo={setReaderInfo}
           onSky={setSky}
+          free={free}
+          onStation={(i) => {
+            setStation(i);
+            if (stageRef.current === "fly") flightMusicTo(i < 0 ? "road" : i >= STATIONS.length ? "sea" : STATIONS[i].id);
+          }}
+          q={q}
+          voyage={voyage}
         />
       </Canvas>
 
@@ -1392,21 +1498,6 @@ export default function Room({
       />
 
       <div className="pointer-events-none absolute inset-0 transition-opacity duration-500" style={{ opacity: idle ? 1 : 0 }}>
-        <div className="absolute left-5 top-5 text-[13px] leading-tight text-white [text-shadow:0_1px_12px_rgb(20_14_8/0.45)]">
-          <div className="font-semibold tracking-[-0.02em]">{owner.name}</div>
-          <div className="text-white/70">{owner.role}</div>
-        </div>
-        <button
-          type="button"
-          className="lg lg-btn pointer-events-auto absolute right-4 top-4 h-8 px-3.5 text-[13px] font-medium text-white/92"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (idle) onSkip();
-          }}
-        >
-          Skip
-        </button>
         <div className="absolute inset-x-0 bottom-8 flex justify-center px-4">
           <Glass className="flex h-9 items-center gap-2 px-4 text-[13px] font-medium">
             <span>{introOff ? (isMobile ? "Tap the phone to power on" : "Click the display to power on") : isMobile ? "Tap the phone to start" : "Click the display to start"}</span>
@@ -1460,9 +1551,37 @@ export default function Room({
           />
         )}
         {mode === "sketch" && <SketchUI key="sketch" onExit={exit} onClear={() => apiRef.current?.sketch.current?.clear()} onSave={() => apiRef.current?.sketch.current?.save()} />}
-        {mode === "plane" && <FlightUI key="plane" onLand={exit} mobile={isMobile} />}
+        {mode === "plane" && <FlightUI key="plane" onLand={exit} mobile={isMobile} free={free} onFree={setFree} station={stage === "fly" ? station : -1} />}
       </AnimatePresence>
 
+      {/* the place has a sound of its own; one small pill silences it */}
+      <AnimatePresence>
+        {revealed && introDone && active && stage !== "boot" && stage !== "approach" && stage !== "done" && (
+          <Glass
+            key="mute"
+            className="!absolute right-4 top-4 z-30 max-sm:right-3"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={GLASS_SPRING}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              aria-label={quiet ? "Turn ambient sound on" : "Mute ambient sound"}
+              aria-pressed={quiet}
+              className="lg-btn grid h-9 w-9 place-items-center text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                startAmbience();
+                setAmbienceMuted(!quiet);
+              }}
+            >
+              {quiet ? <VolumeX size={16} strokeWidth={2} /> : <Volume2 size={16} strokeWidth={2} />}
+            </button>
+          </Glass>
+        )}
+      </AnimatePresence>
       <GlassStyles />
       <Preloader progress={progress} done={revealed} caption={caption} />
     </div>

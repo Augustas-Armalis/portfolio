@@ -43,10 +43,12 @@ export function getAnalyser(): AnalyserNode | null {
 
 // Route an <audio>/<video> element through the same output so it shows up in
 // getAnalyser(). Call once per element.
-export function tapMediaElement(el: HTMLMediaElement) {
+export function tapMediaElement(el: HTMLMediaElement, through?: (ctx: AudioContext) => AudioNode) {
   const { ctx, analyser } = ensureGraph();
   const src = ctx.createMediaElementSource(el);
-  src.connect(analyser);
+  // optionally via a node of the caller's (a gain for cross-fades)
+  if (through) src.connect(through(ctx)).connect(analyser);
+  else src.connect(analyser);
   return src;
 }
 

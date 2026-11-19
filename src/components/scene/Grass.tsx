@@ -1,9 +1,12 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { GLSL_LAKE, GLSL_NOISE, GLSL_SKY, lakeK, pathW, pathX } from "./shared";
+import { ROUTE, STATIONS, roadX } from "./flightPath";
+
+const PARADISE_Z = STATIONS.find((s) => s.id === "paradise")!.z;
+import { GLSL_LAKE, GLSL_NOISE, GLSL_PATH, GLSL_SKY, lakeK, pathW, pathX } from "./shared";
 import { SKY_U } from "./sky";
 import { GLSL_DESK_SHADOW } from "./World";
 
@@ -41,7 +44,7 @@ function bladeGeometry() {
 
 // Rings overlap and cross-fade (blades shrink to nothing at a ring's edge) so
 // density and blade width change without a visible seam.
-type Ring = { count: number; rMin: number; rMax: number; width: number; height: [number, number]; fadeIn?: [number, number]; fadeOut?: [number, number]; linear?: boolean; grow?: number };
+type Ring = { count: number; rMin: number; rMax: number; width: number; height: [number, number]; fadeIn?: [number, number]; fadeOut?: [number, number]; linear?: boolean; grow?: number; wrap?: number };
 const sstep = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -59,6 +62,18 @@ function scatter(g: THREE.InstancedBufferGeometry, ring: Ring, seed: number) {
     // uniform area between rMin and rMax
     // linear: density falls off as 1/r (dense near the desk, no seams), blades
     // widen with distance to keep the field looking full
+    if (ring.wrap) {
+      // a square tile of blades that the shader wraps around the camera, so
+      // the field travels with the plane; fades and clearings happen there
+      off[i * 3] = (rnd() - 0.5) * ring.wrap;
+      off[i * 3 + 1] = (rnd() - 0.5) * ring.wrap;
+      off[i * 3 + 2] = rnd() * Math.PI * 2;
+      shp[i * 4] = ring.height[0] + rnd() * (ring.height[1] - ring.height[0]);
+      shp[i * 4 + 1] = ring.width * (0.7 + rnd() * 0.6);
+      shp[i * 4 + 2] = 0.25 + rnd() * 0.7;
+      shp[i * 4 + 3] = rnd();
+      continue;
+    }
     const r = ring.linear
       ? ring.rMin + rnd() * (ring.rMax - ring.rMin)
       : Math.sqrt(ring.rMin * ring.rMin + rnd() * (ring.rMax * ring.rMax - ring.rMin * ring.rMin));
@@ -80,13 +95,18 @@ function scatter(g: THREE.InstancedBufferGeometry, ring: Ring, seed: number) {
   g.setAttribute("aOffset", new THREE.InstancedBufferAttribute(off, 3));
   g.setAttribute("aShape", new THREE.InstancedBufferAttribute(shp, 4));
   g.instanceCount = ring.count;
-  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), ring.rMax + 2);
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), ring.wrap ? 1e5 : ring.rMax + 2);
 }
 
-export function makeGrassMaterial(fogDensity: number) {
+export function makeGrassMaterial(fogDensity: number, wrap = 0) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
+    defines: wrap ? { WRAP: 1 } : {},
     uniforms: {
+      uCenter: { value: new THREE.Vector2() },
+      uTile: { value: wrap || 1 },
+      uShore: { value: ROUTE.shoreZ },
+      uPond: { value: new THREE.Vector3(roadX(PARADISE_Z) - 66, PARADISE_Z - 6, 58) },
       ...SKY_U,
       uWind: { value: 1 },
       uWindDir: { value: new THREE.Vector2(0.86, 0.5).normalize() },
@@ -96,18 +116,32 @@ export function makeGrassMaterial(fogDensity: number) {
       uniform float uTime; uniform float uWind; uniform vec2 uWindDir;
       attribute vec3 aOffset; attribute vec4 aShape;
       varying float vT; varying vec3 vN; varying vec3 vWorld; varying float vRand; varying float vDry; varying float vWave; varying float vClump;
+      uniform vec2 uCenter; uniform float uTile; uniform float uShore; uniform vec3 uPond;
       ${GLSL_NOISE}
       ${GLSL_LAKE}
+      ${GLSL_PATH}
       void main(){
         float t = position.y; float side = position.x;
         vec2 root = aOffset.xy; float yaw = aOffset.z;
-        float h = aShape.x; float w = aShape.y; float bend = aShape.z; float r = aShape.w;
+        float lod = 1.0;
+        #ifdef WRAP
+          root = mod(root - uCenter + uTile * 0.5, uTile) - uTile * 0.5 + uCenter;
+          float dc = length(root - uCenter);
+          // out to the edge of the tile, in from where the fine blades by the desk take over
+          lod = (1.0 - smoothstep(uTile * 0.34, uTile * 0.49, dc)) * smoothstep(11.5, 16.0, length(root));
+          // the road stays bare, and nothing grows in the sea
+          float pk = abs(root.x - pathX(root.y)) / pathW(root.y);
+          lod *= mix(1.0, smoothstep(0.5, 1.2, pk), step(root.y, 2.0)) * smoothstep(uShore + 1.0, uShore + 7.0, root.y);
+          // and none in the still water at Paradise
+          lod *= smoothstep(uPond.z + 1.0, uPond.z + 6.0, length(root - uPond.xy));
+        #endif
+        float h = aShape.x * max(lod, 0.001); float w = aShape.y; float bend = aShape.z; float r = aShape.w;
+        #ifdef WRAP
+          w *= 1.0 + dc * 0.035;
+        #endif
         float clump = vnoise(root * 0.42 + 11.0);
         float patchN = vnoise(root * 0.11 + 3.0);
         h *= mix(0.62, 1.22, clump) * mix(0.85, 1.12, patchN);
-        // keep a little clearing under the desk so legs read cleanly
-        float cl = smoothstep(0.35, 0.9, max(abs(root.x) / 0.78, abs(root.y) / 0.42));
-        h *= mix(0.78, 1.0, cl);
         // no grass in the lake; short reeds-like fringe at the shore
         float lk = lakeK(root);
         h *= smoothstep(1.0, 1.12, lk) * (1.0 + 0.6 * (1.0 - smoothstep(1.1, 1.4, lk)));
@@ -150,17 +184,20 @@ export function makeGrassMaterial(fogDensity: number) {
         vec3 n = normalize(vN);
         if (!gl_FrontFacing) n = normalize(vec3(-n.x, n.y, -n.z));
         vec3 rootC = vec3(0.020, 0.032, 0.010);
-        vec3 midC = mix(vec3(0.06, 0.11, 0.025), vec3(0.13, 0.12, 0.035), vDry);
-        vec3 tipC = mix(vec3(0.22, 0.33, 0.06), vec3(0.50, 0.40, 0.15), vDry);
+        vec3 midC = mix(vec3(0.06, 0.105, 0.03), vec3(0.13, 0.12, 0.04), vDry);
+        vec3 tipC = mix(vec3(0.2, 0.29, 0.075), vec3(0.44, 0.37, 0.15), vDry);
         vec3 alb = mix(rootC, midC, smoothstep(0.0, 0.45, vT));
         alb = mix(alb, tipC, smoothstep(0.4, 1.0, vT));
         alb *= (0.82 + 0.36 * vRand) * mix(0.72, 1.12, vClump);
+        // far off the blades melt into the painted field under them: no edge to the grass
+        float far = smoothstep(12.0, 46.0, length(vWorld - cameraPosition));
+        alb = mix(alb, mix(vec3(0.13, 0.2, 0.05), vec3(0.28, 0.24, 0.095), vDry) * mix(0.72, 1.12, vClump), far * 0.75);
 
         vec3 V = normalize(cameraPosition - vWorld);
         float sh = deskShadow(vWorld);
         float ndl = dot(n, uKeyDir);
         float diff = pow(clamp(ndl * 0.5 + 0.5, 0.0, 1.0), 1.6) * smoothstep(-0.02, 0.08, uKeyDir.y);
-        float ao = mix(0.18, 1.0, smoothstep(0.0, 0.75, vT));
+        float ao = mix(mix(0.18, 0.8, far), 1.0, smoothstep(0.0, 0.75, vT));
         vec3 sunC = uKeyCol * 1.1;
         vec3 skyC = uSkyCol * 0.62;
         vec3 col = alb * (skyC * ao + sunC * diff * sh * ao);
@@ -182,21 +219,21 @@ export function makeGrassMaterial(fogDensity: number) {
   });
 }
 
-export function Grass({ mobile, wind, fogDensity }: { mobile: boolean; wind: number; fogDensity: number }) {
+export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boolean; wind: number; fogDensity: number; density?: number }) {
   const rings: Ring[] = useMemo(
     () =>
       mobile
         ? [
-            { count: 95000, rMin: 0, rMax: 15, width: 0.013, grow: 0.2, height: [0.2, 0.44], linear: true, fadeOut: [11, 15] },
-            { count: 14000, rMin: 11, rMax: 36, width: 0.08, height: [0.3, 0.55], fadeIn: [11, 15] },
+            { count: Math.round(95000 * density), rMin: 0, rMax: 15, width: 0.013 / Math.sqrt(density), grow: 0.2, height: [0.2, 0.44], linear: true, fadeOut: [11, 15] },
+            { count: Math.round(30000 * density), rMin: 0, rMax: 0, wrap: 76, width: 0.06 / Math.sqrt(density), height: [0.3, 0.52] },
           ]
         : [
-            { count: 230000, rMin: 0, rMax: 16, width: 0.011, grow: 0.17, height: [0.2, 0.44], linear: true, fadeOut: [12, 16] },
-            { count: 40000, rMin: 12, rMax: 38, width: 0.07, height: [0.3, 0.56], fadeIn: [12, 16] },
+            { count: Math.round(230000 * density), rMin: 0, rMax: 16, width: 0.011 / Math.sqrt(density), grow: 0.17, height: [0.2, 0.44], linear: true, fadeOut: [12, 16] },
+            { count: Math.round(120000 * density), rMin: 0, rMax: 0, wrap: 116, width: 0.05 / Math.sqrt(density), height: [0.3, 0.54] },
           ],
-    [mobile],
+    [mobile, density],
   );
-  const mat = useMemo(() => makeGrassMaterial(fogDensity), [fogDensity]);
+  const mats = useMemo(() => rings.map((r) => makeGrassMaterial(fogDensity, r.wrap ?? 0)), [fogDensity, rings]);
   const geos = useMemo(
     () =>
       rings.map((r, i) => {
@@ -206,15 +243,21 @@ export function Grass({ mobile, wind, fogDensity }: { mobile: boolean; wind: num
       }),
     [rings],
   );
+  const near = useRef<THREE.Mesh>(null);
   useEffect(() => () => geos.forEach((g) => g.dispose()), [geos]);
-  useEffect(() => () => mat.dispose(), [mat]);
-  useFrame(() => {
-    mat.uniforms.uWind.value = wind;
+  useEffect(() => () => mats.forEach((m) => m.dispose()), [mats]);
+  useFrame(({ camera }) => {
+    mats.forEach((m) => {
+      m.uniforms.uWind.value = wind;
+      m.uniforms.uCenter.value.set(camera.position.x, camera.position.z);
+    });
+    // the fine blades round the desk aren't drawn once the plane has left them behind
+    if (near.current) near.current.visible = camera.position.x * camera.position.x + camera.position.z * camera.position.z < 70 * 70;
   });
   return (
     <>
       {geos.map((g, i) => (
-        <mesh key={i} geometry={g} material={mat} frustumCulled={false} />
+        <mesh key={i} ref={i === 0 ? near : undefined} geometry={g} material={mats[i]} frustumCulled={false} />
       ))}
     </>
   );

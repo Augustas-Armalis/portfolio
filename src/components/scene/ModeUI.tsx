@@ -4,7 +4,9 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { getAnalyser, music, resumeAudio, tapMediaElement } from "@/lib/audio";
+import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { play } from "@/lib/sfx";
+import { STATIONS } from "./flightPath";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
 
 // DOM controls for the focused desk modes. Quiet, glassy, dark-on-light pills
@@ -422,10 +424,34 @@ export function SketchUI({ onExit, onClear, onSave }: { onExit: () => void; onCl
 
 // ---------- flight ----------
 
-export function FlightUI({ onLand, mobile }: { onLand: () => void; mobile: boolean }) {
+export function FlightUI({ onLand, mobile, free, onFree, station }: { onLand: () => void; mobile: boolean; free: boolean; onFree: (f: boolean) => void; station: number }) {
+  const seg = (on: boolean) => `lg-btn pointer-events-auto h-7 px-3 text-[12.5px] font-medium ${on ? "lg-on" : "text-white/90"}`;
+  const s = station >= 0 && station < STATIONS.length ? STATIONS[station] : null;
+  const sea = station === STATIONS.length;
   return (
     <>
-      <TopBar title="Paper plane" hint={mobile ? "Drag to steer" : "Steer with the mouse or W A S D · fly through the streaks"} exitLabel="Land" onExit={onLand} />
+      <TopBar title="Paper plane" hint={mobile ? "Drag to lean" : free ? "Mouse or W A S D to steer" : "Mouse or arrows to lean · it follows the road"} exitLabel="Land" onExit={onLand} />
+      <Bottom>
+        <Glass className="pointer-events-auto flex items-center gap-0.5 p-1" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <button type="button" className={seg(!free)} onClick={() => onFree(false)}>
+            Follow the road
+          </button>
+          <button type="button" className={seg(free)} onClick={() => onFree(true)}>
+            Free flight
+          </button>
+        </Glass>
+      </Bottom>
+      {/* where you are: the painting this stretch of the road is built from */}
+      <div className="pointer-events-none absolute bottom-6 left-5 z-30 max-sm:bottom-20 max-sm:left-3">
+        <AnimatePresence mode="wait">
+          {(s || sea) && (
+            <Glass key={s?.id ?? "sea"} radius={22} className="px-4 py-2.5" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING}>
+              <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em]">{s ? s.title : "Tranquility"}</div>
+              <div className="mt-0.5 text-[12.5px] leading-tight text-white/70">M. K. Čiurlionis, {s ? s.year : "1904"}</div>
+            </Glass>
+          )}
+        </AnimatePresence>
+      </div>
     </>
   );
 }
@@ -460,6 +486,9 @@ export function NavBar({
   label: string;
 }) {
   const seg = (on: boolean) => `lg-btn pointer-events-auto h-7 px-3 text-[12.5px] font-medium ${on ? "lg-on" : "text-white/90"}`;
+  const [gfx, setGfx] = useState(false);
+  const choice = useQualityChoice();
+  const quality = useQuality();
   return (
     <div className="pointer-events-none absolute bottom-5 left-4 z-30 max-sm:bottom-auto max-sm:left-3 max-sm:top-14">
       <Glass
@@ -517,7 +546,50 @@ export function NavBar({
             {live ? "Live" : "Go live"}
           </button>
         </div>
-        <div className="px-2 pb-0.5 text-[11px] text-white/65">{nav === "explore" ? "Drag to look · W A S D to move · scroll to fly forward" : label}</div>
+        <div className="flex items-center justify-between gap-3 px-2 pb-0.5 text-[11px] text-white/65">
+          <span>{nav === "explore" ? "Drag to look · W A S D to move · scroll to fly forward" : label}</span>
+          <button type="button" className="lg-btn pointer-events-auto -mr-1 px-1.5 py-0.5 text-[11px] font-medium text-white/85" aria-expanded={gfx} onClick={() => setGfx((g) => !g)}>
+            Graphics · {QUALITY_LABELS[choice]}
+          </button>
+        </div>
+        <AnimatePresence initial={false}>
+          {gfx && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
+              <div className="flex flex-col gap-1.5 px-1 pb-1 pt-0.5">
+                <div className="flex rounded-full bg-black/18 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.2)]">
+                  {(["auto", "low", "medium", "high", "ultra"] as QualityChoice[]).map((c) => (
+                    <button key={c} type="button" className={`lg-btn pointer-events-auto h-6 flex-1 px-2 text-[11.5px] font-medium ${choice === c ? "lg-on" : "text-white/90"}`} onClick={() => setQualityChoice(c)}>
+                      {QUALITY_LABELS[c]}
+                    </button>
+                  ))}
+                </div>
+                {(
+                  [
+                    ["Resolution", "resolution", (quality.dpr - 0.75) / 1.25],
+                    ["Grass", "grass", (quality.grass - 0.2) / 1.3],
+                    ["Effects", "effects", quality.effects],
+                  ] as [string, "resolution" | "grass" | "effects", number][]
+                ).map(([name, key, v]) => (
+                  <label key={key} className="flex items-center gap-2 px-1 text-[11.5px] text-white/80">
+                    <span className="w-[68px]">{name}</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      defaultValue={Math.min(1, Math.max(0, v))}
+                      key={`${key}-${choice}-${quality.preset}`}
+                      onPointerUp={(e) => setQualityOverride(key, +(e.target as HTMLInputElement).value)}
+                      onKeyUp={(e) => setQualityOverride(key, +(e.target as HTMLInputElement).value)}
+                      className="h-1 flex-1 cursor-pointer accent-white"
+                      aria-label={name}
+                    />
+                  </label>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Glass>
     </div>
   );

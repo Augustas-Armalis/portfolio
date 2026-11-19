@@ -3,7 +3,6 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { DESK, GLSL_LAKE, GLSL_NOISE, GLSL_PATH, LAKE, MONITOR, lakeK, pathX } from "./shared";
 import { GLSL_SKY, SKY_U } from "./sky";
 
@@ -35,6 +34,19 @@ export function makeSkyMaterial(env = false) {
       float clouds(vec2 uv, float t){
         return fbm(uv * 0.9 + vec2(t * 0.006, t * 0.002) + 7.3);
       }
+      vec3 hash33(vec3 p){ p = fract(p * vec3(.1031, .1030, .0973)); p += dot(p, p.yxz + 33.33); return fract((p.xxy + p.yxx) * p.zyx); }
+      vec3 starLayer(vec3 dir, float scale, float density){
+        vec3 p = dir * scale; vec3 id = floor(p); vec3 f = fract(p) - 0.5;
+        vec3 hh = hash33(id);
+        float dd = length(f - (hh - 0.5) * 0.7);
+        float px = fwidth(dd) * 1.2;
+        float r0 = mix(0.018, 0.055, hh.z * hh.z * hh.z);
+        float r = max(r0, px);
+        float core = smoothstep(r, 0.0, dd) * (r0 * r0) / (r * r) * 9.0;
+        float tw = 0.72 + 0.28 * sin(uTime * (1.0 + hh.x * 3.0) + hh.y * 6.283);
+        vec3 tint = mix(vec3(1.0, 0.86, 0.7), vec3(0.74, 0.84, 1.0), hh.y);
+        return tint * core * tw * step(1.0 - density, hh.x) * (0.4 + 2.6 * hh.z * hh.z);
+      }
       void main(){
         vec3 d = normalize(vWorld - cameraPosition);
         vec3 col = skyBase(d);
@@ -47,20 +59,21 @@ export function makeSkyMaterial(env = false) {
           col += mix(uGlow, vec3(1.0), 0.4) * 16.0 * smoothstep(0.9985, 0.9995, sd) * sunVis;
         #else
           float h = max(d.y, 0.0);
-          // stars
+          // stars: three layers of hash cells on the view direction (no pinching
+          // at the zenith), each star never thinner than a pixel so they dim
+          // rather than shimmer; the Milky Way is a dusty band with a dense
+          // faint layer of its own. All of it swells a little with the music.
           if (uNight > 0.01) {
-            vec2 sp = vec2(atan(d.z, d.x) * 95.0, asin(clamp(d.y, -1.0, 1.0)) * 95.0);
-            vec2 cell = floor(sp);
-            float r = hash12(cell);
-            vec2 c = cell + 0.5 + (vec2(hash12(cell + 3.1), hash12(cell + 7.7)) - 0.5) * 0.7;
-            float dd = length(sp - c);
-            float px = max(fwidth(sp.x), 1e-4);
-            float star = step(0.955, r) * smoothstep(px * 1.6, 0.0, dd) * (0.6 + 4.0 * pow(hash12(cell + 1.3), 6.0));
-            star *= 0.65 + 0.35 * sin(uTime * (1.5 + r * 4.0) + r * 60.0);
-            col += vec3(0.85, 0.9, 1.0) * star * uNight * smoothstep(0.02, 0.2, h);
-            // faint milky band
-            float band = exp(-pow(dot(d, normalize(vec3(0.3, 0.6, -0.74))) * 3.2, 2.0));
-            col += vec3(0.02, 0.025, 0.04) * band * fbm(sp * 0.04) * uNight * smoothstep(0.05, 0.3, h);
+            float beat = 1.0 + uPulse * 1.3;
+            float hz = smoothstep(0.0, 0.16, h);
+            vec3 st = (starLayer(d, 70.0, 0.34) + starLayer(d, 150.0, 0.42) * 0.7 + starLayer(d, 330.0, 0.5) * 0.4) * beat;
+            vec3 gn = normalize(vec3(0.42, 0.5, -0.76));
+            float gb = dot(d, gn);
+            float band = exp(-gb * gb * 16.0);
+            float dust = fbm(d.xz * 3.0 + d.y * 2.0 + 7.0) * fbm(d.zy * 8.0 + 3.0);
+            vec3 mw = mix(vec3(0.05, 0.065, 0.13), vec3(0.2, 0.17, 0.24), dust * 2.0) * band * (0.25 + dust * 2.2);
+            st += starLayer(d, 520.0, 0.85) * band * 0.55;
+            col += (st + mw * (1.0 + uPulse * 0.6)) * uNight * hz;
           }
           // moon: disc with soft maria and a halo
           if (uNight > 0.01) {
@@ -69,7 +82,7 @@ export function makeSkyMaterial(env = false) {
             vec2 mp = vec2(dot(d, tang), dot(d, cross(tang, uMoonDir))) * 400.0;
             float maria = fbm(mp * 0.25 + 3.0);
             col += vec3(0.9, 0.92, 1.0) * disc * (2.2 - maria * 0.9) * uNight;
-            col += vec3(0.4, 0.48, 0.7) * (pow(max(md, 0.0), 400.0) * 0.6 + pow(max(md, 0.0), 30.0) * 0.06) * uNight;
+            col += vec3(0.4, 0.48, 0.7) * (pow(max(md, 0.0), 400.0) * 0.7 + pow(max(md, 0.0), 40.0) * 0.1 + pow(max(md, 0.0), 6.0) * 0.035) * uNight * (1.0 + uPulse * 0.5);
           }
           // two cloud layers: high wispy, lower soft
           vec2 uv = d.xz / (h + 0.09);
@@ -83,7 +96,11 @@ export function makeSkyMaterial(env = false) {
           cc += uGlow * pow(max(sd, 0.0), 8.0) * 1.4 * sunVis;
           col = mix(col, mix(uCloudShade, uCloudLit, 0.7), cov1 * 0.55);
           col = mix(col, cc, cov2 * 0.75);
-          float cover = max(cov1, cov2);
+          // long quiet bars of cloud stacked above the horizon, as he painted them
+          float bars = smoothstep(0.52, 0.7, fbm(vec2(atan(d.z, d.x) * 2.2 + uTime * 0.002, h * 26.0 + 2.0))) * smoothstep(0.015, 0.06, h) * (1.0 - smoothstep(0.14, 0.3, h));
+          col = mix(col, mix(uCloudShade, uCloudLit, 0.55) + uGlow * pow(max(sd, 0.0), 6.0) * 0.8 * sunVis, bars * 0.5);
+          float cover = max(max(cov1, cov2), bars * 0.6);
+          col += uGlow * uPulse * 0.1 * (1.0 - smoothstep(0.0, 0.5, h));
           // crepuscular rays fanning from a low sun through the haze
           float golden = sunVis * (1.0 - smoothstep(0.06, 0.4, uSunDir.y));
           if (golden > 0.01) {
@@ -181,17 +198,22 @@ export function Ground({ fogDensity }: { fogDensity: number }) {
             float n = fbm(vWorld.xz * 0.08);
             float n2 = vnoise(vWorld.xz * 0.6);
             vec3 soil = texture2D(uGrassTex, vWorld.xz * 0.45).rgb * 0.38;
-            vec3 far = mix(vec3(0.11, 0.15, 0.035), vec3(0.2, 0.19, 0.06), smoothstep(0.4, 0.75, n)) * (0.85 + 0.3 * n2);
+            // the same patches of fresh and dry grass the blades are coloured by, so
+            // where the blades end the field simply carries on
+            float clumpN = vnoise(vWorld.xz * 0.42 + 11.0);
+            float patchN = vnoise(vWorld.xz * 0.11 + 3.0);
+            float dry = smoothstep(0.5, 0.85, patchN * 0.7 + clumpN * 0.3);
+            vec3 far = mix(vec3(0.13, 0.2, 0.05), vec3(0.28, 0.24, 0.095), dry) * mix(0.72, 1.12, clamp(clumpN * 0.6 + patchN * 0.6 - 0.1, 0.0, 1.0)) * 0.8;
             vec3 alb = mix(soil, far, smoothstep(2.5, 14.0, r));
             // dirt path
             float px = abs(vWorld.x - pathX(vWorld.z)) / pathW(vWorld.z);
             float edge = 1.0 - smoothstep(0.55 + n2 * 0.35, 1.05 + n2 * 0.3, px);
             vec3 dirt = texture2D(uDirtTex, vWorld.xz * 0.5).rgb * 0.75;
-            alb = mix(alb, dirt, edge * (1.0 - smoothstep(30.0, 60.0, abs(vWorld.z))));
+            alb = mix(alb, mix(dirt, vec3(0.2, 0.16, 0.1), smoothstep(20.0, 60.0, -vWorld.z)), edge * (vWorld.z > 0.0 ? 1.0 - smoothstep(30.0, 60.0, vWorld.z) : 1.0 - smoothstep(520.0, 548.0, -vWorld.z)));
             float lk = lakeK(vWorld.xz);
             alb = mix(alb, vec3(0.05, 0.05, 0.04), 1.0 - smoothstep(1.0, 1.25, lk));
             float sh = deskShadow(vWorld);
-            vec3 col = alb * (uSkyCol * 0.85 + uKeyCol * max(uKeyDir.y, 0.0) * sh * 0.9);
+            vec3 col = alb * (uSkyCol * 0.62 + uKeyCol * (0.25 + 0.75 * max(uKeyDir.y, 0.0)) * sh * smoothstep(-0.02, 0.08, uKeyDir.y));
             float dist = length(vWorld - cameraPosition);
             vec3 fd = normalize(vec3(vWorld.x - cameraPosition.x, 0.015, vWorld.z - cameraPosition.z));
             col = mix(col, skyBase(fd), 1.0 - exp(-dist * (uFog + uMist)));
@@ -270,7 +292,7 @@ function ridged(x: number, y: number, oct: number) {
   return v;
 }
 
-type Range = { r0: number; r1: number; height: number; freq: number; seed: number; haze: number; snow: number };
+type Range = { r0: number; r1: number; height: number; freq: number; seed: number; haze: number; snow: number; gap: [number, number] };
 
 function rangeGeometry(rg: Range, segA: number, segR: number) {
   const pos: number[] = [];
@@ -287,7 +309,10 @@ function rangeGeometry(rg: Range, segA: number, segR: number) {
       const wz = z * rg.freq - rg.seed + 2.5 * noised(z * rg.freq * 0.3 + 9, x * rg.freq * 0.3)[0];
       const h = 0.55 * ridged(wx, wz, 5) + 0.75 * eroded(wx * 0.8, wz * 0.8, 6);
       const broad = 0.5 + 0.5 * noised(x * rg.freq * 0.22 + 40 + rg.seed, z * rg.freq * 0.22)[0];
-      pos.push(x, rg.height * h * broad * env - 5, z);
+      // the hills part where the road runs out (toward -z); the last range opens wide onto the sea
+      const dA = Math.abs(Math.atan2(Math.sin(a + Math.PI / 2), Math.cos(a + Math.PI / 2)));
+      const gk = Math.min(1, Math.max(0, (dA - rg.gap[0]) / (rg.gap[1] - rg.gap[0])));
+      pos.push(x, rg.height * h * broad * env * gk * gk * (3 - 2 * gk) - 5, z);
     }
   }
   const row = segA + 1;
@@ -304,7 +329,7 @@ function rangeGeometry(rg: Range, segA: number, segR: number) {
   return g;
 }
 
-function makeRangeMaterial(rg: Range) {
+export function makeRangeMaterial(rg: { haze: number; snow: number; height: number }) {
   return new THREE.ShaderMaterial({
     uniforms: { ...SKY_U, uHaze: { value: rg.haze }, uSnow: { value: rg.snow }, uTop: { value: rg.height } },
     vertexShader: /* glsl */ `
@@ -319,16 +344,16 @@ function makeRangeMaterial(rg: Range) {
         vec3 n = normalize(vN);
         float hN = clamp(vWorld.y / uTop, 0.0, 1.0);
         float strata = vnoise(vec2(vWorld.y * 0.35, vWorld.x * 0.01));
-        vec3 forest = vec3(0.03, 0.05, 0.032);
-        vec3 rock = mix(vec3(0.1, 0.095, 0.09), vec3(0.15, 0.135, 0.12), strata);
+        vec3 forest = mix(vec3(0.045, 0.075, 0.04), vec3(0.1, 0.105, 0.045), vnoise(vWorld.xz * 0.02));
+        vec3 rock = mix(vec3(0.1, 0.1, 0.105), vec3(0.16, 0.145, 0.13), strata);
         vec3 alb = mix(forest, rock, smoothstep(0.12, 0.45, hN + (1.0 - n.y) * 0.35));
         float sn = uSnow * smoothstep(0.32, 0.5, hN + (vnoise(vWorld.xz * 0.08) - 0.5) * 0.22) * smoothstep(0.35, 0.7, n.y);
         alb = mix(alb, vec3(0.86, 0.89, 0.94), sn);
-        float ndl = max(dot(n, uKeyDir), 0.0);
-        vec3 col = alb * (uSkyCol * (0.5 + 0.5 * n.y) + uKeyCol * ndl * 1.1);
+        float ndl = clamp(dot(n, uKeyDir) * 0.7 + 0.3, 0.0, 1.0);
+        vec3 col = alb * (uSkyCol * (0.6 + 0.4 * n.y) + uKeyCol * ndl * 0.95);
         vec3 d = normalize(vWorld - cameraPosition);
         vec3 air = skyBase(normalize(vec3(d.x, max(d.y, 0.0) * 0.6 + 0.01, d.z)));
-        float haze = clamp(uHaze + (1.0 - smoothstep(0.0, uTop * 0.6, vWorld.y)) * 0.16, 0.0, 0.95);
+        float haze = clamp(uHaze + (1.0 - smoothstep(0.0, uTop * 0.55, vWorld.y)) * 0.34, 0.0, 0.95);
         col = mix(col, air, max(haze, clamp(uMist * 5.0, 0.0, 1.0)));
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -340,9 +365,10 @@ function makeRangeMaterial(rg: Range) {
 export function Mountains({ mobile }: { mobile: boolean }) {
   const layers = useMemo(() => {
     const ranges: Range[] = [
-      { r0: 110, r1: 175, height: 20, freq: 0.02, seed: 3.1, haze: 0.16, snow: 0 },
-      { r0: 210, r1: 340, height: 60, freq: 0.011, seed: 11.7, haze: 0.3, snow: 0.35 },
-      { r0: 430, r1: 660, height: 150, freq: 0.006, seed: 27.3, haze: 0.42, snow: 1 },
+      // layered like his hills: each ridge paler than the one before it
+      { r0: 152, r1: 222, height: 24, freq: 0.017, seed: 3.1, haze: 0.2, snow: 0, gap: [0.2, 0.5] },
+      { r0: 250, r1: 380, height: 62, freq: 0.0105, seed: 11.7, haze: 0.4, snow: 0.3, gap: [0.15, 0.4] },
+      { r0: 460, r1: 690, height: 150, freq: 0.006, seed: 27.3, haze: 0.56, snow: 0.9, gap: [0.5, 0.82] },
     ];
     const segA = mobile ? 540 : 900;
     return ranges.map((rg) => ({ geo: rangeGeometry(rg, segA, mobile ? 22 : 34), mat: makeRangeMaterial(rg) }));
@@ -374,264 +400,66 @@ function rng(seed: number) {
   };
 }
 
-// Tall slender trees in the spirit of Čiurlionis: dark pines and white-stemmed
-// birches standing in loose groups on the far field and along the lake,
-// swaying gently. Instanced, one draw call per species.
-function withWind(mat: THREE.MeshStandardMaterial, amount: number) {
-  mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uTime = SKY_U.uTime;
-    sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nuniform float uTime;")
-      .replace(
-        "#include <begin_vertex>",
-        `#include <begin_vertex>
-        #ifdef USE_INSTANCING
-          float ph = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.23;
-        #else
-          float ph = 0.0;
-        #endif
-        float sway = sin(uTime * 0.9 + ph) * 0.6 + sin(uTime * 2.1 + ph * 1.7) * 0.25;
-        transformed.x += sway * ${amount.toFixed(3)} * max(position.y, 0.0) * max(position.y, 0.0);`,
-      );
-  };
-  return mat;
-}
+// ---------- mist ----------
 
-// Foliage textures, painted once: birch leaf clusters and pine needle sprays.
-function leafTexture(kind: "birch" | "pine") {
-  const S = 256;
-  const c = document.createElement("canvas");
-  c.width = c.height = S;
-  const g = c.getContext("2d")!;
-  const r = rng(kind === "birch" ? 5 : 9);
-  if (kind === "birch") {
-    for (let i = 0; i < 260; i++) {
-      const a = r() * Math.PI * 2;
-      const d = Math.sqrt(r()) * S * 0.42;
-      const x = S / 2 + Math.cos(a) * d;
-      const y = S / 2 + Math.sin(a) * d * 0.9;
-      const l = 40 + r() * 28;
-      g.fillStyle = `hsl(${78 + r() * 26}, ${40 + r() * 25}%, ${l}%)`;
-      g.beginPath();
-      g.ellipse(x, y, 5 + r() * 5, 3 + r() * 3, r() * Math.PI, 0, Math.PI * 2);
-      g.fill();
-    }
-  } else {
-    // a branch spray: central twig with needles, tapering to the tip
-    g.strokeStyle = "#3a2c20";
-    g.lineWidth = 3;
-    g.beginPath();
-    g.moveTo(0, S / 2);
-    g.lineTo(S, S / 2);
-    g.stroke();
-    for (let i = 0; i < 520; i++) {
-      const t = r();
-      const x = t * S;
-      const w = (1 - t * 0.85) * S * 0.46;
-      const side = r() < 0.5 ? -1 : 1;
-      const len = (0.3 + r() * 0.7) * w;
-      g.strokeStyle = `hsl(${118 + r() * 30}, ${26 + r() * 20}%, ${14 + r() * 16}%)`;
-      g.lineWidth = 1.6;
-      g.beginPath();
-      g.moveTo(x, S / 2);
-      g.lineTo(x + len * 0.35, S / 2 + side * len);
-      g.stroke();
-    }
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  return t;
-}
-
-function barkTexture() {
-  const c = document.createElement("canvas");
-  c.width = 64;
-  c.height = 256;
-  const g = c.getContext("2d")!;
-  g.fillStyle = "#e9e6de";
-  g.fillRect(0, 0, 64, 256);
-  const r = rng(3);
-  for (let i = 0; i < 40; i++) {
-    g.fillStyle = `rgba(30,28,26,${0.5 + r() * 0.4})`;
-    g.fillRect(r() * 64, r() * 256, 6 + r() * 18, 1.5 + r() * 3);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
-// A quad from `a` along `dir` (length L, width W, tilted by `up`), with
-// normals pointing away from `center` so the crown shades like a volume.
-function card(pos: number[], nor: number[], uv: number[], idx: number[], a: THREE.Vector3, dir: THREE.Vector3, side: THREE.Vector3, L: number, W: number, center: THREE.Vector3) {
-  const base = pos.length / 3;
-  const pts = [
-    a.clone().addScaledVector(side, -W / 2),
-    a.clone().addScaledVector(side, W / 2),
-    a.clone().addScaledVector(dir, L).addScaledVector(side, W / 2),
-    a.clone().addScaledVector(dir, L).addScaledVector(side, -W / 2),
-  ];
-  const uvs = [0, 0, 0, 1, 1, 1, 1, 0];
-  pts.forEach((p, i) => {
-    pos.push(p.x, p.y, p.z);
-    const n = p.clone().sub(center).normalize();
-    nor.push(n.x, n.y * 0.6 + 0.4, n.z);
-    uv.push(uvs[i * 2], uvs[i * 2 + 1]);
-  });
-  idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-}
-
-function buildPine() {
-  const pos: number[] = [];
-  const nor: number[] = [];
-  const uv: number[] = [];
-  const idx: number[] = [];
-  const r = rng(21);
-  const H = 9;
-  for (let lvl = 0; lvl < 11; lvl++) {
-    const y = 1.6 + lvl * 0.68;
-    const k = 1 - lvl / 11;
-    const n = 7;
+// Bands of low mist lying across the land, one behind another: the bases of
+// the trees and hills dissolve into them and every layer reads as a separate
+// plane of depth. Soft quads, coloured by the sky, thinning as you fly in.
+export function MistBands({ mobile = false }: { mobile?: boolean }) {
+  const { geo, mat, bands } = useMemo(() => {
+    const r = rng(404);
+    const bands: { x: number; y: number; z: number; w: number; h: number; ry: number; seed: number }[] = [];
+    const n = mobile ? 9 : 16;
     for (let i = 0; i < n; i++) {
-      const ang = (i / n) * Math.PI * 2 + lvl * 0.7 + r() * 0.4;
-      const out = new THREE.Vector3(Math.cos(ang), -0.32 - r() * 0.1, Math.sin(ang)).normalize();
-      const side = new THREE.Vector3(-Math.sin(ang), 0, Math.cos(ang));
-      const L = 0.5 + k * 2.1;
-      card(pos, nor, uv, idx, new THREE.Vector3(0, y, 0), out, side, L, 0.55 + k * 0.9, new THREE.Vector3(0, y - 0.3, 0));
+      const z = -46 - i * (500 / n) - r() * 12;
+      bands.push({ x: (r() - 0.5) * 120, y: 0, z, w: 220 + r() * 220, h: 9 + r() * 9, ry: (r() - 0.5) * 0.25, seed: r() * 50 });
     }
-  }
-  // tip
-  card(pos, nor, uv, idx, new THREE.Vector3(0, H - 1, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0), 1.3, 0.5, new THREE.Vector3(0, H - 1.5, 0));
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
-  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  return g;
-}
-
-function buildBirchCrown() {
-  const pos: number[] = [];
-  const nor: number[] = [];
-  const uv: number[] = [];
-  const idx: number[] = [];
-  const r = rng(33);
-  const center = new THREE.Vector3(0, 5.2, 0);
-  for (let i = 0; i < 46; i++) {
-    const u = r() * 2 - 1;
-    const th = r() * Math.PI * 2;
-    const rad = 0.45 + r() * 0.85;
-    const p = new THREE.Vector3(Math.sqrt(1 - u * u) * Math.cos(th) * rad, u * rad * 1.6, Math.sqrt(1 - u * u) * Math.sin(th) * rad).add(center);
-    const dir = new THREE.Vector3(r() - 0.5, r() - 0.6, r() - 0.5).normalize();
-    const side = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
-    if (side.lengthSq() < 0.01) side.set(1, 0, 0);
-    card(pos, nor, uv, idx, p.clone().addScaledVector(dir, -0.45), dir, side, 0.95, 0.95, center);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
-  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  return g;
-}
-
-function buildBirchTrunk() {
-  const parts = [new THREE.CylinderGeometry(0.045, 0.085, 6.6, 7, 4).translate(0, 3.3, 0)];
-  const r = rng(8);
-  for (let i = 0; i < 6; i++) {
-    const y = 3.2 + i * 0.45;
-    const ang = r() * Math.PI * 2;
-    const b = new THREE.CylinderGeometry(0.012, 0.022, 1.1, 4).translate(0, 0.55, 0);
-    b.rotateZ(0.9 + r() * 0.4);
-    b.rotateY(ang);
-    b.translate(0, y, 0);
-    parts.push(b);
-  }
-  const g = mergeGeometries(parts.map((p) => p.toNonIndexed()))!;
-  g.computeVertexNormals();
-  return g;
-}
-
-export function Trees() {
-  const data = useMemo(() => {
-    const r = rng(77);
-    const pines: { x: number; z: number; s: number }[] = [];
-    const birches: { x: number; z: number; s: number }[] = [];
-    const groves: [number, number, number, "p" | "b"][] = [
-      [-62, -92, 26, "p"],
-      [-22, -108, 30, "p"],
-      [24, -112, 28, "p"],
-      [66, -90, 24, "p"],
-      [-100, -44, 22, "p"],
-      [96, -40, 22, "p"],
-      [-88, 58, 26, "p"],
-      [84, 66, 24, "p"],
-      [LAKE.x - 24, LAKE.z - 16, 12, "b"],
-      [LAKE.x + 6, LAKE.z - 20, 14, "b"],
-      [-70, 10, 10, "b"],
-    ];
-    groves.forEach(([gx, gz, spread, kind]) => {
-      const n = kind === "p" ? 14 + Math.floor(r() * 10) : 7 + Math.floor(r() * 5);
-      for (let i = 0; i < n; i++) {
-        const x = gx + (r() - 0.5) * spread * 1.6;
-        const z = gz + (r() - 0.5) * spread * 0.5;
-        if (lakeK(x, z) < 1.2 || Math.abs(x - pathX(z)) < 2) continue;
-        (kind === "p" ? pines : birches).push({ x, z, s: kind === "p" ? 1.4 + r() * 1.4 : 0.9 + r() * 0.5 });
-      }
+    // and to the sides of the desk
+    bands.push({ x: -70, y: 0, z: -8, w: 200, h: 8, ry: 1.2, seed: 3 }, { x: 78, y: 0, z: 6, w: 200, h: 8, ry: -1.25, seed: 9 }, { x: 0, y: 0, z: 74, w: 260, h: 9, ry: 0, seed: 14 });
+    const m = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      uniforms: { ...SKY_U, uSeed: { value: 0 } },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv; varying vec3 vWorld;
+        void main(){ vUv = uv; vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
+      fragmentShader: /* glsl */ `
+        uniform float uSeed;
+        varying vec2 vUv; varying vec3 vWorld;
+        ${GLSL_NOISE}
+        ${GLSL_SKY}
+        void main(){
+          float n = fbm(vec2(vUv.x * 5.0 + uSeed + uTime * 0.012, vUv.y * 1.4 + uSeed));
+          float a = smoothstep(0.0, 0.14, vUv.y) * pow(1.0 - vUv.y, 1.7) * 2.2;
+          a *= smoothstep(0.0, 0.22, vUv.x) * smoothstep(1.0, 0.78, vUv.x) * smoothstep(0.25, 0.75, n);
+          float dist = length(vWorld - cameraPosition);
+          a *= smoothstep(14.0, 60.0, dist) * 0.34;
+          vec3 d = normalize(vWorld - cameraPosition);
+          vec3 col = skyBase(normalize(vec3(d.x, 0.03, d.z))) * 1.06 + uGlow * pow(max(dot(d, uSunDir), 0.0), 6.0) * 0.25 * smoothstep(-0.05, 0.05, uSunDir.y);
+          gl_FragColor = vec4(col, clamp(a, 0.0, 0.85));
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
     });
-    const leafB = leafTexture("birch");
-    const leafP = leafTexture("pine");
-    const bark = barkTexture();
-    const pineTrunk = new THREE.CylinderGeometry(0.07, 0.16, 9, 6).translate(0, 4.5, 0);
-    return {
-      pines,
-      birches,
-      pine: buildPine(),
-      pineTrunk,
-      birchTrunk: buildBirchTrunk(),
-      birchCrown: buildBirchCrown(),
-      matPine: withWind(new THREE.MeshStandardMaterial({ map: leafP, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }), 0.0012),
-      matPineTrunk: withWind(new THREE.MeshStandardMaterial({ color: "#3b2d22", roughness: 1 }), 0.0012),
-      matBirch: withWind(new THREE.MeshStandardMaterial({ map: leafB, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1 }), 0.002),
-      matBirchTrunk: withWind(new THREE.MeshStandardMaterial({ map: bark, roughness: 0.85 }), 0.002),
-    };
-  }, []);
-  const refs = [useRef<THREE.InstancedMesh>(null), useRef<THREE.InstancedMesh>(null), useRef<THREE.InstancedMesh>(null), useRef<THREE.InstancedMesh>(null)];
-  useEffect(() => {
-    const o = new THREE.Object3D();
-    const col = new THREE.Color();
-    data.pines.forEach((t, i) => {
-      o.position.set(t.x, 0, t.z);
-      o.scale.set(t.s * 0.95, t.s * (1.05 + (i % 5) * 0.06), t.s * 0.95);
-      o.rotation.set(0, i * 2.3, 0);
-      o.updateMatrix();
-      refs[0].current?.setMatrixAt(i, o.matrix);
-      refs[1].current?.setMatrixAt(i, o.matrix);
-      refs[0].current?.setColorAt(i, col.setHSL(0.3 + (i % 7) * 0.01, 0.35, 0.42 + (i % 3) * 0.05));
-    });
-    data.birches.forEach((t, i) => {
-      o.position.set(t.x, 0, t.z);
-      o.scale.set(t.s, t.s * (1 + (i % 4) * 0.08), t.s);
-      o.rotation.set(0, i * 1.9, ((i % 3) - 1) * 0.04);
-      o.updateMatrix();
-      refs[2].current?.setMatrixAt(i, o.matrix);
-      refs[3].current?.setMatrixAt(i, o.matrix);
-      refs[3].current?.setColorAt(i, col.setHSL(0.2 + (i % 5) * 0.015, 0.45, 0.55 + (i % 3) * 0.06));
-    });
-    refs.forEach((r) => {
-      if (!r.current) return;
-      r.current.instanceMatrix.needsUpdate = true;
-      if (r.current.instanceColor) r.current.instanceColor.needsUpdate = true;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+    return { geo: new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), mat: m, bands };
+  }, [mobile]);
+  const mats = useMemo(() => bands.map((b) => {
+    const c = mat.clone();
+    Object.assign(c.uniforms, SKY_U);
+    c.uniforms.uSeed = { value: b.seed };
+    return c;
+  }), [bands, mat]);
+  useEffect(() => () => {
+    geo.dispose();
+    mat.dispose();
+    mats.forEach((m) => m.dispose());
+  }, [geo, mat, mats]);
   return (
     <>
-      <instancedMesh ref={refs[0]} args={[data.pine, data.matPine, data.pines.length]} frustumCulled={false} />
-      <instancedMesh ref={refs[1]} args={[data.pineTrunk, data.matPineTrunk, data.pines.length]} frustumCulled={false} />
-      <instancedMesh ref={refs[2]} args={[data.birchTrunk, data.matBirchTrunk, data.birches.length]} frustumCulled={false} />
-      <instancedMesh ref={refs[3]} args={[data.birchCrown, data.matBirch, data.birches.length]} frustumCulled={false} />
+      {bands.map((b, i) => (
+        <mesh key={i} geometry={geo} material={mats[i]} position={[b.x, b.y, b.z]} rotation={[0, b.ry, 0]} scale={[b.w, b.h, 1]} renderOrder={3} frustumCulled={false} />
+      ))}
     </>
   );
 }
