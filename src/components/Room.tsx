@@ -37,6 +37,7 @@ import {
   type ObjKind,
   type Placement,
 } from "./scene/shared";
+import { TRACK, geist, geistReady } from "./scene/font";
 import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
 import { Birds, Ground, Lake, Mountains, Sky, Trees, makeSkyMaterial } from "./scene/World";
@@ -53,7 +54,8 @@ type Input = { dx: number; dy: number; zoom: number; dragging: boolean; last: nu
 
 const DUR = { approach: 1.55, push: 1.05, hold: 0.12, wake: 2.3, wakeDelay: 0.35, focus: 1.15 };
 const FOG = 0.016;
-const INTRO = 2.6; // seconds of aerial descent before the desk assembles
+const INTRO = 3.4; // seconds of aerial descent before the desk assembles
+const ARRIVE = INTRO + 1.8; // the camera reaches its home pose
 const LABELS: Record<ObjKind | "display" | "plane", string> = { keys: "Piano", camera: "Camera", headphones: "Music", book: "Read", sketchbook: "Sketch", plane: "Fly", display: "Start" };
 const MODE_OF: Record<ObjKind, Mode> = { keys: "piano", camera: "camera", headphones: "music", book: "book", sketchbook: "sketch" };
 
@@ -380,6 +382,7 @@ function Scene({
   const rig = useRef({ az: cfg.az, pol: cfg.pol, r: cfg.r, gaz: cfg.az, gpol: cfg.pol, gr: cfg.r });
   const vf = useRef({ yaw: 0, pitch: 0 });
   const par = useRef(0);
+  const introK = useRef(1);
   const v = useMemo(
     () => ({
       pos: new THREE.Vector3(),
@@ -448,7 +451,7 @@ function Scene({
     if (process.env.NODE_ENV !== "production") ((window as unknown as { __t: Record<string, number> }).__t.effect = performance.now());
     (async () => {
       onProgress(0.4);
-      await Promise.race([coverReady(), new Promise((r) => window.setTimeout(r, 2500))]);
+      await Promise.race([Promise.all([coverReady(), lock.ready, geistReady()]), new Promise((r) => window.setTimeout(r, 2500))]);
       if (dead) return;
       onProgress(0.62);
       await new Promise((r) => window.setTimeout(r, 30));
@@ -521,7 +524,7 @@ function Scene({
     return { cover, fit };
   };
 
-  const ready = () => instant || (introAt.current !== null && nowS() - introAt.current > INTRO + 1.6);
+  const ready = () => instant || (introAt.current !== null && nowS() - introAt.current > ARRIVE);
 
   // boot (display click)
   startRef.current = () => {
@@ -634,7 +637,7 @@ function Scene({
   apiRef.current = {
     skip: () => {
       const a = introAt.current;
-      if (a !== null && nowS() - a < INTRO + 1.6) introAt.current = nowS() - (INTRO + 3.2);
+      if (a !== null && nowS() - a < ARRIVE) introAt.current = nowS() - (ARRIVE + 1.6);
     },
     snap: () => {
       gl.render(scene, cam);
@@ -743,13 +746,21 @@ function Scene({
     // mountains, the camera eases down onto the desk
     const at = introAt.current;
     if (!instant) {
-      const k = at === null ? 0 : clamp01((now - at) / (INTRO + 1.6));
-      const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-      v.tmp.set(tx - 5, ty + 15, tz + 24);
+      // It opens high in the mist, level with the horizon (the loader's line
+      // sits exactly on it), then sinks through the haze: the eye finds the
+      // desk first and the body follows.
+      const k = at === null ? 0 : clamp01((now - at) / ARRIVE);
+      const e = k * k * k * (k * (k * 6 - 15) + 10);
+      const sx = tx - 7;
+      const sy = ty + 37;
+      const sz = tz + 62;
+      v.tmp.set(sx, sy, sz);
       v.pos.lerpVectors(v.tmp, v.pos, e);
-      v.pos.y += Math.sin(Math.PI * e) * 1.5;
-      const el = Math.pow(e, 1.4);
-      v.look.lerpVectors(v.tmp.set(-6, 6, -90), v.look.clone(), el);
+      v.pos.x += Math.sin(Math.PI * e) * 2.2;
+      const el = clamp01((k - 0.12) / 0.74);
+      const le = el * el * (3 - 2 * el);
+      v.look.lerpVectors(v.tmp.set(sx, sy, sz - 120), v.look.clone(), le);
+      introK.current = e;
     }
   };
 
@@ -801,7 +812,7 @@ function Scene({
 
     // arrival mist thins out as the camera comes down
     const at = introAt.current;
-    const mist = instant ? 0 : at === null ? 0.4 : 0.4 * (1 - smooth(clamp01((now - at) / 3.4)));
+    const mist = instant ? 0 : at === null ? 0.4 : 0.4 * (1 - smooth(clamp01((now - at) / (ARRIVE * 0.82))));
     SKY_U.uMist.value = mist;
     fog.near = 20 * (1 - mist * 2.2) + 0.5;
     fog.far = 170 * (1 - mist * 2.2) + 6;
@@ -830,8 +841,8 @@ function Scene({
     // and dark after Shut Down until the next boot
     const lockTarget = (s === "idle" || s === "focus" || s === "unfocus" || s === "fly" || s === "land") && !offRef.current ? 1 : 0;
     lockOn.current += (lockTarget - lockOn.current) * Math.min(1, dt * (lockTarget ? 1.5 : 6));
-    const settled = at === null || instant ? 1 : clamp01((now - at - INTRO - 1.2) / 0.8);
-    screenMat.uniforms.uLockMix.value = lockOn.current * settled;
+    // the display is already on its lock screen when it comes into view
+    screenMat.uniforms.uLockMix.value = lockOn.current;
     if (s === "idle" && nav === "explore") {
       exploreStep(dt);
       reflect.opacity = 1;
@@ -843,6 +854,16 @@ function Scene({
       cam.position.copy(v.pos);
       cam.up.copy(v.Y);
       cam.lookAt(v.look);
+      // a wider lens up high, closing as it lands
+      if (!instant && introK.current < 1) {
+        cam.fov = cfg.fov + 9 * (1 - introK.current);
+        cam.updateProjectionMatrix();
+        if (at !== null && now - at >= ARRIVE) {
+          introK.current = 1;
+          cam.fov = cfg.fov;
+          cam.updateProjectionMatrix();
+        }
+      }
       reflect.opacity = 1;
       if (screen.current) screenPose();
       return;
@@ -1143,6 +1164,7 @@ export default function Room({
   const [readerInfo, setReaderInfo] = useState<ReaderInfo>({ spread: 0, spreads: 1, ready: false });
   const [sky, setSky] = useState<{ label: string; night: number; hdr: string }>({ label: "", night: 0, hdr: "day" });
   const [skipIntro] = useState(introOff);
+  const mounted = useRef(performance.now());
   const [caption, setCaption] = useState<string>();
 
   useEffect(() => {
@@ -1155,7 +1177,8 @@ export default function Room({
   useEffect(() => {
     if (!ready) return;
     setProgress(1);
-    const t = window.setTimeout(() => setRevealed(true), 650);
+    // never a flash of loader: it holds for a beat even when everything is cached
+    const t = window.setTimeout(() => setRevealed(true), Math.max(650, 1500 - (performance.now() - mounted.current)));
     return () => window.clearTimeout(t);
   }, [ready]);
 
@@ -1276,8 +1299,8 @@ export default function Room({
   const orbiting = mode === "none" || mode === "music";
   return (
     <div
-      className="absolute inset-0 touch-none select-none"
-      style={{ cursor: mode === "plane" ? "crosshair" : mode !== "none" && mode !== "music" ? "default" : !idle ? "default" : dragging ? "grabbing" : "grab" }}
+      className={`${geist.className} absolute inset-0 touch-none select-none`}
+      style={{ letterSpacing: TRACK.body, cursor: mode === "plane" ? "crosshair" : mode !== "none" && mode !== "music" ? "default" : !idle ? "default" : dragging ? "grabbing" : "grab" }}
       onPointerDown={(e) => {
         // a click during the arrival skips straight to the desk
         if (revealed && !introDone) {

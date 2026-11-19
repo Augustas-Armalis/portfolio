@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "motion/react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { TRACK, geist } from "./font";
 import { BOOT } from "./shared";
 
 const { markY, markH, markW, stroke, barY, barW, barH } = BOOT;
@@ -69,46 +70,87 @@ export function BootVeil({ onDone }: { onDone: () => void }) {
   );
 }
 
-// First-load preloader. Black, one thin line of light: real loading progress
-// draws it out from the centre into a horizon. When the world is ready a small
-// sun rises over it, and the whole thing dissolves into the mist the camera
-// descends through. Name and the live Kaunas time, small.
+// First-load preloader. Black, his mark, his name, and one hairline: real
+// loading progress draws it across, a small counter follows. When the world is
+// ready the line runs out to both edges of the screen and becomes the horizon:
+// the black parts along it, up and down, onto the sky the camera starts in.
+let shownProgress = 0; // survives the swap from the chunk-loading fallback to the scene's own loader
+
 export function Preloader({ progress, done = false, caption }: { progress: number; done?: boolean; caption?: string }) {
-  const p = Math.min(1, Math.max(0, progress));
+  const target = Math.min(1, Math.max(0, progress));
+  const fill = useRef<HTMLDivElement>(null);
+  const count = useRef<HTMLSpanElement>(null);
+  const goal = useRef(target);
+  goal.current = done ? 1 : target;
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      // a lagging value, never the raw one: it glides and never steps back
+      shownProgress = Math.max(shownProgress, shownProgress + (goal.current - shownProgress) * (1 - Math.exp(-dt * (goal.current >= 1 ? 9 : 3.2))));
+      if (goal.current - shownProgress < 0.002) shownProgress = goal.current;
+      if (fill.current) fill.current.style.transform = `scaleX(${shownProgress.toFixed(4)})`;
+      if (count.current) count.current.textContent = String(Math.round(shownProgress * 100)).padStart(2, "0");
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  if (gone) return null;
+  const OPEN = { duration: 1.5, ease: [0.7, 0, 0.2, 1] as const, delay: 0.55 };
+  const panel = "absolute inset-x-0 bg-[#050506]";
   return (
-    <motion.div
-      className="pointer-events-none fixed inset-0 z-[50] bg-black"
-      initial={false}
-      animate={{ opacity: done ? 0 : 1 }}
-      transition={{ duration: 1.4, ease: [0.4, 0, 0.2, 1], delay: done ? 0.55 : 0 }}
-    >
-      <div className="absolute left-1/2 top-1/2 h-0 w-[min(560px,78vw)] -translate-x-1/2">
-        {/* horizon */}
-        <div
-          className="absolute left-1/2 top-0 h-px -translate-x-1/2 bg-gradient-to-r from-transparent via-white/90 to-transparent"
-          style={{ width: `${8 + p * 92}%`, transition: "width 700ms cubic-bezier(0.22, 1, 0.36, 1)" }}
-        />
-        <div
-          className="absolute left-1/2 top-0 h-6 -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(50%_50%_at_50%_50%,rgb(255_236_200/0.22),transparent)] blur-md"
-          style={{ width: `${p * 100}%`, transition: "width 700ms cubic-bezier(0.22, 1, 0.36, 1)" }}
-        />
-        {/* the sun rising once everything is ready */}
-        <motion.div
-          className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 rounded-full bg-[#fff3dc] shadow-[0_0_24px_8px_rgb(255_214_160/0.55),0_0_80px_30px_rgb(255_190_120/0.2)]"
-          initial={{ y: 4, opacity: 0, scale: 0.6 }}
-          animate={p >= 1 ? { y: -22, opacity: 1, scale: 1 } : { y: 4, opacity: 0, scale: 0.6 }}
-          transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
-        />
-      </div>
+    <div className={`${geist.className} pointer-events-none fixed inset-0 z-[50] text-white`} style={{ letterSpacing: TRACK.body }} aria-hidden={done}>
+      {/* the two halves of the dark, meeting on the horizon */}
       <motion.div
-        className="absolute inset-x-0 top-1/2 mt-7 text-center"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: done ? 0 : 1 }}
-        transition={{ duration: 0.8, delay: done ? 0 : 0.2 }}
+        className={`${panel} top-0 h-[calc(50%+1px)]`}
+        initial={false}
+        animate={{ y: done ? "-101%" : "0%" }}
+        transition={OPEN}
+        style={{ boxShadow: "0 28px 60px 30px #050506" }}
+      />
+      <motion.div
+        className={`${panel} bottom-0 h-[calc(50%+1px)]`}
+        initial={false}
+        animate={{ y: done ? "101%" : "0%" }}
+        transition={OPEN}
+        style={{ boxShadow: "0 -28px 60px 30px #050506" }}
+        onAnimationComplete={() => done && setGone(true)}
+      />
+      {/* the line: progress first, then the horizon */}
+      <motion.div
+        className="absolute left-1/2 top-1/2 h-px -translate-y-1/2"
+        initial={false}
+        animate={{ width: done ? "100vw" : "min(360px, 64vw)", x: "-50%", opacity: done ? 0 : 1 }}
+        transition={{ width: { duration: 0.75, ease: [0.7, 0, 0.2, 1] }, opacity: { duration: 0.9, delay: 0.9 } }}
       >
-        <div className="text-[11px] font-medium uppercase tracking-[0.42em] text-white/80">Augustas Armalis</div>
-        <div className="mt-2 text-[11px] tabular-nums tracking-[0.08em] text-white/40">{caption ?? "\u00a0"}</div>
+        <div className="absolute inset-0 bg-white/14" />
+        <div ref={fill} className="absolute inset-0 origin-left bg-white" style={{ transform: `scaleX(${shownProgress})` }} />
+        <div className="absolute inset-x-0 top-1/2 h-10 -translate-y-1/2 bg-[radial-gradient(50%_50%_at_50%_50%,rgb(255_232_196/0.16),transparent)] blur-md" />
       </motion.div>
-    </motion.div>
+      {/* lockup: mark above the line, name and counter hanging from its ends */}
+      <motion.div
+        className="absolute left-1/2 top-1/2 w-[min(360px,64vw)] -translate-x-1/2"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: done ? 0 : 1, y: done ? 6 : 0 }}
+        transition={{ duration: done ? 0.35 : 0.7, ease: [0.22, 1, 0.36, 1], delay: done ? 0 : 0.1 }}
+      >
+        <svg viewBox="15 13 34 38" className="absolute bottom-5 left-0 h-[26px] w-auto" fill="currentColor" aria-hidden>
+          <path d="M32 13 15.5 51h7.2l3.4-8.3h11.8l3.4 8.3h7.2L32 13Zm-3.6 23.6L32 27.4l3.6 9.2h-7.2Z" />
+        </svg>
+        <div className="flex items-baseline justify-between pt-3.5 text-[13px] font-medium leading-none">
+          <span>
+            Augustas Armalis
+            {caption && <span className="ml-2 font-normal text-white/38 max-sm:hidden">{caption}</span>}
+          </span>
+          <span ref={count} className="tabular-nums text-white/55">
+            00
+          </span>
+        </div>
+      </motion.div>
+    </div>
   );
 }

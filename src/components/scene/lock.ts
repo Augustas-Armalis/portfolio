@@ -1,11 +1,12 @@
 import * as THREE from "three";
+import { GEIST, geistReady } from "./font";
 
 // The display's idle face: a macOS-style lock screen. A wallpaper photo, the
 // date, and a large live clock. On the phone it's the iOS-style lock screen.
 // Values are written as display (sRGB) colour, like the boot frame.
 
 const WALL = { desktop: "/wallpapers/founder-foggy-sunrise.jpg", mobile: "/wallpapers/engineer-joel-filipe.jpg" };
-const FONT = `-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif`;
+const FONT = GEIST;
 
 export function makeLockScreen(mobile: boolean) {
   const W = mobile ? 720 : 1600;
@@ -42,10 +43,16 @@ export function makeLockScreen(mobile: boolean) {
     g.shadowColor = "rgba(0,0,0,0.25)";
     g.shadowBlur = 24;
     const u = mobile ? W / 390 : H / 900;
-    g.font = `600 ${Math.round((mobile ? 18 : 24) * u)}px ${FONT}`;
+    const track = (px: number, em: number) => ((g as unknown as { letterSpacing: string }).letterSpacing = `${(px * em).toFixed(2)}px`);
+    const dateSize = Math.round((mobile ? 18 : 24) * u);
+    g.font = `500 ${dateSize}px ${FONT}`;
+    track(dateSize, -0.015);
     g.fillText(date, W / 2, (mobile ? 150 : 150) * u);
-    g.font = `700 ${Math.round((mobile ? 92 : 150) * u)}px ${FONT}`;
+    const timeSize = Math.round((mobile ? 96 : 156) * u);
+    g.font = `600 ${timeSize}px ${FONT}`;
+    track(timeSize, -0.045);
     g.fillText(time, W / 2, (mobile ? 245 : 300) * u);
+    track(dateSize, -0.015);
     g.shadowBlur = 0;
     // a quiet hint at the bottom
     g.font = `500 ${Math.round((mobile ? 14 : 18) * u)}px ${FONT}`;
@@ -53,8 +60,15 @@ export function makeLockScreen(mobile: boolean) {
     g.fillText(mobile ? "Tap to unlock" : "Click to start", W / 2, H - (mobile ? 70 : 70) * u);
     tex.needsUpdate = true;
   };
-  img.onload = draw;
+  const ready = new Promise<void>((res) => {
+    img.onload = () => {
+      draw();
+      res();
+    };
+    img.onerror = () => res();
+  });
   draw();
+  void geistReady().then(draw);
   const t = window.setInterval(draw, 15000);
-  return { tex, dispose: () => window.clearInterval(t) };
+  return { tex, ready, dispose: () => window.clearInterval(t) };
 }
