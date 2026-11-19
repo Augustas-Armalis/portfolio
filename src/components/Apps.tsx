@@ -77,7 +77,7 @@ import MusicShader from "./scene/MusicShader";
 import dynamic from "next/dynamic";
 import { Bars, DeskArt, Resume } from "./Desktop";
 import { Monogram } from "./Login";
-import { useOS } from "@/store";
+import { useOS, useWallpaperIndex } from "@/store";
 import { QUALITY_LABELS, setQualityChoice, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { AppIcon, DocArt, FolderArt } from "./icons";
 import { Badge, Btn, Button, dragFile, glass, GlassMenu, TabBar, Group, IconTile, InfoGrid, List, ListRow, SectionHeader, Squircle, StatsRow, useContextMenu, QuickLook, Row, SearchField, Segmented, SplitView, Switch, Toolbar, Visual, useChrome, type LookItem } from "./ui";
@@ -490,22 +490,96 @@ function ProjectApp({ id }: { id: AppId }) {
 
 // The key files of a project of this kind. A stand-in for the listing until the repositories are public: it follows
 // from the stack in content.ts, nothing is fetched.
-function repoFiles(p: Project): { name: string; dir?: boolean; note: string }[] {
-  const st = (p.stack ?? "").toLowerCase();
-  const tail = [
-    { name: "README.md", note: "What it is and how to run it" },
-    { name: "LICENSE", note: "Licence" },
-  ];
-  if (st.includes("swift")) return [{ name: "Sources", dir: true, note: "The app" }, { name: "Resources", dir: true, note: "Assets" }, { name: "Package.swift", note: "Swift package manifest" }, ...tail];
-  if (st.includes("python")) return [{ name: "engine", dir: true, note: "The package" }, { name: "scores", dir: true, note: "Studied scores" }, { name: "tests", dir: true, note: "Rule checks" }, { name: "pyproject.toml", note: "Project and dependencies" }, ...tail];
-  if (st.includes("electron")) return [{ name: "src", dir: true, note: "Main and renderer" }, { name: "assets", dir: true, note: "Tray icons" }, { name: "package.json", note: "Scripts and dependencies" }, ...tail];
-  return [{ name: "src", dir: true, note: "Source" }, { name: "package.json", note: "Scripts and dependencies" }, { name: "tsconfig.json", note: "TypeScript settings" }, ...tail];
+// A public repository shows what is really in it: the file list and the README come from GitHub when the
+// window opens. Nothing is made up; a project without a public repository shows no files at all.
+type RepoData = { files: { name: string; dir: boolean }[]; readme: string | null };
+const repoCache = new Map<string, Promise<RepoData>>();
+function loadRepo(slug: string) {
+  let hit = repoCache.get(slug);
+  if (!hit) {
+    const api = `https://api.github.com/repos/${slug}`;
+    hit = Promise.all([
+      fetch(`${api}/contents`).then((r) => (r.ok ? r.json() : Promise.reject(new Error("contents")))),
+      fetch(`${api}/readme`, { headers: { Accept: "application/vnd.github.raw+json" } })
+        .then((r) => (r.ok ? r.text() : null))
+        .catch(() => null),
+    ]).then(([list, readme]) => ({
+      files: (list as { name: string; type: string }[])
+        .map((f) => ({ name: f.name, dir: f.type === "dir" }))
+        .sort((x, y) => Number(y.dir) - Number(x.dir) || x.name.localeCompare(y.name)),
+      readme,
+    }));
+    repoCache.set(slug, hit);
+    hit.catch(() => repoCache.delete(slug));
+  }
+  return hit;
+}
+
+// Enough Markdown for a README: headings, lists, code fences and paragraphs. Images, badges and HTML are dropped.
+function Readme({ text }: { text: string }) {
+  const out: React.ReactNode[] = [];
+  const inline = (t: string) =>
+    t
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/<[^>]+>/g, "")
+      .replace(/[*_`]{1,3}([^*_`]+)[*_`]{1,3}/g, "$1")
+      .trim();
+  const lines = text.split("\n");
+  let code: string[] | null = null;
+  let para: string[] = [];
+  const flush = () => {
+    const t = inline(para.join(" "));
+    if (t) out.push(<p key={out.length} className="t-sub mt-2 text-ink-2 [text-wrap:pretty]">{t}</p>);
+    para = [];
+  };
+  for (const raw of lines) {
+    if (raw.trim().startsWith("```")) {
+      if (code) {
+        out.push(<pre key={out.length} className="mt-2 overflow-x-auto rounded-[8px] bg-[var(--fill-2)] p-3 font-mono text-[12px] leading-[1.5] text-ink">{code.join("\n")}</pre>);
+        code = null;
+      } else {
+        flush();
+        code = [];
+      }
+      continue;
+    }
+    if (code) {
+      code.push(raw);
+      continue;
+    }
+    const h = /^(#{1,6})\s+(.*)$/.exec(raw);
+    const li = /^\s*[-*+]\s+(.*)$/.exec(raw) ?? /^\s*\d+\.\s+(.*)$/.exec(raw);
+    if (h) {
+      flush();
+      const t = inline(h[2]);
+      if (t) out.push(h[1].length === 1 ? <h2 key={out.length} className="t-title3 text-ink">{t}</h2> : <h3 key={out.length} className="m-headline mt-4 text-ink">{t}</h3>);
+    } else if (li) {
+      flush();
+      const t = inline(li[1]);
+      if (t) out.push(<div key={out.length} className="t-sub mt-1 flex gap-2 text-ink-2"><span aria-hidden>•</span><span className="min-w-0">{t}</span></div>);
+    } else if (!raw.trim()) flush();
+    else para.push(raw.trim());
+  }
+  flush();
+  return <>{out}</>;
 }
 
 function RepoView({ it }: { it: StoryItem }) {
   const { compact } = useChrome();
   const p = it.p;
-  const files = repoFiles(p);
+  const [repo, setRepo] = useState<RepoData | null>(null);
+  const [repoState, setRepoState] = useState<"idle" | "loading" | "failed">(p.repo ? "loading" : "idle");
+  useEffect(() => {
+    if (!p.repo) return;
+    let dead = false;
+    loadRepo(p.repo.replace(/^https?:\/\/github\.com\//, ""))
+      .then((d) => !dead && (setRepo(d), setRepoState("idle")))
+      .catch(() => !dead && setRepoState("failed"));
+    return () => {
+      dead = true;
+    };
+  }, [p.repo]);
   const langs = (p.stack ?? "").split(",").map((x) => x.trim()).filter(Boolean);
   const slug = p.repo ? p.repo.replace(/^https?:\/\/github\.com\//, "") : p.name.toLowerCase().replace(/\s+/g, "-");
   const actions = p.repo ? (
@@ -538,33 +612,53 @@ function RepoView({ it }: { it: StoryItem }) {
         {compact && <div className="mt-4 flex flex-wrap gap-2">{actions}</div>}
         <div className={`mt-5 grid gap-5 ${compact ? "" : "grid-cols-[minmax(0,1fr)_220px]"}`}>
           <div className="min-w-0 space-y-5">
-            <div>
-              <SectionHeader mac={!compact}>Files</SectionHeader>
-              <List mac={!compact}>
-                {files.map((f) => (
-                  <ListRow
-                    key={f.name}
-                    mac={!compact}
-                    icon={<span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--accent)]">{f.dir ? <Folder size={16} fill="currentColor" fillOpacity={0.18} /> : <FileText size={15} className="text-ink-2" />}</span>}
-                    title={<span className="font-mono text-[12.5px]">{f.name}</span>}
-                    detail={<span className={compact ? "t-foot" : "m-sub"}>{f.note}</span>}
-                  />
-                ))}
-              </List>
-            </div>
-            <div>
-              <SectionHeader mac={!compact}>README.md</SectionHeader>
-              <List mac={!compact} className="p-5">
-                <h2 className="t-title3 text-ink">{p.name}</h2>
-                {p.what && <p className="t-sub mt-2 text-ink-2 [text-wrap:pretty]">{p.what}</p>}
-                {langs.length > 0 && (
-                  <>
-                    <h3 className="m-headline mt-4 text-ink">Built with</h3>
-                    <ul className="t-sub mt-1 list-disc pl-5 text-ink-2">
-                      {langs.map((l) => (
-                        <li key={l}>{l}</li>
+            {p.repo && (
+              <div>
+                <SectionHeader mac={!compact}>Files</SectionHeader>
+                <List mac={!compact}>
+                  {repo ? (
+                    repo.files.map((f) => (
+                      <ListRow
+                        key={f.name}
+                        mac={!compact}
+                        href={`${p.repo}/${f.dir ? "tree" : "blob"}/HEAD/${f.name}`}
+                        icon={<span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--accent)]">{f.dir ? <Folder size={16} fill="currentColor" fillOpacity={0.18} /> : <FileText size={15} className="text-ink-2" />}</span>}
+                        title={<span className="font-mono text-[12.5px]">{f.name}</span>}
+                        chevron={compact}
+                      />
+                    ))
+                  ) : repoState === "loading" ? (
+                    <div className="space-y-2.5 p-4" aria-label="Loading files from GitHub" role="status">
+                      {[52, 38, 64, 44].map((w) => (
+                        <div key={w} className="skeleton h-4 rounded-[4px]" style={{ width: `${w}%` }} />
                       ))}
-                    </ul>
+                    </div>
+                  ) : (
+                    <div className={`p-4 text-ink-2 ${compact ? "t-sub" : "m-body"}`}>GitHub didn&apos;t answer. The files are one tap away with View on GitHub.</div>
+                  )}
+                </List>
+              </div>
+            )}
+            <div>
+              <SectionHeader mac={!compact}>{repo?.readme ? "README.md" : "Overview"}</SectionHeader>
+              <List mac={!compact} className="p-5">
+                {repo?.readme ? (
+                  <Readme text={repo.readme} />
+                ) : (
+                  <>
+                    <h2 className="t-title3 text-ink">{p.name}</h2>
+                    {p.what && <p className="t-sub mt-2 text-ink-2 [text-wrap:pretty]">{p.what}</p>}
+                    {langs.length > 0 && (
+                      <>
+                        <h3 className="m-headline mt-4 text-ink">Built with</h3>
+                        <ul className="t-sub mt-1 list-disc pl-5 text-ink-2">
+                          {langs.map((l) => (
+                            <li key={l}>{l}</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {!p.repo && <p className="t-foot mt-4 text-ink-3">The source isn&apos;t public yet, so there are no files to show.</p>}
                   </>
                 )}
               </List>
@@ -2380,7 +2474,8 @@ function Game() {
 }
 
 function SettingsApp() {
-  const { sound, setSound, wallpaper, setWallpaper, appearance, setAppearance, tintedIcons, setTintedIcons, reduceEffects, setReduceEffects } = useOS();
+  const wallpaper = useWallpaperIndex();
+  const { sound, setSound, setWallpaper, appearance, setAppearance, tintedIcons, setTintedIcons, reduceEffects, setReduceEffects } = useOS();
   const { compact } = useChrome();
   const [sel, setSel] = useState("appearance");
   const choice = useQualityChoice();
@@ -2441,7 +2536,7 @@ function SettingsApp() {
       </div>
     ) : sel === "wallpaper" ? (
       <div>
-        <SectionHeader mac={!compact}>Desktop picture</SectionHeader>
+        <SectionHeader mac={!compact}>{compact ? "Wallpaper" : "Desktop picture"}</SectionHeader>
         <List mac={!compact} className="p-3">
           <div className="grid grid-cols-2 gap-3 @md:grid-cols-3 @xl:grid-cols-4">
             {wallpapers.map((w, i) => {

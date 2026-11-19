@@ -28,7 +28,7 @@ type OS = {
   locked: boolean;
   // Shut Down returns to the 3D intro with the screen off (read by the intro)
   introOff: boolean;
-  // chosen desktop picture (index into wallpapers)
+  // chosen desktop picture (index into wallpapers); -1 until one is chosen, which means the default for the device
   wallpaper: number;
   // Light, Dark or Auto (follows the system); icons can be tinted
   appearance: "light" | "dark" | "auto";
@@ -99,7 +99,7 @@ export const useOS = create<OS>((set, get) => ({
   restarting: false,
   locked: false,
   introOff: false,
-  wallpaper: 0,
+  wallpaper: -1,
   appearance: "light",
   tintedIcons: false,
   setAppearance: (a) => {
@@ -134,8 +134,7 @@ export const useOS = create<OS>((set, get) => ({
   putBack: (ids) => set({ trash: get().trash.filter((x) => !ids.includes(x)) }),
   emptyTrash: () => set({ deleted: [...get().deleted, ...get().trash], trash: [] }),
 
-  // the phone starts on a calmer picture than the desktop: icon labels have to read over it
-  setMobile: (m) => set(m && get().wallpaper === 0 ? { isMobile: m, wallpaper: PHONE_WALLPAPER } : { isMobile: m }),
+  setMobile: (m) => set({ isMobile: m }),
   finishIntro: (target) => {
     set({ seamless: true, introOff: false });
     if (target) get().login(target);
@@ -204,9 +203,15 @@ export function focusedApp(windows: Win[]): AppId | null {
   return live.reduce((a, b) => (a.z > b.z ? a : b)).id;
 }
 
-export function useWallpaper() {
+// The picture in use. Until one is chosen the Mac gets the first and the phone a calmer one: icon labels and
+// the lock screen clock have to read over it.
+export function useWallpaperIndex() {
   const i = useOS((s) => s.wallpaper);
-  return wallpapers[i] ?? wallpapers[0];
+  const mobile = useOS((s) => s.isMobile);
+  return wallpapers[i] ? i : mobile ? PHONE_WALLPAPER : 0;
+}
+export function useWallpaper() {
+  return wallpapers[useWallpaperIndex()];
 }
 
 // dev only: lets the QA pass drive the OS from the console

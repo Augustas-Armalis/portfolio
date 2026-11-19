@@ -242,6 +242,7 @@ export const projects: Partial<Record<AppId, Project>> = {
   filzymovie: {
     id: "filzymovie",
     name: "Filzy Movie",
+    what: "Search for a film or a series and open it in the player. Your progress stays on your device.",
     role: "Founder",
     status: "Live",
     numbers: [],
