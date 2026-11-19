@@ -221,12 +221,12 @@ function build() {
     alu: new THREE.MeshPhysicalMaterial({ color: "#d4d6da", metalness: 1, roughness: 0.42, roughnessMap: brushedTexture(), anisotropy: 0.6 }),
     aluDark: new THREE.MeshPhysicalMaterial({ color: "#4b4d53", metalness: 0.9, roughness: 0.42 }),
     // bead-blasted anodised aluminium (display, headphone cups): no brushing, a soft even sheen
-    anodised: new THREE.MeshPhysicalMaterial({ color: "#d9dadd", metalness: 0.92, roughness: 0.46, clearcoat: 0.15, clearcoatRoughness: 0.6 }),
+    anodised: new THREE.MeshPhysicalMaterial({ color: "#b8babf", metalness: 0.72, roughness: 0.5, clearcoat: 0.15, clearcoatRoughness: 0.6 }),
     // satin silver plate and machined dials (camera, knobs)
-    satin: new THREE.MeshPhysicalMaterial({ color: "#cfd0d2", metalness: 0.95, roughness: 0.32 }),
+    satin: new THREE.MeshPhysicalMaterial({ color: "#bcbdc0", metalness: 0.8, roughness: 0.36 }),
     brass: new THREE.MeshStandardMaterial({ color: "#b8935a", metalness: 1, roughness: 0.38 }),
     // the headband frame's soft-touch coating
-    softTouch: new THREE.MeshPhysicalMaterial({ color: "#c3c4c7", roughness: 0.62, sheen: 0.4, sheenColor: new THREE.Color("#ffffff"), sheenRoughness: 0.5 }),
+    softTouch: new THREE.MeshPhysicalMaterial({ color: "#b4b5b9", roughness: 0.62, sheen: 0.4, sheenColor: new THREE.Color("#ffffff"), sheenRoughness: 0.5 }),
     meshDark: new THREE.MeshStandardMaterial({ color: "#3b3d42", roughness: 0.95 }),
     titanium: new THREE.MeshPhysicalMaterial({ color: "#bdbab3", metalness: 1, roughness: 0.34 }),
     steel: new THREE.MeshStandardMaterial({ color: "#d8dadd", metalness: 1, roughness: 0.14 }),

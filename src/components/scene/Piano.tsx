@@ -37,6 +37,7 @@ export function PianoKeys({ playable }: { playable: boolean }) {
     }),
     [],
   );
+  useEffect(() => () => Object.values(geo).forEach((g) => g.dispose()), [geo]);
   const x0 = (-15 * KW) / 2 + KW / 2;
   const zW = 0.135 / 2 - 0.092 / 2 - 0.004;
   const zB = zW - 0.092 / 2 + 0.056 / 2;

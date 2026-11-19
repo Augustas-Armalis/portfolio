@@ -253,8 +253,8 @@ export function Desk() {
         [0.0042, 0, true],
       ],
       8,
-      // the edges take a slanted slice of the grain rather than a stretched one
-      (p) => [p.x / DESK.w + 0.5 + p.y * 1.1, p.z / DESK.d + 0.5 + p.y * 1.7],
+      // grain runs the length of the top; the edges take a slanted slice of it rather than a stretched one
+      (p) => [(p.z / DESK.d) * 0.5 + 0.5 + p.y * 1.1, (p.x / DESK.w) * 2 + p.y * 1.7],
     );
     const under = DESK.top - DESK.t;
     const ax = DESK.w / 2 - 0.125;
@@ -275,7 +275,7 @@ export function Desk() {
         const leg = cyl(0.0205, 0.0125, len, 20);
         // grain runs along the leg
         const uv = leg.attributes.uv;
-        for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getY(i) * 0.45 + (sx + sz) * 0.07, uv.getX(i) * 0.12 + 0.3);
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 0.07 + 0.3 + (sx + sz * 2) * 0.11, uv.getY(i));
         leg.applyQuaternion(q);
         leg.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
         wood.push(leg);
@@ -287,9 +287,15 @@ export function Desk() {
         feet.push(ferrule);
       }
     const railY = under - 0.021;
+    const rail = (len: number, k: number) => {
+      const r = rbox(len, 0.042, 0.018, 0.003, 2);
+      const uv = r.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getY(i) * 0.05 + k, uv.getX(i) * len * 1.4);
+      return r;
+    };
     for (const s of [-1, 1]) {
-      wood.push(put(rbox(ax * 2, 0.042, 0.018, 0.003, 2), 0, railY, s * az));
-      wood.push(put(rbox(0.018, 0.042, az * 2, 0.003, 2), s * ax, railY, 0));
+      wood.push(put(rail(ax * 2, 0.2 + s * 0.1), 0, railY, s * az));
+      wood.push(put(rail(az * 2, 0.6 + s * 0.1), s * ax, railY, 0, 0, Math.PI / 2));
     }
     return { top, frame: merge(wood), feet: merge(feet) };
   });
