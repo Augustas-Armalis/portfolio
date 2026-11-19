@@ -94,13 +94,15 @@ function makeTempera() {
         // the colours are written as you'd mix them on a palette; the sun here is several times brighter than paper white
         vec3 col = alb * (uSkyCol * (0.62 + 0.38 * n.y) + uKeyCol * lit * 0.9) * 0.36;
         // its own light: suns, windows, stars; it swells with the music
-        col += vCol.rgb * vCol.rgb * vCol.a * 0.8 * (1.0 + uPulse * 0.7) * (0.85 + 0.15 * sin(uTime * 1.3 + vWorld.x * 0.2));
         float dist = length(vWorld - cameraPosition);
+        // from the desk the stations are quiet shapes in the haze; they light up as the plane comes near
+        float near = 1.0 - smoothstep(95.0, 215.0, dist);
+        col += vCol.rgb * vCol.rgb * vCol.a * 0.8 * near * (1.0 + uPulse * 0.7) * (0.85 + 0.15 * sin(uTime * 1.3 + vWorld.x * 0.2));
         vec3 d = normalize(vWorld - cameraPosition);
         vec3 air = skyBase(normalize(vec3(d.x, max(d.y, 0.0) * 0.5 + 0.012, d.z)));
         float low = exp(-max(vWorld.y, 0.0) * 0.07);
         float f = 1.0 - exp(-dist * (0.0032 * (0.5 + low) + uMist));
-        col = mix(col, air, clamp(f, 0.0, 1.0) * (1.0 - 0.45 * clamp(vCol.a, 0.0, 1.0)));
+        col = mix(col, air, clamp(f, 0.0, 1.0) * (1.0 - 0.45 * near * clamp(vCol.a, 0.0, 1.0)));
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
