@@ -3,7 +3,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
+import { LightGate, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { GLSL_AIR, WORLD_U, haloGeometry, makeHaloMaterial, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff } from "./kit";
 import { GLSL_SKY, SKY_U, airState, mixSky, type SkyState } from "../sky";
 import { Birds, type Flock } from "./life";
@@ -270,6 +270,8 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
       <mesh geometry={b.skerries} material={b.rock} />
       <Birds flocks={b.flocks} tint={[0.07, 0.08, 0.07]} />
       <mesh geometry={b.grotto} material={b.grottoMat} />
+      {/* inside the grotto, the way on: a soft sheet of light, the night beyond faintly in it (no arch: the rock is the door) */}
+      <LightGate id="sea" def={def} look="veil" half={13} rise={12} gain={0.85} tint={[0.82, 0.9, 1]} />
       <mesh geometry={b.post} material={b.postMat} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
       <mesh geometry={b.wisps} material={b.wispMat} renderOrder={3} />

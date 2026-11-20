@@ -943,6 +943,9 @@ export const voyage = {
   mist: 0, // extra air density for every shader (SKY_U.uMist), rises with the veil
   frames: 0, // frames drawn since the world last changed
   ready: null as WorldId | null, // the next world, made ready ahead of time while this one is flown (worlds/Worlds.tsx)
+  // work the next world needs done before it is swapped in (a few milliseconds a call; true when it is finished): set by
+  // worlds/Worlds.tsx when the cloud begins to close on a world that was not made ready, run by the plane under the cloud
+  prep: null as (() => boolean) | null,
   quick: false, // this crossing arrived in a world that was ready: the cloud need not wait for it
   held: 0, // seconds the cloud has been closed
   skyFrom: null as SkyState | null,

@@ -77,7 +77,8 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     glows.push({ p: [PYR.x, tip + AS * 0.9, PYR.z + 4], size: 210, col: [1, 0.7, 0.3], k: 0.4 });
     glows.push({ p: [PYR.x, tip - 30, PYR.z], size: 420, col: [0.6, 0.8, 0.6], k: 0.16 });
     halos.push({ p: [PYR.x, tip + AS * 1.69, PYR.z + 3], size: 16, col: [1, 0.95, 0.8], k: 1.3 });
-    const shafts: Shaft[] = [{ x: PYR.x, z: PYR.z, y0: py0 - 20, y1: tip + 10, r: 30, k: 1.1 }];
+    // (one soft shaft in the great pyramid, and none in the far ones: a tall bright column in every pyramid was too much)
+    const shafts: Shaft[] = [{ x: PYR.x, z: PYR.z, y0: py0 - 20, y1: tip + 10, r: 30, k: 0.45 }];
     // two smaller pyramids far off to either hand, as at the top of the Allegro, each with its light
     const farPyr: { p: V3; s: number }[] = [
       { p: [-1150, g(-1150, -900) - 6, -900], s: 0.62 },
@@ -87,7 +88,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     for (const f of farPyr) {
       glows.push({ p: [f.p[0], f.p[1] + PYR.h * f.s, f.p[2]], size: 260 * f.s, col: [1, 0.86, 0.56], k: 0.5 });
       halos.push({ p: [f.p[0], f.p[1] + PYR.h * f.s, f.p[2]], size: 30 * f.s, col: [1, 0.95, 0.8], k: 1.2 });
-      shafts.push({ x: f.p[0], z: f.p[2], y0: f.p[1], y1: f.p[1] + PYR.h * f.s, r: 22 * f.s, k: 1.6 });
+
     }
 
     // ----- the river of stars -----
@@ -95,7 +96,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     const river = riverGeometry(-1500, 1500, bandY, RIVER.z, RIVER.top, RIVER.fall, props.mobile ? 90 : 180);
     // star dust drifting over it and falling from its brink
     const riverDust = pointsGeometry(
-      props.mobile ? 1400 : Math.round(3000 + 3000 * props.effects),
+      props.mobile ? 900 : Math.round(1600 + 1600 * props.effects),
       (_, q) => {
         const x = (q() - 0.5) * 2900;
         const sp = q() + q() + q() - 1.5;
@@ -119,7 +120,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     // ----- the gold strings from the river, and the worlds threaded on them -----
     const threads: Seg[] = [];
     const orbs: Soft[] = [];
-    const nT = props.mobile ? 10 : 18;
+    const nT = props.mobile ? 6 : 9;
     for (let i = 0; i < nT; i++) {
       const x = -1280 + (i / (nT - 1)) * 2560 + (r() - 0.5) * 60;
       const z = RIVER.z + RIVER.top / 2 + 1;
@@ -139,7 +140,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       }
     }
     // free worlds hanging in the deep, small and many near, vast and few far off
-    for (let i = 0; i < (props.mobile ? 40 : 110); i++) {
+    for (let i = 0; i < (props.mobile ? 20 : 44); i++) {
       const a = r() * Math.PI * 2;
       const d = 240 + r() * 1300;
       const x = Math.cos(a) * d;
@@ -199,7 +200,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
 
     // ----- bands of pale blue-green crossing the air -----
     const bands: { geo: THREE.BufferGeometry; mat: THREE.ShaderMaterial }[] = [];
-    const nB = props.mobile ? 5 : 10;
+    const nB = props.mobile ? 3 : 5;
     for (let w = 0; w < nB; w++) {
       const y = 90 + w * 62 + r() * 40;
       const z = 520 - w * 190 + r() * 80;
@@ -219,7 +220,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     // (the low ones are the painting's own ochre and umber cloud; the high ones are blue-green and far)
     const warm: PCloud[] = [];
     const cool: PCloud[] = [];
-    const nC = props.mobile ? 44 : Math.round(70 + 50 * props.effects);
+    const nC = props.mobile ? 30 : Math.round(44 + 26 * props.effects);
     for (let i = 0; i < nC; i++) {
       const a = r() * Math.PI * 2;
       const low = i % 4 !== 0;
@@ -233,7 +234,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     }
     // mist lying in the troughs of the waves
     const puffs: Puff[] = [];
-    for (let i = 0; i < (props.mobile ? 14 : 40); i++) {
+    for (let i = 0; i < (props.mobile ? 8 : 18); i++) {
       const x = (r() - 0.5) * 2400;
       const z = 800 - r() * 2000;
       puffs.push({ p: [x, g(x, z) + 6 + r() * 14, z], size: 90 + r() * 140, a: 0.5 });
@@ -243,7 +244,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     const segs: Seg[] = [];
     const figs: { c: THREE.Vector3; size: number }[] = [];
     const figStars: V3[] = [];
-    const nF = props.mobile ? 9 : 16;
+    const nF = props.mobile ? 6 : 9;
     const tan = new THREE.Vector3();
     for (let i = 0; i < nF; i++) {
       const pi = Math.floor((0.05 + (i / nF) * 0.86) * (path.length - 2));
@@ -263,7 +264,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     for (const s of figStars) halos.push({ p: s, size: 7 + r() * 7, col: [1, 0.95, 0.82], k: 0.75 });
 
     // ----- stars near at hand, drifting through everything -----
-    const dust = pointsGeometry(props.mobile ? 900 : Math.round(2600 * props.effects + 1200), (_, q) => [(q() - 0.5) * 2600, 10 + q() * 1000, 900 - q() * 2400, 0.4 + q() * q() * 1.8], 99);
+    const dust = pointsGeometry(props.mobile ? 500 : Math.round(1100 * props.effects + 600), (_, q) => [(q() - 0.5) * 2600, 10 + q() * 1000, 900 - q() * 2400, 0.4 + q() * q() * 1.8], 99);
 
     // birds of light: over the globe, along the river, round the angel
     const flocks: Flock[] = [
@@ -292,11 +293,11 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       river: river.geo,
       riverMat: makeStarRiver({ width: river.width, top: river.top, base: [0.006, 0.012, 0.045], warm: 0.7, flow: 2.2, alpha: 0.84 }),
       riverDust,
-      riverDustMat: makePoints({ a: [1.0, 0.92, 0.7], b: [0.7, 0.84, 1.0], scale: 420, gain: 1.25, max: 30, drift: 1.2 }),
+      riverDustMat: makePoints({ a: [1.0, 0.92, 0.7], b: [0.7, 0.84, 1.0], scale: 420, gain: 0.9, max: 30, drift: 1.2 }),
       serpent: serpent.geo,
       serpentMat: makeStarRiver({ width: 34, top: 1, base: [0.05, 0.026, 0.014], warm: 0.15, flow: 1.4, alpha: 0.7 }),
       threads: linesGeometry(threads),
-      threadMat: makeLineMaterial({ gain: 2.2, minW: 0.0022, flow: 0.6 }),
+      threadMat: makeLineMaterial({ gain: 1.3, minW: 0.0022, flow: 0.6 }),
       orbs: softGeometry(orbs, fine ? 2 : 1),
       giants: softGeometry(giants, 3),
       orbMat: makeSoftMaterial({ shade: [0.35, 0.4, 0.7], under: [0.4, 0.4, 0.6], rim: 1.4, dab: 0.8, amb: 1.2, key: 0.9 }),
@@ -351,8 +352,9 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
   return (
     <>
       <mesh geometry={b.sea} material={b.seaMat} renderOrder={-5} />
-      <LightPath id="stars" def={def} tint={[1, 0.92, 0.7]} gain={2.2} effects={props.effects} angels={false} />
-      <LightGate id="stars" def={def} tint={[1, 0.92, 0.7]} gain={2} />
+      <LightPath id="stars" def={def} tint={[1, 0.92, 0.7]} gain={1.4} effects={props.effects} angels={false} />
+      {/* the way on: only a sheet of light in the pale disc behind the angel (no arch, no pillar) */}
+      <LightGate id="stars" def={def} tint={[1, 0.92, 0.7]} gain={1.1} look="veil" />
       <Gallery def={def} />
       <mesh geometry={b.cool} material={b.coolMat} frustumCulled={false} renderOrder={1.2} />
       <mesh geometry={b.warm} material={b.warmMat} frustumCulled={false} renderOrder={1.3} />

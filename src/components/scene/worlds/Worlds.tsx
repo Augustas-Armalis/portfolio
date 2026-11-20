@@ -111,7 +111,7 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
   const { gl, camera, scene } = useThree();
   const [warm, setWarm] = useState<WorldId | null>(null);
   const group = useRef<THREE.Group | null>(null);
-  const job = useRef({ id: null as WorldId | null, since: 0, list: null as Drawn[] | null, compiled: 0, drawn: 0, wait: 0, t0: 0, prep: null as (() => boolean) | null, prepFor: null as WorldId | null });
+  const job = useRef({ id: null as WorldId | null, since: 0, list: null as Drawn[] | null, compiled: 0, drawn: 0, wait: 0, t0: 0, prep: null as (() => boolean) | null, prepFor: null as WorldId | null, closing: null as WorldId | null });
   const tiny = useMemo(() => new THREE.WebGLRenderTarget(1, 1), []);
   useEffect(() => () => tiny.dispose(), [tiny]);
   // an object whose shader uses the scene's lights cannot be lit when drawn alone: those are only compiled
@@ -134,7 +134,8 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
       // landed: the world that was waiting is let go
       if (warm) setWarm(null);
       if (j.prepFor) dropKings();
-      j.id = j.prep = j.prepFor = null;
+      j.id = j.prep = j.prepFor = j.closing = null;
+      voyage.prep = null;
       j.since = 0;
       voyage.ready = null;
       return;
@@ -142,6 +143,19 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
     const next = voyage.phase === "open" && !voyage.homing ? (WORLD_ORDER[WORLD_ORDER.indexOf(cur) + 1] ?? null) : null;
     if (!next) {
       if (voyage.phase !== "open") j.since = now;
+      // the cloud is closing on a world that was not made ready (a jump from the Worlds list): its heavy part is
+      // handed to the plane to make in slices under the cloud, instead of all at once in the frame it is swapped in
+      const to = voyage.phase === "closing" ? voyage.next : null;
+      if (!to) j.closing = null;
+      else if (j.closing !== to) {
+        j.closing = to;
+        if (PREPARE[to] && voyage.ready !== to) {
+          // (if it was already being made ahead of time, the same work is carried on, not begun again)
+          voyage.prep = j.prepFor === to && j.prep ? j.prep : PREPARE[to]!(props);
+          j.prep = null;
+          j.prepFor = to;
+        }
+      }
       return;
     }
     if (j.id !== next) {
@@ -234,7 +248,41 @@ export function Worlds(props: WorldProps) {
     const def = WORLDS[id];
     setWorldAir(def.fog);
   }, [id]);
+  // A world that was not made ready ahead of time (a jump from the Worlds list) is shown to the renderer a few
+  // things a frame under the closed cloud, so its shaders are compiled and its buffers uploaded over many short
+  // frames instead of one long one; the cloud does not open (voyage.frames stays at 0) until all of it is there.
+  const stand = useRef<THREE.Group | null>(null);
+  const reveal = useRef({ id: null as WorldId | null, on: false, list: null as THREE.Object3D[] | null, i: 0 });
   useFrame(() => {
+    const rv = reveal.current;
+    if (rv.id !== id) Object.assign(rv, { id, on: id !== "home" && voyage.phase === "hold" && !voyage.quick, list: null, i: 0 });
+    if (rv.on) {
+      const g = stand.current;
+      if (!g) {
+        voyage.frames = 0;
+        return;
+      }
+      if (!rv.list) {
+        const list: THREE.Object3D[] = [];
+        g.traverse((o) => {
+          const d = o as Drawn;
+          if (((d as THREE.Mesh).isMesh || (d as THREE.Points).isPoints || (d as THREE.Line).isLine) && d.visible) {
+            d.visible = false;
+            list.push(d);
+          }
+        });
+        rv.list = list;
+      }
+      const n = Math.min(rv.list.length, rv.i + 2);
+      for (; rv.i < n; rv.i++) rv.list[rv.i].visible = true;
+      if (rv.i < rv.list.length && voyage.phase === "hold") {
+        voyage.frames = 0;
+        return;
+      }
+      // (all shown; or the cloud is opening after all: nothing stays hidden)
+      for (; rv.i < rv.list.length; rv.i++) rv.list[rv.i].visible = true;
+      rv.on = false;
+    }
     voyage.frames++;
   });
   const { warm, group } = useWarmWorld(id, props);
@@ -253,7 +301,7 @@ export function Worlds(props: WorldProps) {
       {ids.map((w) => {
         const Comp = COMPONENTS[w];
         return (
-          <group key={w} position={ORIGIN} visible={w === id} ref={w === id ? undefined : group}>
+          <group key={w} position={ORIGIN} visible={w === id} ref={w === id ? stand : group}>
             {Comp && <Comp props={props} />}
           </group>
         );

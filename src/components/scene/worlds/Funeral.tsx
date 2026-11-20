@@ -5,7 +5,7 @@ import { useRef } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
+import { Halos, LightGate, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, noise2, paint, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, PaintedClouds, type Flock, type PaintedCloud } from "./life";
 import { ORIGIN, WORLDS, voyage } from "./voyage";
@@ -32,6 +32,53 @@ export const FUNERAL_PAL: GroundPalette = { a: [0.018, 0.035, 0.11], b: [0.026, 
 const END = /* glsl */ `
   #include <tonemapping_fragment>
   #include <colorspace_fragment>`;
+
+// The way the plane came: deep in the cave it comes out of stands a sheet of light, and in it, faintly, the world
+// left behind: the pale evening over still water, the island's dark back and its mirror, the two eyes and their
+// paths down the glass, all of it drifting as if seen through water.
+function makeArrivalVeil() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    uniforms: { ...SKY_U },
+    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      void main(){
+        // the cave's own outline
+        float x = (vUv.x - 0.5) * 2.0 * ${(CAVE.half * 1.06).toFixed(2)}; float y = vUv.y * ${(CAVE.top * 1.04).toFixed(2)};
+        float hw = y <= ${CAVE.wall.toFixed(1)} ? ${CAVE.half.toFixed(1)} : ${CAVE.half.toFixed(1)} * sqrt(max(0.0, 1.0 - pow((y - ${CAVE.wall.toFixed(1)}) / ${(CAVE.top - CAVE.wall).toFixed(1)}, 2.0)));
+        float edge = hw - abs(x);
+        if (edge < 0.0) discard;
+        float t = uTime;
+        vec2 wob = vec2(vnoise(vec2(vUv.y * 6.0 + t * 0.22, vUv.x * 3.0)), vnoise(vec2(vUv.x * 5.0 - t * 0.17, vUv.y * 4.0 + 3.0))) - 0.5;
+        vec2 q = vUv + wob * 0.03;
+        float hor = 0.44;
+        vec3 col = q.y > hor ? mix(vec3(0.5, 0.52, 0.34), vec3(0.3, 0.37, 0.3), smoothstep(hor, 1.0, q.y)) : mix(vec3(0.36, 0.4, 0.3), vec3(0.13, 0.17, 0.14), smoothstep(hor, 0.0, q.y));
+        // the island and its mirror
+        float back = 0.115 * exp(-pow((q.x - 0.62) / 0.09, 2.0)) + 0.045 * exp(-pow((q.x - 0.42) / 0.2, 2.0));
+        float d = abs(q.y - hor);
+        float isl = smoothstep(0.0, 0.012, back * (q.y > hor ? 1.0 : 1.15) - d) * smoothstep(0.16, 0.24, q.x);
+        col = mix(col, vec3(0.05, 0.1, 0.06), isl * (q.y > hor ? 0.92 : 0.7));
+        // the eyes, and their paths down the glass
+        for (int i = 0; i < 2; i++) {
+          float ex = i == 0 ? 0.585 : 0.655;
+          float dx = q.x - ex;
+          col += vec3(1.0, 0.86, 0.56) * (exp(-(dx * dx + (q.y - hor) * (q.y - hor)) * 9000.0) * 1.4 + exp(-dx * dx * 26000.0) * step(q.y, hor) * smoothstep(0.0, hor, q.y) * 0.55);
+        }
+        // light drifting in the sheet, and a line of it where it meets the rock
+        float drift = vnoise(vec2(q.x * 4.0, q.y * 3.0 - t * 0.12)) * 0.6 + vnoise(vec2(q.x * 9.0 + t * 0.08, q.y * 7.0)) * 0.4;
+        col *= 0.75 + 0.5 * drift;
+        col += vec3(0.5, 0.6, 0.44) * (1.0 - smoothstep(0.0, 2.2, edge)) * 0.45;
+        float a = (0.6 + 0.25 * drift) * smoothstep(0.0, 1.2, edge);
+        gl_FragColor = vec4(col * 0.42 * (0.9 + 0.1 * sin(t * 0.4)), a);
+        ${END}
+      }`,
+  });
+}
 
 // a cypress as he drew them: a tall dark flame, slim as a column, its edge a little ragged
 function cypress(x: number, y: number, z: number, h: number, seed: number) {
@@ -180,6 +227,10 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       const o = L.pts[L.iOut];
       glows.push({ p: [o.x, L.y[L.iOut] + 20, o.z], size: 70, col: [0.16, 0.34, 0.9], k: 0.07 });
     }
+    // the sheet of light deep in the cave it comes out of, a little way in from the vault's end
+    const iV = 5;
+    const veil = { p: [L.pts[iV].x, L.y[iV] + CAVE.top * 0.52, L.pts[iV].z] as V3, yaw: Math.atan2(L.tan[iV][0], L.tan[iV][1]) };
+    glows.push({ p: veil.p, size: 80, col: [0.4, 0.5, 0.32], k: 0.08 });
     // a glow over each turn of the road, where the crowd is densest to the eye
     for (const i of [L.iPass - 150, L.iPass - 320, L.iPass - 470]) {
       if (i < 0) continue;
@@ -279,6 +330,9 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       flocks,
       clouds,
       shrines: shrines.build(),
+      veil,
+      veilGeo: new THREE.PlaneGeometry(CAVE.half * 2.12, CAVE.top * 1.04),
+      veilMat: makeArrivalVeil(),
       shrineMat: makeTempera({ amb: 1.0, key: 0.3, rim: [0.4, 0.26, 0.08], rimPow: 3.2 }),
     };
   }, [props.mobile, props.effects > 0.5]);
@@ -310,6 +364,9 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       <mesh geometry={b.rock.land} material={b.rockMat} renderOrder={-5} />
       <mesh geometry={b.rock.ledge} material={b.ledgeMat} />
       <mesh geometry={b.rock.cave} material={b.caveMat} />
+      <mesh geometry={b.veilGeo} material={b.veilMat} position={b.veil.p} rotation={[0, b.veil.yaw, 0]} renderOrder={5} />
+      {/* in the cave at the pass, the way on: a soft sheet of light with the wood of the kings faintly in it */}
+      <LightGate id="funeral" def={def} look="veil" half={16} rise={24} gain={0.9} tint={[1, 0.86, 0.56]} />
       {b.cyp.map((g, i) => (
         <mesh key={i} geometry={g} material={b.tempera} />
       ))}
