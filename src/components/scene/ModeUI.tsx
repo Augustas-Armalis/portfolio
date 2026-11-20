@@ -1251,7 +1251,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const sub = world === "home" ? "" : def.year ? `M. K. Čiurlionis, ${def.year}` : "";
   const stop = { onClick: (e: React.MouseEvent) => e.stopPropagation(), onPointerDown: (e: React.PointerEvent) => e.stopPropagation() };
   const faint = chrome.idle && !panel;
-  const ib = (on: boolean) => `lg-btn lg-tip pointer-events-auto grid shrink-0 place-items-center ${mobile ? "h-10 w-10" : "h-8 w-8"} ${on ? "lg-on" : "text-white/95"}`;
+  const ib = (on: boolean) => `lg-btn lg-tip pointer-events-auto grid shrink-0 place-items-center ${mobile ? "h-11 w-11" : "h-8 w-8"} ${on ? "lg-on" : "text-white/95"}`;
   const isz = mobile ? 18 : 15;
   const sw = 2;
 
