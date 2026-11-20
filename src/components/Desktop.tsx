@@ -442,6 +442,12 @@ function MenuBar() {
       setMenu(menu === m ? null : m);
     },
     onPointerEnter: () => menu && menu !== m && setMenu(m),
+    // the same from the keyboard: the titles open on press for a pointer, so they need their own key handling
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key !== "Enter" && e.key !== " " && e.key !== "ArrowDown") return;
+      e.preventDefault();
+      setMenu(menu === m ? null : m);
+    },
   });
   const run = (fn: () => void) => () => {
     close();
@@ -460,7 +466,7 @@ function MenuBar() {
       <div aria-hidden data-glass="" className={`${glass("bar")} pointer-events-none absolute inset-0 rounded-none`} />
       <div className="relative flex items-center gap-px">
         <div className="relative">
-          <button type="button" aria-label="Augustas OS menu" className={btn(menu === "a")} {...item("a")}>
+          <button type="button" aria-label="Augustas OS menu" aria-haspopup="menu" aria-expanded={menu === "a"} className={btn(menu === "a")} {...item("a")}>
             <SystemMenuMark className="text-ink" />
           </button>
           <Pop open={menu === "a"}>
@@ -479,7 +485,7 @@ function MenuBar() {
         </div>
         <span className="px-[9px] font-bold">{f ? apps[f].title : "Finder"}</span>
         <div className="relative">
-          <button type="button" className={btn(menu === "go")} {...item("go")}>
+          <button type="button" aria-haspopup="menu" aria-expanded={menu === "go"} className={btn(menu === "go")} {...item("go")}>
             Go
           </button>
           <Pop open={menu === "go"} width={210}>
@@ -524,7 +530,7 @@ function MenuBar() {
           <Search size={14} strokeWidth={2} />
         </button>
         <div className="relative">
-          <button type="button" aria-label="Control Center" className={btn(menu === "cc")} {...item("cc")}>
+          <button type="button" aria-label="Control Center" aria-haspopup="dialog" aria-expanded={menu === "cc"} className={btn(menu === "cc")} {...item("cc")}>
             <SlidersHorizontal size={14} strokeWidth={2} />
           </button>
           <Pop open={menu === "cc"} align="right" width={300} panel>
@@ -532,7 +538,7 @@ function MenuBar() {
           </Pop>
         </div>
         <div className="relative">
-          <button type="button" aria-label={`${time}, Notification Center`} className={`${btn(menu === "nc")} tabular-nums`} {...item("nc")}>
+          <button type="button" aria-label={`${time}, Notification Center`} aria-haspopup="dialog" aria-expanded={menu === "nc"} className={`${btn(menu === "nc")} tabular-nums`} {...item("nc")}>
             {time}
           </button>
           <Pop open={menu === "nc"} align="right" width={340} panel>

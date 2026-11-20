@@ -26,6 +26,24 @@ html,
 body {
   height: 100%;
 }
+/* the page itself never rubber-bands or pulls to refresh (Safari reads this from <html>, Chrome from either);
+   inner scrollers keep their own bounce and do not hand it on (overscroll-contain where they scroll) */
+html {
+  overscroll-behavior: none;
+}
+/* a control answers a tap at once: no wait to see whether a second tap is coming (double-tap zoom). In the base
+   layer, so a drag surface that sets touch-none still wins. */
+@layer base {
+  button,
+  a,
+  label,
+  [role="button"],
+  [role="switch"],
+  [role="radio"],
+  [role="tab"] {
+    touch-action: manipulation;
+  }
+}
 body {
   background: var(--color-page);
   color: var(--color-ink);
