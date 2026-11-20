@@ -709,8 +709,10 @@ export function makePuffMaterial() {
 // ---------- a painting ----------
 // Display-referred: into the lens' linear target it goes as linear light with
 // alpha 0, so the grade passes it through untouched.
-export function makeCanvasMaterial(map: THREE.Texture) {
+// `twoSided`: a picture hung in the open air reads the right way round from behind as well.
+export function makeCanvasMaterial(map: THREE.Texture, o: { twoSided?: boolean } = {}) {
   return new THREE.ShaderMaterial({
+    side: o.twoSided ? THREE.DoubleSide : THREE.FrontSide,
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -80,
@@ -721,7 +723,7 @@ export function makeCanvasMaterial(map: THREE.Texture) {
       varying vec2 vUv;
       void main(){
         // the texture is sRGB-decoded on sampling: encode back to what the file holds
-        vec3 lin = texture2D(uMap, vUv).rgb;
+        vec3 lin = texture2D(uMap, gl_FrontFacing ? vUv : vec2(1.0 - vUv.x, vUv.y)).rgb;
         // a soft wash of light from above, and the unlit ground of the canvas until the picture has arrived
         float wash = mix(0.9, 1.04, smoothstep(0.0, 1.0, vUv.y)) * uLit;
         lin = mix(vec3(0.12, 0.1, 0.085), lin * wash, uShow);
