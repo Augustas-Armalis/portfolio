@@ -81,7 +81,7 @@ function ribbonGeometry(pts: THREE.Vector3[], width: number) {
 //   1  a river of small stars, drifting toward the gate and twinkling (Sonata of the Stars)
 //   2  a path of flowers: soft petals of light strewn along it, in the colours of the meadow (Fairy Tale, Paradise)
 //   3  a causeway of light on the water: broken glints that travel like the sun's road on a sea (Rex, Tranquility)
-const PATH_STYLE: Partial<Record<WorldId, 0 | 1 | 2 | 3>> = { stars: 1, fairy: 2, paradise: 2, rex: 3, sea: 3 };
+const PATH_STYLE: Partial<Record<WorldId, 0 | 1 | 2 | 3>> = { stars: 1, fairy: 2, paradise: 2, rex: 3, sea: 3, seafinale: 3 };
 const PATH_WIDTH = [0.9, 1.7, 1.5, 1.3];
 
 export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = true, marks = true, effects = 1, from = 0 }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; angels?: boolean; marks?: boolean; effects?: number; from?: number }) {
@@ -467,6 +467,7 @@ const WORLD_OF: [RegExp, WorldId][] = [
   [/^fairy/, "fairy"],
   [/^paradise|^angel|^spring/, "paradise"],
   [/^offering/, "gate"],
+  [/^sea-finale|^finale/, "seafinale"],
   [/^sea|^tranquil/, "sea"],
   [/^funeral/, "funeral"],
   [/^kings/, "kings"],
@@ -585,6 +586,7 @@ const HANG: Record<WorldId, { wall: V3; ink: "dark" | "light"; plain?: boolean }
   paradise: { wall: [0.86, 0.78, 0.5], ink: "dark" },
   gate: { wall: [0.3, 0.26, 0.26], ink: "light" },
   sea: { wall: [0.28, 0.28, 0.22], ink: "light" },
+  seafinale: { wall: [0.34, 0.3, 0.2], ink: "light" },
   funeral: { wall: [0.1, 0.13, 0.24], ink: "light" },
   kings: { wall: [0.2, 0.26, 0.27], ink: "light", plain: true },
 };
