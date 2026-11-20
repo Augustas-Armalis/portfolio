@@ -30,24 +30,34 @@ export const owner = {
   studio: { label: "larpo.studio", href: "https://larpo.studio" },
 };
 
-export type Wallpaper = { src: string; by: string; href: string; dark: boolean };
+export type Wallpaper = { src: string; by: string; href: string; dark: boolean; name?: string; phone?: string };
 
-// Every desktop picture, in one set. The first is the default; "live:music" is the audio-reactive shader.
+// Every desktop picture, in one set; the phone uses its own portrait crop where there is one ("phone"). The Mac
+// starts on Foggy Sunrise (the 3D display's lock face shows the same picture), the phone on Golden Peaks.
+// "live:music" is the audio-reactive shader.
+const W = (file: string, name: string, by: string, id: string, dark: boolean): Wallpaper => ({
+  src: `/wallpapers/${file}.webp`,
+  phone: `/wallpapers/${file}-phone.webp`,
+  name,
+  by,
+  href: `https://unsplash.com/photos/${id}`,
+  dark,
+});
 export const wallpapers: Wallpaper[] = [
-  { src: "/wallpapers/engineer-joel-filipe.webp", by: "Joel Filipe", href: "https://unsplash.com/photos/OxeG5GiOiqM", dark: false },
-  { src: "/wallpapers/engineer-pawel-curves.webp", by: "Pawel Czerwinski", href: "https://unsplash.com/photos/C6rZgXbNxJk", dark: false },
-  { src: "/wallpapers/engineer-pawel-structure.webp", by: "Pawel Czerwinski", href: "https://unsplash.com/photos/9T8fywAF54I", dark: false },
-  { src: "/wallpapers/engineer-pawel-folds.webp", by: "Pawel Czerwinski", href: "https://unsplash.com/photos/TtAoOVEXgMw", dark: false },
-  { src: "/wallpapers/founder-uran-wang.webp", by: "Uran Wang", href: "https://unsplash.com/photos/5wDq-27_zKI", dark: true },
-  { src: "/wallpapers/founder-farnaz-kohankhaki.webp", by: "Farnaz Kohankhaki", href: "https://unsplash.com/photos/LuN2RBcXO6w", dark: true },
-  { src: "/wallpapers/founder-mountain-sunset.webp", by: "Unsplash", href: "https://unsplash.com/photos/vay2UUzHnfw", dark: true },
-  { src: "/wallpapers/founder-foggy-sunrise.webp", by: "Zetong Li", href: "https://unsplash.com/photos/MaeshPdBGV4", dark: true },
-  { src: "/wallpapers/founder-mountain-glow.webp", by: "Urban Vintage", href: "https://unsplash.com/photos/0HF6s01qyIw", dark: true },
-  { src: "live:music", by: "Live", href: "", dark: true },
-  { src: "/wallpapers/art-bernd-dittrich.webp", by: "Bernd Dittrich", href: "https://unsplash.com/photos/wLhmecNUVNc", dark: true },
-  { src: "/wallpapers/art-thom-milkovic.webp", by: "Thom Milkovic", href: "https://unsplash.com/photos/1MSHtu4pkBM", dark: true },
-  { src: "/wallpapers/art-tinky-rain-blue.webp", by: "Tinky", href: "https://unsplash.com/photos/Z9AW35oeFEo", dark: true },
-  { src: "/wallpapers/art-satyajit-rain.webp", by: "Satyajit", href: "https://unsplash.com/photos/3XiPqV2fKeE", dark: true },
+  { src: "/wallpapers/founder-foggy-sunrise.webp", name: "Foggy Sunrise", by: "Zetong Li", href: "https://unsplash.com/photos/MaeshPdBGV4", dark: true },
+  W("golden-peaks", "Golden Peaks", "Daniil Silantev", "ou_9KZ6BJ-0", true),
+  W("davos-mist", "Davos Mist", "Dario Jud", "8xXFONfEUtA", false),
+  W("braies", "Braies", "Intricate Explorer", "gjI-YoxuFys", true),
+  W("shoreline", "Shoreline", "Hameen Reynolds", "zWFa7mlQAYk", false),
+  W("ocean-wave", "Ocean Wave", "Ivan Bandura", "_cyiEwMnGM4", true),
+  W("sagres", "Sagres", "Bernd Dittrich", "ELGDJBMKNMI", true),
+  W("dunes-night", "Dunes at Night", "Tim de Groot", "yNGQ830uFB4", true),
+  { src: "live:music", name: "Live", by: "Live", href: "", dark: true },
+  { src: "/wallpapers/founder-mountain-glow.webp", name: "Mountain Glow", by: "Urban Vintage", href: "https://unsplash.com/photos/0HF6s01qyIw", dark: true },
+  { src: "/wallpapers/founder-uran-wang.webp", name: "Night Blue", by: "Uran Wang", href: "https://unsplash.com/photos/5wDq-27_zKI", dark: true },
+  { src: "/wallpapers/engineer-pawel-curves.webp", name: "Curves", by: "Pawel Czerwinski", href: "https://unsplash.com/photos/C6rZgXbNxJk", dark: false },
+  { src: "/wallpapers/engineer-joel-filipe.webp", name: "Folds", by: "Joel Filipe", href: "https://unsplash.com/photos/OxeG5GiOiqM", dark: false },
+  { src: "/wallpapers/art-tinky-rain-blue.webp", name: "Rain", by: "Tinky", href: "https://unsplash.com/photos/Z9AW35oeFEo", dark: true },
 ];
 
 // The lock screen sits on this one.
