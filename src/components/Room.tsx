@@ -5,7 +5,7 @@ import { Environment, Html } from "@react-three/drei";
 import { AnimatePresence, motion } from "motion/react";
 import { BookOpen, Camera as CameraIcon, Headphones as Headphones2, PenLine, Piano, Power, Send, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import * as THREE from "three";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { owner, type UserId } from "@/content";
 import { play } from "@/lib/sfx";
 import { DeskDust, type DustApi } from "./scene/Dust";
@@ -63,7 +63,7 @@ import { Sky, makeSkyMaterial } from "./scene/World";
 import { HomeMountains } from "./scene/home/Mountains";
 import { Land } from "./scene/home/Terrain";
 import { LakeMirror, Reeds } from "./scene/home/Water";
-import { hLakeK, homeLand } from "./scene/home/land";
+import { HOLD, hLakeK, homeLand } from "./scene/home/land";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
 // Everything on the desk does something: the display boots the OS, the piano
@@ -638,6 +638,16 @@ function Scene({
     });
   }, [input, cam, v]);
 
+  // Held from before the first frame: nothing is drawn until the scene's programs are ready (see below).
+  useLayoutEffect(() => {
+    HOLD.on = true;
+    cam.layers.disableAll();
+    return () => {
+      HOLD.on = false;
+      cam.layers.set(0);
+    };
+  }, [cam]);
+
   // Behind the loader: wait for the type, the cover and whatever three is
   // still fetching (textures, the sky HDRI), upload every texture, compile
   // every program, draw a few hidden frames, and only then report ready, so
@@ -651,6 +661,9 @@ function Scene({
     const finish = () => {
       if (dead || done) return;
       done = true;
+      // (whatever happened, the world is let go)
+      HOLD.on = false;
+      cam.layers.set(0);
       onReady();
     };
     const hard = window.setTimeout(finish, 9000);
@@ -700,11 +713,19 @@ function Scene({
       mark("textures");
       await wait(30);
       if (dead) return;
+      // Every program of the scene is compiled off the main thread (the loader keeps moving, and the drivers build
+      // them side by side). The lights are gathered with the camera's layers on, then nothing is drawn again until
+      // all of them are ready: a draw would make each finish there and then.
       try {
-        gl.compile(scene, cam);
+        cam.layers.set(0);
+        const done = gl.compileAsync(scene, cam);
+        cam.layers.disableAll();
+        await Promise.race([done, wait(7000)]);
       } catch {
-        /* compile on first draw instead */
+        /* compiled on first draw instead */
       }
+      cam.layers.set(0);
+      HOLD.on = false;
       if (dead) return;
       mark("compiled");
       onProgress(0.9);
@@ -713,7 +734,9 @@ function Scene({
       const f0 = performance.now();
       const tick = () => {
         if (dead) return;
-        if (++n < 4 && !(n >= 2 && performance.now() - f0 > 700)) requestAnimationFrame(tick);
+        // (fourteen frames: the first dozen draw every tile of grass and the mirror once, so their buffers are on the card
+        // before the descent needs them; a slow tab is not held to all of them)
+        if (++n < 14 && !(n >= 3 && performance.now() - f0 > 1600)) requestAnimationFrame(tick);
         else finish();
       };
       requestAnimationFrame(tick);

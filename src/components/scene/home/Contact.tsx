@@ -1,6 +1,7 @@
 "use client";
 
 import { useFrame, useThree } from "@react-three/fiber";
+import { HOLD } from "./land";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { DESK } from "../shared";
@@ -90,6 +91,7 @@ export function ContactShadows({ strength = 1 }: { strength?: number }) {
     [k],
   );
   useFrame(() => {
+    if (HOLD.on) return;
     // the things on the desk are found by name (each lifting group is one) and marked for this eye;
     // looked for again now and then, as models arrive late
     if (mark.current++ % 45 === 0)

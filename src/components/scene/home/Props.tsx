@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { MIRROR_LAYER } from "./Forest";
-import { GLSL_HOME_AIR, HLAKE, HOME_U, PLACES, SEA, landH, rng } from "./land";
+import { GLSL_HOME_AIR, HLAKE, HOME_U, PLACES, SEA, landH, rng, timed } from "./land";
 
 // The made things of the map, the places a walk or a flight arrives at:
 //   behind the desk the footpath runs down through the dunes to a wooden pier
@@ -474,7 +474,7 @@ export function Props() {
           #include <colorspace_fragment>
         }`,
     });
-    return { geo: build(), mat };
+    return { geo: timed("props", build), mat };
   }, []);
   useEffect(
     () => () => {

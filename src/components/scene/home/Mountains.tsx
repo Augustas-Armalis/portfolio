@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { GLSL_HOME_AIR, HOME_U } from "./land";
+import { GLSL_HOME_AIR, HOME_U, timed } from "./land";
 import { MIRROR_LAYER } from "./Forest";
 
 // The mountains to the north: three ranges one behind another, each higher
@@ -96,7 +96,7 @@ function rangeGeometry(rg: Range, segA: number, segR: number) {
       const z = -Math.cos(th) * r;
       const wx = x * rg.freq + rg.seed + 2.5 * noised(x * rg.freq * 0.3, z * rg.freq * 0.3)[0];
       const wz = z * rg.freq - rg.seed + 2.5 * noised(z * rg.freq * 0.3 + 9, x * rg.freq * 0.3)[0];
-      const h = 0.55 * ridged(wx, wz, 5) + 0.75 * eroded(wx * 0.8, wz * 0.8, 6);
+      const h = 0.55 * ridged(wx, wz, 4) + 0.75 * eroded(wx * 0.8, wz * 0.8, 5);
       // single great peaks and low saddles along the range
       const broad = 0.38 + 0.62 * Math.pow(noised(x * rg.freq * 0.24 + 40 + rg.seed, z * rg.freq * 0.24)[0], 1.3) * 1.5;
       // (no pass any more: the greatest of them stand right where the desk looks, a little west of north)
@@ -178,7 +178,7 @@ export function HomeMountains({ mobile }: { mobile: boolean }) {
       { r0: 2100, r1: 4300, height: 760, freq: 0.00125, seed: 27.3, haze: 0.16, snow: 1, pass: [-1, -0.5], span: [1.0, 1.7], massif: 0.5 },
     ];
     const segA = mobile ? 360 : 600;
-    return ranges.map((rg) => ({ geo: rangeGeometry(rg, segA, mobile ? 20 : 30), mat: makeRangeMaterial(rg) }));
+    return ranges.map((rg) => ({ geo: timed("mountains", () => rangeGeometry(rg, segA, mobile ? 20 : 30)), mat: makeRangeMaterial(rg) }));
   }, [mobile]);
   useEffect(
     () => () =>
