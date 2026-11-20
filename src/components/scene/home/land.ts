@@ -226,7 +226,7 @@ export const HOME_U = {
   uCrownMap: { value: null as THREE.Texture | null },
   uCloudTex: { value: null as THREE.Texture | null },
   // haze at the ground (per metre), its falloff with height, the cloud cover's threshold
-  uAirK: { value: new THREE.Vector4(0.00092, 0.0045, 0.56, 0) },
+  uAirK: { value: new THREE.Vector4(0.00125, 0.0045, 0.56, 0) },
 };
 
 // The air of the home world: haze that lies in the low land and thins with
