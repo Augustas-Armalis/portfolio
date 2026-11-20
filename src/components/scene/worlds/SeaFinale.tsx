@@ -7,9 +7,9 @@ import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makeTempera, rng, type GroundPalette, type Puff, type V3 } from "./kit";
 import { Birds, GreatSun, PaintedClouds, type Flock, type PaintedCloud } from "./life";
 import { SKY_U } from "../sky";
-import { WORLDS, voyage } from "./voyage";
+import { ORIGIN, WORLDS, voyage } from "./voyage";
 import { useDeepLens } from "./fairy/shared";
-import { buildCrest, buildSea, buildSpray, makeCrestMaterial, makeSeaMaterial, makeSprayMaterial, signTexture } from "./seafinale/ocean";
+import { FINALE_U, buildCrest, buildSea, buildSpray, makeCrestMaterial, makeSeaMaterial, makeSprayMaterial, signTexture } from "./seafinale/ocean";
 import { SHIPS, bodyAt, onFace, swellAt, swellDamp } from "./seafinale/shape";
 
 // Sonata of the Sea. Finale (Jūros sonata. Finale, 1908). One colossal green wave rearing over the whole
@@ -139,6 +139,9 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     }
     // white birds low over the swell, and a skein high over the crest
     const flocks: Flock[] = [
+      // (small against the face, half way up it: the measure of the wave)
+      { c: [-120, 150, -90], r: 230, n: props.mobile ? 12 : 24, size: 1.5, speed: 10 },
+      { c: [260, 230, -180], r: 170, n: props.mobile ? 8 : 16, size: 1.4, speed: 9 },
       { c: [120, 46, 330], r: 150, n: 14, size: 1.5, speed: 11 },
       { c: [-220, 70, 250], r: 190, n: 10, size: 1.4, speed: 10 },
       { c: [-60, 470, -260], r: 300, n: 18, size: 2.2, speed: 9 },
@@ -159,21 +162,43 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     };
   }, [props.mobile, props.effects > 0.5]);
   const tmp = useRef({ up: new THREE.Vector3(), fwd: new THREE.Vector3(), right: new THREE.Vector3(), m: new THREE.Matrix4() });
-  useFrame(() => {
-    if (voyage.cur !== "seafinale") return;
+  // The journey's two events: the wave rears as the plane comes (a third lower at first, full height by the time
+  // the way turns along its face); and once it stands, one ship works her way right up the face to the foam under
+  // the crest, hangs there, and slips back.
+  const ev = useRef({ on: false, rise: 0, crestT: -1 });
+  useFrame(({ camera }) => {
+    const e = ev.current;
+    if (voyage.cur !== "seafinale") {
+      e.on = false;
+      return;
+    }
     const t = SKY_U.uTime.value;
+    if (!e.on) {
+      e.on = true;
+      e.rise = 0;
+      e.crestT = -1;
+    }
+    const lz = camera.position.z - ORIGIN.z;
+    e.rise = Math.max(e.rise, THREE.MathUtils.smoothstep(600 - lz, 0, 430));
+    const rise = 0.66 + 0.34 * e.rise;
+    FINALE_U.uRise.value = rise;
+    if (e.crestT < 0 && e.rise > 0.9) e.crestT = t;
+    const cu = e.crestT < 0 ? 0 : t - e.crestT;
+    // (up over twenty-five seconds, a hold, and back)
+    const crestK = THREE.MathUtils.smoothstep(cu, 0, 25) * (1 - THREE.MathUtils.smoothstep(cu, 38, 62));
     const { up, fwd, right, m } = tmp.current;
     // the ships ride the water that is drawn: lifted and tilted by the swell and by the slope of the wave, each
     // working slowly up the face and slipping back
     const h = (x: number, z: number) => {
       const body = bodyAt(x, z);
-      return body + swellAt(x, z, t) * swellDamp(body);
+      return body * rise + swellAt(x, z, t) * swellDamp(body * rise);
     };
     SHIPS.forEach(([s0, f0, yaw, size], i) => {
       const mesh = ships.current[i];
       if (!mesh) return;
-      const [x0, z0] = onFace(s0, f0);
-      const climb = 26 * Math.sin(t * 0.05 + i * 1.7);
+      // (the fifth is the one that crests the wave)
+      const [x0, z0] = onFace(s0, i === 4 ? f0 - (f0 - 0.72) * crestK : f0);
+      const climb = 26 * Math.sin(t * 0.05 + i * 1.7) * (i === 4 ? 1 - crestK : 1);
       const x = x0 + Math.sin(t * 0.031 + i) * 8;
       const z = z0 - climb;
       const y = h(x, z);
