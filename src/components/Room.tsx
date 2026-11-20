@@ -24,7 +24,6 @@ import { ContactShadows } from "./scene/home/Contact";
 import { Clouds } from "./scene/home/Clouds";
 import { Butterflies, Flock, Motes, Skein } from "./scene/home/Life";
 import { PropLights, Props } from "./scene/home/Props";
-import { Journey } from "./scene/home/JourneyScene";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
 import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
@@ -1693,8 +1692,6 @@ function Scene({
         <Flock />
         <Props />
         <PropLights />
-        {/* the opening flight: the town on the river, the old forest, the cave in the mountain (home/journey.ts) */}
-        <Journey mobile={mobile} trees={q.trees} effects={q.effects} />
         {q.effects > 0.2 && <Butterflies count={mobile ? 20 : 46} />}
         <Skein />
       </HomeWorld>

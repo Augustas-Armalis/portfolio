@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { CAVE, riverLevel } from "./home/journey";
 import { HLAKE, SEA, hLakeK, landH } from "./home/land";
 
 // What the paper plane (and the eye behind it) must stay above at home: the land itself (home/land.ts: the very
@@ -81,19 +80,9 @@ export function bakeHomeSolids(scene: THREE.Object3D) {
   solid = grid;
 }
 
-// The cave's doorway (journey.ts): the mountain over it and the cliff it is cut into are not ground to be climbed
-// over. In front of the mouth and down the cave the plane keeps to the land (the cave's floor is the land).
-function inDoor(x: number, z: number) {
-  const rx = x - CAVE.x;
-  const rz = z - CAVE.z;
-  const along = -Math.sin(CAVE.yaw) * rx - Math.cos(CAVE.yaw) * rz; // > 0: into the mountain
-  const side = Math.cos(CAVE.yaw) * rx - Math.sin(CAVE.yaw) * rz;
-  return along > -170 && along < 140 && Math.abs(side) < CAVE.half + 10 + Math.max(0, -along) * 0.25;
-}
-
 // the ranges' height at a point (far below everything where there is none)
 function solidAt(x: number, z: number) {
-  if (!solid || inDoor(x, z)) return -1e4;
+  if (!solid) return -1e4;
   const fx = (x + HALF) / CELL;
   const fz = (z + HALF) / CELL;
   if (fx < 0 || fz < 0 || fx >= N - 1 || fz >= N - 1) return -1e4;
@@ -121,7 +110,7 @@ function solidAt(x: number, z: number) {
 }
 
 // the level of the water over a point: the lake inside its shore, the sea everywhere else
-export const homeWater = (x: number, z: number) => Math.max(hLakeK(x, z) < 1.12 ? Math.max(HLAKE.y, SEA) : SEA, riverLevel(x, z));
+export const homeWater = (x: number, z: number) => (hLakeK(x, z) < 1.12 ? Math.max(HLAKE.y, SEA) : SEA);
 
 // the top of whatever is under a point of the home world: land, water or mountain
 export function homeGround(x: number, z: number) {
