@@ -58,21 +58,45 @@ export function ridge2(x: number, y: number, oct = 4) {
 // far things melt into the sky's own colour, and the feet of things stand in
 // more air than their heads. uFogD is density per metre, uFogH how fast it
 // thins with height. Shared by every material here; set once per world.
+//
+// Two more things a world can ask of its air:
+// - The far dissolve. `fog: [density, falloff, from, to]` in a world's entry (voyage.ts) makes everything between
+//   `from` and `to` metres from the eye melt completely into the sky's own colour, whatever the density: the far
+//   world is gone into the air before its geometry ends, so no edge of ground or cut-off hill is ever seen.
+//   Off unless a world gives the two distances. (Kept as start and 1 / span, so a material that never heard of
+//   it reads zeros and is left alone.)
+// - mistBelow(wpos, top, depth): how much of a low mist lies over a point (none above `top`, thickening down
+//   through `depth` metres, thin close to the eye). Mix toward airCol by it for hollows and water's edges.
 export const WORLD_U = {
   uFogD: { value: 0.001 },
   uFogH: { value: 0.012 },
+  uDissolve: { value: new THREE.Vector2(0, 0) },
 };
+export function setWorldAir(fog: readonly (number | undefined)[]) {
+  WORLD_U.uFogD.value = fog[0] ?? 0.001;
+  WORLD_U.uFogH.value = fog[1] ?? 0.012;
+  const from = fog[2] ?? 0;
+  const to = fog[3] ?? 0;
+  WORLD_U.uDissolve.value.set(from, to > from ? 1 / (to - from) : 0);
+}
 export const GLSL_AIR = /* glsl */ `
-uniform float uFogD; uniform float uFogH;
+uniform float uFogD; uniform float uFogH; uniform vec2 uDissolve;
 vec3 airCol(vec3 d){ return skyBase(normalize(vec3(d.x, max(d.y, 0.0) * 0.5 + 0.012, d.z))); }
 float airAmt(vec3 wpos){
   vec3 dv = wpos - cameraPosition; float dist = length(dv);
   float a = exp(-max(cameraPosition.y, 0.0) * uFogH);
   float t = dv.y * uFogH;
   float integ = abs(t) > 0.001 ? (1.0 - exp(-t)) / t : 1.0;
-  return clamp(1.0 - exp(-dist * (uFogD * 0.3 + uFogD * 2.2 * a * integ + uMist)), 0.0, 1.0);
+  float air = clamp(1.0 - exp(-dist * (uFogD * 0.3 + uFogD * 2.2 * a * integ + uMist)), 0.0, 1.0);
+  // the far dissolve: beyond a world's own distance everything is the sky's colour
+  float far = clamp((dist - uDissolve.x) * uDissolve.y, 0.0, 1.0);
+  return max(air, far * far * (3.0 - 2.0 * far));
 }
 vec3 applyAir(vec3 col, vec3 wpos){ return mix(col, airCol(normalize(wpos - cameraPosition)), airAmt(wpos)); }
+float mistBelow(vec3 wpos, float top, float depth){
+  float h = clamp((top - wpos.y) / max(depth, 0.01), 0.0, 1.0);
+  return h * h * (1.0 - exp(-length(wpos - cameraPosition) * 0.012));
+}
 // the eye is wide open at night: lights are turned down so they glow instead of glaring
 float glowK(){ return mix(1.0, 0.36, uNight); }
 `;

@@ -7,7 +7,7 @@ import { postCtl } from "../Post";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { LightGate, LightPath, type WorldProps } from "./common";
-import { WORLD_U } from "./kit";
+import { setWorldAir } from "./kit";
 import FairyWorld from "./Fairy";
 import FuneralWorld from "./Funeral";
 import GateWorld from "./Gate";
@@ -218,8 +218,7 @@ export function Worlds(props: WorldProps) {
   // the air of the world that stands, set before anything of it is drawn
   useMemo(() => {
     const def = WORLDS[id];
-    WORLD_U.uFogD.value = def.fog[0];
-    WORLD_U.uFogH.value = def.fog[1];
+    setWorldAir(def.fog);
   }, [id]);
   useFrame(() => {
     voyage.frames++;

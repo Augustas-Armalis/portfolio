@@ -69,7 +69,7 @@ export type WorldDef = {
   music: string;
   place: "meadow" | "forest" | "sea" | "sky" | "none";
   air: Air | null; // null: the live sky of the visitor's own hour
-  fog: [density: number, heightFalloff: number];
+  fog: [density: number, heightFalloff: number, dissolveFrom?: number, dissolveTo?: number]; // (the last two: see "the far dissolve" in kit.ts)
   terrain: Terrain | null;
   water: number | null; // the level of still water, if the world has any
   centre: [number, number];

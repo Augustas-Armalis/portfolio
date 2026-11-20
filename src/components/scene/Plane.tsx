@@ -4,8 +4,9 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { DESK, clamp01, easeInOutCubic, nowS, spring } from "./shared";
+import { postCtl } from "./Post";
 import { arriveGolden } from "./sky";
-import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
+import { KINGS, ORIGIN, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
 // A folded paper plane that lives on the desk. Click it and it takes off down
 // the road, and from there it is yours: it glides. The pointer (or A / D, or a
@@ -74,6 +75,7 @@ export const zoomMem = { v: 1, min: 0.55, max: 3.4 };
 // The bank keys (A / D and the arrows), held by the plane itself while it flies with a keyboard.
 const bank = { l: false, r: false };
 const bankKeys = () => (bank.r ? 1 : 0) - (bank.l ? 1 : 0);
+const kingsEye = new THREE.Vector3();
 const NO_INPUT: FlightInput = { sx: 0, sy: 0 };
 const handsIn: FlightInput = { sx: 0, sy: 0, climb: 0 };
 const OPT_NONE = {};
@@ -641,6 +643,11 @@ export function Plane({
       airOf(edge);
       lookStep(dt, st.t < 1.7 ? null : input);
       chase(dt, cam, easeInOutCubic(clamp01(st.t / 1.7)));
+      // the lens: once in the air the far world softens a little behind whatever the eye is led to (Post.tsx)
+      postCtl.far.k = damp(postCtl.far.k, st.t > 2 ? 1 : 0, 0.9, dt);
+      // (before the kings the eye is led to the little world they hold: that stays sharp from any distance)
+      if (voyage.cur === "kings") postCtl.far.subject = kingsEye.set(ORIGIN.x, KINGS.domeY, ORIGIN.z + KINGS.z);
+      else if (postCtl.far.subject === kingsEye) postCtl.far.subject = null;
       sync();
     },
     beginLand: (cam) => {
@@ -666,6 +673,7 @@ export function Plane({
     },
     land: (dt, cam, home) => {
       st.t += dt;
+      postCtl.far.k = damp(postCtl.far.k, 0, 2.2, dt);
       if (st.landPhase === 0) {
         // on, into the cloud
         glide(dt, NO_INPUT, OPT_HANDS);
@@ -762,6 +770,8 @@ export function Plane({
         voyage.assist = 0;
         voyage.mist = 0;
         st.landPhase = 0;
+        postCtl.far.k = 0;
+        postCtl.far.subject = null;
       }
       return done;
     },

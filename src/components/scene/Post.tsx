@@ -13,6 +13,9 @@ const WHITE = new THREE.Color(1, 1, 1);
 // The lens and the hand: everything the world is seen through.
 //
 //   scene (linear HDR, MSAA, depth)
+//     -> ambient occlusion at half res, from depth alone (the normal is read
+//        off the depth itself): a soft contact shade where things meet, on the
+//        desk and on the worlds' great forms alike, faded out into the far air
 //     -> half res with a signed circle of confusion (behind / in front of the
 //        plane of focus), from a real thin lens: focal length, f-number,
 //        focus distance
@@ -27,8 +30,15 @@ const WHITE = new THREE.Color(1, 1, 1);
 //        vignette
 //
 // Levels: 0 = off (the scene is drawn straight to the screen, as before),
-// 1 = bloom + grade + grain (depth of field only while the camera is held),
-// 2 = everything, 3 = everything with more taps.
+// 1 = occlusion + bloom + grade + grain (depth of field while the camera is
+// held, and the flight's gentle far softness), 2 = everything, 3 = everything
+// with more taps.
+//
+// In flight the lens is not a thin lens focused on one plane (the paper plane
+// is a metre and a half away and the thing flown toward a kilometre): it keeps
+// everything sharp from the lens out past the subject, and only what lies
+// beyond that softens, gently, never the sky's own stars. `postCtl.far` says
+// how much and from where; Plane.tsx sets it, a world may name its subject.
 //
 // Display-referred surfaces (the monitor's boot frame and lock screen, the
 // paintings) mark themselves with alpha 0 and pass through untouched while
@@ -57,6 +67,12 @@ export const postCtl = {
   // one finished frame drawn at width x height pixels, cropped to a rectangle of the frame (0..1, origin top left)
   capture: null as ((rect: { x: number; y: number; w: number; h: number }, width: number, height: number) => Capture | null) | null,
   level: 0,
+  // ambient occlusion: 0..1 how dark the contact shade is (0 = none)
+  ao: 0.62,
+  // The flight's far softness. `k` 0..1 is its strength (Plane.tsx eases it in after take-off and out on landing);
+  // everything nearer than `from` metres stays sharp, and so does `subject` if a world names one (a point in the
+  // world that the eye is being led to: the sharp range reaches a little past it); beyond, the picture softens.
+  far: { k: 0, from: 240, subject: null as THREE.Vector3 | null },
   // where the scene itself is drawn (null: straight to the screen), for whoever warms shaders ahead of time
   sceneTarget: null as THREE.WebGLRenderTarget | null,
 };
@@ -91,8 +107,10 @@ float viewZ(vec2 uv){ float d = texture2D(tDepth, uv).x; float z = d * 2.0 - 1.0
 // a fraction of the frame's height; the result is in units of that largest
 // radius. uBand is the slice either side of the plane that stays dead sharp.
 const GLSL_COC = /* glsl */ `
-uniform float uFocus; uniform float uCocK; uniform float uBand; uniform float uMaxC;
+uniform float uFocus; uniform float uCocK; uniform float uBand; uniform float uMaxC; uniform float uFarOnly;
 float cocAt(float z){
+  // the flight's lens: sharp out to uFocus, then softening over the next few of that distance; the sky itself (its stars) stays as it is
+  if (uFarOnly > 0.5) return z > uFarOnly ? 0.0 : clamp(smoothstep(uFocus, uFocus * 4.5, z) * uCocK / uMaxC, 0.0, 1.0);
   float x = 1.0 - uFocus / max(z, 0.01);
   float m = max(abs(x) - uBand, 0.0) / (1.0 - uBand);
   return clamp(sign(x) * m * uCocK / uMaxC, -1.0, 1.0);
@@ -224,6 +242,59 @@ void main(){
   gl_FragColor = acc / 16.0;
 }`;
 
+// Ambient occlusion from depth alone. The surface normal is read from the depth's own slope (the smaller step each
+// way, so an edge does not bend it); a spiral of taps round the pixel asks how much of the half-space above the
+// surface is filled by what is drawn nearby. The radius is a few centimetres at the desk and, from two metres
+// out, a fixed small share of the frame, so the worlds' great forms get their contact shade too. r: openness (1 = open), g: distance, for the blur.
+const AO = /* glsl */ `
+varying vec2 vUv; uniform vec2 uTexel; uniform vec2 uProj; uniform float uRadius;
+${GLSL_DEPTH}
+float ign(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+vec3 posAt(vec2 uv){ float z = viewZ(uv); return vec3((uv * 2.0 - 1.0) / uProj * z, -z); }
+void main(){
+  if (texture2D(tDepth, vUv).x >= 0.99995) { gl_FragColor = vec4(1.0, uFar, 0.0, 1.0); return; }
+  vec3 p = posAt(vUv);
+  float z = -p.z;
+  vec3 x1 = posAt(vUv + vec2(uTexel.x, 0.0)) - p; vec3 x0 = p - posAt(vUv - vec2(uTexel.x, 0.0));
+  vec3 y1 = posAt(vUv + vec2(0.0, uTexel.y)) - p; vec3 y0 = p - posAt(vUv - vec2(0.0, uTexel.y));
+  vec3 n = normalize(cross(abs(x1.z) < abs(x0.z) ? x1 : x0, abs(y1.z) < abs(y0.z) ? y1 : y0));
+  float R = uRadius * max(1.0, z * 0.5);
+  // (the radius on screen, as a share of the frame's height: never under two pixels, never a great smear)
+  float rs = clamp(R * uProj.y * 0.5 / z, uTexel.y * 2.5, 0.09);
+  float a0 = ign(gl_FragCoord.xy) * 6.2831853;
+  // (a surface seen edge-on has little depth to tell it from itself: it is given more room before it counts)
+  float graze = 1.0 - abs(n.z);
+  float bias = 0.04 * R + z * 0.002 + graze * graze * 0.14 * R;
+  float occ = 0.0;
+  for (int i = 0; i < TAPS; i++) {
+    float t = (float(i) + 0.5) / float(TAPS);
+    float a = a0 + float(i) * 2.39996;
+    vec2 o = vec2(cos(a) * uProj.x / uProj.y, sin(a)) * sqrt(t) * rs;
+    vec2 uv = vUv + o;
+    // (nothing is known of what lies beyond the frame: such a tap says nothing)
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) continue;
+    vec3 q = posAt(uv) - p;
+    float dd = dot(q, q);
+    // how far above the surface the neighbour stands, over how far away it is; nothing counts from beyond the reach
+    occ += max(dot(q, n) - bias, 0.0) / (dd + 0.01 * R * R) * R * (1.0 - smoothstep(R * R, 4.0 * R * R, dd));
+  }
+  float ao = clamp(1.0 - occ * (1.9 / float(TAPS)), 0.0, 1.0);
+  gl_FragColor = vec4(ao, z, 0.0, 1.0);
+}`;
+// the taps' grain is melted over a 4 x 4 window, keeping to its own side of every edge
+const AO_BLUR = /* glsl */ `
+varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel;
+void main(){
+  vec2 c = texture2D(tMap, vUv).rg;
+  float acc = 0.0; float w = 0.0;
+  for (int y = -2; y <= 1; y++) for (int x = -2; x <= 1; x++) {
+    vec2 s = texture2D(tMap, vUv + (vec2(float(x), float(y)) + 0.5) * uTexel).rg;
+    float k = 1.0 / (1.0 + abs(s.g - c.g) / (0.02 * c.g + 0.02) * 4.0);
+    acc += s.r * k; w += k;
+  }
+  gl_FragColor = vec4(acc / max(w, 1e-4), c.g, 0.0, 1.0);
+}`;
+
 // 13-tap downsample; the first bloom level also keeps only what is brighter than paper
 const DOWN = /* glsl */ `
 varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel; uniform float uThresh;
@@ -239,7 +310,8 @@ void main(){
     float soft = clamp(br - uThresh + knee, 0.0, 2.0 * knee);
     soft = soft * soft / (4.0 * knee + 1e-4);
     col *= max(soft, br - uThresh) / max(br, 1e-4);
-    col = min(col, vec3(14.0));
+    // (one very hot point is not allowed to flood the frame: a glow, not a flash)
+    col = min(col, vec3(7.0));
   }
   gl_FragColor = vec4(col, 1.0);
 }`;
@@ -303,6 +375,7 @@ vec3 encode(vec3 c){ c = clamp(c, 0.0, 1.0); return mix(c * 12.92, 1.055 * pow(c
 const COMPOSITE = /* glsl */ `
 varying vec2 vUv; uniform sampler2D tScene; uniform sampler2D tDof; uniform sampler2D tBloom; uniform sampler2D tRays;
 uniform float uBloom; uniform float uRays; uniform vec3 uRayCol; uniform float uNight; uniform float uWarm; uniform vec2 uPx;
+uniform sampler2D tAo; uniform float uAo;
 ${GLSL_DEPTH}
 ${GLSL_COC}
 ${GLSL_TONE}
@@ -353,8 +426,20 @@ void main(){
   }
   #endif
   vec3 raw = encode(sc.rgb);
-  vec3 bloom = texture2D(tBloom, vUv).rgb;
-  vec3 lit = hdr + bloom * uBloom;
+  #ifdef USE_AO
+  if (uAo > 0.0) {
+    // the contact shade: on what is lit by the scene (never a screen's own picture), thinning into the far air,
+    // and leaning cool rather than grey so it reads as shade and not as dirt
+    vec2 ao = texture2D(tAo, vUv).rg;
+    float z = viewZ(vUv);
+    float k = uAo * keep * (1.0 - smoothstep(260.0, 900.0, z)) * (1.0 - soften * 0.6);
+    float open = mix(1.0, ao.r, k);
+    hdr *= mix(vec3(open), vec3(1.0), vec3(0.0, 0.04, 0.1) * (1.0 - open) * 4.0);
+  }
+  #endif
+  // bloom is laid over softly: however hot its source, what it adds stays under the paper's white
+  vec3 bloom = texture2D(tBloom, vUv).rgb * uBloom;
+  vec3 lit = hdr + bloom / (1.0 + 0.55 * max(bloom.r, max(bloom.g, bloom.b)));
   #ifdef USE_RAYS
     lit += texture2D(tRays, vUv).rgb * uRayCol * uRays;
   #endif
@@ -444,10 +529,12 @@ function build(level: number) {
   const up = [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(4, 4, hdr));
   const mask = new THREE.WebGLRenderTarget(4, 4, hdr);
   const rays = new THREE.WebGLRenderTarget(4, 4, hdr);
+  const ao = new THREE.WebGLRenderTarget(4, 4, hdr);
+  const ao2 = new THREE.WebGLRenderTarget(4, 4, hdr);
   const ldr = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false });
   const pick = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
   const depthU = { tDepth: { value: full.depthTexture }, uNear: { value: 0.01 }, uFar: { value: 3000 } };
-  const cocU = { uFocus: { value: 2 }, uCocK: { value: 0 }, uBand: { value: 0.3 }, uMaxC: { value: MAX_C } };
+  const cocU = { uFocus: { value: 2 }, uCocK: { value: 0 }, uBand: { value: 0.3 }, uMaxC: { value: MAX_C }, uFarOnly: { value: 0 } };
   const toneU = { uExposure: { value: 1 } };
   const finishU = { uTime: SKY_U.uTime, uLook: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) } };
   const paint = level >= 2;
@@ -460,6 +547,8 @@ function build(level: number) {
     // the camera in the hand, and the photograph itself: a rounder, quieter blur
     dofHi: pass(DOF, dofU(), { TAPS: level >= 2 ? 64 : 36 }),
     tent: pass(TENT, { tMap: { value: dof.texture }, uTexel: { value: new THREE.Vector2() } }),
+    ao: pass(AO, { uTexel: { value: new THREE.Vector2() }, uProj: { value: new THREE.Vector2(1, 1) }, uRadius: { value: 0.07 }, ...depthU }, { TAPS: level >= 3 ? 16 : level >= 2 ? 12 : 8 }),
+    aoBlur: pass(AO_BLUR, { tMap: { value: ao.texture }, uTexel: { value: new THREE.Vector2() } }),
     down: pass(DOWN, { tMap: { value: null }, uTexel: { value: new THREE.Vector2() }, uThresh: { value: 0 } }),
     up: pass(UP, { tLow: { value: null }, tHigh: { value: null }, uTexel: { value: new THREE.Vector2() } }),
     mask: pass(MASK, { tMap: { value: half.texture }, tDepth: { value: full.depthTexture } }),
@@ -477,18 +566,20 @@ function build(level: number) {
         uNight: SKY_U.uNight,
         uWarm: { value: 1 },
         uPx: { value: new THREE.Vector2() },
+        tAo: { value: ao2.texture },
+        uAo: { value: 0 },
         ...depthU,
         ...cocU,
         ...toneU,
         ...finishU,
       },
-      { USE_DOF: 1, ...(level >= 2 ? { USE_RAYS: 1 } : {}), ...(paint ? {} : { FINISH: 1 }) },
+      { USE_DOF: 1, USE_AO: 1, ...(level >= 2 ? { USE_RAYS: 1 } : {}), ...(paint ? {} : { FINISH: 1 }) },
     ),
     paint: pass(PAINT, { tMap: { value: ldr.texture }, uTexel: { value: new THREE.Vector2() }, uStep: { value: 1 }, uPaint: { value: 0.5 }, uPaintZ: { value: new THREE.Vector2(7, 30) }, ...depthU, ...finishU }),
     pick: pass(PICK, { uPoint: { value: new THREE.Vector2(0.5, 0.5) }, ...depthU }),
   };
-  const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ldr, pick];
-  return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ldr, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, w: 0, h: 0 };
+  const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ao, ao2, ldr, pick];
+  return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, w: 0, h: 0 };
 }
 
 const sunV = new THREE.Vector3();
@@ -546,7 +637,16 @@ export function Post({ level }: { level: number }) {
     const dofOn = lv >= 2 || postCtl.photo ? postCtl.dof : 0;
     const focal = postCtl.sensor / 2 / Math.tan(THREE.MathUtils.degToRad(pc.fov ?? 40) / 2); // mm
     const focusMm = Math.max(postCtl.focus * 1000, focal * 1.5);
-    const cocK = dofOn > 0.01 ? (0.5 * ((focal * focal) / (Math.max(1, postCtl.aperture) * (focusMm - focal))) * dofOn) / postCtl.sensor : 0;
+    let cocK = dofOn > 0.01 ? (0.5 * ((focal * focal) / (Math.max(1, postCtl.aperture) * (focusMm - focal))) * dofOn) / postCtl.sensor : 0;
+    // the flight's lens (see the top of this file): only while no other lens is at work
+    let farFrom = 0;
+    const F = postCtl.far;
+    if (cocK === 0 && F.k > 0.01 && !postCtl.photo && !out) {
+      farFrom = F.from;
+      if (F.subject) farFrom = Math.max(farFrom, F.subject.distanceTo(camera.position) * 1.2 + 20);
+      // (a gentle softness: at its most, a circle a fifth of the largest the lens draws)
+      cocK = MAX_C * 0.2 * F.k;
+    }
     const maxR = Math.max(2, (MAX_C * h) / 2); // largest radius in half-res pixels
     const T = Math.min(32, Math.max(4, Math.ceil(maxR)));
     if (w !== p.w || h !== p.h) {
@@ -563,6 +663,8 @@ export function Post({ level }: { level: number }) {
       p.up.forEach((t, i) => t.setSize(Math.max(2, w >> (i + 2)), Math.max(2, h >> (i + 2))));
       p.mask.setSize(w >> 2, h >> 2);
       p.rays.setSize(w >> 2, h >> 2);
+      p.ao.setSize(w >> 1, h >> 1);
+      p.ao2.setSize(w >> 1, h >> 1);
     }
     const run = (mat: THREE.ShaderMaterial, target: THREE.WebGLRenderTarget | null) => {
       p.quad.material = mat;
@@ -571,7 +673,8 @@ export function Post({ level }: { level: number }) {
     };
     p.depthU.uNear.value = pc.near;
     p.depthU.uFar.value = pc.far;
-    p.cocU.uFocus.value = postCtl.focus;
+    p.cocU.uFocus.value = farFrom > 0 ? farFrom : postCtl.focus;
+    p.cocU.uFarOnly.value = farFrom > 0 ? pc.far * 0.96 : 0;
     p.cocU.uCocK.value = cocK;
     p.cocU.uBand.value = postCtl.band;
     p.toneU.uExposure.value = gl.toneMappingExposure * postCtl.exposure;
@@ -581,6 +684,18 @@ export function Post({ level }: { level: number }) {
     gl.setRenderTarget(p.full);
     gl.render(scene, camera);
     POST_U.uLinearOut.value = 0;
+
+    // the contact shade
+    const aoK = postCtl.ao;
+    if (aoK > 0.01) {
+      const u = p.m.ao.uniforms;
+      u.uTexel.value.set(1 / w, 1 / h);
+      u.uProj.value.set(pc.projectionMatrix.elements[0], pc.projectionMatrix.elements[5]);
+      run(p.m.ao, p.ao);
+      p.m.aoBlur.uniforms.uTexel.value.set(1 / p.ao.width, 1 / p.ao.height);
+      run(p.m.aoBlur, p.ao2);
+    }
+    p.m.comp.uniforms.uAo.value = aoK > 0.01 ? aoK : 0;
 
     p.m.half.uniforms.uTexel.value.set(1 / w, 1 / h);
     run(p.m.half, p.half);
@@ -637,7 +752,7 @@ export function Post({ level }: { level: number }) {
     }
 
     const c = p.m.comp.uniforms;
-    c.uBloom.value = 0.085 * (1 + SKY_U.uPulse.value * 0.35);
+    c.uBloom.value = 0.1 * (1 + SKY_U.uPulse.value * 0.35);
     c.uRays.value = rayK * 0.55;
     (c.uRayCol.value as THREE.Color).copy(SKY_U.uGlow.value).lerp(WHITE, 0.35);
     if (SKY_U.uSunDir.value.y <= -0.06) (c.uRayCol.value as THREE.Color).set(0.6, 0.7, 1.0);
