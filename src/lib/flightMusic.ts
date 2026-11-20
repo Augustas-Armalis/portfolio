@@ -5,11 +5,11 @@ import { channel, musicOwner, stopOwner, voice, voicePlay, voiceStop, type Voice
 // between worlds).
 //
 //   flightMusicTo(id)   cross-fade to that world's recording (equal power,
-//                       2.5 s). Asking for the recording that is already
+//                       5 s). Asking for the recording that is already
 //                       playing does nothing: it is never restarted. Coming
 //                       back to a recording heard earlier in the same flight
 //                       carries on from where it was left.
-//   flightMusicStop()   fade out (2.5 s), pause and let go of the files.
+//   flightMusicStop()   fade out (5 s), pause and let go of the files.
 //
 // No recordings of Čiurlionis's own music are in the project yet, so the
 // table points at the two pieces that exist (both by Augustas). To give a
@@ -25,19 +25,23 @@ const NOCTURNE = "/content/music/nocturne-for-absent-things.mp3";
 const AFTERLIGHT = "/content/music/afterlight.m4a";
 
 export type FlightTrack = { file: string; title: string; start?: number; gain?: number };
+// The two pieces are dealt out by mood: the Nocturne to the night and the dusk
+// (the road, the stars, Rex, the gate, the kings' wood), Afterlight to the
+// worlds of daylight (the sun, the castle, Paradise, the sea), so that most
+// passages between worlds are a change of music and none is abrupt.
 export const FLIGHT_TRACKS: Record<string, FlightTrack> = {
   road: { file: NOCTURNE, title: "Nocturne for Absent Things" },
   forest: { file: NOCTURNE, title: "Nocturne for Absent Things" }, // e.g. "Miške" (In the Forest), symphonic poem
-  sun: { file: NOCTURNE, title: "Nocturne for Absent Things" },
+  sun: { file: AFTERLIGHT, title: "Afterlight" },
   stars: { file: NOCTURNE, title: "Nocturne for Absent Things" },
-  rex: { file: NOCTURNE, title: "Nocturne for Absent Things" },
-  fairy: { file: NOCTURNE, title: "Nocturne for Absent Things" },
-  paradise: { file: AFTERLIGHT, title: "Afterlight" },
+  rex: { file: NOCTURNE, title: "Nocturne for Absent Things", gain: 0.9 },
+  fairy: { file: AFTERLIGHT, title: "Afterlight" },
+  paradise: { file: AFTERLIGHT, title: "Afterlight", gain: 0.9 },
   kings: { file: NOCTURNE, title: "Nocturne for Absent Things", gain: 0.8 },
-  sea: { file: AFTERLIGHT, title: "Afterlight" }, // e.g. "Jūra" (The Sea), symphonic poem
+  sea: { file: AFTERLIGHT, title: "Afterlight", gain: 0.85 }, // e.g. "Jūra" (The Sea), symphonic poem
 };
 
-const FADE = 2.5; // seconds
+const FADE = 5; // seconds: long, so one piece leaves under the cloud while the next arrives with the new sky
 
 // Which recording each deck holds. Kept on globalThis with the decks
 // themselves, so a hot reload carries on instead of starting a second copy.

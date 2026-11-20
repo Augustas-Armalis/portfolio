@@ -299,6 +299,7 @@ function Scene({
   const veil = useMemo(() => (instant ? null : makeLoaderOverlay()), [instant]);
   const fast = useRef(false);
   const musicVol = useRef(1);
+  const gatePhase = useRef<string>("open");
   useEffect(() => {
     if (!veil) return;
     postCtl.overlay = veil.mat;
@@ -649,6 +650,7 @@ function Scene({
       voyage.onEnter = (id) => {
         if (stage.current === "fly") flightMusicTo(WORLDS[id].music);
       };
+      gatePhase.current = "open";
       // flying into the kings' little world is the landing
       voyage.onHome = () => exitRef.current?.();
       planeApi.current?.launch(cam);
@@ -1042,6 +1044,12 @@ function Scene({
       place: voyage.cur === "home" ? (voyage.flying && cam.position.z < -46 ? "forest" : "meadow") : wdef.place,
       world: voyage.cur,
     });
+    // a soft rush of air as the plane goes through a gate into cloud, and a softer one as the cloud opens on the next world
+    if (flying && voyage.phase !== gatePhase.current) {
+      if (voyage.phase === "closing") play("whoosh", { volume: 0.9 });
+      else if (voyage.phase === "opening") play("whoosh", { volume: 0.5 });
+      gatePhase.current = voyage.phase;
+    }
     // the kings' wood grows quiet: the music sinks as the plane nears the light they hold
     if (flying) {
       let vol = 1;
