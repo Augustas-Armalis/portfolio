@@ -81,8 +81,10 @@ export function makeHomeTreeMaterial(leaves: THREE.Texture) {
           vec2 uv = (vec2(mod(cell, 2.0), floor(cell * 0.5)) + vec2(vUv.x, -vUv.y) * 0.5 + 0.5) * 0.5;
           // further off the sheet is read blurred: a clump is then one rounded mass, not single leaves a pixel wide
           // that sparkle as the tree moves (and the cut is lowered to keep the crown whole)
-          vec4 t = texture2D(uLeafTex, uv, mix(0.0, 1.6, smoothstep(10.0, 55.0, dist)));
-          float cut = mix(0.5, 0.26, smoothstep(14.0, 120.0, dist));
+          // (the birch's spray is mostly air: blurred as much as the others it would fall under the cut and the tree stand bare)
+          float airy = 1.0 - abs(cell - 1.0) > 0.5 ? 1.0 : 0.0;
+          vec4 t = texture2D(uLeafTex, uv, mix(0.0, mix(1.6, 0.5, airy), smoothstep(10.0, 55.0, dist)));
+          float cut = mix(mix(0.5, 0.4, airy), mix(0.26, 0.1, airy), smoothstep(14.0, 120.0, dist));
           // the leaf's edge is a soft step one pixel wide, given to the lens's multisampling as coverage: a smooth
           // outline that does not crawl (where there is no multisampling, in the lake's mirror, it is a plain cut)
           cov = clamp((t.a - cut) / max(fwidth(t.a) * 1.3, 0.0001) + 0.5, 0.0, 1.0);

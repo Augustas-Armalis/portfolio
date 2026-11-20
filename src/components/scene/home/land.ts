@@ -337,6 +337,10 @@ float windWave(vec2 p){ return smoothstep(0.25, 0.85, vnoise(p * 0.22 - vec2(0.8
 // behind the loader (see the room), and a draw would force each one to finish there and then.
 export const HOLD = { on: false };
 
+// While the desk is simply being looked at, the two shadow passes (the sun's map and the contact shadows) take
+// turns, a frame each: nothing on the desk moves faster than that can follow.
+export const CALM = { on: false, frame: 0 };
+
 // how long each part of the world took to make (ms), for whoever is measuring the load: window.__gen
 export function timed<T>(name: string, fn: () => T): T {
   const t0 = performance.now();

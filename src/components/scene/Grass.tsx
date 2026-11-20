@@ -339,6 +339,15 @@ export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boole
     if (jumped) walkOn.current = wantW;
     walkOn.current += (wantW - walkOn.current) * (1 - Math.exp(-Math.min(dt, 0.1) * 2.2));
     if (walkOn.current < 0.002 && !wantW) walkOn.current = 0;
+    // From the sky no blade can be seen, and each still costs its vertices: the field is thinned by count with the
+    // eye's height (the blades are in random order, so fewer of them is the same field, sparser), each kind of tile
+    // over its own range. Coming down, the grass thickens under the eye instead of all being there from a kilometre up.
+    const hy = camera.position.y;
+    const sm = THREE.MathUtils.smoothstep;
+    rings.forEach((r, i) => {
+      const k = r.walk ? 1 : r.far ? 1 - sm(hy, 110, 300) : r.wrap ? 1 - sm(hy, 38, 125) : 1 - sm(hy, 16, 58);
+      geos[i].instanceCount = Math.round(r.count * k);
+    });
     mats.forEach((m) => {
       m.uniforms.uWind.value = wind;
       m.uniforms.uCenter.value.set(camera.position.x, camera.position.z);
