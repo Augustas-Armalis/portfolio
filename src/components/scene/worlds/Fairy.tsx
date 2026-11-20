@@ -1,441 +1,515 @@
 "use client";
 
 import * as THREE from "three";
+import { GLSL_NOISE } from "../shared";
+import { GLSL_SKY, SKY_U } from "../sky";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { Kit, angel, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
-import { Birds, PaintedClouds, type Flock, type PaintedCloud } from "./life";
-import { WORLDS, groundAt } from "./voyage";
+import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { Birds, type Flock } from "./life";
+import { buildCastle } from "./fairy/castle";
+import { MT, PEAKS, WARDS, buildMountain, buildPeaks, buildRamp, mountainCrowns, peakRadius, rampLine, roadLine } from "./fairy/mountain";
+import { Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap } from "./fairy/shared";
+import { WORLDS, groundAt, pathOf } from "./voyage";
 
-// Fairy Tale (Castle Fairy Tale, 1909). A mountain wound round by a road:
-// a broad green terrace climbing in a spiral behind a red-brown wall, turn
-// above turn, to three violet peaks with a small castle glowing among them
-// like a lit lantern. A pale cobbled way falls from it down the right-hand
-// slope. The sky is turquoise, set with small cream clouds in rows, and the
-// sun stands low to the right in a fan of rays.
+// Fairy Tale (Castle Fairy Tale, 1909), after the painting and after the way the film "Angelų takais" built it
+// in the round. A wide plain of woods and small fields under a whole sky of gilded cloud; out of it one great
+// mountain, wound round by a wall that climbs it in a spiral, its slopes thick with small round trees, a pale
+// road going up behind the wall; and on its peaks a castle of many towers, every window lit, with the sun
+// standing in a fan of rays just behind its highest spire.
+//
+// The plane comes in over a rise, low across the plain, and goes once round the mountain, climbing, to cross
+// the castle's face; then away toward the sun.
 
 const def = WORLDS.fairy;
-export const FAIRY_PAL: GroundPalette = { a: [0.06, 0.125, 0.04], b: [0.095, 0.145, 0.045], c: [0.045, 0.105, 0.055] };
+const f4 = (n: number) => n.toFixed(4);
 
-// The mountain, measured from its own foot: the wall's rim climbs fifty metres
-// a turn while it draws in, so rim after rim lies on the side of a cone.
-export const MOUNT = { x: 0, z: -80, turns: 2.25, batter: 4.5, th0: 0 };
-// the whole mountain and its castle are raised to this much of their drawn height: it towers (voyage.ts obstacles follow)
-export const LIFT = 1.32;
-const WALL: V3 = [0.33, 0.11, 0.09];
-const WALL_LOW: V3 = [0.1, 0.04, 0.085];
-const RIM: V3 = [0.5, 0.26, 0.24];
-const GREEN: V3 = [0.05, 0.12, 0.05];
-const GREEN2: V3 = [0.2, 0.25, 0.07];
-const ROAD: V3 = [0.6, 0.47, 0.34];
-const SLOPE: V3 = [0.24, 0.27, 0.08];
-const ROCK: V3 = [0.16, 0.085, 0.18];
-const ROCK_LIT: V3 = [0.7, 0.4, 0.38];
-
-const sm = (a: number, b: number, x: number) => {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
+// ---------- the plain: where the woods stand, and where the fields are ----------
+// One function, the same in JS (where trees are planted) and in GLSL (where the ground is painted):
+// above zero is wood, well below it are fields, between them meadow.
+const HAMLETS: [x: number, z: number, r: number][] = [
+  [150, 640, 200],
+  [-430, 380, 210],
+  [640, 80, 190],
+  [-690, -200, 220],
+  [520, -760, 200],
+  [-330, -880, 210],
+  [900, -420, 200],
+  [-980, 240, 220],
+  [-360, 1120, 180],
+  [1100, 760, 220],
+  [-1250, -650, 240],
+  [120, -1250, 220],
+  [1350, -900, 240],
+  [-1300, 900, 240],
+];
+const woodF = (x: number, z: number) => {
+  let F = Math.sin(x * 0.0041 + 1.3) * Math.sin(z * 0.0052 + 0.4) + 0.55 * Math.sin((x + z) * 0.0093 + 2.0) + 0.3 * Math.sin(x * 0.019 - z * 0.015 + 0.7) + 0.12;
+  const dm = Math.hypot(x - MT.x, z - MT.z);
+  F += 1.5 * Math.exp(-Math.pow((dm - 450) / 190, 2));
+  for (const [hx, hz, hr] of HAMLETS) F -= 1.7 * Math.exp(-((x - hx) ** 2 + (z - hz) ** 2) / (hr * hr));
+  return F;
 };
-const mix3 = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-const thOf = (u: number) => MOUNT.th0 + u * Math.PI * 2;
-// the wall's rim: its radius and height at u turns up the spiral
-const rhoOf = (u: number) => {
-  const r = 172 - 52 * u;
-  return r + (44 - r) * sm(MOUNT.turns - 0.3, MOUNT.turns, u);
-};
-const rimOf = (u: number) => 30 + 50 * u;
-// where the terrace of turn v meets the foot of the wall above it (v < 0: the slope the lowest wall stands on)
-const innerOf = (v: number) => (v >= 0 ? rimOf(v) + 17.5 : 47.5 + 30 * v);
-const footOf = (u: number) => innerOf(u - 1);
-const INNER_R = 50;
+const GLSL_WOOD = /* glsl */ `
+float fairyF(vec2 p){
+  float F = sin(p.x * 0.0041 + 1.3) * sin(p.y * 0.0052 + 0.4) + 0.55 * sin((p.x + p.y) * 0.0093 + 2.0) + 0.3 * sin(p.x * 0.019 - p.y * 0.015 + 0.7) + 0.12;
+  float dm = length(p - vec2(${f4(MT.x)}, ${f4(MT.z)}));
+  F += 1.5 * exp(-(dm - 450.0) * (dm - 450.0) / 36100.0);
+  ${HAMLETS.map(([x, z, r]) => `{ vec2 d = p - vec2(${f4(x)}, ${f4(z)}); F -= 1.7 * exp(-dot(d, d) / ${f4(r * r)}); }`).join("\n  ")}
+  return F;
+}`;
+// the road over the plain: from the rise, by the first hamlet, to where the mountain's own road begins
+const FOOT = rampLine(2)[0];
+const WAY0 = { z0: MT.z + FOOT.z, z1: 1440, x0: MT.x + FOOT.x, k: (4 - (MT.x + FOOT.x)) / (1440 - (MT.z + FOOT.z)) };
+const wayX = (z: number) => WAY0.x0 + (z - WAY0.z0) * WAY0.k + 46 * Math.sin(z * 0.011 + 0.4) * Math.sin(((z - WAY0.z0) / (WAY0.z1 - WAY0.z0)) * Math.PI);
 
-type Pt = { p: THREE.Vector3; c: V3 };
-// Lay strips of surface between successive cross-sections; each strip shades as one smooth sheet.
-function loft(rings: Pt[][][]) {
-  const parts: THREE.BufferGeometry[] = [];
-  const strips = rings[0].length;
-  for (let s = 0; s < strips; s++) {
-    const m = rings[0][s].length;
-    const pos: number[] = [];
-    const col: number[] = [];
-    const idx: number[] = [];
-    rings.forEach((ring, i) => {
-      for (const q of ring[s]) {
-        pos.push(q.p.x, q.p.y, q.p.z);
-        col.push(q.c[0], q.c[1], q.c[2], 0);
+export const FAIRY_PAL: GroundPalette = {
+  a: [0.075, 0.15, 0.045],
+  b: [0.13, 0.18, 0.05],
+  c: [0.05, 0.115, 0.05],
+  hook: {
+    decl: /* glsl */ `
+      ${GLSL_WOOD}
+      float fairyWay(float z){ return ${f4(WAY0.x0)} + (z - ${f4(WAY0.z0)}) * ${f4(WAY0.k)} + 46.0 * sin(z * 0.011 + 0.4) * sin((z - ${f4(WAY0.z0)}) / ${f4(WAY0.z1 - WAY0.z0)} * 3.14159265); }
+    `,
+    lit: /* glsl */ `
+      {
+        float F = fairyF(p);
+        vec3 light = uSkyCol * 0.7 + uKeyCol * (0.22 + 0.5 * max(uKeyDir.y, 0.0)) * sunUp;
+        float fpx = length(fwidth(p));
+        // the fields: a patchwork laid a little askew, each its own crop, a dark hedge between
+        vec2 q = mat2(0.92, 0.39, -0.39, 0.92) * p + vec2(vnoise(p * 0.004) - 0.5, vnoise(p * 0.004 + 7.0) - 0.5) * 90.0;
+        vec2 c = q / vec2(118.0, 74.0);
+        float rowH = hash12(vec2(floor(c.y), 3.7));
+        c.x = c.x * (0.62 + 0.9 * rowH) + rowH * 7.0;
+        vec2 id = floor(c); vec2 ff = fract(c);
+        float fh = hash12(id);
+        vec3 crop = fh < 0.3 ? vec3(0.44, 0.37, 0.11) : fh < 0.55 ? vec3(0.15, 0.27, 0.07) : fh < 0.8 ? vec3(0.27, 0.31, 0.09) : vec3(0.21, 0.14, 0.12);
+        // furrows, each field its own way, gone before they could shimmer
+        float fa = fh * 6.2832;
+        float furrow = sin(dot(q, vec2(cos(fa), sin(fa))) * 0.9);
+        crop *= 1.0 + furrow * 0.12 * (1.0 - smoothstep(0.4, 1.6, fpx));
+        crop *= 0.9 + 0.2 * vnoise(p * 0.05 + fh * 9.0);
+        float hedge = 1.0 - smoothstep(0.02, 0.05, min(min(ff.x, 1.0 - ff.x) * 1.6, min(ff.y, 1.0 - ff.y)));
+        crop = mix(crop, vec3(0.03, 0.07, 0.04), hedge * 0.9);
+        float fld = 1.0 - smoothstep(-0.75, -0.45, F);
+        col = mix(col, crop * light, fld);
+        // under the wood it is dark; far off the wood itself is painted here, crown by crown
+        float wood = smoothstep(-0.06, 0.1, F);
+        float can = vnoise(p * 0.07) * 0.5 + vnoise(p * 0.19 + 3.0) * 0.5;
+        vec3 floorC = mix(vec3(0.028, 0.065, 0.04), vec3(0.1, 0.16, 0.045), smoothstep(0.42, 0.7, can) * (1.0 - smoothstep(0.6, 3.5, fpx)) * 0.8);
+        col = mix(col, floorC * light, wood);
+        // the pale road
+        float wd = abs(p.x - fairyWay(p.y));
+        float way = (1.0 - smoothstep(3.2, 5.0, wd)) * step(${f4(WAY0.z0)}, p.y) * step(p.y, ${f4(WAY0.z1)});
+        col = mix(col, vec3(0.74, 0.66, 0.5) * light, way * 0.9);
       }
-      if (i < rings.length - 1) for (let j = 0; j < m - 1; j++) idx.push(i * m + j, i * m + j + 1, (i + 1) * m + j, i * m + j + 1, (i + 1) * m + j + 1, (i + 1) * m + j);
+    `,
+  },
+};
+// (grass grows in the meadows only: not under the trees, and not in the crops)
+const GRASS_MASK = /* glsl */ `
+  float F = sin(p.x * 0.0041 + 1.3) * sin(p.y * 0.0052 + 0.4) + 0.55 * sin((p.x + p.y) * 0.0093 + 2.0) + 0.3 * sin(p.x * 0.019 - p.y * 0.015 + 0.7) + 0.12;
+  float dm = length(p - vec2(${f4(MT.x)}, ${f4(MT.z)}));
+  F += 1.5 * exp(-(dm - 450.0) * (dm - 450.0) / 36100.0);
+  ${HAMLETS.map(([x, z, r]) => `{ vec2 d = p - vec2(${f4(x)}, ${f4(z)}); F -= 1.7 * exp(-dot(d, d) / ${f4(r * r)}); }`).join("\n  ")}
+  return smoothstep(-0.75, -0.5, F) * (1.0 - smoothstep(-0.12, 0.02, F)) * (1.0 - smoothstep(330.0, 400.0, dm));`;
+
+// ---------- the sun ----------
+// As he painted it: a small pale disc in a wide fan of fine rays, each ray a row of small dabs. It hangs at the
+// sky's distance in the sky's own sun direction; cloud that passes before it hides it.
+function FairySun({ size = 0.62 }: { size?: number }) {
+  const b = useDisposable(() => {
+    const g = new THREE.PlaneGeometry(2, 2);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { ...SKY_U, uSize: { value: size } },
+      vertexShader: /* glsl */ `
+        uniform vec3 uSunDir; uniform float uSize;
+        varying vec2 vUv;
+        void main(){
+          vec3 c = cameraPosition + normalize(uSunDir) * 2700.0;
+          vec4 mv = viewMatrix * vec4(c, 1.0);
+          mv.xy += position.xy * 2700.0 * uSize;
+          vUv = position.xy;
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: /* glsl */ `
+        varying vec2 vUv;
+        ${GLSL_NOISE}
+        ${GLSL_SKY}
+        void main(){
+          float r = length(vUv);
+          if (r > 1.0) discard;
+          float ang = atan(vUv.y, vUv.x);
+          float t = uTime;
+          float disc = 1.0 - smoothstep(0.034, 0.042, r);
+          // fine rays, long and short, each a row of short strokes of unequal length that walk slowly outward
+          float cell = ang / 6.2832 * 120.0;
+          float id = floor(cell); float lat = abs(fract(cell) - 0.5);
+          float pick = fract(sin(id * 12.9898) * 43758.5453);
+          float pick2 = fract(pick * 7.13);
+          float reach = mix(0.34, 0.98, pick);
+          float s = fract(r * mix(34.0, 66.0, pick2) - t * 0.22 + pick * 40.0);
+          float dab = smoothstep(0.16, 0.3, s) * smoothstep(0.94, 0.72, s);
+          float ray = (1.0 - smoothstep(0.07, 0.2, lat)) * smoothstep(0.09, 0.2, r) * (1.0 - smoothstep(reach * 0.5, reach, r)) * dab * (0.45 + 0.55 * pick2);
+          // broad soft beams under them, turning very slowly, never still
+          float beams = pow(0.5 + 0.5 * sin(ang * 11.0 + t * 0.015 + fbm(vec2(ang * 2.0, t * 0.03)) * 2.0), 3.0) * exp(-r * 3.4);
+          float glow = exp(-r * r * 24.0) * 0.9 + exp(-r * 5.5) * 0.12;
+          vec3 col = vec3(1.0, 0.97, 0.86) * disc * 5.0 + uGlow * (ray * 0.34 + beams * 0.12 + glow);
+          float up = smoothstep(-0.06, 0.04, uSunDir.y);
+          gl_FragColor = vec4(col * (1.0 - smoothstep(0.8, 1.0, r)) * up * (1.0 + uPulse * 0.4), 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
     });
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute("aCol", new THREE.Float32BufferAttribute(col, 4));
-    g.setIndex(idx);
-    g.computeVertexNormals();
-    parts.push(g);
-  }
-  return parts;
+    return { g, mat };
+  }, [size]);
+  return <mesh geometry={b.g} material={b.mat} frustumCulled={false} renderOrder={1} />;
 }
 
-// The wound mountain: for every step along the spiral, a cross-section from
-// the foot of the next wall out across the green terrace and its winding road
-// to the parapet, down the leaning wall, and (on the lowest turn) down the
-// cobbled slope it stands on.
-function spiral(mobile: boolean, foot: (x: number, z: number) => number) {
-  const per = mobile ? 72 : 128;
-  const n = Math.round(per * MOUNT.turns);
-  const at = (u: number, r: number, y: number) => new THREE.Vector3(Math.cos(thOf(u)) * r, y, Math.sin(thOf(u)) * r);
-  const rings: Pt[][][] = [];
-  for (let i = 0; i <= n; i++) {
-    const u = (i / n) * MOUNT.turns;
-    const ro = rhoOf(u);
-    // at its upper end the wall sinks into its own terrace and turns to the rock it runs into
-    const end = sm(MOUNT.turns - 0.32, MOUNT.turns - 0.06, u);
-    const rim = rimOf(u) - 2.5 * end;
-    const yT = rimOf(u) - 2.5;
-    const wallC = mix3(WALL, ROCK, end);
-    const lowC = mix3(WALL_LOW, ROCK, end);
-    const rimC = mix3(RIM, ROCK, end);
-    const ri = u + 1 <= MOUNT.turns ? rhoOf(u + 1) + MOUNT.batter : INNER_R;
-    const road = 0.5 + 0.3 * Math.sin(u * Math.PI * 2 * 2.5 + 0.6);
-    const terrace: Pt[] = [];
-    const M = 12;
-    for (let j = 0; j <= M; j++) {
-      const t = j / M; // 0 at the parapet, 1 at the foot of the wall above
-      const r = ro - 2.6 + (ri + 0.4 - (ro - 2.6)) * t;
-      const y = yT + 20 * Math.pow(t, 1.2);
-      const patchy = 0.5 + 0.5 * Math.sin(u * 23 + t * 5) * Math.sin(u * 7.3 + t * 11 + 1.3);
-      let c = mix3(GREEN2, GREEN, sm(0.0, 0.9, t) * 0.75 + patchy * 0.25);
-      c = mix3(c, ROAD, 1 - sm(0.035, 0.085, Math.abs(t - road)));
-      terrace.push({ p: at(u, r, y), c });
-    }
-    const f = footOf(u);
-    const ground = u < 1 ? foot(Math.cos(thOf(u)) * (ro + 30), Math.sin(thOf(u)) * (ro + 30)) - 12 : f;
-    const skirt: Pt[] = [];
-    const drop = Math.max(0, f - ground);
-    for (let j = 0; j <= 4; j++) {
-      const t = j / 4;
-      // a slope that eases out toward the meadow
-      skirt.push({ p: at(u, ro + MOUNT.batter + drop * (1.25 * t + 0.6 * t * t), f - drop * t), c: mix3(SLOPE, [0.13, 0.22, 0.07], t * 0.8 + 0.2 * Math.sin(u * 31)) });
-    }
-    rings.push([
-      terrace,
-      [
-        { p: at(u, ro - 2.6, yT), c: mix3(rimC, lowC, 0.5) },
-        { p: at(u, ro - 2.4, rim), c: rimC },
-      ],
-      [
-        { p: at(u, ro - 2.4, rim), c: rimC },
-        { p: at(u, ro - 1.2, rim + 0.5 * (1 - end)), c: mix3(rimC, [0.8, 0.5, 0.42], 0.6 * (1 - end)) },
-        { p: at(u, ro + 0.3, rim), c: rimC },
-      ],
-      [
-        { p: at(u, ro + 0.3, rim), c: mix3(wallC, rimC, 0.4) },
-        { p: at(u, ro + 0.2, rim - 1.6), c: wallC },
-        { p: at(u, ro + MOUNT.batter * 0.5, (rim + f) / 2), c: mix3(wallC, lowC, 0.45) },
-        { p: at(u, ro + MOUNT.batter, f), c: lowC },
-      ],
-      skirt,
-    ]);
-  }
-  const parts = loft(rings);
-  // the wall's end where the road begins
-  {
-    const first = rings[0];
-    const pos: number[] = [];
-    const col: number[] = [];
-    const edge = [...first[0]].reverse().concat(first[2]);
-    for (let j = 0; j < edge.length - 1; j++) {
-      const a = edge[j].p;
-      const b2 = edge[j + 1].p;
-      pos.push(a.x, a.y, a.z, b2.x, b2.y, b2.z, a.x, -14, a.z, b2.x, b2.y, b2.z, b2.x, -14, b2.z, a.x, -14, a.z);
-      for (let q = 0; q < 6; q++) col.push(...(q === 2 || q >= 4 ? WALL_LOW : WALL), 0);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute("aCol", new THREE.Float32BufferAttribute(col, 4));
-    g.computeVertexNormals();
-    parts.push(g);
-  }
-  // the arcade: a row of tall pointed arches let into the wall, turn after turn
-  {
-    const pos: number[] = [];
-    const col: number[] = [];
-    const wallPt = (u: number, k: number, proud: number) => {
-      const f = footOf(u);
-      return at(u, rhoOf(u) + MOUNT.batter * (1 - k) + proud, f + k * (rimOf(u) - f));
-    };
-    const spacing = mobile ? 15 : 9.5;
-    for (let u = 0.02; u < MOUNT.turns - 0.32; ) {
-      const ro = rhoOf(u);
-      const du = spacing / (Math.PI * 2 * ro);
-      const face = rimOf(u) - footOf(u);
-      if (face > 11) {
-        const hw = (spacing * 0.3) / (Math.PI * 2 * ro);
-        const k0 = 1.5 / face;
-        const k1 = 1 - 5 / face;
-        const R = 7;
-        const lo: V3 = [0.06, 0.035, 0.1];
-        const hi: V3 = [0.07, 0.15, 0.2];
-        for (let j = 0; j < R; j++) {
-          const ta = j / R;
-          const tb = (j + 1) / R;
-          // straight sides, then two arcs meeting in a point
-          const wOf = (t: number) => (t < 0.55 ? 1 : Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.55) / 0.45, 1.7))));
-          const A = [wallPt(u - hw * wOf(ta), k0 + (k1 - k0) * ta, 0.22), wallPt(u + hw * wOf(ta), k0 + (k1 - k0) * ta, 0.22), wallPt(u - hw * wOf(tb), k0 + (k1 - k0) * tb, 0.22), wallPt(u + hw * wOf(tb), k0 + (k1 - k0) * tb, 0.22)];
-          for (const q of [0, 1, 2, 1, 3, 2]) {
-            pos.push(A[q].x, A[q].y, A[q].z);
-            col.push(...mix3(lo, hi, q < 2 ? ta : tb), 0);
-          }
-        }
-      }
-      u += du;
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute("aCol", new THREE.Float32BufferAttribute(col, 4));
-    g.computeVertexNormals();
-    parts.push(g);
-  }
-  const flat = parts.map((g) => {
-    const q = g.index ? g.toNonIndexed() : g;
-    if (q !== g) g.dispose();
-    return q;
-  });
-  const out = mergeGeometries(flat)!;
-  flat.forEach((g) => g.dispose());
-  out.computeBoundingSphere();
-  return out;
+// ---------- pennants on the highest spires ----------
+function Pennants({ tips }: { tips: V3[] }) {
+  const b = useDisposable(() => {
+    const g = new THREE.InstancedBufferGeometry();
+    const base = new THREE.PlaneGeometry(1, 1, 10, 1);
+    base.translate(0.5, 0, 0);
+    g.setAttribute("position", base.attributes.position);
+    g.setAttribute("uv", base.attributes.uv);
+    g.setIndex(base.index);
+    const at = new Float32Array(tips.length * 4);
+    tips.forEach((p, i) => at.set([p[0], p[1], p[2], 5 + (i % 5) * 1.6], i * 4));
+    g.setAttribute("aAt", new THREE.InstancedBufferAttribute(at, 4));
+    g.instanceCount = tips.length;
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 560, 30), 420);
+    const mat = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide,
+      uniforms: { ...SKY_U },
+      vertexShader: /* glsl */ `
+        attribute vec4 aAt;
+        uniform float uTime;
+        varying vec2 vUv; varying float vSeed;
+        void main(){
+          vSeed = fract(aAt.x * 0.37 + aAt.z * 0.61);
+          float L = aAt.w;
+          // a long swallow-tailed pennant streaming on the wind, the wave running down it
+          float s = uv.x;
+          float w = sin(s * 7.0 - uTime * (3.0 + vSeed) + vSeed * 20.0) * 0.22 * s + sin(s * 3.0 - uTime * 1.7 + vSeed * 9.0) * 0.3 * s;
+          vec3 p = aAt.xyz + vec3(s * L * 0.92, position.y * L * 0.2 * (1.0 - 0.45 * s) - s * s * L * 0.12, w * L * 0.5 + s * L * 0.3);
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        varying vec2 vUv; varying float vSeed;
+        ${GLSL_SKY}
+        void main(){
+          // the swallow tail
+          if (vUv.x > 0.72 && abs(vUv.y - 0.5) < (vUv.x - 0.72) * 1.3) discard;
+          vec3 c = vSeed < 0.4 ? vec3(0.9, 0.2, 0.12) : vSeed < 0.7 ? vec3(1.0, 0.72, 0.2) : vec3(0.36, 0.3, 0.75);
+          gl_FragColor = vec4(c * (uSkyCol * 0.9 + uKeyCol * 0.35) * (0.8 + 0.3 * vUv.y), 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    return { g, mat };
+  }, [tips]);
+  return <mesh geometry={b.g} material={b.mat} />;
 }
 
 export default function FairyWorld({ props }: { props: WorldProps }) {
+  useDeepLens("fairy");
   const b = useDisposable(() => {
     const r = rng(303);
     const g = (x: number, z: number) => groundAt(def, x, z);
-    const y0 = g(MOUNT.x, MOUNT.z) - 4;
-    const k = new Kit();
-    const halos: Halo[] = [];
-    const glows: Halo[] = [];
-    const windows: Halo[] = [];
-    const P = (x: number, y: number, z: number): V3 => [MOUNT.x + x, y0 + y, MOUNT.z + z];
-    // (the same point once the mountain is raised: for things that are not part of it but stand by it)
-    const PL = (x: number, y: number, z: number): V3 => [MOUNT.x + x, y0 + y * LIFT, MOUNT.z + z];
+    const y0 = g(MT.x, MT.z);
+    const rel = (x: number, z: number) => g(MT.x + x, MT.z + z) - y0;
+    const few = props.mobile ? 0.34 : 0.55 + 0.45 * props.trees;
 
-    // buttresses between the arches: slim fins of lighter stone
-    const spacing = props.mobile ? 15 : 9.5;
-    for (let u = 0.02; u < MOUNT.turns - 0.32; ) {
-      const ro = rhoOf(u);
-      const du = spacing / (Math.PI * 2 * ro);
-      const ub = u + du / 2;
-      const face = rimOf(ub) - footOf(ub);
-      if (face > 11) {
-        const th = thOf(ub);
-        const rr = rhoOf(ub) + MOUNT.batter * 0.55 + 0.5;
-        k.add(new THREE.CylinderGeometry(0.5, 1.5, face - 1.2, 4), P(Math.cos(th) * rr, footOf(ub) + (face - 1.2) / 2, Math.sin(th) * rr), [0.36, 0.13, 0.12], { top: [0.74, 0.34, 0.2], rot: [0, -th + Math.PI / 4, 0] });
-      }
-      u += du;
+    // ---- the mountain, its rock and its castle
+    const mount = buildMountain(props.mobile, rel);
+    const peaks = buildPeaks(props.mobile);
+    const castle = buildCastle(props.mobile, r);
+    const rampPts = rampLine(40);
+    const skip = (p: THREE.Vector3) => {
+      for (const q of rampPts) if (Math.abs(p.x - q.x) < 11 && Math.abs(p.z - q.z) < 11 && Math.abs(p.y - q.y) < 12) return true;
+      for (const w of WARDS) if (Math.hypot(p.x - w.x, p.z - w.z) < w.R + 10 && p.y < w.y + 6) return true;
+      for (const pk of PEAKS) if (Math.hypot(p.x - pk.x, p.z - pk.z) < peakRadius(pk, p.y) + 4) return true;
+      return false;
+    };
+    const wood = makeCrownMaterial({ a: [0.085, 0.17, 0.045], b: [0.19, 0.25, 0.055], shade: [0.018, 0.055, 0.05] });
+    const slopes = crownMesh(mountainCrowns(Math.round(7000 * few), r, rel, skip), wood, true);
+
+    // ---- the woods of the plain: thick near the way and round the mountain's foot, bigger and fewer far off
+    const plain: Crown[] = [];
+    const close: Crown[] = [];
+    const track = pathOf("fairy").pts.filter((_, i) => i % 6 === 0);
+    const nearTrack = (x: number, z: number) => track.some((q) => q.y < 240 && Math.abs(q.x - x) < 150 && Math.abs(q.z - z) < 150);
+    const nearN = Math.round(7000 * few);
+    for (let i = 0, guard = 0; i < nearN && guard < nearN * 8; guard++) {
+      const a = r() * Math.PI * 2;
+      const d = Math.sqrt(r()) * 1180;
+      const x = 60 + Math.cos(a) * d;
+      const z = 120 + Math.sin(a) * d;
+      const F = woodF(x, z);
+      if (F < 0.04 + r() * 0.1) continue;
+      if (Math.hypot(x - MT.x, z - MT.z) < 372) continue;
+      if (z > WAY0.z0 && z < WAY0.z1 && Math.abs(x - wayX(z)) < 9) continue;
+      if (def.canvases.some((c) => Math.hypot(x - c.x, z - c.z) < 30)) continue;
+      const s = 6 + r() * 4.5;
+      (nearTrack(x, z) ? close : plain).push({ p: [x, g(x, z) - s * 0.1, z], r: s, h: 0.95 + r() * 0.55, seed: r() });
+      i++;
+    }
+    const farN = Math.round(5200 * few * Math.min(1, props.far + 0.2));
+    for (let i = 0, guard = 0; i < farN && guard < farN * 8; guard++) {
+      const a = r() * Math.PI * 2;
+      const d = 1100 + Math.pow(r(), 0.8) * 1500;
+      const x = 60 + Math.cos(a) * d;
+      const z = 120 + Math.sin(a) * d;
+      if (woodF(x, z) < 0.05 + r() * 0.15) continue;
+      const s = 9 + (d - 1100) * 0.008 + r() * 6;
+      plain.push({ p: [x, g(x, z) - s * 0.1, z], r: s, h: 0.9 + r() * 0.5, seed: r() });
+      i++;
+    }
+    // a few stand alone in the meadows and along the hedges
+    for (let i = 0; i < Math.round(700 * few); i++) {
+      const a = r() * Math.PI * 2;
+      const d = 380 + Math.sqrt(r()) * 1300;
+      const x = Math.cos(a) * d;
+      const z = -100 + Math.sin(a) * d;
+      const F = woodF(x, z);
+      if (F > -0.05 || F < -0.9) continue;
+      if (z > WAY0.z0 && z < WAY0.z1 && Math.abs(x - wayX(z)) < 10) continue;
+      const s = 4.5 + r() * 5;
+      plain.push({ p: [x, g(x, z) - s * 0.1, z], r: s, h: 1 + r() * 0.5, seed: r() });
     }
 
-    // the heart of the mountain: green shoulders going up into violet rock
-    const cone = (x: number, z: number, R: number, yb: number, yt: number, lo: V3, hi: V3, pow = 1.25, seg = 28) => {
-      const prof: [number, number][] = [];
-      for (let i = 0; i <= 18; i++) {
-        const t = i / 18;
-        prof.push([R * Math.pow(1 - t, pow) + 0.01, (yt - yb) * t]);
-      }
-      k.lathe(prof, P(x, yb, z), lo, { top: hi, seg });
-    };
-    k.lathe(
+    // ---- hamlets in their fields: a tower, a huddle of roofs, lit windows, cypresses standing by
+    const k = new Kit();
+    const lamps: Halo[] = [];
+    const cyp: Crown[] = [];
+    const stone: V3 = [0.5, 0.4, 0.42];
+    const stoneLit: V3 = [0.92, 0.72, 0.56];
+    const roofs: [V3, V3][] = [
       [
-        [64, 0],
-        [54, 30],
-        [41, 58],
-        [30, 80],
-        [18, 100],
-        [0.1, 104],
+        [0.5, 0.18, 0.12],
+        [0.95, 0.52, 0.24],
       ],
-      P(0, 92, 0),
-      [0.15, 0.25, 0.08],
-      { top: [0.4, 0.24, 0.36], seg: 44 },
-    );
-    cone(8, -24, 40, 150, 312, ROCK, ROCK_LIT, 1.3, 32);
-    cone(40, 6, 30, 128, 240, [0.24, 0.16, 0.28], [0.88, 0.58, 0.5], 1.25);
-    cone(-38, -10, 27, 130, 222, [0.2, 0.12, 0.24], [0.72, 0.46, 0.52], 1.25);
-    cone(-8, -52, 24, 132, 210, [0.2, 0.1, 0.22], [0.6, 0.38, 0.46], 1.2);
-    
-
-    // the castle: three tiers of pale wall stepping up the front of the peak, a
-    // crowd of slim towers with tall spires, every window lit, and towers on up the ridge to the very top
-    const stone: V3 = [0.6, 0.42, 0.5];
-    const stoneLit: V3 = [0.94, 0.68, 0.56];
-    const spire: V3 = [0.92, 0.56, 0.3];
-    const tower = (x: number, y: number, z: number, rad0: number, h0: number, tall = 5) => {
-      // slim and tall: a shaft drawn in a little toward the top, a small cornice, a steep roof and a needle on it
-      const rad = rad0 * 0.72;
-      const h = h0 * 1.25;
-      k.add(new THREE.CylinderGeometry(rad * 0.8, rad, h, 12), P(x, y + h / 2, z), stone, { top: stoneLit, glow: 0.08 });
-      k.add(new THREE.CylinderGeometry(rad * 1.02, rad * 0.84, rad * 0.5, 12), P(x, y + h + rad * 0.25, z), stoneLit, { glow: 0.1 });
-      const rh = rad * (tall + 2.4);
-      k.add(new THREE.ConeGeometry(rad * 1.0, rh, 12), P(x, y + h + rad * 0.5 + rh / 2, z), [0.5, 0.2, 0.17], { top: spire, glow: 0.22 });
-      k.add(new THREE.CylinderGeometry(0.03, 0.09, rad * 2.4, 4), P(x, y + h + rad * 0.5 + rh + rad * 1.1, z), spire, { glow: 0.5 });
-      const rows = Math.max(1, Math.floor(h / 7));
-      for (let j = 0; j < 2; j++) {
-        const a = 0.9 + j * 1.3 + x * 0.3;
-        for (let q = 0; q < rows; q++) {
-          k.box(0.34, 1.1, 0.2, P(x + Math.cos(a) * rad * 0.9, y + 3.4 + q * 6.2, z + Math.sin(a) * rad * 0.9), [1, 0.8, 0.42], { glow: 2.6, rot: [0, -a + Math.PI / 2, 0] });
-          // each lit window breathes a little warm light into the air before it
-          if ((q + j) % 2 === 0) windows.push({ p: P(x + Math.cos(a) * rad * 1.3, y + 3.4 + q * 6.2, z + Math.sin(a) * rad * 1.3), size: 3.2, col: [1, 0.72, 0.36], k: 0.55 });
-        }
-      }
-    };
-    // the shelf it stands on, where the road arrives
-    k.add(new THREE.CylinderGeometry(35, 39, 64, 36), P(0, 162 - 32, 20), [0.3, 0.17, 0.28], { top: [0.22, 0.3, 0.1] });
-    const tiers: [R: number, zc: number, y: number, h: number][] = [
-      [32, 20, 161, 8],
-      [24, 16, 176, 8],
-      [16, 12, 192, 9],
+      [
+        [0.22, 0.18, 0.4],
+        [0.56, 0.46, 0.72],
+      ],
     ];
-    const every = props.mobile ? 2 : 1;
-    tiers.forEach(([R, zc, y, h], ti) => {
-      k.add(new THREE.CylinderGeometry(R, R + 0.7, h, 36, 1, true, -1.75, 3.5), P(0, y + h / 2, zc), stone, { top: stoneLit, glow: 0.12 });
-      const nT = Math.round(R / 2.6);
-      for (let i = 0; i <= nT; i += 1) {
-        const a = -1.75 + (i / nT) * 3.5;
-        const x = Math.sin(a) * R;
-        const z = zc + Math.cos(a) * R;
-        // battlements between, a tower at every other step
-        k.box(1.3, 1.5, 1.0, P(Math.sin(a + 0.06) * (R + 0.2), y + h + 0.7, zc + Math.cos(a + 0.06) * (R + 0.2)), stoneLit, { glow: 0.14, rot: [0, a, 0] });
-        if (i % (2 * every) === 0) tower(x, y - 2, z, 1.7 + r() * 1.1 + (ti === 0 ? 0.5 : 0), h + 7 + r() * 9 + (i === Math.round(nT / 2) ? 5 : 0), 4.6 + r() * 1.6);
+    HAMLETS.forEach(([hx, hz], hi) => {
+      const gy = g(hx, hz);
+      const R = 3.2 + r() * 1.6;
+      const H = 26 + r() * 20;
+      const [lo, hi2] = roofs[hi % 2];
+      k.lathe(
+        [
+          [R * 1.15, 0],
+          [R, H * 0.06],
+          [R * 0.88, H * 0.88],
+          [R * 1.1, H * 0.93],
+          [R * 1.1, H],
+          [R * 0.5, H + 0.01],
+        ],
+        [hx, gy - 1, hz],
+        stone,
+        { top: stoneLit, seg: 10, glow: 0.05 },
+      );
+      k.add(new THREE.ConeGeometry(R * 1.3, R * 5, 10), [hx, gy - 1 + H + R * 2.5, hz], lo, { top: hi2, glow: 0.12 });
+      for (let q = 0; q < 3; q++) k.box(0.7, 1.9, 1, [hx + Math.sin(q * 2.1) * (R * 0.9 - 0.2), gy + H * (0.3 + q * 0.22), hz + Math.cos(q * 2.1) * (R * 0.9 - 0.2)], [1, 0.76, 0.38], { glow: 2.2, rot: [0, q * 2.1, 0] });
+      lamps.push({ p: [hx, gy + H * 0.6, hz], size: 5, col: [1, 0.72, 0.36], k: 0.5 });
+      const nH = 5 + Math.floor(r() * 6);
+      for (let i = 0; i < nH; i++) {
+        const a = r() * Math.PI * 2;
+        const d = 12 + r() * 46;
+        const x = hx + Math.cos(a) * d;
+        const z = hz + Math.sin(a) * d;
+        const y = g(x, z);
+        const w = 7 + r() * 5;
+        const dp = 5.5 + r() * 3;
+        const h = 4 + r() * 3.5;
+        const yaw = r() * Math.PI;
+        k.box(w, h + 1, dp, [x, y + h / 2 - 0.5, z], [0.6, 0.5, 0.42], { top: [0.9, 0.78, 0.6], rot: [0, yaw, 0], glow: 0.04 });
+        k.add(new THREE.CylinderGeometry(0.001, 1, 1, 4, 1), [x, y + h + h * 0.45, z], roofs[i % 2][0], { top: roofs[i % 2][1], scale: [w * 0.78, h * 0.9, dp * 0.78], rot: [0, yaw + Math.PI / 4, 0], glow: 0.1 });
+        k.box(0.9, 1.1, dp + 0.5, [x + Math.cos(yaw) * w * 0.22, y + h * 0.5, z - Math.sin(yaw) * w * 0.22], [1, 0.76, 0.38], { glow: 2.0, rot: [0, yaw, 0] });
+        if (i % 2 === 0) lamps.push({ p: [x, y + h * 0.6, z], size: 4.2, col: [1, 0.72, 0.36], k: 0.4 });
+      }
+      for (let i = 0; i < 9 + Math.floor(r() * 8); i++) {
+        const a = r() * Math.PI * 2;
+        const d = 20 + r() * 110;
+        const x = hx + Math.cos(a) * d;
+        const z = hz + Math.sin(a) * d;
+        cyp.push({ p: [x, g(x, z) - 0.5, z], r: 2.2 + r() * 1.6, h: 6.5 + r() * 3.5, seed: r() });
       }
     });
-    // the gate, lit from within
-    k.box(4.6, 7.4, 0.5, P(0, 161 + 3.2, 20 + 32.4), [1, 0.78, 0.36], { glow: 1.9 });
-    k.add(new THREE.ConeGeometry(3.3, 4.4, 4), P(0, 161 + 9.0, 20 + 32.3), [1, 0.78, 0.36], { glow: 1.9, scale: [1, 1, 0.12], rot: [0, Math.PI / 4, 0] });
-    // the keep and its needle
-    tower(0, 196, 10, 4.4, 30, 5.4);
-    tower(-9, 194, 13, 2.4, 20, 6);
-    tower(9, 194, 12, 2.6, 23, 6);
-    // on up the ridge, and one on the summit itself
-    for (const [x, y, z, rad, h] of [
-      [8, 230, -7, 1.7, 9],
-      [8, 254, -13, 1.5, 8],
-      [8, 279, -19, 1.3, 7],
-      [8, 304, -24, 1.2, 9],
-    ] as const)
-      tower(x, y, z, rad, h, 7);
-    glows.push({ p: P(0, 196, 26), size: 150, col: [1, 0.66, 0.3], k: 0.55 });
-    halos.push({ p: P(0, 250, 10), size: 8, col: [1, 0.86, 0.56], k: 0.5 }, { p: P(8, 323, -24), size: 9, col: [1, 0.86, 0.56], k: 0.6 }, { p: P(0, 166, 53), size: 9, col: [1, 0.8, 0.46], k: 0.5 });
-
-    // thin cypresses and round bushes along the road
-    const nC = props.mobile ? 26 : Math.round(90 * props.trees);
-    for (let i = 0; i < nC; i++) {
-      const u = 0.06 + r() * (MOUNT.turns - 0.1);
-      const th = thOf(u);
-      const ro = rhoOf(u) - 2.6;
-      const ri = u + 1 <= MOUNT.turns ? rhoOf(u + 1) + MOUNT.batter : INNER_R;
-      const t = r() < 0.5 ? 0.06 + r() * 0.2 : 0.62 + r() * 0.32;
-      const rr = ro + (ri - ro) * t;
-      const y = rimOf(u) - 2.5 + 20 * Math.pow(t, 1.2) - 0.4;
-      if (i % 3 === 0) {
-        const h = 8 + r() * 9;
-        k.add(new THREE.ConeGeometry(1.0 + h * 0.06, h, 7), P(Math.cos(th) * rr, y + h / 2, Math.sin(th) * rr), [0.03, 0.08, 0.06], { top: [0.1, 0.2, 0.1] });
-      } else {
-        const s = 1.6 + r() * 2.2;
-        k.add(new THREE.SphereGeometry(s, 8, 6), P(Math.cos(th) * rr, y + s * 0.5, Math.sin(th) * rr), [0.06, 0.15, 0.05], { top: [0.34, 0.42, 0.1], scale: [1, 0.8, 1] });
-      }
-    }
-
-    // his sky: small round clouds laid out in rows, like a pattern on cloth
-    const clouds: PaintedCloud[] = [];
-    // near rows overhead, and row behind row going down to the horizon
-    // how many rows go out toward the horizon follows the quality's draw distance
-    const rows = Math.round((props.mobile ? 9 : 16) * Math.min(1.15, Math.max(0.6, props.far)));
-    let z = 520;
-    for (let row = 0; row < rows; row++) {
-      const gap = 110 + row * (props.mobile ? 34 : 15);
-      z -= gap;
-      const half = 760 + (520 - z) * 0.55;
-      const stepX = (props.mobile ? 130 : 74) + row * 6;
-      for (let x = -half + (row % 2) * stepX * 0.5; x < half; x += stepX) {
-        const cx = x + (r() - 0.5) * stepX * 0.36;
-        const cz = z + (r() - 0.5) * gap * 0.34;
-        if (Math.hypot(cx - MOUNT.x, cz - MOUNT.z) < 170) continue; // the peaks stand clear
-        const w = (22 + r() * 18) * (1 + row * 0.05);
-        clouds.push({ p: [cx, 380 + (r() - 0.5) * 40 - row * 4, cz], w, seed: r() });
-        // and a second, lower layer between the rows, as he set them, scale on scale
-        if (!props.mobile && r() < 0.6) clouds.push({ p: [cx + stepX * 0.5, 300 + (r() - 0.5) * 30 - row * 3, cz + gap * 0.5], w: w * 0.85, seed: r() });
-      }
-    }
-    // the sea of cloud the mountain's rock stands up out of: row on row of the same rounded clouds, far below the
-    // headland and all round past the cliffs, to the horizon
-    for (let i = 0; i < (props.mobile ? 120 : 320); i++) {
+    // lone cypresses and little rows of them in the fields
+    for (let i = 0; i < (props.mobile ? 120 : 420); i++) {
       const a = r() * Math.PI * 2;
-      const d = 940 + Math.pow(r(), 0.7) * 1400;
-      clouds.push({ p: [Math.cos(a) * d, -95 + r() * 30, -40 + Math.sin(a) * d], w: 50 + r() * 70 + d * 0.03, seed: r() });
+      const d = 400 + Math.sqrt(r()) * 1700;
+      const x = Math.cos(a) * d;
+      const z = -100 + Math.sin(a) * d;
+      if (woodF(x, z) > -0.35) continue;
+      const row = r() < 0.3 ? 2 + Math.floor(r() * 4) : 1;
+      const dir = r() * Math.PI;
+      for (let j = 0; j < row; j++) {
+        const px = x + Math.cos(dir) * j * 9;
+        const pz = z + Math.sin(dir) * j * 9;
+        if (pz > WAY0.z0 && pz < WAY0.z1 && Math.abs(px - wayX(pz)) < 7) continue;
+        cyp.push({ p: [px, g(px, pz) - 0.5, pz], r: 2 + r() * 1.5, h: 6.5 + r() * 3.5, seed: r() });
+      }
     }
-    // a few lying low about the mountain's foot, as if it stood above them
+    // the gatehouse where the plain's road meets the mountain: two small towers and a lamp between them
+    {
+      const gx = MT.x + FOOT.x * 1.04;
+      const gz = MT.z + FOOT.z * 1.04;
+      const gy = g(gx, gz);
+      const ax = -FOOT.z / Math.hypot(FOOT.x, FOOT.z);
+      const az = FOOT.x / Math.hypot(FOOT.x, FOOT.z);
+      for (const sd of [-1, 1]) {
+        const tx = gx + ax * sd * 10;
+        const tz = gz + az * sd * 10;
+        k.lathe(
+          [
+            [4.6, 0],
+            [4, 3],
+            [3.5, 30],
+            [4.4, 32],
+            [4.4, 36],
+            [2, 36.01],
+          ],
+          [tx, gy - 3, tz],
+          stone,
+          { top: stoneLit, seg: 10, glow: 0.05 },
+        );
+        k.add(new THREE.ConeGeometry(5.2, 20, 10), [tx, gy + 43, tz], roofs[0][0], { top: roofs[0][1], glow: 0.12 });
+      }
+      lamps.push({ p: [gx, gy + 7, gz], size: 16, col: [1, 0.76, 0.4], k: 0.7 });
+    }
+
+    // ---- the sky: heaps of cloud in ranks, near ones overhead and row behind row to the horizon
+    const heaps: Heap[] = [];
+    const far: Heap[] = [];
+    const reach = 2500 * Math.min(1.1, Math.max(0.7, props.far + 0.2));
+    for (let z = 1500; z > -reach; z -= 250) {
+      const row = Math.round((1500 - z) / 250);
+      for (let x = -reach + (row % 2) * 160; x < reach; x += 320) {
+        const cx = x + (r() - 0.5) * 190;
+        const cz = z + (r() - 0.5) * 150;
+        const dm = Math.hypot(cx - MT.x, cz - MT.z);
+        // the peaks stand clear, and so does the sun's own road down to them
+        if (dm < 520) continue;
+        if (Math.hypot(cx, cz + 100) > reach) continue;
+        if (r() < 0.14) continue;
+        const w = 110 + r() * 130;
+        const h: Heap = { p: [cx, 800 + (r() - 0.5) * 150 + dm * 0.03, cz], w, seed: r(), tall: 0.9 + r() * 0.5 };
+        (Math.hypot(cx, cz - 200) < 1250 ? heaps : far).push(h);
+        // a second, lower rank between them here and there, as he set them scale on scale
+        if (r() < 0.3 && dm > 760) far.push({ p: [cx + 150, 640 + (r() - 0.5) * 80, cz + 120], w: w * 0.55, seed: r() });
+      }
+    }
+    const heapMat = makeHeapMaterial({});
+    // a wreath of low cloud about the mountain's waist, which the plane climbs through
+    const belt: Heap[] = [];
+    for (let i = 0; i < (props.mobile ? 9 : 16); i++) {
+      const a = (i / 16) * Math.PI * 2 + r() * 0.3;
+      const d = 430 + r() * 190;
+      // (none in the way of the first sight of it from the rise)
+      if (Math.sin(a) > 0.45 && Math.abs(Math.cos(a)) < 0.6) continue;
+      belt.push({ p: [MT.x + Math.cos(a) * d, y0 + 205 + r() * 90, MT.z + Math.sin(a) * d], w: 70 + r() * 70, seed: r(), tall: 0.7 });
+    }
     const puffs: Puff[] = [];
-    for (let i = 0; i < 30; i++) {
+    // mist lying in the hollows of the plain, far out
+    for (let i = 0; i < (props.mobile ? 14 : 34); i++) {
       const a = r() * Math.PI * 2;
-      const d = 230 + r() * 330;
-      puffs.push({ p: [Math.cos(a) * d, 26 + r() * 30, MOUNT.z + Math.sin(a) * d], size: 80 + r() * 90, a: 0.7 });
+      const d = 620 + r() * 1300;
+      const x = Math.cos(a) * d;
+      const z = -100 + Math.sin(a) * d;
+      puffs.push({ p: [x, g(x, z) + 16 + r() * 22, z], size: 150 + r() * 160, a: 0.5 });
     }
-    // the sun low to the right, in a fan of rays
-    const air = def.air!;
-    const sa = (air.sunAz * Math.PI) / 180;
-    const se = (air.sunEl * Math.PI) / 180;
-    const sunP: V3 = [Math.sin(sa) * Math.cos(se) * 1500, Math.sin(se) * 1500, -Math.cos(sa) * Math.cos(se) * 1500];
 
-    // the two small figures standing on the cliff's edge, looking out, as in the picture's right-hand side
-    // (not raised with the mountain: they stand on the meadow)
-    const fk = new Kit();
-    for (const [dx, h] of [
-      [0, 1],
-      [3.2, 0.92],
-    ])
-      angel(fk, [262 + dx, g(262 + dx, 30) - 0.2, 30 + dx * 0.3], 2.4 * h, -1.2, [0.1, 0.07, 0.09], { glow: 0.02, wing: [0.12, 0.09, 0.1], open: 0.05 });
-    // and birds, wheeling about the peaks and over the valley
+    // ---- life: birds about the spires and over the woods, lanterns climbing the road, motes of gold in the air
     const flocks: Flock[] = [
-      { c: [MOUNT.x, 250 * LIFT, MOUNT.z], r: 230, n: props.mobile ? 8 : 16, size: 1.6, speed: 12 },
-      { c: [MOUNT.x + 40, 380 * LIFT, MOUNT.z - 30], r: 120, n: props.mobile ? 5 : 10, size: 2.2, speed: 10 },
-      { c: [-200, 120, 260], r: 110, n: props.mobile ? 6 : 12, size: 1.2, speed: 9 },
-      { c: [240, 90, 140], r: 80, n: props.mobile ? 5 : 9, size: 1.1, speed: 8 },
+      { c: [MT.x, y0 + 640, MT.z], r: 150, n: props.mobile ? 8 : 18, size: 2.4, speed: 13 },
+      { c: [MT.x + 30, y0 + 560, MT.z + 30], r: 210, n: props.mobile ? 6 : 14, size: 2.0, speed: 11 },
+      { c: [MT.x - 20, y0 + 730, MT.z - 10], r: 90, n: props.mobile ? 5 : 9, size: 2.6, speed: 9 },
+      { c: [120, 120, 520], r: 150, n: props.mobile ? 6 : 12, size: 1.5, speed: 10 },
+      { c: [-420, 150, 200], r: 190, n: props.mobile ? 5 : 11, size: 1.5, speed: 11 },
+      { c: [520, 200, -700], r: 160, n: props.mobile ? 5 : 10, size: 1.7, speed: 10 },
     ];
+    const road = roadLine(7);
+    const way: THREE.Vector3[] = [];
+    for (let z = WAY0.z1 - 20; z > WAY0.z0 + 10; z -= 7) way.push(new THREE.Vector3(wayX(z), g(wayX(z), z), z));
+    const nM = props.mobile ? 260 : Math.round(1300 * props.effects);
     return {
-      figures: fk.build(),
-      windows,
-      flocks,
-      motes: pointsGeometry(props.mobile ? 200 : Math.round(900 * props.effects), (_, q) => [(q() - 0.5) * 900, 20 + q() * 320, -80 + (q() - 0.5) * 900, 0.5 + q() * 1.2], 9),
-      moteMat: makePoints({ a: [1, 0.86, 0.56], b: [1, 0.95, 0.8], scale: 220, drift: 2.6, gain: 0.7, max: 16 }),
-      mount: spiral(props.mobile, (x, z) => g(MOUNT.x + x, MOUNT.z + z) - y0),
-      set: k.build(),
-      tempera: makeTempera({ amb: 0.72, key: 0.62, dab: 1.4, grain: 1.2, ao: 0.45, aoH: 40, wrap: 0.7, rim: [0.95, 0.48, 0.2], rimPow: 3 }),
       y0,
-      clouds,
+      // (the plane is high over woods for most of this world: the meadows' grass can be thinner)
+      base: { ...props, grass: props.grass * 0.5 },
+      soil: mount.soil,
+      ramp: buildRamp(),
+      rampMat: Object.assign(makeTempera({ amb: 0.78, key: 0.6, dab: 1.0, grain: 1.0 }), { polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }),
+      wall: mount.wall,
+      peaks,
+      castle: castle.geo,
+      windows: castle.windows,
+      castleHalos: castle.halos,
+      castleGlows: castle.glows,
+      tips: castle.tips.filter((_, i) => i % (props.mobile ? 5 : 2) === 0),
+      slopes,
+      wood,
+      plain: crownMesh(plain, wood, false),
+      close: crownMesh(close, wood, true),
+      cypress: cypressMesh(cyp, makeCrownMaterial({ a: [0.045, 0.12, 0.06], b: [0.07, 0.15, 0.06], shade: [0.02, 0.05, 0.055], wind: 0.5, gold: 0 })),
+      set: k.build(),
+      lamps,
+      heaps: heapMesh(heapBlobs(heaps, 5), heapMat, props.mobile ? 1 : 2),
+      far: heapMesh(heapBlobs(far, 9), heapMat, 1),
+      belt: heapMesh(heapBlobs(belt, 13), heapMat, props.mobile ? 1 : 2),
+      heapMat,
       puffs,
-      halos,
-      glows,
-      suns: [{ p: sunP, size: 900, col: [1, 0.9, 0.62] as V3, k: 0.4 }],
+      flocks,
+      road,
+      way,
+      masonry: makeMasonry({ bay: 27, amb: 0.62, key: 0.5 }),
+      tempera: makeTempera({ amb: 0.78, key: 0.6, dab: 1.3, grain: 1.1, ao: 0.4, aoH: 30, wrap: 0.8, rim: [0.95, 0.5, 0.22], rimPow: 3 }),
+      rock: makeTempera({ amb: 0.8, key: 0.62, dab: 1.4, strata: 0.9, grain: 1.2, wrap: 0.9, rim: [1.0, 0.56, 0.3], rimPow: 3.2 }),
+      stone: makeTempera({ amb: 0.7, key: 0.6, dab: 1.1, strata: 0.35, grain: 1.0, wrap: 0.9, gold: 0.5, rim: [1.0, 0.56, 0.26], rimPow: 2.6 }),
+      motes: pointsGeometry(nM, (_, q) => [MT.x + (q() - 0.5) * 1500, 30 + q() * 700, MT.z + 200 + (q() - 0.5) * 1700, 0.5 + q() * 1.3], 9),
+      moteMat: makePoints({ a: [1, 0.84, 0.5], b: [1, 0.95, 0.8], scale: 320, drift: 3.2, gain: 0.7, max: 14 }),
     };
-  }, [props.mobile, props.trees, props.far, props.effects > 0.5]);
+  }, [props.mobile, props.trees, props.far, props.effects > 0.5, props.grass, props.reduced]);
   return (
     <>
-      <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={props} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} />
-      {/* the mountain and its castle, raised about the mountain's own foot */}
-      <group position={[0, b.y0, 0]} scale={[1, LIFT, 1]}>
-        <mesh geometry={b.mount} material={b.tempera} position={[MOUNT.x, 0, MOUNT.z]} />
-        <mesh geometry={b.set} material={b.tempera} position={[0, -b.y0, 0]} />
-        <group position={[0, -b.y0, 0]}>
-          <Halos list={b.windows} />
-          <Halos list={b.glows} kind={2} />
-          <Halos list={b.halos} />
-        </group>
+      <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={b.base} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} mask={GRASS_MASK} groundSize={6400} />
+      <FairySun />
+      {/* the mountain, measured from its own foot */}
+      <group position={[MT.x, b.y0, MT.z]}>
+        <mesh geometry={b.soil} material={b.tempera} />
+        <mesh geometry={b.ramp} material={b.rampMat} />
+        <mesh geometry={b.wall} material={b.masonry} />
+        <mesh geometry={b.peaks} material={b.rock} />
+        <mesh geometry={b.castle} material={b.stone} />
+        <primitive object={b.slopes} />
+        <Pennants tips={b.tips} />
+        <Halos list={b.windows} />
+        <Halos list={b.castleGlows} kind={2} />
+        <Halos list={b.castleHalos} />
+        <Walkers road={b.road} n={props.mobile ? 60 : 150} speed={1.5} size={1.1} />
       </group>
-      <mesh geometry={b.figures} material={b.tempera} />
-      <PaintedClouds list={b.clouds} warm={[1.0, 0.92, 0.76]} shade={[0.56, 0.72, 0.72]} hi={[1.3, 1.12, 0.8]} />
-      <Birds flocks={b.flocks} tint={[0.16, 0.1, 0.08]} />
+      <primitive object={b.plain} />
+      <primitive object={b.close} />
+      <primitive object={b.cypress} />
+      <mesh geometry={b.set} material={b.stone} />
+      <Halos list={b.lamps} />
+      <Walkers road={b.way} n={props.mobile ? 20 : 46} speed={1.4} size={0.9} seed={8} />
+      <primitive object={b.heaps} />
+      <primitive object={b.far} />
+      <primitive object={b.belt} />
+      <Birds flocks={b.flocks} tint={[0.14, 0.09, 0.1]} />
       <points geometry={b.motes} material={b.moteMat} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
-      <Halos list={b.suns} kind={3} />
     </>
   );
 }
