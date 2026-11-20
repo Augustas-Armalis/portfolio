@@ -10,7 +10,11 @@ import type { Terrain } from "../voyage";
 
 type B = [x: number, z: number, radius: number, height: number];
 
-export const WAVE = { z0: -300, bend: 0.00036, H: 330, rho: 150, span: 640, base: 7 };
+// (It is built at its full height, seven hundred metres and more than two kilometres long; the world draws it far
+// lower at first and lets it rear as the plane comes: SeaFinale.tsx. WK: how much longer it is than it was first
+// built, for everything that was laid out along the first one.)
+export const WAVE = { z0: -560, bend: 0.00022, H: 720, rho: 285, span: 1000, base: 7 };
+export const WK = WAVE.span / 640;
 // its crest line: z at a place s (= x) along it, bowed toward whoever comes
 export const ridgeZ = (s: number) => WAVE.z0 + WAVE.bend * s * s;
 // across the crest at s, toward the wave's face (unit, in x and z)
@@ -26,8 +30,8 @@ export const waveRho = (s: number) => WAVE.rho * (0.45 + (0.55 * waveH(s)) / WAV
 
 function buildBumps() {
   const out: B[] = [];
-  let s = -1060;
-  while (s <= 1060) {
+  let s = -1060 * WK;
+  while (s <= 1060 * WK) {
     const rho = waveRho(s);
     const space = rho * 0.5;
     out.push([s, ridgeZ(s), rho, waveH(s) / ((Math.sqrt(Math.PI) * rho) / space)]);
@@ -94,26 +98,32 @@ export const onFace = (s: number, f: number): [number, number] => {
 // The way: in low over the swell toward the middle of the wave, the ships ahead on its lower slope; then round
 // to the left and along its face, climbing, the crest curling overhead; and at its far end out to the left
 // through the hanging lace of the crest, into calm.
-const FACE: [number, number, number][] = [
-  [20, 1.9, 10],
-  [-50, 1.6, 10],
-  [-130, 1.32, 10],
-  [-220, 1.1, 10],
-  [-310, 0.96, 10],
-  [-400, 0.9, 11],
-  [-480, 0.9, 14],
-  [-550, 0.94, 22],
-  [-602, 1.05, 34],
-];
-export const EXIT = { s: -640, f: 1.25, above: 48 };
+const FACE: [number, number, number][] = (
+  [
+    [20, 1.9, 10],
+    [-50, 1.6, 10],
+    [-130, 1.32, 10],
+    [-220, 1.1, 10],
+    [-310, 0.96, 10],
+    [-400, 0.9, 11],
+    [-480, 0.9, 14],
+    [-550, 0.94, 22],
+    [-602, 1.05, 34],
+  ] as [number, number, number][]
+).map(([s, f, a]) => [s * WK, f, a]);
+export const EXIT = { s: -640 * WK, f: 1.25, above: 48 };
 function buildPath() {
+  // (a long way in over a quiet sea before the water begins to stand up)
   const path: [number, number, number][] = [
-    [250, 640, 12],
-    [212, 520, 9],
-    [165, 400, 8],
-    [112, 285, 8],
-    [62, 180, 8],
-    [30, 82, 9],
+    [300, 1360, 14],
+    [290, 1200, 12],
+    [272, 1040, 10],
+    [250, 880, 9],
+    [222, 720, 9],
+    [186, 570, 8],
+    [140, 430, 8],
+    [90, 300, 8],
+    [52, 190, 9],
   ];
   for (const [s, f, a] of FACE) path.push([...onFace(s, f), a]);
   const g = onFace(EXIT.s, EXIT.f);
@@ -129,7 +139,7 @@ function buildPath() {
 const P = buildPath();
 export const FINALE_PATH = P.path;
 export const FINALE_GATE = P.gate;
-export const FINALE_ENTRY = { x: 250, z: 640, above: 12, yaw: Math.atan2(38, 120) };
+export const FINALE_ENTRY = { x: 300, z: 1360, above: 14, yaw: Math.atan2(10, 160) };
 
 // where the ships ride: on the band of foam at the wave's foot and a little way up its slope (along the crest,
 // across it in the wave's widths, heading, size)

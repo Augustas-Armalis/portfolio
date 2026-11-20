@@ -748,9 +748,10 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // the mean sea so the swell has room to run under the plane
     terrain: FINALE_TERRAIN,
     water: null,
-    centre: [-60, 150],
-    radius: 940,
-    ceil: 340,
+    centre: [-150, 250],
+    radius: 1900,
+    ceil: 940,
+    pace: 2.1,
     entry: FINALE_ENTRY,
     // at the wave's far end, in the hanging lace of its crest: out through it, into calm (no arch of light)
     gate: FINALE_GATE,
