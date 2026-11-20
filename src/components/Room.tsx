@@ -13,6 +13,7 @@ import { ambienceMuted, ambienceScene, onAmbienceChange, setAmbienceMuted, start
 import { music, sampleMusic, stopOwner } from "@/lib/audio";
 import { flightMusicStop, flightMusicTo, flightMusicVolume } from "@/lib/flightMusic";
 import { gyroLook, gyroNudge, gyroStop } from "@/lib/gyro";
+import { handoff } from "@/lib/handoff";
 import { getQuality, getQualityChoice, reportFrame, setQualityChoice, useQuality, type Quality } from "@/lib/quality";
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { DeskModel } from "./scene/glb";
@@ -548,8 +549,18 @@ function Scene({
       v.fromUp.copy(cam.up);
       input.current.last = performance.now();
       offRef.current = true;
-      play("shutdown");
+      // (the phone's Fly shortcut comes this way too: no power-down sound, and the plane leaves as soon as the desk is there)
+      if (!handoff.fly) play("shutdown");
       setStage(reduced ? "idle" : "wake");
+      if (reduced && handoff.fly) {
+        handoff.fly = false;
+        window.setTimeout(() => enterRef.current?.("plane"), 400);
+      }
+    }
+    else if (active && handoff.fly) {
+      // (the desk was never left through the glass: the plane simply goes)
+      handoff.fly = false;
+      window.setTimeout(() => enterRef.current?.("plane"), 500);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
@@ -1254,7 +1265,13 @@ function Scene({
       v.tmp.lerpVectors(v.sp, v.look, easeInOutCubic(clamp01((el - DUR.wakeDelay - 0.15) / (DUR.wake - 0.15))));
       cam.up.lerpVectors(v.su, v.Y, k).normalize();
       cam.lookAt(v.tmp);
-      if (el >= DUR.wakeDelay + DUR.wake) setStage("idle");
+      if (el >= DUR.wakeDelay + DUR.wake) {
+        setStage("idle");
+        if (handoff.fly) {
+          handoff.fly = false;
+          enter("plane");
+        }
+      }
     }
   };
 

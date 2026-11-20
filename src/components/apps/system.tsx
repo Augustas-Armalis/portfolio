@@ -488,7 +488,8 @@ export function SettingsApp() {
       onSelect={setSel}
       startPushed={startPushed}
       footer={
-        // the phone's power control: back to the desk, with the screen off
+        // (on the phone the power control is the first thing under the account row: see the header)
+        compact ? undefined : (
         <List className="mt-8">
           <ListRow
             icon={tile("#FF3B30", <Power size={sz} />)}
@@ -499,13 +500,28 @@ export function SettingsApp() {
             }}
           />
         </List>
+        )
       }
       header={
         // the account row System Settings opens with
         compact ? (
-          <List className="mt-2">
-            <ListRow icon={<span className="my-2"><Monogram size={56} /></span>} title={<span className="t-title3">{owner.name}</span>} sub={owner.role} />
-          </List>
+          <>
+            <List className="mt-2">
+              <ListRow icon={<span className="my-2"><Monogram size={56} /></span>} title={<span className="t-title3">{owner.name}</span>} sub={owner.role} />
+            </List>
+            {/* the phone's power control, where it is seen at once: back to the desk, with the screen off */}
+            <List className="mt-5">
+              <ListRow
+                icon={tile("#FF3B30", <Power size={sz} />)}
+                title="Power Off"
+                sub="Back to the desk in the field"
+                onClick={() => {
+                  sfx("shutdown");
+                  shutdown();
+                }}
+              />
+            </List>
+          </>
         ) : (
           <div className="flex items-center gap-2.5 px-2 pb-1">
             <Monogram size={36} />

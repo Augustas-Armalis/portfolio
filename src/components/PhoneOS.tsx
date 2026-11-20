@@ -2,14 +2,16 @@
 
 import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransform, type AnimationPlaybackControls } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { apps, dockApps, mainWork, owner, projects, sharedApps, tracks, type AppId } from "@/content";
+import { apps, bookCall, dockApps, gameApps, mainWork, owner, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
+import { flightMusicPrime } from "@/lib/flightMusic";
+import { handoff } from "@/lib/handoff";
 import { useOS, useWallpaper } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, player, usePlayer, warmApps } from "./Apps";
 import { Bars } from "./Desktop";
 import { Monogram, PowerOverlay } from "./Login";
 import { IconFace } from "./icons";
-import { Check, ChevronLeft, Pause, Play, X } from "lucide-react";
-import { Chrome, EASE_OUT, glass, PhoneNav, SPRING_GLASS, useGlassScope, type PhoneDetail } from "./ui";
+import { Check, ChevronLeft, Pause, Play, Power, Send, X } from "lucide-react";
+import { Chrome, EASE_OUT, glass, PhoneNav, SPRING_GLASS, sfx, useGlassScope, type PhoneDetail } from "./ui";
 import { useClock, useDate } from "./useClock";
 
 // iPhone-style OS: lock screen that lifts away, a home screen of icons, and apps
@@ -17,7 +19,7 @@ import { useClock, useDate } from "./useClock";
 
 // The Dynamic Island: a live activity grows out of it with a spring. Music shows the artwork and a waveform,
 // Get in Touch shows "Sent", and a long press opens the full activity. A tap opens the app it belongs to.
-function Island() {
+function Island({ real }: { real: boolean }) {
   const p = usePlayer();
   const activity = useOS((s) => s.activity);
   const setActivity = useOS((s) => s.setActivity);
@@ -44,10 +46,12 @@ function Island() {
     if (mode === "sent") openPhoneApp("contact");
   };
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-[max(11px,env(safe-area-inset-top))] z-[90] flex justify-center">
+    // on a real phone there is a real island above this: ours is only a pill that appears, under the safe area,
+    // while something is going on (music, a copied address)
+    <div className={`pointer-events-none absolute inset-x-0 z-[90] flex justify-center ${real ? "top-[calc(env(safe-area-inset-top)+6px)]" : "top-[max(11px,env(safe-area-inset-top))]"}`} data-island={mode}>
       <motion.div
         initial={false}
-        animate={{ width: size[0], height: size[1], borderRadius: size[2] }}
+        animate={{ width: size[0], height: size[1], borderRadius: size[2], opacity: real && mode === "idle" ? 0 : 1, scale: real && mode === "idle" ? 0.6 : 1 }}
         transition={SPRING_GLASS}
         onPointerDown={() => {
           held.current = false;
@@ -120,7 +124,7 @@ function StatusBar({ light }: { light?: boolean }) {
   const time = useClock(false);
   const c = light ? "text-white" : "text-ink";
   return (
-    <div className={`pointer-events-none absolute inset-x-0 top-0 z-[80] flex h-[54px] items-center pt-[max(4px,env(safe-area-inset-top))] text-[17px] font-semibold tracking-[-0.02em] tabular-nums ${c}`}>
+    <div className={`pointer-events-none absolute inset-x-0 top-0 z-[80] flex h-[54px] items-center pt-[max(4px,var(--sat))] text-[17px] font-semibold tracking-[-0.02em] tabular-nums ${c}`}>
       {/* the time and the icons are each centred in the "ears" either side of the Dynamic Island */}
       <span className="flex flex-1 justify-center pl-3">{time}</span>
       <span className="w-[126px]" />
@@ -140,8 +144,11 @@ function StatusBar({ light }: { light?: boolean }) {
 
 // ---------- lock ----------
 
-function Lock() {
+function Lock({ onPower }: { onPower: () => void }) {
   const login = useOS((s) => s.login);
+  // a long press anywhere on the lock screen asks about power, as holding the side button would
+  const hold = useRef<number | undefined>(undefined);
+  const held = useRef(false);
   const seamless = useOS((s) => s.seamless);
   const wp = useWallpaper();
   const time = useClock(false);
@@ -154,8 +161,19 @@ function Lock() {
       style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}
       role="button"
       tabIndex={0}
-      onClick={() => login()}
+      onPointerDown={() => {
+        held.current = false;
+        hold.current = window.setTimeout(() => {
+          held.current = true;
+          onPower();
+        }, 600);
+      }}
+      onPointerUp={() => window.clearTimeout(hold.current)}
+      onPointerLeave={() => window.clearTimeout(hold.current)}
+      onPointerCancel={() => window.clearTimeout(hold.current)}
+      onClick={() => !held.current && login()}
       onKeyDown={(e) => e.key === "Enter" && login()}
+      data-lock=""
     >
       {wp.src.startsWith("live:") && <LiveWallpaper />}
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.3),rgb(0_0_0/0.08)_38%,rgb(0_0_0/0.12)_62%,rgb(0_0_0/0.42))]" />
@@ -163,7 +181,7 @@ function Lock() {
         initial={{ opacity: 0, y: -10, filter: "blur(8px)" }}
         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
         transition={{ duration: 0.7, ease: EASE_OUT, delay: seamless ? 0.35 : 0.2 }}
-        className="relative mt-[calc(env(safe-area-inset-top)+84px)] text-center [text-shadow:0_1px_12px_rgb(0_0_0/0.25)]"
+        className="relative mt-[calc(var(--sat)+84px)] text-center [text-shadow:0_1px_12px_rgb(0_0_0/0.25)]"
       >
         <div className="text-[20px] font-medium leading-6 tracking-[-0.01em] text-white/85">{date || "\u00a0"}</div>
         <div className="mt-1 min-h-[96px] text-[96px] font-light leading-none tracking-[-0.05em] tabular-nums text-white/95">{time}</div>
@@ -195,7 +213,25 @@ function Lock() {
         >
           Tap to open
         </motion.div>
-        <div className="mt-3 h-[5px] w-[134px] rounded-full bg-white/90" />
+        {/* the way back out, always in sight: the phone goes dark and the desk is there again */}
+        <motion.button
+          type="button"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: EASE_OUT, delay: 0.6 }}
+          data-glass=""
+          data-lock-back=""
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPower();
+          }}
+          className={`glass-press mt-4 flex h-11 items-center gap-2 rounded-full pl-3.5 pr-4 text-[15px] font-medium tracking-[-0.015em] text-white ${glass("btn-dark")}`}
+        >
+          <Power size={16} strokeWidth={2.2} />
+          Back to the desk
+        </motion.button>
+        <div className="mt-4 h-[5px] w-[134px] rounded-full bg-white/90" />
       </div>
     </div>
   );
@@ -216,7 +252,7 @@ function HomeIcon({ id, label, onOpen }: { id: AppId; label?: string; onOpen: (i
     onOpen(id, { x: r.x, y: r.y, w: r.width, h: r.height });
   };
   return (
-    <div className="relative flex flex-col items-center gap-[5px]">
+    <div className="relative flex w-[60px] flex-col items-center gap-[5px]">
       <motion.button
         type="button"
         aria-label={`Open ${apps[id].title}`}
@@ -235,7 +271,7 @@ function HomeIcon({ id, label, onOpen }: { id: AppId; label?: string; onOpen: (i
         </div>
       </motion.button>
       {label !== "" && (
-        <span className={`w-[76px] truncate text-center text-[11px] font-medium leading-[13px] tracking-[0.005em] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.5),0_0_10px_rgb(0_0_0/0.28)]`}>
+        <span className={`-mx-2 w-[76px] truncate text-center text-[12px] font-medium leading-[14px] tracking-[-0.005em] text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.5),0_0_10px_rgb(0_0_0/0.28)]`}>
           {label ?? apps[id].title}
         </span>
       )}
@@ -270,56 +306,404 @@ function HomeIcon({ id, label, onOpen }: { id: AppId; label?: string; onOpen: (i
   );
 }
 
-// The home screen: a widget about him, his apps, and the system ones in the dock.
+// ---------- home: pages of widgets and apps ----------
+
+// A tap on anything that opens grows the app out of that thing's own rectangle.
+type Open = (id: AppId, o: Origin) => void;
+const rectOf = (el: Element): Origin => {
+  const r = el.getBoundingClientRect();
+  return { x: r.x, y: r.y, w: r.width, h: r.height };
+};
+// Widget sizes follow the icon grid, as on iOS: a small one covers two columns and is square, a medium one runs
+// the width of the page at the same height.
+const WIDGET_H = "h-[152px]";
+const widget = `glass-press relative overflow-hidden rounded-[26px] text-left text-white ${glass("widget-dark")}`;
+const kicker = "text-[12px] font-semibold leading-4 tracking-[-0.005em] text-white/60";
+
+function Widget({ app, onOpen, className = "", children, label }: { app: AppId; onOpen: Open; className?: string; children: React.ReactNode; label: string }) {
+  return (
+    <button type="button" aria-label={label} data-glass="" data-widget={app} onClick={(e) => onOpen(app, rectOf(e.currentTarget))} className={`${widget} ${className}`}>
+      {children}
+    </button>
+  );
+}
+
+// Now playing: the artwork, what it is, and a play button that works without opening Music.
+function PlayingWidget({ onOpen }: { onOpen: Open }) {
+  const p = usePlayer();
+  const track = tracks.find((t) => t.id === p.id) ?? tracks[0];
+  if (!track) return null;
+  const on = p.playing && p.id === track.id;
+  return (
+    <div className={`relative ${WIDGET_H}`}>
+      <Widget app="records" onOpen={onOpen} label={`Open Music: ${track.title}`} className="flex h-full w-full items-center gap-4 p-4 pr-[84px]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={track.cover} alt="" draggable={false} className="h-[120px] w-[120px] shrink-0 rounded-[18px] object-cover shadow-[0_8px_22px_-8px_rgb(0_0_0/0.55)]" />
+        <span className="min-w-0 flex-1">
+          <span className={`block ${kicker}`}>{on ? "Now playing" : "Music"}</span>
+          <span className="mt-1 line-clamp-2 text-[17px] font-semibold leading-[21px] tracking-[-0.022em]">{track.title}</span>
+          <span className="mt-0.5 block truncate text-[13px] leading-[18px] text-white/65">{track.artist}</span>
+          <span className="mt-3 block h-[3px] overflow-hidden rounded-full bg-white/20">
+            <span className="block h-full origin-left rounded-full bg-white/90" style={{ transform: `scaleX(${p.id === track.id && p.dur ? Math.min(1, p.t / p.dur) : 0})` }} />
+          </span>
+        </span>
+      </Widget>
+      <button
+        type="button"
+        aria-label={on ? "Pause" : `Play ${track.title}`}
+        data-widget="play"
+        onClick={() => player.toggle(track.id)}
+        className="press absolute right-4 top-1/2 flex h-[52px] w-[52px] -translate-y-1/2 items-center justify-center rounded-full bg-white text-black shadow-[0_6px_16px_-6px_rgb(0_0_0/0.5)]"
+      >
+        {on ? <Pause size={22} fill="currentColor" strokeWidth={0} /> : <Play size={22} fill="currentColor" strokeWidth={0} className="ml-0.5" />}
+      </button>
+    </div>
+  );
+}
+
+// The time where he is: a plain clock face, Kaunas under it.
+function ClockWidget({ onOpen }: { onOpen: Open }) {
+  const [now, setNow] = useState<{ h: number; m: number; s: number; label: string } | null>(null);
+  useEffect(() => {
+    const tick = () => {
+      const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Vilnius", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).formatToParts(new Date());
+      const n = (t: string) => +(parts.find((x) => x.type === t)?.value ?? 0);
+      setNow({ h: n("hour") % 24, m: n("minute"), s: n("second"), label: `${String(n("hour") % 24).padStart(2, "0")}:${String(n("minute")).padStart(2, "0")}` });
+    };
+    tick();
+    const iv = window.setInterval(tick, 1000);
+    return () => window.clearInterval(iv);
+  }, []);
+  const hand = (deg: number, len: number, w: number, col: string) => <line x1="50" y1="50" x2={50 + Math.sin((deg * Math.PI) / 180) * len} y2={50 - Math.cos((deg * Math.PI) / 180) * len} stroke={col} strokeWidth={w} strokeLinecap="round" />;
+  return (
+    <Widget app="about" onOpen={onOpen} label={`Kaunas time${now ? `, ${now.label}` : ""}. Open About`} className={`flex ${WIDGET_H} flex-col items-center justify-between p-3`}>
+      <svg viewBox="0 0 100 100" className="h-[98px] w-[98px]" aria-hidden>
+        <circle cx="50" cy="50" r="48" fill="rgb(255 255 255 / 0.94)" />
+        {Array.from({ length: 12 }, (_, i) => (
+          <line key={i} x1="50" y1={i % 3 === 0 ? 7 : 8} x2="50" y2={i % 3 === 0 ? 15 : 12} stroke="#1c1c1e" strokeWidth={i % 3 === 0 ? 2.4 : 1.4} strokeLinecap="round" opacity={i % 3 === 0 ? 0.9 : 0.45} transform={`rotate(${i * 30} 50 50)`} />
+        ))}
+        {now && (
+          <>
+            {hand((now.h % 12) * 30 + now.m * 0.5, 23, 4.4, "#1c1c1e")}
+            {hand(now.m * 6 + now.s * 0.1, 35, 3, "#1c1c1e")}
+            {hand(now.s * 6, 38, 1.1, "#ff9f0a")}
+            <circle cx="50" cy="50" r="2.6" fill="#ff9f0a" />
+          </>
+        )}
+      </svg>
+      <span className="flex w-full items-baseline justify-between px-1.5 pb-0.5">
+        <span className="text-[13px] font-semibold tracking-[-0.01em]">Kaunas</span>
+        <span className="text-[13px] tabular-nums text-white/65">{now?.label ?? " "}</span>
+      </span>
+    </Widget>
+  );
+}
+
+// His projects, one at a time, each under its own mark.
+const STACK: AppId[] = projectGroups.slice(0, 2).flatMap((g) => g.apps).filter((id) => projects[id]);
+function ProjectsWidget({ onOpen }: { onOpen: Open }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const iv = window.setInterval(() => setI((n) => (n + 1) % STACK.length), 3600);
+    return () => window.clearInterval(iv);
+  }, []);
+  const id = STACK[i];
+  const p = projects[id]!;
+  return (
+    <Widget app="projects" onOpen={onOpen} label="Open Projects" className={`flex ${WIDGET_H} flex-col p-4`}>
+      <span className={kicker}>Projects</span>
+      <span className="relative mt-2 block flex-1">
+        <AnimatePresence initial={false} mode="popLayout">
+          <motion.span key={id} className="absolute inset-0 flex flex-col justify-between" initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -8, filter: "blur(4px)" }} transition={{ duration: 0.45, ease: EASE_OUT }}>
+            <AppIcon id={id} size={46} />
+            <span>
+              <span className="block truncate text-[17px] font-semibold leading-[21px] tracking-[-0.022em]">{p.name}</span>
+              <span className="block truncate text-[13px] leading-[17px] text-white/65">{p.role ?? p.what ?? ""}</span>
+            </span>
+          </motion.span>
+        </AnimatePresence>
+      </span>
+    </Widget>
+  );
+}
+
+// A large picture from Shots, changing slowly.
+function PhotoWidget({ onOpen }: { onOpen: Open }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const iv = window.setInterval(() => setI((n) => (n + 1) % shots.items.length), 6000);
+    return () => window.clearInterval(iv);
+  }, []);
+  const s = shots.items[i];
+  return (
+    <Widget app="shots" onOpen={onOpen} label="Open Shots" className="block h-[clamp(132px,24dvh,206px)] w-full">
+      <AnimatePresence initial={false}>
+        <motion.img key={s.src} src={s.src} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: EASE_OUT }} />
+      </AnimatePresence>
+      <span aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgb(0_0_0/0.55))]" />
+      <span className="absolute inset-x-4 bottom-3 flex items-baseline justify-between">
+        <span className="text-[17px] font-semibold tracking-[-0.022em]">Shots</span>
+        <span className="text-[13px] text-white/75">{s.title}</span>
+      </span>
+    </Widget>
+  );
+}
+
+function WorkingWidget({ onOpen }: { onOpen: Open }) {
+  return (
+    <Widget app={mainWork.id as AppId} onOpen={onOpen} label={`Working on ${mainWork.name}. Open it`} className={`flex ${WIDGET_H} flex-col justify-between p-4`}>
+      <span className="flex items-start justify-between">
+        <span className={kicker}>Working on</span>
+        <AppIcon id={mainWork.id as AppId} size={34} />
+      </span>
+      <span>
+        <span className="block text-[20px] font-semibold leading-6 tracking-[-0.025em]">{mainWork.name}</span>
+        <span className="block truncate text-[13px] leading-[17px] text-white/65">{mainWork.role}</span>
+        <span className="block truncate text-[13px] leading-[17px] text-white/45">{mainWork.years}</span>
+      </span>
+    </Widget>
+  );
+}
+
+// Back to the field, and straight into the air.
+function FlyWidget({ onFly }: { onFly: () => void }) {
+  return (
+    <button type="button" data-glass="" data-widget="fly" aria-label="Fly: back to the field by paper plane" onClick={onFly} className={`${widget} flex ${WIDGET_H} flex-col justify-between p-4`}>
+      <span aria-hidden className="absolute inset-0 bg-[radial-gradient(120%_90%_at_100%_0%,rgb(255_214_150/0.34),transparent_60%)]" />
+      <span className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white text-black">
+        <Send size={18} strokeWidth={2.1} className="-ml-0.5 mt-0.5" />
+      </span>
+      <span className="relative">
+        <span className="block text-[20px] font-semibold leading-6 tracking-[-0.025em]">Fly</span>
+        <span className="block text-[13px] leading-[17px] text-white/65">Out over the field, by paper plane</span>
+      </span>
+    </button>
+  );
+}
+
+function ContactWidget({ onOpen }: { onOpen: Open }) {
+  return (
+    <Widget app="contact" onOpen={onOpen} label="Get in Touch" className={`flex ${WIDGET_H} flex-col justify-between p-4`}>
+      <span className="flex items-start justify-between">
+        <span className={kicker}>Get in Touch</span>
+        <Monogram size={34} />
+      </span>
+      <span>
+        <span className="block text-[17px] font-semibold leading-[21px] tracking-[-0.022em]">{bookCall.label}</span>
+        <span className="block truncate text-[13px] leading-[17px] text-white/65">{bookCall.sub}</span>
+      </span>
+    </Widget>
+  );
+}
+
+// Games, as a folder standing open on the page: its two apps, ready to tap.
+function GamesWidget({ onOpen }: { onOpen: Open }) {
+  return (
+    <div data-glass="" data-widget="games" className={`relative overflow-hidden rounded-[26px] text-white ${glass("widget-dark")} flex ${WIDGET_H} flex-col p-4`}>
+      <span className={kicker}>Games</span>
+      <span className="mt-auto grid grid-cols-2 gap-2 pb-0.5">
+        {gameApps.map((id) => (
+          <button key={id} type="button" aria-label={`Open ${apps[id].title}`} onClick={(e) => onOpen(id, rectOf(e.currentTarget.firstElementChild ?? e.currentTarget))} className="press flex flex-col items-center gap-1.5">
+            <span className="block">
+              <AppIcon id={id} size={52} />
+            </span>
+            <span className="w-full truncate text-center text-[11px] font-medium leading-[13px] text-white/85">{apps[id].title}</span>
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+function TimelineWidget({ onOpen }: { onOpen: Open }) {
+  const rows = timeline.filter((m) => m.key).slice(-3);
+  return (
+    <Widget app="about" onOpen={onOpen} label="Milestones. Open About" className="flex w-full flex-col gap-1.5 p-4 [@media(max-height:879px)]:hidden">
+      <span className={kicker}>Lately</span>
+      {rows.map((m) => (
+        <span key={m.title} className="flex items-baseline gap-3">
+          <span className="w-[86px] shrink-0 text-[12px] tabular-nums leading-[18px] text-white/50">{m.when}</span>
+          <span className="min-w-0 flex-1 truncate text-[14px] font-medium leading-[18px] tracking-[-0.012em]">{m.title}</span>
+        </span>
+      ))}
+    </Widget>
+  );
+}
+
+// A folder, opened: the page behind goes soft and dark, and its apps stand in a glass panel under its name.
+const FOLDERS: Record<"projects" | "games", { title: string; apps: AppId[]; all: string }> = {
+  projects: { title: "Projects", apps: projectApps, all: "All projects" },
+  games: { title: "Games", apps: gameApps, all: "Library" },
+};
+function Folder({ id, onOpen, onClose }: { id: "projects" | "games"; onOpen: Open; onClose: () => void }) {
+  const f = FOLDERS[id];
+  return (
+    <motion.div
+      className="absolute inset-0 z-[40] flex flex-col items-center justify-center px-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.18 } }}
+      transition={{ duration: 0.25 }}
+      onClick={onClose}
+      role="dialog"
+      aria-label={`${f.title} folder`}
+      data-folder={id}
+    >
+      <div aria-hidden className="absolute inset-0 bg-black/35 backdrop-blur-[26px] backdrop-saturate-150" />
+      <motion.div className="relative w-full max-w-[340px]" initial={{ scale: 0.82, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9 }} transition={{ type: "spring", bounce: 0.18, duration: 0.42 }} onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 px-2 text-[28px] font-semibold leading-8 tracking-[-0.028em] text-white [text-shadow:0_1px_10px_rgb(0_0_0/0.3)]">{f.title}</div>
+        <div data-glass="" className={`${glass("widget-dark")} max-h-[58dvh] overflow-y-auto overscroll-contain rounded-[34px] px-4 py-6`}>
+          <div className="grid grid-cols-3 justify-items-center gap-x-2 gap-y-5">
+            {[...f.apps, id].map((a, n) => (
+              <HomeIcon key={`${a}${n}`} id={a} label={n === f.apps.length ? f.all : (projects[a]?.name ?? apps[a].title)} onOpen={(app, o) => (onClose(), onOpen(app, o))} />
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// The home screen: pages you swipe between. The first is his apps under a few widgets; the second is more of him.
+// The dock and the page dots stay put.
 const HOME_APPS: AppId[] = [...dockApps, "taste"];
-function Home({ onOpen }: { onOpen: (id: AppId, o: Origin) => void }) {
+const PAGES = 2;
+const GRID = "grid grid-cols-[repeat(4,60px)] justify-between";
+function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
   const wp = useWallpaper();
   const dark = wp.dark;
   const dock: AppId[] = [...sharedApps, "about"];
-  const ref = useRef<HTMLButtonElement>(null);
+  const [w, setW] = useState(() => (typeof window === "undefined" ? 390 : window.innerWidth));
+  const [page, setPage] = useState(0);
+  const [folder, setFolder] = useState<"projects" | "games" | null>(null);
+  const x = useMotionValue(0);
+  // a swipe is not a tap: whatever was under the finger does not open
+  const swiped = useRef(false);
+  const go = (p: number, velocity = 0) => {
+    const to = Math.min(PAGES - 1, Math.max(0, p));
+    setPage(to);
+    animate(x, -to * w, { type: "spring", stiffness: 320, damping: 36, mass: 1, velocity });
+  };
+  useEffect(() => {
+    const f = () => setW(window.innerWidth);
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
+  useEffect(() => {
+    x.set(-page * w);
+    // only when the width changes (a turn of the phone)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w]);
+  const open: Open = (id, o) => {
+    if (swiped.current) return;
+    if (id === "projects" || id === "games") return setFolder(id);
+    onOpen(id, o);
+  };
+  // (from inside a folder its own tile opens the app itself: the Files-style view)
+  const openFromFolder: Open = (id, o) => onOpen(id, o);
+  const pageCls = "flex h-full shrink-0 flex-col gap-[14px] px-[27px] pt-[calc(var(--sat)+64px)]";
   return (
-    <div className="wp-photo absolute inset-0 flex flex-col" style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}>
+    <div className="wp-photo absolute inset-0 flex touch-none flex-col overflow-hidden" style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}>
       {wp.src.startsWith("live:") && <LiveWallpaper />}
       {/* labels are white, as on iOS: a light picture is toned down so they still read */}
       <div aria-hidden className={`pointer-events-none absolute inset-0 ${dark ? "bg-[linear-gradient(180deg,rgb(0_0_0/0.18),transparent_22%,transparent_70%,rgb(0_0_0/0.22))]" : "bg-black/25"}`} />
-      <div className="relative px-5 pt-[calc(env(safe-area-inset-top)+64px)]">
-        <button
-          type="button"
-          ref={ref}
-          onClick={() => {
-            const r = ref.current!.getBoundingClientRect();
-            onOpen("about", { x: r.x, y: r.y, w: r.width, h: r.height });
-          }}
-          data-glass=""
-          className={`glass-press flex w-full items-center gap-3.5 rounded-[28px] p-4 text-left ${glass("widget-dark")} text-white`}
-        >
-          <Monogram size={48} />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[17px] font-semibold leading-tight tracking-[-0.01em]">{owner.name}</span>
-            <span className={`mt-0.5 block text-[13px] leading-[17px] text-white/75`}>
-              {owner.role}. The work is in Projects.
-            </span>
-          </span>
-        </button>
-      </div>
-      <div className="relative grid grid-cols-4 gap-x-2 gap-y-[22px] px-5 pt-7">
-        {HOME_APPS.map((id, i) => (
-          <motion.div key={id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.04 + i * 0.03 }}>
-            <HomeIcon id={id} onOpen={onOpen} />
-          </motion.div>
-        ))}
-      </div>
-      <div className="relative mt-auto px-3 pb-[max(10px,env(safe-area-inset-bottom))]">
-        <div className="mb-3 flex justify-center gap-1.5" aria-hidden>
-          <span className="h-[7px] w-[7px] rounded-full bg-white" />
+      <motion.div
+        className="relative flex min-h-0 flex-1"
+        style={{ x, width: w * PAGES }}
+        drag={folder ? false : "x"}
+        dragDirectionLock
+        dragConstraints={{ left: -(PAGES - 1) * w, right: 0 }}
+        dragElastic={0.2}
+        dragMomentum={false}
+        onDragStart={() => (swiped.current = true)}
+        onDragEnd={(_, info) => {
+          const at = -x.get() / w;
+          const v = info.velocity.x;
+          // a flick turns the page whatever the distance; otherwise the nearer page wins
+          go(Math.abs(v) > 320 ? (v < 0 ? Math.floor(at) + 1 : Math.ceil(at) - 1) : Math.round(at), v);
+          window.setTimeout(() => (swiped.current = false), 80);
+        }}
+        data-home-pages=""
+      >
+        <div className={pageCls} style={{ width: w }} aria-hidden={page !== 0} data-page="0">
+          <PlayingWidget onOpen={open} />
+          <div className="grid grid-cols-2 gap-[14px] [@media(max-height:759px)]:hidden">
+            <ClockWidget onOpen={open} />
+            <ProjectsWidget onOpen={open} />
+          </div>
+          <div className={`${GRID} gap-y-[18px] pt-1`}>
+            {HOME_APPS.map((id, i) => (
+              <motion.div key={id} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.04 + i * 0.03 }}>
+                <HomeIcon id={id} onOpen={open} />
+              </motion.div>
+            ))}
+          </div>
         </div>
-        <div data-glass="" className={`${glass("dock")} flex justify-around rounded-[34px] px-2 py-4`}>
+        <div className={pageCls} style={{ width: w }} aria-hidden={page !== 1} data-page="1">
+          <PhotoWidget onOpen={open} />
+          <div className="grid grid-cols-2 gap-[14px]">
+            <WorkingWidget onOpen={open} />
+            <FlyWidget onFly={() => !swiped.current && onFly()} />
+          </div>
+          <div className="grid grid-cols-2 gap-[14px] [@media(max-height:689px)]:hidden">
+            <GamesWidget onOpen={open} />
+            <ContactWidget onOpen={open} />
+          </div>
+          <TimelineWidget onOpen={open} />
+        </div>
+      </motion.div>
+      <div className="relative px-[13px] pb-[max(10px,env(safe-area-inset-bottom))]">
+        <div className="flex justify-center gap-[9px] py-3" role="tablist" aria-label="Home screen pages">
+          {Array.from({ length: PAGES }, (_, i) => (
+            <button key={i} type="button" role="tab" aria-selected={page === i} aria-label={`Page ${i + 1}`} onClick={() => go(i)} className="grid h-5 w-4 place-items-center" data-page-dot={i}>
+              <span className={`h-[7px] w-[7px] rounded-full transition-colors duration-300 ${page === i ? "bg-white" : "bg-white/35"}`} />
+            </button>
+          ))}
+        </div>
+        <div data-glass="" className={`${glass("dock")} ${GRID} rounded-[34px] px-[14px] py-4`}>
           {dock.map((id) => (
-            <HomeIcon key={id} id={id} label="" onOpen={onOpen} />
+            <HomeIcon key={id} id={id} label="" onOpen={open} />
           ))}
         </div>
       </div>
+      <AnimatePresence>{folder && <Folder key={folder} id={folder} onOpen={openFromFolder} onClose={() => setFolder(null)} />}</AnimatePresence>
     </div>
+  );
+}
+
+// ---------- power ----------
+
+// The way to turn it off, said plainly: one sheet, the same from the lock screen and from Settings.
+function PowerSheet({ onClose }: { onClose: () => void }) {
+  const shutdown = useOS((s) => s.shutdown);
+  return (
+    <motion.div className="absolute inset-0 z-[95] flex flex-col justify-end px-3 pb-[max(14px,env(safe-area-inset-bottom))]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }} onClick={onClose} role="dialog" aria-label="Power" data-power-sheet="">
+      <div aria-hidden className="absolute inset-0 bg-black/45 backdrop-blur-[18px]" />
+      <motion.div className="relative flex flex-col gap-2" initial={{ y: 40 }} animate={{ y: 0 }} exit={{ y: 30 }} transition={{ type: "spring", bounce: 0.12, duration: 0.42 }} onClick={(e) => e.stopPropagation()}>
+        <div data-glass="" className={`${glass("widget-dark")} flex flex-col items-center rounded-[30px] px-6 pb-3 pt-6 text-center text-white`}>
+          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-white/14">
+            <Power size={24} strokeWidth={2.1} />
+          </span>
+          <span className="mt-3 text-[20px] font-semibold leading-6 tracking-[-0.025em]">Power Off</span>
+          <span className="mt-1 max-w-[260px] text-[14px] leading-[19px] text-white/65">The phone goes dark and you are back at the desk in the field.</span>
+          <button
+            type="button"
+            data-power="off"
+            onClick={() => {
+              onClose();
+              sfx("shutdown");
+              shutdown();
+            }}
+            className="press mt-5 flex h-[52px] w-full items-center justify-center rounded-full bg-[#FF453A] text-[17px] font-semibold tracking-[-0.02em] text-white"
+          >
+            Power Off
+          </button>
+          <button type="button" onClick={onClose} className="press mt-1 flex h-[48px] w-full items-center justify-center rounded-full text-[17px] font-medium tracking-[-0.02em] text-white/85">
+            Cancel
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -339,7 +723,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
       <motion.div
         style={{ opacity: bar }}
         data-glass=""
-        className={`glass pointer-events-none absolute inset-x-0 top-0 z-20 flex h-[calc(env(safe-area-inset-top)+98px)] items-end justify-center pb-[12px] ${dark ? "ios-bar-dark" : "ios-bar"}`}
+        className={`glass pointer-events-none absolute inset-x-0 top-0 z-20 flex h-[calc(var(--sat)+98px)] items-end justify-center pb-[12px] ${dark ? "ios-bar-dark" : "ios-bar"}`}
       >
         <span className={`text-[17px] font-semibold tracking-[-0.02em] ${dark ? "text-white" : "text-ink"}`}>{title}</span>
       </motion.div>
@@ -348,7 +732,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
         onClick={onClose}
         aria-label={`Close ${phoneTitle(id)}`}
         data-glass=""
-        className={`glass-press absolute right-4 top-[calc(env(safe-area-inset-top)+58px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
+        className={`glass-press absolute right-4 top-[calc(var(--sat)+58px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
       >
         <X size={20} className="bold" />
       </button>
@@ -364,7 +748,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.12 } }}
             transition={{ type: "spring", bounce: 0.2, duration: 0.35 }}
-            className={`absolute left-4 top-[calc(env(safe-area-inset-top)+58px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
+            className={`absolute left-4 top-[calc(var(--sat)+58px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
           >
             <ChevronLeft size={24} strokeWidth={2.4} className="-ml-0.5" />
           </motion.button>
@@ -373,11 +757,11 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
       <div ref={ref} className="absolute inset-0 overflow-y-auto overscroll-contain pb-12">
         {/* a contact card and an About sheet carry their own big name, so no large title over them */}
         {id === "contact" || id === "about" || id === "blocks" || id === "doom" || id === "projects" || id === "games" || projects[id] ? (
-          <div className={id === "contact" || id === "about" || (projects[id]?.kind === "code") ? "h-[calc(env(safe-area-inset-top)+104px)]" : "h-[calc(env(safe-area-inset-top)+58px)]"} />
+          <div className={id === "contact" || id === "about" || (projects[id]?.kind === "code") ? "h-[calc(var(--sat)+104px)]" : "h-[calc(var(--sat)+58px)]"} />
         ) : (
         <motion.h1
           style={{ opacity: big }}
-          className={`pb-2 pl-4 pr-16 text-[34px] font-bold leading-[41px] tracking-[0.011em] ${detail ? "pt-[calc(env(safe-area-inset-top)+110px)]" : "pt-[calc(env(safe-area-inset-top)+60px)]"}`}
+          className={`pb-2 pl-4 pr-16 text-[34px] font-bold leading-[41px] tracking-[0.011em] ${detail ? "pt-[calc(var(--sat)+110px)]" : "pt-[calc(var(--sat)+60px)]"}`}
         >
           {title}
         </motion.h1>
@@ -508,11 +892,38 @@ export default function PhoneOS() {
   const openPhoneApp = useOS((s) => s.openPhoneApp);
   const heroDark = useOS((s) => s.heroDark);
   const lightBar = !(phase === "os" && !!user) || !phoneApp || phoneApp === "terminal" || phoneApp === "doom" || phoneApp === "blocks" || (!!phoneApp && heroDark);
+  const shutdown = useOS((s) => s.shutdown);
+  const [power, setPower] = useState(false);
+  // A real phone already has a status bar and an island of its own: ours would sit under them, everything twice.
+  // There (a touch screen; the desktop's phone preview is a mouse) the clock, signal and battery are left out,
+  // the island is only a pill for live activity, and every screen starts just under the real bar.
+  const [real, setReal] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const forced = process.env.NODE_ENV !== "production" ? /[?&]realphone=([01])/.exec(window.location.search)?.[1] : undefined;
+    const set = () => setReal(forced ? forced === "1" : mq.matches);
+    set();
+    mq.addEventListener("change", set);
+    return () => mq.removeEventListener("change", set);
+  }, []);
+  const playing = usePlayer().playing;
+  const activity = useOS((s) => s.activity);
+  const pill = real && (playing || !!activity);
+  // --sat is "the top of the screen" for everything here. With our own status bar it is the safe area; without
+  // it, 46px higher (the bar is not there to make room for), and 44px lower again while the pill is showing.
+  const sat = real ? `calc(env(safe-area-inset-top) - ${pill ? 2 : 46}px)` : "env(safe-area-inset-top)";
+  // the Fly shortcut: the tap wakes the music, the phone goes dark, and the desk sends the plane off
+  const fly = () => {
+    flightMusicPrime();
+    handoff.fly = true;
+    shutdown();
+  };
 
   return (
-    <div className="no-callout absolute inset-0 overflow-hidden bg-page">
-      <StatusBar light={lightBar} />
-      <Island />
+    <div className="phone-root no-callout absolute inset-0 overflow-hidden bg-page" style={{ "--sat": sat } as React.CSSProperties} data-real={real ? "1" : "0"}>
+      <style>{`@property --sat{syntax:"<length>";inherits:true;initial-value:0px}.phone-root{transition:--sat .42s cubic-bezier(.22,1,.36,1)}`}</style>
+      {!real && <StatusBar light={lightBar} />}
+      <Island real={real} />
       <AnimatePresence initial={false}>
         {phase === "os" && user ? (
           <motion.div
@@ -523,7 +934,7 @@ export default function PhoneOS() {
             exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}
             transition={{ type: "spring", bounce: 0, duration: 0.55 }}
           >
-            <Home onOpen={(id, o) => openPhoneApp(id, o)} />
+            <Home onOpen={(id, o) => openPhoneApp(id, o)} onFly={fly} />
           </motion.div>
         ) : (
           <motion.div
@@ -534,11 +945,12 @@ export default function PhoneOS() {
             exit={{ y: "-100%", transition: { type: "spring", bounce: 0, duration: 0.5 } }}
             transition={{ duration: 0.3 }}
           >
-            <Lock />
+            <Lock onPower={() => setPower(true)} />
           </motion.div>
         )}
       </AnimatePresence>
       {phase === "os" && phoneApp && <AppWindow key={phoneApp} id={phoneApp} origin={origin} onClosed={() => openPhoneApp(null)} />}
+      <AnimatePresence>{power && <PowerSheet key="power" onClose={() => setPower(false)} />}</AnimatePresence>
       <PowerOverlay />
     </div>
   );
