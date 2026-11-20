@@ -7,6 +7,7 @@ import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, WORLD_U, makeTempera, rng, type GroundPalette, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { greatSunMaterial } from "./sun/life";
+import { buildWisps, makeWispMaterial } from "./sea/water";
 import { makeCloudPaint, paintedCloudGeometry, type PCloud } from "./stars/forms";
 import { SKY_U, airState, mixSky, type SkyState } from "../sky";
 import { ORIGIN, WORLDS, pathOf, voyage } from "./voyage";
@@ -196,6 +197,15 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       calmMat: makeCloudPaint({ lit: [1.5, 1.32, 0.98], shade: [1.25, 1.05, 0.8], under: [0.95, 0.84, 0.78], rim: 0.8, amb: 1.6, key: 0.6, air: 0.6, fade: [3600, 5200], near: [200, 600] }),
       deck: paintedCloudGeometry(deck, [0, 20, 300]),
       deckMat: makeCloudPaint({ lit: [0.42, 0.52, 0.62], shade: [0.17, 0.23, 0.31], under: [0.06, 0.09, 0.13], rim: 0.4, amb: 1.0, key: 0.35, air: 0.5, fade: [3000, 4300], near: [200, 700] }),
+      // mist on the quiet sea, in long level bands, and thick along the wave's foot
+      wisps: buildWisps([
+        { x: 300, z: 1300, w: 1500, d: 400, y: 5, a: 0.4 },
+        { x: -200, z: 800, w: 1800, d: 460, y: 6, a: 0.4 },
+        { x: 500, z: 500, w: 1600, d: 420, y: 6, a: 0.4 },
+        { x: 0, z: 60, w: 3200, d: 520, y: 12, a: 0.55 },
+        { x: -1200, z: 120, w: 2400, d: 520, y: 14, a: 0.5 },
+      ]),
+      wispMat: makeWispMaterial(),
       rain: rainGeometry(),
       rainMat: makeRainMaterial(),
       sunMat: greatSunMaterial({ size: 0.46, tint: [1, 0.78, 0.34], rays: 26, gain: 0.38 }),
@@ -374,6 +384,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       ))}
       <Birds flocks={b.flocks} tint={[0.95, 0.9, 0.78]} seed={8} lit />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
+      <mesh geometry={b.wisps} material={b.wispMat} renderOrder={3} />
       <mesh geometry={b.boltGeo} material={b.boltMat} frustumCulled={false} renderOrder={-2} />
       <mesh ref={rainRef} geometry={b.rain} material={b.rainMat} frustumCulled={false} renderOrder={8} />
       <mesh ref={crashRef} geometry={b.crashGeo} material={b.crashMat} frustumCulled={false} renderOrder={30} />

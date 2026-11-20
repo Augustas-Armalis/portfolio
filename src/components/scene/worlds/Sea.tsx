@@ -141,7 +141,19 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
       { c: [ISLAND.x - ISLAND.half * 0.7, 70, ISLAND.z + 120], r: 170, n: props.mobile ? 5 : 9, size: 1.5, speed: 8 },
       { c: [ISLAND.x + ISLAND.half * 0.2, 240, ISLAND.z], r: 120, n: props.mobile ? 4 : 7, size: 1.4, speed: 7 },
     ];
+    // the magic in the air: small lights adrift over the water before the head, kindled once night has fallen
+    const spirits = pointsGeometry(
+      props.mobile ? 120 : 320,
+      (_, q) => {
+        const a = q() * Math.PI;
+        const d = 30 + Math.sqrt(q()) * 560;
+        return [GROTTO.x + Math.cos(a) * d * 0.9 - 60, 2 + q() * q() * 46, ISLAND.z + 120 + Math.sin(a) * d, 0.5 + q() * 1.3];
+      },
+      57,
+    );
     return {
+      spirits,
+      spiritMat: makePoints({ a: [0.5, 0.95, 0.8], b: [1, 0.9, 0.6], scale: 150, drift: 3.4, gain: 0, max: 9 }),
       pod: dolphinsGeometry(pod),
       podMat: makeDolphinMaterial(),
       podMirror: makeDolphinMaterial(true),
@@ -200,10 +212,12 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
       dusk.sky = null;
       dusk.keyK = -1;
       ISLAND_U.uEyeK.value.set(0, 0);
+      ISLAND_U.uOpen.value = 0;
+      ISLAND_U.uMagic.value = 0;
       SEA_LIFE_U.uPodT.value = -1;
     };
   }, []);
-  const ev = useRef({ on: false, wake: -1, pod: false, podT0: -1 });
+  const ev = useRef({ on: false, wake: -1, pod: false, podT0: -1, magic: 0, open: 0 });
   // (a moment of the flight: worlds/moments.tsx; in development __moments.fire("dolphins") brings them at once)
   const pod = useMoment("sea", { id: "dolphins", after: 18, at: [60, 9, 330], within: 270, ease: 1, hold: 44, out: 1 });
   useDeepLens("sea");
@@ -220,6 +234,8 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
       e.on = true;
       e.wake = -1;
       e.podT0 = -1;
+      e.magic = 0;
+      e.open = 0;
     }
     // the pod comes up once, after a calm while, close ahead and to the right, and goes with the plane toward the island for a while
     // (the moment says when; its seconds are counted on the sky's own clock, which is the one the water runs on)
@@ -232,14 +248,23 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
     // the head of the island, from the eye
     const d = Math.hypot(camera.position.x - ORIGIN.x - GROTTO.x, camera.position.z - ORIGIN.z - ISLAND.z);
     // evening into a deep green dusk as the island comes near; the air clears as the light goes
-    dusk.k = Math.min(1, Math.max(0, (1010 - d) / 640));
+    // (night first: it has fallen well before the plane is close; then the magic; then the mouth opens)
+    dusk.k = Math.min(1, Math.max(0, (1330 - d) / 560));
+    const sm = THREE.MathUtils.smoothstep;
+    e.magic = Math.max(e.magic, sm(760 - d, 0, 300));
+    e.open = Math.max(e.open, sm(500 - d, 0, 270));
+    ISLAND_U.uMagic.value = e.magic;
+    ISLAND_U.uOpen.value = e.open;
+    b.spiritMat.uniforms.uGain.value = 0.8 * e.magic;
     WORLD_U.uFogD.value = 0.00007 - 0.00003 * dusk.k;
     // the eyes kindle with it; they breathe a little, slowly, never in step; and once in a long while one of
     // them closes for a moment
     // (shut until the dusk has begun; then they blink awake, the second a moment after the first)
+    // (the two eyes are there to be seen the whole way, small and steady in the evening; as night falls they blink
+    // once and then burn brighter)
     if (e.wake < 0 && dusk.k > 0.3) e.wake = now;
-    const kin = 0.22 + 0.78 * THREE.MathUtils.smoothstep(dusk.k, 0.3, 0.85);
-    const waking = (tw: number) => (e.wake < 0 || tw < 0 ? 0.03 : tw < 0.22 ? 0.55 : tw < 0.75 ? 0.03 : tw < 1.0 ? 0.8 : tw < 1.35 ? 0.03 : Math.min(1, 0.3 + (tw - 1.35) * 0.5));
+    const kin = 0.34 + 0.66 * THREE.MathUtils.smoothstep(dusk.k, 0.25, 0.9);
+    const waking = (tw: number) => (e.wake < 0 || tw < 0 ? 0.75 : tw < 0.25 ? 0.1 : tw < 0.6 ? 0.9 : tw < 0.85 ? 0.15 : Math.min(1, 0.6 + (tw - 0.85) * 0.5));
     const ca = b.core.getAttribute("aCol") as THREE.InstancedBufferAttribute;
     const ga = b.glow.getAttribute("aCol") as THREE.InstancedBufferAttribute;
     for (let i = 0; i < 2; i++) {
@@ -276,6 +301,7 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
       <mesh geometry={b.wisps} material={b.wispMat} renderOrder={3} />
       <points geometry={b.motes} material={b.moteMat} />
+      <points geometry={b.spirits} material={b.spiritMat} />
       <mesh geometry={b.glow} material={b.glowMat} renderOrder={6} />
       <mesh geometry={b.core} material={b.coreMat} renderOrder={6} />
     </>

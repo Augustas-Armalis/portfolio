@@ -29,7 +29,7 @@ export function makeGlass() {
       varying vec3 vWorld; varying vec3 vLocal; varying vec2 vCamL;
       void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vLocal = (wp.xyz - modelMatrix[3].xyz); vCamL = cameraPosition.xz - modelMatrix[3].xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
-      uniform vec3 uEyes[2]; uniform vec2 uEyeK; uniform vec3 uDeep; uniform vec3 uTint; uniform vec3 uLightCol;
+      uniform vec3 uEyes[2]; uniform vec2 uEyeK; uniform vec3 uDeep; uniform vec3 uTint; uniform vec3 uLightCol; uniform float uOpen; uniform float uMagic;
       varying vec3 vWorld; varying vec3 vLocal; varying vec2 vCamL;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -135,7 +135,18 @@ export function makeGlass() {
         {
           float u = abs(q.x - ${GROTTO.x.toFixed(1)}) / ${(GROTTO.half * 1.05).toFixed(1)};
           float inn = smoothstep(${(GROTTO.z + 6).toFixed(1)}, ${(GROTTO.z - 10).toFixed(1)}, q.y) * (1.0 - smoothstep(0.8, 1.15, u));
-          col *= 1.0 - 0.88 * inn;
+          col *= 1.0 - 0.88 * inn * uOpen;
+        }
+        // the magic of the night: a soft light kindles on the glass before the island's head, slow pools of pale
+        // sea-green, and in them points that brighten and fade, each in its own time
+        if (uMagic > 0.003) {
+          float near = 1.0 - smoothstep(330.0, 900.0, length(q - vec2(${GROTTO.x.toFixed(1)}, ${(ISLAND.z + 150).toFixed(1)})));
+          float pool = smoothstep(0.42, 0.8, fbm(q * 0.011 + vec2(uTime * 0.01, -uTime * 0.008)));
+          vec2 cq = q * 0.2; vec2 ci = floor(cq); float ch = hash12(ci);
+          vec2 cf = fract(cq) - 0.5 - (vec2(hash12(ci + 3.0), hash12(ci + 7.0)) - 0.5) * 0.6;
+          float keep = 1.0 - smoothstep(0.25, 1.0, length(fwidth(cq)));
+          float pt = exp(-dot(cf, cf) * 70.0) * step(0.55, ch) * (0.5 + 0.5 * sin(uTime * (0.35 + ch) + ch * 40.0)) * keep;
+          col += vec3(0.2, 0.52, 0.44) * uMagic * near * (pool * 0.045 + pt * (0.2 + 0.5 * pool));
         }
         col = applyAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);

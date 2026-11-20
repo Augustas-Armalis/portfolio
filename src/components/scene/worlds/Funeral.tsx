@@ -6,10 +6,10 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { Halos, LightGate, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
-import { Kit, makePoints, makeTempera, noise2, paint, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { Kit, angel, makePoints, makeTempera, noise2, paint, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, PaintedClouds, type Flock, type PaintedCloud } from "./life";
 import { ORIGIN, WORLDS, voyage } from "./voyage";
-import { useDeepLens } from "./fairy/shared";
+import { Walkers, useDeepLens } from "./fairy/shared";
 import { FUNERAL_U } from "./funeral/air";
 import { ROAD_W, funeralLand } from "./funeral/land";
 import { CAVE, buildFuneralRock, makeLedgeMaterial, makeRockMaterial } from "./funeral/rock";
@@ -177,17 +177,47 @@ function makeSkyGrainMaterial() {
         vec3 d = normalize(vDir);
         float az = atan(d.x, -d.z);
         float el = asin(clamp(d.y, -1.0, 1.0));
-        // the strokes: slanting, long, laid in two passes of the chalk; and the paper's tooth
+        // the strokes: long, slanting, laid one way with a soft hand (two crossing passes drew a chequer of blue
+        // squares on the sky; and the lines of a sphere pinch together overhead, so there is none of it there)
         vec2 p = vec2(az * 60.0 + el * 44.0, el * 60.0 - az * 9.0);
-        float s1 = vnoise(vec2(p.x * 1.0, p.y * 0.06));
-        float s2 = vnoise(vec2((az * 60.0 - el * 70.0) * 0.55, (el * 60.0 + az * 20.0) * 0.045) + 9.0);
-        float tooth = vnoise(vec2(az, el) * 520.0) * 0.6 + vnoise(vec2(az, el) * 1300.0 + 3.0) * 0.4;
-        float n = s1 * 0.5 + s2 * 0.3 + tooth * 0.2;
-        float light = smoothstep(0.52, 0.8, n);
-        float dark = smoothstep(0.46, 0.2, n);
-        float up = smoothstep(-0.05, 0.12, d.y);
-        vec3 col = mix(vec3(0.0, 0.004, 0.03), uUpper * 2.3 + vec3(0.0, 0.012, 0.03), step(dark, light));
-        gl_FragColor = vec4(col, max(light * 0.34, dark * 0.3) * up);
+        float s1 = vnoise(vec2(p.x * 0.7, p.y * 0.05)) * 0.6 + vnoise(vec2(p.x * 0.23 + 4.0, p.y * 0.021 + 2.0)) * 0.4;
+        float n = s1;
+        float light = smoothstep(0.5, 0.82, n);
+        float dark = 1.0 - smoothstep(0.2, 0.5, n);
+        float up = smoothstep(-0.05, 0.12, d.y) * (1.0 - smoothstep(0.45, 0.8, d.y));
+        vec3 col = mix(vec3(0.0, 0.004, 0.03), uUpper * 2.0 + vec3(0.0, 0.01, 0.026), step(dark, light));
+        gl_FragColor = vec4(col, max(light * 0.2, dark * 0.18) * up);
+        ${END}
+      }`,
+  });
+}
+
+// A faint aurora low over the northern peaks: tall soft curtains of sea-green that breathe and wander, never bright.
+function makeAuroraMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.BackSide,
+    uniforms: { ...SKY_U },
+    vertexShader: /* glsl */ `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      varying vec3 vDir;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      void main(){
+        vec3 d = normalize(vDir);
+        float az = atan(d.x, -d.z);
+        float el = asin(clamp(d.y, -1.0, 1.0));
+        float t = uTime;
+        // where the curtain hangs, and how tall it is there
+        float mid = 0.34 + 0.07 * sin(az * 2.3 + t * 0.03) + 0.04 * sin(az * 5.1 - t * 0.02);
+        float band = exp(-pow((el - mid) / 0.16, 2.0)) * smoothstep(1.5, 0.5, abs(az));
+        // its folds: upright rays, slow
+        float fold = vnoise(vec2(az * 9.0 + t * 0.02, 1.3)) * 0.6 + vnoise(vec2(az * 26.0 - t * 0.035, el * 2.0)) * 0.4;
+        float a = band * smoothstep(0.3, 0.8, fold) * (0.7 + 0.3 * sin(t * 0.21 + az * 3.0));
+        vec3 col = mix(vec3(0.04, 0.3, 0.26), vec3(0.16, 0.34, 0.5), smoothstep(mid, mid + 0.2, el)) * a * 0.3;
+        gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,
   });
@@ -197,6 +227,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
   // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
   useDeepLens("funeral");
   const shell = useRef<THREE.Mesh>(null);
+  const aurora = useRef<THREE.Mesh>(null);
   const b = useDisposable(() => {
     const L = funeralLand();
     const r = rng(1903);
@@ -231,6 +262,30 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
     const iV = 5;
     const veil = { p: [L.pts[iV].x, L.y[iV] + CAVE.top * 0.52, L.pts[iV].z] as V3, yaw: Math.atan2(L.tan[iV][0], L.tan[iV][1]) };
     glows.push({ p: veil.p, size: 80, col: [0.4, 0.5, 0.32], k: 0.08 });
+    // candles along the road's edges all the way up, warm against the blue, now on one side, now on the other
+    for (let i = L.iOut + 8, n = 0; i < L.iMouth - 4; i += 7, n++) {
+      const side = n % 2 ? 1 : -1;
+      const x = L.pts[i].x - L.tan[i][1] * side * (ROAD_W / 2 - 0.5);
+      const z = L.pts[i].z + L.tan[i][0] * side * (ROAD_W / 2 - 0.5);
+      halos.push({ p: [x, L.y[i] + 0.7, z], size: 1.1, col: [1, 0.74, 0.34], k: 0.75 });
+      if (n % 3 === 0) glows.push({ p: [x, L.y[i] + 1.2, z], size: 8, col: [1, 0.66, 0.28], k: 0.07 });
+    }
+    // the light of the cave at the pass spilling out and down the slope below it
+    glows.push({ p: [m.x - mt[0] * 30, my + 26, m.z - mt[1] * 30], size: 230, col: [1, 0.66, 0.3], k: 0.05 });
+    glows.push({ p: [m.x - mt[0] * 120, my - 20, m.z - mt[1] * 120], size: 190, col: [1, 0.62, 0.28], k: 0.03 });
+    // a few great pale figures standing high on the cliffs, watching it pass: hardly more than a lighter blue
+    const watchers = new Kit();
+    for (const [x, z, sc, yaw] of [
+      [-150, -540, 17, 0.5],
+      [270, -555, 15, -0.6],
+      [-430, -330, 20, 1.1],
+      [440, -150, 18, -1.3],
+      [-470, 150, 16, 1.5],
+    ] as [number, number, number, number][])
+      angel(watchers, [x, L.ground(x, z) - 1.5, z], sc, yaw, [0.07, 0.13, 0.3], { glow: 0.16, wing: [0.1, 0.2, 0.4], bow: 0.5 });
+    // spirit lights: the road as the shader walks it, for the lights that go up it above the crowd
+    const spiritRoad: THREE.Vector3[] = [];
+    for (let i = L.iOut + 4; i <= L.iMouth + 6; i += 3) spiritRoad.push(new THREE.Vector3(L.pts[i].x, L.y[i], L.pts[i].z));
     // a glow over each turn of the road, where the crowd is densest to the eye
     for (const i of [L.iPass - 150, L.iPass - 320, L.iPass - 470]) {
       if (i < 0) continue;
@@ -330,6 +385,10 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       flocks,
       clouds,
       shrines: shrines.build(),
+      watchers: watchers.build(),
+      watcherMat: makeTempera({ amb: 1.3, key: 0.5, rim: [0.1, 0.4, 0.42], rimPow: 2.4, wrap: 0.6 }),
+      spiritRoad,
+      auroraMat: makeAuroraMaterial(),
       veil,
       veilGeo: new THREE.PlaneGeometry(CAVE.half * 2.12, CAVE.top * 1.04),
       veilMat: makeArrivalVeil(),
@@ -354,12 +413,14 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
     }
     b.souls.update(camera);
     shell.current?.position.copy(camera.position).sub(ORIGIN);
+    aurora.current?.position.copy(camera.position).sub(ORIGIN);
     if (process.env.NODE_ENV !== "production") (window as unknown as { __funeral?: unknown }).__funeral = b.souls.stats;
   });
   return (
     <>
-      <WorldBase id="funeral" def={def} pal={FUNERAL_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.86, 0.56]} pathGain={0.4} angels={false} marks={false} />
+      <WorldBase id="funeral" def={def} pal={FUNERAL_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.86, 0.56]} pathGain={0.16} angels={false} marks={false} />
       <mesh ref={shell} geometry={b.shellGeo} material={b.grainMat} frustumCulled={false} renderOrder={-9} />
+      <mesh geometry={b.shellGeo} material={b.auroraMat} position={[0, 0, 0]} frustumCulled={false} renderOrder={-8.5} ref={aurora} />
       <mesh geometry={b.quad} material={b.moonMat} frustumCulled={false} renderOrder={-8} />
       <mesh geometry={b.rock.land} material={b.rockMat} renderOrder={-5} />
       <mesh geometry={b.rock.ledge} material={b.ledgeMat} />
@@ -374,6 +435,9 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       <primitive object={b.souls.bierMesh} />
       <primitive object={b.souls.lampMesh} />
       <mesh geometry={b.shrines} material={b.shrineMat} />
+      <mesh geometry={b.watchers} material={b.watcherMat} />
+      {/* spirit lights going up the road above the crowd toward the cave, slowly, each bobbing a little */}
+      <Walkers road={b.spiritRoad} n={props.mobile ? 26 : 60} speed={7} size={2.6} col={[0.8, 0.9, 1]} seed={13} lift={11} />
       <PaintedClouds list={b.clouds} warm={[0.16, 0.24, 0.5]} shade={[0.03, 0.05, 0.16]} hi={[0.42, 0.56, 0.8]} order={1} />
       <points geometry={b.motes} material={b.moteMat} />
       <Birds flocks={b.flocks} tint={[0.004, 0.008, 0.03]} seed={19} />
