@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
 import { useDisposable } from "../common";
-import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { GLSL_AIR, WORLD_U, rng, type V3 } from "../kit";
 import { voyage, type WorldId } from "../voyage";
 
@@ -108,7 +108,7 @@ export function makeCrownMaterial(o: Wood) {
         vec3 col = alb * uSkyCol * (0.34 + 0.5 * up);
         col += mix(mid, mid * vec3(2.1, 1.55, 0.5) + vec3(0.06, 0.04, 0.0), 0.7) * uKeyCol * lit * 0.5;
         // light coming through the thin edge of a crown that stands against the sun
-        float back = pow(max(dot(-V, uKeyDir), 0.0), 2.0) * pow(1.0 - max(dot(n, V), 0.0), 1.4);
+        float back = pow(max(dot(-V, uKeyDir), 0.0), 2.0) * pow(clamp(1.0 - dot(n, V), 0.0, 1.0), 1.4);
         col += mid * vec3(2.4, 1.8, 0.5) * uKeyCol * back * 0.42 * sunUp;
         // the foot of every crown stands in the shade of its neighbours
         col *= mix(0.36, 1.0, smoothstep(-0.05, 0.6, vObj.y));
@@ -254,7 +254,7 @@ export function makeHeapMaterial(o: { lit?: V3; shade?: V3; rim?: number; drift?
         // the belly: cooler and deeper, but never hard
         col = mix(col, shade * vec3(0.8, 0.84, 1.0), smoothstep(0.3, -0.9, n.y) * 0.5);
         float ndv = max(dot(n, V), 0.0);
-        float edge = pow(1.0 - ndv, 1.8);
+        float edge = pow(clamp(1.0 - ndv, 0.0, 1.0), 1.8);
         vec3 dir = dv / dist;
         // cloud between the eye and the sun is lit through: gold all over, brightest in its thin edges
         float through = pow(max(dot(dir, uSunDir), 0.0), 2.5);
@@ -346,10 +346,10 @@ export function makeMasonry(o: { bay?: number; niche?: V3; foot?: V3; mould?: V3
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         float lit = clamp(dot(n, uKeyDir) * 0.6 + 0.4, 0.0, 1.0) * sunUp;
         vec3 col = alb * (uSkyCol * (0.68 + 0.32 * n.y) * uAmbK * ao + uKeyCol * lit * uKeyK * (1.0 - inside * 0.7));
-        col += uRim * pow(1.0 - abs(dot(n, V)), 3.0) * (1.0 - inside);
+        col += uRim * pow(clamp(1.0 - abs(dot(n, V)), 0.0, 1.0), 3.0) * (1.0 - inside);
         col = applyAir(col, vWorld);
         // a lamp in one niche in seven
-        float lamp = step(0.86, hash12(vec2(bayId, 3.0))) * inside * exp(-(fx * fx) / (aw * aw * 0.3)) * exp(-pow((y - 5.0) / 4.0, 2.0));
+        float lamp = step(0.86, hash12(vec2(bayId, 3.0))) * inside * exp(-(fx * fx) / (aw * aw * 0.3)) * exp(-(y - 5.0) * (y - 5.0) / 16.0);
         col += vec3(1.0, 0.7, 0.34) * lamp * 1.6 * glowK() * (1.0 - 0.6 * airAmt(vWorld));
         gl_FragColor = vec4(col, 1.0);
         ${END}
@@ -459,4 +459,216 @@ export function Walkers({ road, n, speed = 1.4, size = 1, col = [1, 0.8, 0.45], 
     return { g, mat, tex };
   }, [road, n, speed, size, seed]);
   return <points geometry={b.g} material={b.mat} renderOrder={6} />;
+}
+
+// ---------- the sun ----------
+// As he painted it: a small pale disc in a wide fan of fine rays, each ray a row of small dabs. It hangs at the
+// sky's distance in the sky's own sun direction; cloud that passes before it hides it.
+export function RayedSun({ size = 0.62, gain = 1 }: { size?: number; gain?: number }) {
+  const b = useDisposable(() => {
+    const g = new THREE.PlaneGeometry(2, 2);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { ...SKY_U, uSize: { value: size }, uGain: { value: gain } },
+      vertexShader: /* glsl */ `
+        uniform vec3 uSunDir; uniform float uSize;
+        varying vec2 vUv;
+        void main(){
+          vec3 c = cameraPosition + normalize(uSunDir) * 2700.0;
+          vec4 mv = viewMatrix * vec4(c, 1.0);
+          mv.xy += position.xy * 2700.0 * uSize;
+          vUv = position.xy;
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform float uGain;
+        varying vec2 vUv;
+        ${GLSL_NOISE}
+        ${GLSL_SKY}
+        void main(){
+          float r = length(vUv);
+          if (r > 1.0) discard;
+          float ang = atan(vUv.y, vUv.x);
+          float t = uTime;
+          float disc = 1.0 - smoothstep(0.034, 0.042, r);
+          // fine rays, long and short, each a row of short strokes of unequal length that walk slowly outward
+          float cell = ang / 6.2832 * 120.0;
+          float id = floor(cell); float lat = abs(fract(cell) - 0.5);
+          float pick = fract(sin(id * 12.9898) * 43758.5453);
+          float pick2 = fract(pick * 7.13);
+          float reach = mix(0.34, 0.98, pick);
+          float s = fract(r * mix(34.0, 66.0, pick2) - t * 0.22 + pick * 40.0);
+          float dab = smoothstep(0.16, 0.3, s) * smoothstep(0.94, 0.72, s);
+          float ray = (1.0 - smoothstep(0.07, 0.2, lat)) * smoothstep(0.09, 0.2, r) * (1.0 - smoothstep(reach * 0.5, reach, r)) * dab * (0.45 + 0.55 * pick2);
+          // broad soft beams under them, turning very slowly, never still
+          float beams = pow(0.5 + 0.5 * sin(ang * 11.0 + t * 0.015 + fbm(vec2(ang * 2.0, t * 0.03)) * 2.0), 3.0) * exp(-r * 3.4);
+          float glow = exp(-r * r * 24.0) * 0.9 + exp(-r * 5.5) * 0.12;
+          vec3 col = vec3(1.0, 0.97, 0.86) * disc * 5.0 + uGlow * (ray * 0.34 + beams * 0.12 + glow);
+          float up = smoothstep(-0.06, 0.04, uSunDir.y);
+          gl_FragColor = vec4(col * (1.0 - smoothstep(0.8, 1.0, r)) * up * uGain * (1.0 + uPulse * 0.4), 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    return { g, mat };
+  }, [size, gain]);
+  return <mesh geometry={b.g} material={b.mat} frustumCulled={false} renderOrder={1} />;
+}
+
+
+// ---------- light pouring down ----------
+// A shaft of sunlight come through a gap in the cloud: a long soft blade lying along the sun's own direction,
+// always turned to the eye, streaked along its length, drifting and breathing. `foot` is where it lands.
+export type Beam = { foot: V3; len: number; w: number; k?: number };
+export function SunShafts({ list, tint = [1, 0.9, 0.6], dir }: { list: Beam[]; tint?: V3; dir?: V3 }) {
+  const b = useDisposable(() => {
+    const g = new THREE.InstancedBufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([-1, 0, 0, 1, 0, 0, 1, 1, 0, -1, 1, 0], 3));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    const foot = new Float32Array(list.length * 4);
+    const meta = new Float32Array(list.length * 3);
+    const box = new THREE.Box3();
+    list.forEach((s, i) => {
+      foot.set([...s.foot, s.len], i * 4);
+      meta.set([s.w, s.k ?? 1, (i * 0.618) % 1], i * 3);
+      box.expandByPoint(new THREE.Vector3(...s.foot));
+    });
+    g.setAttribute("aFoot", new THREE.InstancedBufferAttribute(foot, 4));
+    g.setAttribute("aMeta", new THREE.InstancedBufferAttribute(meta, 3));
+    g.instanceCount = list.length;
+    g.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+    g.boundingSphere.radius += 1200;
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) }, uDir: { value: new THREE.Vector3(...(dir ?? [0, 0, 0])) } },
+      vertexShader: /* glsl */ `
+        attribute vec4 aFoot; attribute vec3 aMeta;
+        uniform vec3 uSunDir; uniform vec3 uDir; uniform float uTime;
+        varying vec2 vUv; varying vec3 vMeta; varying float vDist;
+        void main(){
+          vec3 axis = normalize(dot(uDir, uDir) > 0.0 ? uDir : uSunDir);
+          vec3 foot = (modelMatrix * vec4(aFoot.xyz, 1.0)).xyz + vec3(sin(uTime * 0.03 + aMeta.z * 30.0), 0.0, cos(uTime * 0.025 + aMeta.z * 17.0)) * aMeta.x * 0.3;
+          vec3 c = foot + axis * aFoot.w * position.y;
+          // the blade turns about its own axis to face the eye, and opens a little as it comes down
+          vec3 side = normalize(cross(axis, c - cameraPosition));
+          vec3 p = c + side * position.x * aMeta.x * (1.25 - 0.5 * position.y);
+          vUv = position.xy; vMeta = aMeta; vDist = length(p - cameraPosition);
+          gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uTint;
+        varying vec2 vUv; varying vec3 vMeta; varying float vDist;
+        ${GLSL_NOISE}
+        ${GLSL_SKY}
+        void main(){
+          float across = exp(-vUv.x * vUv.x * 3.2) * (1.0 - abs(vUv.x));
+          float along = smoothstep(0.0, 0.16, vUv.y) * smoothstep(1.0, 0.5, vUv.y);
+          float streak = vnoise(vec2(vUv.x * 5.0 + vMeta.z * 50.0, vUv.y * 0.7 - uTime * 0.01)) * 0.6 + vnoise(vec2(vUv.x * 17.0 + vMeta.z * 9.0, vUv.y * 1.6)) * 0.4;
+          float breath = 0.75 + 0.25 * sin(uTime * 0.2 + vMeta.z * 30.0);
+          float a = across * along * (0.3 + 0.7 * streak) * breath * vMeta.y * smoothstep(8.0, 90.0, vDist) * mix(1.0, 0.36, uNight);
+          gl_FragColor = vec4(uTint * mix(vec3(1.0), uGlow, 0.5) * a * 0.2, 1.0);
+          ${END}
+        }`,
+    });
+    return { g, mat };
+  }, [list]);
+  return <mesh geometry={b.g} material={b.mat} renderOrder={7} />;
+}
+
+// ---------- figures that walk ----------
+// A procession: small robed figures going one behind another along a line of points at walking pace, each
+// turned the way it goes, swaying a little as it steps. One draw call; they are placed in the shader.
+export function Procession({ road, n, speed = 1.3, scale = 2, robe = [0.8, 0.76, 0.66], wing = [0.6, 0.66, 0.8], seed = 4, glow = 0.1 }: { road: THREE.Vector3[]; n: number; speed?: number; scale?: number; robe?: V3; wing?: V3; seed?: number; glow?: number }) {
+  const b = useDisposable(() => {
+    const N = road.length;
+    const data = new Float32Array(N * 4);
+    let len = 0;
+    road.forEach((p, i) => {
+      if (i > 0) len += p.distanceTo(road[i - 1]);
+      data.set([p.x, p.y, p.z, len], i * 4);
+    });
+    const tex = new THREE.DataTexture(data, N, 1, THREE.RGBAFormat, THREE.FloatType);
+    tex.minFilter = tex.magFilter = THREE.NearestFilter;
+    tex.needsUpdate = true;
+    // one figure: a robe, a head, two folded wings behind (feet at the origin, facing +z)
+    const parts: THREE.BufferGeometry[] = [];
+    const add = (g: THREE.BufferGeometry, c: V3) => {
+      const q = g.index ? g.toNonIndexed() : g;
+      const col = new Float32Array(q.attributes.position.count * 3);
+      for (let i = 0; i < q.attributes.position.count; i++) col.set(c, i * 3);
+      q.setAttribute("aCol", new THREE.BufferAttribute(col, 3));
+      q.deleteAttribute("uv");
+      parts.push(q);
+    };
+    add(new THREE.LatheGeometry([[0.3, 0], [0.2, 0.5], [0.15, 1.0], [0.18, 1.38], [0.07, 1.52]].map(([x, y]) => new THREE.Vector2(x, y)), 7), robe);
+    add(new THREE.SphereGeometry(0.11, 6, 5).translate(0, 1.64, 0), [0.92, 0.78, 0.64]);
+    for (const sd of [-1, 1]) add(new THREE.ConeGeometry(0.2, 1.7, 4).scale(0.55, 1, 0.22).rotateZ(sd * 0.1).translate(sd * 0.17, 1.25, -0.16), wing);
+    const fig = mergeGeometries(parts)!;
+    parts.forEach((q) => q.dispose());
+    const g = new THREE.InstancedBufferGeometry();
+    g.setAttribute("position", fig.attributes.position);
+    g.setAttribute("normal", fig.attributes.normal);
+    g.setAttribute("aCol", fig.attributes.aCol);
+    const r = rng(seed);
+    const ph = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) {
+      const company = Math.floor(r() * Math.max(1, n / 6));
+      ph.set([(company / Math.max(1, n / 6) + (r() - 0.5) * 0.016 + 1) % 1, r()], i * 2);
+    }
+    g.setAttribute("aPh", new THREE.InstancedBufferAttribute(ph, 2));
+    g.instanceCount = n;
+    g.boundingSphere = new THREE.Box3().setFromPoints(road).getBoundingSphere(new THREE.Sphere());
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { ...SKY_U, ...WORLD_U, uRoad: { value: tex }, uN: { value: N }, uLen: { value: len }, uSpeed: { value: speed }, uScale: { value: scale }, uGlowK: { value: glow } },
+      vertexShader: /* glsl */ `
+        attribute vec2 aPh; attribute vec3 aCol;
+        uniform sampler2D uRoad; uniform float uN; uniform float uLen; uniform float uSpeed; uniform float uScale; uniform float uTime;
+        varying vec3 vWorld; varying vec3 vN; varying vec3 vCol; varying float vShow;
+        vec3 roadAt(float s){
+          float f = clamp(s, 0.0, 1.0) * (uN - 1.0); float i0 = floor(f);
+          vec3 a = texture2D(uRoad, vec2((i0 + 0.5) / uN, 0.5)).xyz;
+          vec3 b = texture2D(uRoad, vec2((min(i0 + 1.0, uN - 1.0) + 0.5) / uN, 0.5)).xyz;
+          return mix(a, b, f - i0);
+        }
+        void main(){
+          float s = fract(aPh.x + uTime * uSpeed / uLen);
+          vec3 c = roadAt(s);
+          vec3 ahead = roadAt(s + 3.0 / uLen) - c;
+          vec2 fw = normalize(ahead.xz + vec2(1e-5));
+          float sz = uScale * (0.85 + 0.3 * aPh.y);
+          // a slow sway from foot to foot
+          float step = sin(uTime * 2.4 * uSpeed / sz * 2.0 + aPh.y * 40.0);
+          vec3 p = position * sz;
+          p.x += step * 0.05 * sz * position.y;
+          vec3 right = vec3(fw.y, 0.0, -fw.x);
+          vec3 w = c + right * (p.x + (aPh.y - 0.5) * 5.0) + vec3(0.0, p.y, 0.0) + vec3(fw.x, 0.0, fw.y) * (p.z + (fract(aPh.y * 7.0) - 0.5) * 4.0);
+          vN = normalize(right * normal.x + vec3(0.0, normal.y, 0.0) + vec3(fw.x, 0.0, fw.y) * normal.z);
+          vShow = smoothstep(0.0, 0.015, s) * smoothstep(1.0, 0.985, s);
+          vec4 wp = modelMatrix * vec4(w, 1.0);
+          vWorld = wp.xyz; vCol = aCol;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform float uGlowK;
+        varying vec3 vWorld; varying vec3 vN; varying vec3 vCol; varying float vShow;
+        ${GLSL_SKY}
+        ${GLSL_AIR}
+        void main(){
+          if (vShow < 0.5) discard;
+          vec3 n = normalize(vN);
+          float lit = clamp(dot(n, uKeyDir) * 0.6 + 0.4, 0.0, 1.0) * smoothstep(-0.02, 0.08, uKeyDir.y);
+          vec3 col = vCol * (uSkyCol * (0.7 + 0.3 * n.y) + uKeyCol * lit * 0.4);
+          col = applyAir(col, vWorld) + vCol * uGlowK * glowK();
+          gl_FragColor = vec4(col, 1.0);
+          ${END}
+        }`,
+    });
+    return { g, mat, tex, fig };
+  }, [road, n, speed, scale, seed]);
+  return <mesh geometry={b.g} material={b.mat} />;
 }

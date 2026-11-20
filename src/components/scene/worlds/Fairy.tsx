@@ -1,14 +1,13 @@
 "use client";
 
 import * as THREE from "three";
-import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { buildCastle } from "./fairy/castle";
 import { MT, PEAKS, WARDS, buildMountain, buildPeaks, buildRamp, mountainCrowns, peakRadius, rampLine, roadLine } from "./fairy/mountain";
-import { Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap } from "./fairy/shared";
+import { RayedSun, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap } from "./fairy/shared";
 import { WORLDS, groundAt, pathOf } from "./voyage";
 
 // Fairy Tale (Castle Fairy Tale, 1909), after the painting and after the way the film "Angelų takais" built it
@@ -113,61 +112,6 @@ const GRASS_MASK = /* glsl */ `
   F += 1.5 * exp(-(dm - 450.0) * (dm - 450.0) / 36100.0);
   ${HAMLETS.map(([x, z, r]) => `{ vec2 d = p - vec2(${f4(x)}, ${f4(z)}); F -= 1.7 * exp(-dot(d, d) / ${f4(r * r)}); }`).join("\n  ")}
   return smoothstep(-0.75, -0.5, F) * (1.0 - smoothstep(-0.12, 0.02, F)) * (1.0 - smoothstep(330.0, 400.0, dm));`;
-
-// ---------- the sun ----------
-// As he painted it: a small pale disc in a wide fan of fine rays, each ray a row of small dabs. It hangs at the
-// sky's distance in the sky's own sun direction; cloud that passes before it hides it.
-function FairySun({ size = 0.62 }: { size?: number }) {
-  const b = useDisposable(() => {
-    const g = new THREE.PlaneGeometry(2, 2);
-    const mat = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      uniforms: { ...SKY_U, uSize: { value: size } },
-      vertexShader: /* glsl */ `
-        uniform vec3 uSunDir; uniform float uSize;
-        varying vec2 vUv;
-        void main(){
-          vec3 c = cameraPosition + normalize(uSunDir) * 2700.0;
-          vec4 mv = viewMatrix * vec4(c, 1.0);
-          mv.xy += position.xy * 2700.0 * uSize;
-          vUv = position.xy;
-          gl_Position = projectionMatrix * mv;
-        }`,
-      fragmentShader: /* glsl */ `
-        varying vec2 vUv;
-        ${GLSL_NOISE}
-        ${GLSL_SKY}
-        void main(){
-          float r = length(vUv);
-          if (r > 1.0) discard;
-          float ang = atan(vUv.y, vUv.x);
-          float t = uTime;
-          float disc = 1.0 - smoothstep(0.034, 0.042, r);
-          // fine rays, long and short, each a row of short strokes of unequal length that walk slowly outward
-          float cell = ang / 6.2832 * 120.0;
-          float id = floor(cell); float lat = abs(fract(cell) - 0.5);
-          float pick = fract(sin(id * 12.9898) * 43758.5453);
-          float pick2 = fract(pick * 7.13);
-          float reach = mix(0.34, 0.98, pick);
-          float s = fract(r * mix(34.0, 66.0, pick2) - t * 0.22 + pick * 40.0);
-          float dab = smoothstep(0.16, 0.3, s) * smoothstep(0.94, 0.72, s);
-          float ray = (1.0 - smoothstep(0.07, 0.2, lat)) * smoothstep(0.09, 0.2, r) * (1.0 - smoothstep(reach * 0.5, reach, r)) * dab * (0.45 + 0.55 * pick2);
-          // broad soft beams under them, turning very slowly, never still
-          float beams = pow(0.5 + 0.5 * sin(ang * 11.0 + t * 0.015 + fbm(vec2(ang * 2.0, t * 0.03)) * 2.0), 3.0) * exp(-r * 3.4);
-          float glow = exp(-r * r * 24.0) * 0.9 + exp(-r * 5.5) * 0.12;
-          vec3 col = vec3(1.0, 0.97, 0.86) * disc * 5.0 + uGlow * (ray * 0.34 + beams * 0.12 + glow);
-          float up = smoothstep(-0.06, 0.04, uSunDir.y);
-          gl_FragColor = vec4(col * (1.0 - smoothstep(0.8, 1.0, r)) * up * (1.0 + uPulse * 0.4), 1.0);
-          #include <tonemapping_fragment>
-          #include <colorspace_fragment>
-        }`,
-    });
-    return { g, mat };
-  }, [size]);
-  return <mesh geometry={b.g} material={b.mat} frustumCulled={false} renderOrder={1} />;
-}
 
 // ---------- pennants on the highest spires ----------
 function Pennants({ tips }: { tips: V3[] }) {
@@ -483,7 +427,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
   return (
     <>
       <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={b.base} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} mask={GRASS_MASK} groundSize={6400} />
-      <FairySun />
+      <RayedSun />
       {/* the mountain, measured from its own foot */}
       <group position={[MT.x, b.y0, MT.z]}>
         <mesh geometry={b.soil} material={b.tempera} />
