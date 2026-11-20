@@ -892,14 +892,16 @@ function Scene({
         inp.zoom = 0;
       }
     }
-    r.gaz = THREE.MathUtils.clamp(r.gaz, cfg.azMin, cfg.azMax);
+    // all the way round: the azimuth is free (only the height and the distance are held)
     r.gpol = THREE.MathUtils.clamp(r.gpol, cfg.polMin, cfg.polMax);
     r.gr = THREE.MathUtils.clamp(r.gr, cfg.rMin, cfg.rMax);
     const idleFor = (performance.now() - inp.last) / 1000;
     // the view stays where it was put; only after a long rest does it drift home
     if (!inp.dragging && idleFor > 14 && !reduced) {
       const k = 1 - Math.exp(-dt * 0.55);
-      r.gaz += (cfg.az + Math.sin(now * 0.09) * 0.07 - r.gaz) * k;
+      // (home by the shorter way round, however many turns it was given)
+      const homeAz = cfg.az + Math.PI * 2 * Math.round((r.gaz - cfg.az) / (Math.PI * 2));
+      r.gaz += (homeAz + Math.sin(now * 0.09) * 0.07 - r.gaz) * k;
       r.gpol += (cfg.pol + Math.sin(now * 0.063) * 0.012 - r.gpol) * k;
       r.gr += (cfg.r - r.gr) * k;
     }
@@ -1818,7 +1820,7 @@ export default function Room({
       }}
       onWheel={(e) => {
         if (mode === "camera") photoCtl.onWheel?.(e.ctrlKey ? e.deltaY * 2.5 : e.deltaY);
-        // in flight the wheel is the throttle: up for more
+        // in flight the wheel (and a trackpad pinch, ctrl+wheel) draws the eye in or out: up to come closer
         if (mode === "plane") input.current.zoom += e.ctrlKey ? e.deltaY * 2.5 : e.deltaY;
         if (!orbiting) return;
         // scroll up (or pinch out, which arrives as ctrl+wheel) moves in

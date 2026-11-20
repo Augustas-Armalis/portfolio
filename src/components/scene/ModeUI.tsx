@@ -1067,7 +1067,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const chip = (on: boolean) => `lg-btn pointer-events-auto flex h-7 items-center gap-1.5 whitespace-nowrap px-3 text-[12.5px] font-medium ${on ? "lg-on" : "lg-chip text-white/90"}`;
   return (
     <>
-      <TopBar title="Paper plane" hint={guide ? "Following the path · A D to nudge · drag to look around · W S or scroll for speed" : "Mouse steers · drag to look around · W S or scroll for speed"} exitLabel="Land" onExit={onLand} />
+      <TopBar title="Paper plane" hint={guide ? "Following the path · A D to nudge · drag to look · scroll to zoom · W S for speed" : "Mouse steers · drag to look · scroll to zoom · W S for speed"} exitLabel="Land" onExit={onLand} />
       <Bottom>
         <Glass className="pointer-events-auto flex items-center gap-1.5 p-1 pl-4" {...stop}>
           <label className="mr-1 flex items-center gap-2.5">

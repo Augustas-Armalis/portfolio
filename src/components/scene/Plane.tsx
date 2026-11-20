@@ -67,6 +67,8 @@ const smooth01 = (t: number) => {
   return k * k * (3 - 2 * k);
 };
 export const SPEED = { min: 3.2, max: 28 };
+// how far the chase camera stands back (1 = as designed), kept for the rest of the visit
+export const zoomMem = { v: 1, min: 0.55, max: 3.4 };
 const NO_INPUT: FlightInput = { sx: 0, sy: 0 };
 const handsIn: FlightInput = { sx: 0, sy: 0, climb: 0 };
 const OPT_NONE = {};
@@ -153,6 +155,7 @@ export function Plane({
       sx: 0,
       sy: 0,
       cruise: 0,
+      zoom: zoomMem.v,
       gateAlong: NaN,
       tmp3: new THREE.Vector3(),
       camFrom: new THREE.Vector3(),
@@ -202,13 +205,15 @@ export function Plane({
     }
     st.camYaw += wrap(st.yaw - st.camYaw) * (1 - Math.exp(-dt * 3.2));
     st.camPitch = damp(st.camPitch, st.pitch * 0.55, 2.6, dt);
-    const dist = 1.32 + st.speed * 0.022;
+    // the wheel or a pinch draws the eye in close behind the plane or out to a wide view (remembered for the visit)
+    st.zoom += (zoomMem.v - st.zoom) * (1 - Math.exp(-dt * 5));
+    const dist = (1.32 + st.speed * 0.022) * st.zoom;
     // the eye may be turned away from the plane's own line: it swings round the plane on the same boom
     const lw = smooth01(Math.hypot(st.lookYaw, st.lookPitch) / 0.5);
     const yawC = st.camYaw + st.lookYaw;
     const pitC = THREE.MathUtils.clamp(st.camPitch + st.lookPitch, -1.45, 1.45);
     const cp = Math.cos(pitC);
-    const want = st.tmp2.set(st.pos.x + Math.sin(yawC) * cp * dist, st.pos.y - Math.sin(pitC) * dist + 0.44 * (1 - 0.75 * lw) + Math.sin(st.t * 1.7) * 0.02, st.pos.z + Math.cos(yawC) * cp * dist);
+    const want = st.tmp2.set(st.pos.x + Math.sin(yawC) * cp * dist, st.pos.y - Math.sin(pitC) * dist + 0.44 * Math.sqrt(st.zoom) * (1 - 0.75 * lw) + Math.sin(st.t * 1.7) * 0.02, st.pos.z + Math.cos(yawC) * cp * dist);
     // the lens keeps clear of the ground too
     const id = voyage.cur;
     const o = originOf(id);
@@ -324,8 +329,8 @@ export function Plane({
     const lz = st.pos.z - o.z;
     const ground = (x: number, z: number) => (id === "home" ? 0 : groundAt(def, x, z));
 
-    // throttle: keys ease it, the wheel nudges it
-    voyage.throttle = clamp01(voyage.throttle + (input.thr ?? 0) * 0.42 * dt - (input.wheel ?? 0) * 0.0009);
+    // throttle: the keys ease it (the wheel and a pinch are the lens's: see chase)
+    voyage.throttle = clamp01(voyage.throttle + (input.thr ?? 0) * 0.42 * dt);
 
     // the stick, with a soft centre so small corrections are small
     const shape = (v: number) => v * (0.45 + 0.55 * v * v);
@@ -573,6 +578,7 @@ export function Plane({
     },
     fly: (dt, input, cam) => {
       st.t += dt;
+      if (input.wheel) zoomMem.v = THREE.MathUtils.clamp(zoomMem.v * Math.exp(input.wheel * 0.0011), zoomMem.min, zoomMem.max);
       const launching = st.t < 2.4 && voyage.cur === "home" && voyage.phase === "open";
       // in the first moments, and while cloud is over the lens, the plane flies itself
       const hands = st.t < 0.9 || voyage.phase === "closing";
