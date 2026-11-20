@@ -159,6 +159,25 @@ export function buildCastle(mobile: boolean, r: () => number) {
     k.box(w + t * 2.6, t * 0.8, depth + t, [x + Math.sin(yaw) * depth * 0.5, y - t * 0.4, z + Math.cos(yaw) * depth * 0.5], STONE, { top: STONE_LIT, rot: [0, yaw, 0], glow: 0.05 });
   };
 
+  // A flight of steps wound on a drum's face, from bearing a0 at height y0 to bearing a1 at y1: each step a
+  // slab let into the wall and carried on a corbel, a low parapet on its open side. It begins and ends on
+  // something real (a landing, a court, a door).
+  const perron = (w: { x: number; z: number; R: number }, a0: number, y0: number, a1: number, y1: number, width = 9) => {
+    const n = Math.max(5, Math.round(Math.abs(y1 - y0) / 1.5));
+    const rr = w.R + width / 2 - 0.6;
+    const seg = (Math.abs(a1 - a0) * (w.R + width / 2)) / n + 0.7;
+    for (let i = 0; i < n; i++) {
+      const a = a0 + ((a1 - a0) * (i + 0.5)) / n;
+      const yT = y0 + ((y1 - y0) * (i + 1)) / n;
+      const px = w.x + Math.sin(a) * rr;
+      const pz = w.z + Math.cos(a) * rr;
+      k.box(seg, 5, width, [px, yT - 2.5, pz], mixc(STONE, STONE_LIT, 0.35), { top: STONE_LIT, rot: [0, a, 0], glow: 0.06 });
+      k.box(seg, 1.5, 0.9, [w.x + Math.sin(a) * (w.R + width - 1), yT + 0.75, w.z + Math.cos(a) * (w.R + width - 1)], STONE_LIT, { rot: [0, a, 0], glow: 0.06 });
+      // its corbel: a wedge of stone going back into the wall under it
+      if (i % 2 === 0) k.add(new THREE.CylinderGeometry(width * 0.62, 0.4, 9, 4, 1), [w.x + Math.sin(a) * (w.R + 1), yT - 9.4, w.z + Math.cos(a) * (w.R + 1)], DARK, { top: STONE, rot: [0, a + Math.PI / 4, 0], glow: 0.02 });
+    }
+  };
+
   // a ward: a drum of stone standing out of the rock, buttressed, with its curtain wall and towers on the open side
   WARDS.forEach((w0, wi) => {
     // (the drum is carried down to below the lowest ground its rim stands over: no part of it hangs)
@@ -177,6 +196,19 @@ export function buildCastle(mobile: boolean, r: () => number) {
       const a = -A * 0.92 + (i / nb) * A * 1.84;
       const h = w.body * 0.92;
       k.add(new THREE.CylinderGeometry(2.4, 5.2, h, 5), [w.x + Math.sin(a) * (w.R + 2.6), w.y - h / 2 - 3, w.z + Math.cos(a) * (w.R + 2.6)], mixc(DARK, STONE, 0.3), { top: mixc(STONE, STONE_LIT, 0.4), rot: [0, a, 0], glow: 0.02 });
+    }
+    // between the buttresses, tall lancets let into the drum, lit from the vaults behind them
+    for (let i = 0; i < nb; i++) {
+      const a = -A * 0.92 + ((i + 0.5) / nb) * A * 1.84;
+      // (not where the great door and its stairs are)
+      if (wi === 0 && Math.abs(a) < 0.34) continue;
+      archway(w.x + Math.sin(a) * (w.R + 2.2), w.y - (wi === 0 ? 66 : 48), w.z + Math.cos(a) * (w.R + 2.2), a, wi === 0 ? 4.6 : 3.6, wi === 0 ? 24 : 18, 2, 0.8);
+    }
+    // a gallery of small corbels all round under the coping
+    const nc = Math.round((w.R * A * 2) / 4.4);
+    for (let i = 0; i < nc; i++) {
+      const a = -A + ((i + 0.5) / nc) * A * 2;
+      k.box(1.7, 2.6, 2.4, [w.x + Math.sin(a) * (w.R + 0.9), w.y - 3.6, w.z + Math.cos(a) * (w.R + 0.9)], STONE, { top: STONE_LIT, rot: [0, a, 0], glow: 0.05 });
     }
     // the curtain wall and its battlements
     const wh = wi === 0 ? 17 : 13;
@@ -207,7 +239,18 @@ export function buildCastle(mobile: boolean, r: () => number) {
     k.box(42, 64, 18, [w.x, w.y + 22, gz], STONE, { top: STONE_LIT, glow: 0.1 });
     // (the block stands on a pier of its own, down into the slope)
     const under = surfaceY(w.x, gz + 10) - 12;
-    k.box(46, w.y - 9 - under, 22, [w.x, (w.y - 9 + under) / 2, gz], DARK, { top: STONE, glow: 0.01 });
+    k.lathe(
+      [
+        [34, 0],
+        [29, (w.y - 9 - under) * 0.2],
+        [26, w.y - 9 - under - 6],
+        [29, w.y - 9 - under - 2],
+        [29, w.y - 9 - under],
+      ],
+      [w.x, under, gz - 6],
+      DARK,
+      { top: STONE, seg: 24, glow: 0.01 },
+    );
     for (const sx of [-1, 1]) {
       tower(w.x + sx * 24.5, w.y - 14, gz + 1, 12.5, 108, { roof: 0, rh: 60, turrets: true });
       seated(w.x + sx * 24.5, w.y - 13, gz + 1, 12.5);
@@ -216,14 +259,14 @@ export function buildCastle(mobile: boolean, r: () => number) {
     archway(w.x, w.y - 4, gz + 9, 0, 15, 30, 7);
     k.lathe(
       [
-        [1.5, 0],
-        [6, 9],
-        [15, 17],
-        [15, 20],
-        [16, 20.01],
-        [16, 23],
+        [3, 0],
+        [12, 9],
+        [25, 17],
+        [25, 20],
+        [26.5, 20.01],
+        [26.5, 23],
       ],
-      [w.x, w.y - 27, gz + 9],
+      [w.x, w.y - 27, gz + 6],
       DARK,
       { top: STONE_LIT, seg: 20, glow: 0.04 },
     );
@@ -241,15 +284,52 @@ export function buildCastle(mobile: boolean, r: () => number) {
     }
     const a = Math.atan2(door.x - w.x, door.z - w.z);
     archway(w.x + Math.sin(a) * (w.R + 1.5), door.y - 0.5, w.z + Math.cos(a) * (w.R + 1.5), a, 11, 20, 5);
+    // from the road's door two flights wind up the drum's face to the landing before the great door: the left
+    // one from the road itself, the right one from a round lookout that answers it on the other side
+    const aL = a + 0.2;
+    perron(w, aL, door.y, -0.5, w.y - 4.5);
+    perron(w, -aL, door.y, 0.5, w.y - 4.5);
+    // each arrives at a door in the flank of a gate tower, and through the tower at the landing
+    for (const sx of [-1, 1]) archway(w.x + sx * (24.5 + 12.2), w.y - 4.5, gz + 3, (sx * Math.PI) / 2, 5, 10, 2.2);
+    {
+      const lx = w.x + Math.sin(-aL + 0.06) * (w.R + 9);
+      const lz = w.z + Math.cos(-aL + 0.06) * (w.R + 9);
+      const foot = surfaceY(lx, lz) - 10;
+      k.lathe(
+        [
+          [17, 0],
+          [14.5, (door.y - foot) * 0.2],
+          [13, door.y - foot - 4],
+          [15, door.y - foot - 1],
+          [15, door.y - foot],
+          [14, door.y - foot + 0.01],
+          [14, door.y - foot + 1.8],
+          [15, door.y - foot + 1.8],
+        ],
+        [lx, foot, lz],
+        DARK,
+        { top: STONE_LIT, seg: 18, glow: 0.03 },
+      );
+      L.windows.push({ p: [lx, door.y + 4, lz], size: 4, col: [1, 0.7, 0.34], k: 0.5 });
+    }
     L.glows.push({ p: [w.x + Math.sin(a) * (w.R + 10), door.y + 8, w.z + Math.cos(a) * (w.R + 10)], size: 26, col: [1, 0.72, 0.36], k: 0.4 });
+  }
+  // from the lower court two flights wind up the middle drum to a gate in its wall
+  {
+    const w = WARDS[1];
+    perron(w, -1.2, WARDS[0].y, -0.16, w.y - 1, 7);
+    perron(w, 1.2, WARDS[0].y, 0.16, w.y - 1, 7);
+    archway(w.x, w.y, w.z + w.R - 0.6, 0, 7, 11.5, 3);
   }
   // the hall on the middle ward: a long roof, a row of tall windows, a flèche
   {
     const w = WARDS[1];
+    archway(w.x, w.y, w.z + 10, 0, 6, 12, 2.4);
     k.box(66, 36, 28, [w.x, w.y + 18, w.z - 4], STONE, { top: STONE_LIT, glow: 0.1 });
     k.add(new THREE.CylinderGeometry(0.001, 1, 1, 4, 1), [w.x, w.y + 36 + 14, w.z - 4], ROOFS[0][0], { top: ROOFS[0][1], glow: 0.1, scale: [48, 28, 21], rot: [0, Math.PI / 4, 0] });
     for (let i = -4; i <= 4; i++) {
-      archway(w.x + i * 6.8, w.y + 6, w.z + 10, 0, 3.0, 23, 1.6);
+      if (i !== 0) archway(w.x + i * 6.8, w.y + 6, w.z + 10, 0, 3.0, 23, 1.6);
+      else archway(w.x, w.y + 16, w.z + 10, 0, 3.0, 13, 1.6);
       if (i % 2 === 0) L.windows.push({ p: [w.x + i * 6.8, w.y + 17, w.z + 13], size: 9, col: [1, 0.72, 0.36], k: 0.5 });
     }
     tower(w.x, w.y + 46, w.z - 4, 3.6, 16, { roof: 2, rh: 42 });

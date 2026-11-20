@@ -49,7 +49,7 @@ export function makeCrownMaterial(o: Wood) {
       void main(){
         vec3 p = position;
         // no two crowns the same ball: broad lumps pushed out and in
-        float l = sin(p.x * 3.1 + aSeed * 40.0) * sin(p.z * 2.7 + aSeed * 17.0) * 0.13 + sin(p.y * 4.3 + aSeed * 9.0) * 0.06;
+        float l = sin(p.x * 3.1 + aSeed * 40.0) * sin(p.z * 2.7 + aSeed * 17.0) * 0.09 + sin(p.y * 4.3 + aSeed * 9.0) * 0.045;
         p *= 1.0 + l;
         vec4 ip = instanceMatrix * vec4(p, 1.0);
         // the wind goes over the wood in slow waves
@@ -71,12 +71,23 @@ export function makeCrownMaterial(o: Wood) {
         vec3 V = normalize(cameraPosition - vWorld);
         float d = length(cameraPosition - vWorld);
         float near = 1.0 - smoothstep(160.0, 800.0, d);
+        // A crown is a heap of leaf clumps, not a ball. Close to, each clump turns the light its own way, and the
+        // outline is broken where clumps stand proud of it, so no straight edge of the form beneath is ever seen.
+        float close = 1.0 - smoothstep(110.0, 340.0, d);
+        if (close > 0.0) {
+          vec3 q3 = vObj * 3.4 + vSeed * 17.0;
+          float cl = vnoise(q3.xy + q3.z * 1.7) * 0.55 + vnoise(q3.yz * 2.3 - q3.x * 1.3) * 0.45;
+          float ndv = abs(dot(n, V));
+          if (ndv < 0.36 * close && cl < 0.3 + (0.36 * close - ndv) * 1.4) discard;
+          float ang = cl * 15.0 + vSeed * 6.0;
+          n = normalize(n + vec3(cos(ang), 0.35, sin(ang)) * (cl - 0.5) * 0.5 * close);
+        }
         // the painter's dabs: clumps of leaf, broad close to and gone far off (so they never swim)
         vec3 q = vObj * 2.6 + vSeed * 31.0;
         float dab = vnoise(q.xz * 1.2 + q.y * 0.9) * 0.6 + vnoise(q.xy * 2.7 - q.z * 2.1) * 0.4;
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         float sun = dot(n, uKeyDir) + (dab - 0.5) * 0.8 * near;
-        float lit = smoothstep(-0.2, 0.7, sun) * sunUp;
+        float lit = smoothstep(-0.45, 0.85, sun) * sunUp;
         float up = n.y * 0.5 + 0.5;
         // each tree its own green: most of them the wood's two greens, some gone to gold, some dark and blue
         float k = fract(vSeed * 7.31);
@@ -93,15 +104,16 @@ export function makeCrownMaterial(o: Wood) {
         float back = pow(max(dot(-V, uKeyDir), 0.0), 2.0) * pow(clamp(1.0 - dot(n, V), 0.0, 1.0), 1.4);
         col += mid * vec3(2.4, 1.8, 0.5) * uKeyCol * back * 0.42 * sunUp;
         // the foot of every crown stands in the shade of its neighbours
-        col *= mix(0.36, 1.0, smoothstep(-0.05, 0.6, vObj.y));
+        col *= mix(0.42, 1.0, smoothstep(-0.1, 0.75, vObj.y));
         col = applyAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,
   });
 }
-export function crownMesh(list: Crown[], mat: THREE.Material, fine = false) {
-  const g = fine ? crownGeometry(8, 4) : crownGeometry(6, 2);
+// `fine`: false for the far wood, true for what the plane passes, "near" for the trees it passes close over (round enough to bear looking at)
+export function crownMesh(list: Crown[], mat: THREE.Material, fine: boolean | "near" = false) {
+  const g = fine === "near" ? crownGeometry(10, 5) : fine ? crownGeometry(8, 4) : crownGeometry(6, 2);
   const im = new THREE.InstancedMesh(g, mat, list.length);
   const seeds = new Float32Array(list.length);
   const o = new THREE.Object3D();

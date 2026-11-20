@@ -6,7 +6,7 @@ import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common
 import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { buildCastle } from "./fairy/castle";
-import { MT, PEAKS, WARDS, buildMountain, buildPeaks, buildRamp, mountainCrowns, peakRadius, rampLine, roadLine } from "./fairy/mountain";
+import { MT, PEAKS, WARDS, buildMountain, buildPeaks, buildRamp, mountainCrowns, peakRadius, rampLine, roadLine, surfaceY } from "./fairy/mountain";
 import { GLSL_GROUND_LIFE, Kindling, archGeometry, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp } from "./fairy/shared";
 import { WORLDS, gateOf, groundAt, pathOf } from "./voyage";
 
@@ -182,12 +182,30 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const rampPts = rampLine(40);
     const skip = (p: THREE.Vector3) => {
       for (const q of rampPts) if (Math.abs(p.x - q.x) < 11 && Math.abs(p.z - q.z) < 11 && Math.abs(p.y - q.y) < 12) return true;
-      for (const w of WARDS) if (Math.hypot(p.x - w.x, p.z - w.z) < w.R + 10 && p.y < w.y + 6) return true;
+      for (const w of WARDS) if (Math.hypot(p.x - w.x, p.z - w.z) < w.R + 13 && p.y < w.y + 6) return true;
       for (const pk of PEAKS) if (Math.hypot(p.x - pk.x, p.z - pk.z) < peakRadius(pk, p.y) + 4) return true;
       return false;
     };
     const wood = makeCrownMaterial({ a: [0.055, 0.125, 0.035], b: [0.13, 0.18, 0.04], shade: [0.012, 0.04, 0.046] });
-    const slopes = crownMesh(mountainCrowns(Math.round(7000 * few), r, rel, skip), wood, true);
+    const onMount = mountainCrowns(Math.round(7000 * few), r, rel, skip);
+    // planting where the castle's stone meets the hill: trees close under the drums and bastions, so no wall rises out of bare ground
+    for (const [wi, n] of [
+      [0, 70],
+      [1, 26],
+    ] as const) {
+      const w = WARDS[wi];
+      for (let i = 0; i < n; i++) {
+        const a = -2.4 + (i / (n - 1)) * 4.8 + (r() - 0.5) * 0.05;
+        const d = w.R + 11 + r() * 13;
+        const x = w.x + Math.sin(a) * d;
+        const z = w.z + Math.cos(a) * d;
+        const y = surfaceY(x, z);
+        if (y > w.y - 14 || PEAKS.some((pk) => Math.hypot(x - pk.x, z - pk.z) < peakRadius(pk, y) + 4)) continue;
+        const sz = 5 + r() * 4.5;
+        onMount.push({ p: [x, y - sz * 0.15, z], r: sz, h: 1.1 + r() * 0.6, seed: r() });
+      }
+    }
+    const slopes = crownMesh(onMount, wood, true);
 
     // ---- the woods of the plain: thick near the way and round the mountain's foot, bigger and fewer far off
     const plain: Crown[] = [];
@@ -233,6 +251,22 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       plain.push({ p: [x, g(x, z) - s * 0.1, z], r: s, h: 1 + r() * 0.5, seed: r() });
     }
 
+    // the trees the plane passes low over as the world opens: these are looked at, so each is a round crown with
+    // two or three lesser ones clustered against it
+    const nearest: Crown[] = [];
+    const low = pathOf("fairy").pts.filter((q, i) => i % 5 === 0 && q.y < 140);
+    for (let i = close.length - 1; i >= 0; i--) {
+      const c = close[i];
+      if (!low.some((q) => Math.abs(q.x - c.p[0]) < 95 && Math.abs(q.z - c.p[2]) < 95)) continue;
+      close.splice(i, 1);
+      nearest.push(c);
+      const m = props.mobile ? 1 : 2;
+      for (let j = 0; j < m; j++) {
+        const a = r() * Math.PI * 2;
+        const s2 = c.r * (0.5 + r() * 0.22);
+        nearest.push({ p: [c.p[0] + Math.cos(a) * c.r * 0.72, c.p[1] + c.r * (0.05 + r() * 0.35), c.p[2] + Math.sin(a) * c.r * 0.72], r: s2, h: 0.95 + r() * 0.3, seed: r() });
+      }
+    }
     // low bushes scattered through the meadows, so no stretch of ground is bare
     for (let i = 0; i < Math.round(1500 * few); i++) {
       const a = r() * Math.PI * 2;
@@ -472,6 +506,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       wood,
       plain: crownMesh(plain, wood, false),
       close: crownMesh(close, wood, true),
+      near: crownMesh(nearest, wood, "near"),
       cypress: cypressMesh(cyp, makeCrownMaterial({ a: [0.045, 0.12, 0.06], b: [0.07, 0.15, 0.06], shade: [0.02, 0.05, 0.055], wind: 0.5, gold: 0 })),
       set: k.build(),
       lamps,
@@ -512,6 +547,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       </group>
       <primitive object={b.plain} />
       <primitive object={b.close} />
+      <primitive object={b.near} />
       <primitive object={b.cypress} />
       <mesh geometry={b.set} material={b.stone} />
       <Halos list={b.lamps} />
