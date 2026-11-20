@@ -772,7 +772,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "funeral",
     place: "none",
     air: AIR.funeral,
-    fog: [0.00022, 0.005],
+    // (thicker air than before: the ranges stand one behind another, each paler, and the far ones are only a breath)
+    fog: [0.00036, 0.0042],
     // colossal mountains, and the fin of rock the procession's road climbs in three switchbacks to the cave: the
     // land, the road, the path of light beside it and the way in are all worked out together in funeral/land.ts
     terrain: FUNERAL.terrain,

@@ -39,18 +39,21 @@ function soulGeometry(seg: number, rings: [number, number][]) {
   g.computeVertexNormals();
   return g;
 }
+// (a cloak wide at the hem, shoulders, a narrow neck in shadow, and a deep hood that comes to a point)
 const NEAR_PROFILE: [number, number][] = [
-  [0.15, 0],
-  [0.147, 0.06],
-  [0.132, 0.3],
-  [0.116, 0.56],
-  [0.106, 0.74],
-  [0.09, 0.805],
-  [0.083, 0.845],
-  [0.09, 0.895],
-  [0.08, 0.945],
-  [0.05, 0.982],
-  [0.0, 1.0],
+  [0.19, 0],
+  [0.186, 0.05],
+  [0.16, 0.3],
+  [0.136, 0.55],
+  [0.124, 0.7],
+  [0.13, 0.765],
+  [0.086, 0.8],
+  [0.072, 0.826],
+  [0.097, 0.862],
+  [0.106, 0.9],
+  [0.09, 0.945],
+  [0.046, 0.986],
+  [0.0, 1.03],
 ];
 const MID_PROFILE: [number, number][] = [
   [0.15, 0],
@@ -129,8 +132,12 @@ function makeSoulMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: n
                float turn = (fract(seed * 7.13) - 0.5) * 0.5;
                float cs = cos(turn); float sn = sin(turn);
                vec3 f2 = fwd * cs + right * sn; vec3 r2 = right * cs - fwd * sn;
-               float bow = smoothstep(0.68, 1.0, k);
-               vec3 lp = vec3(position.x * H * girth + sway, k * H + bob - bow * 0.03, position.z * H * girth + 0.09 * k * k + bow * (0.05 + 0.025 * sin(ph * 2.0 + 1.0)));
+               // (no two alike: some hoods taller and more pointed, some heads bowed lower, some cloaks fuller at the hem)
+               float hoodK = fract(seed * 5.31); float stoop = fract(seed * 2.17);
+               float bow = smoothstep(0.68, 1.0, k) * (0.6 + 1.5 * stoop);
+               float hem = 1.0 + (fract(seed * 8.3) - 0.3) * 0.5 * (1.0 - smoothstep(0.0, 0.5, k));
+               float peak = 1.0 + (hoodK - 0.4) * 0.16 * smoothstep(0.86, 1.0, k);
+               vec3 lp = vec3(position.x * H * girth * hem + sway, k * H * peak + bob - bow * 0.03, position.z * H * girth * hem + 0.09 * k * k + bow * (0.05 + 0.025 * sin(ph * 2.0 + 1.0)));
                wp = base + r2 * lp.x + vec3(0.0, lp.y, 0.0) + f2 * lp.z;
                vN = normalize(r2 * normal.x + vec3(0.0, normal.y, 0.0) + f2 * normal.z); vR = r2;`
         }
@@ -287,7 +294,8 @@ export function buildSouls(mobile: boolean, effects: number) {
   roadTex.needsUpdate = true;
 
   // the crowd that every length of road holds
-  const dense = mobile ? 0.62 : 0.8 + 0.2 * effects;
+  // (not packed shoulder to shoulder: room between them, and lanterns among them)
+  const dense = mobile ? 0.4 : 0.5 + 0.14 * effects;
   const rows = Math.round((CHUNK / 1.5) * Math.sqrt(dense));
   const cols = Math.round(((ROAD_W - 1.6) / 1.2) * Math.sqrt(dense));
   const per = rows * cols;
@@ -300,7 +308,7 @@ export function buildSouls(mobile: boolean, effects: number) {
       const lat = ((b + 0.5) / cols) * 2 - 1;
       const seed = r();
       inst.set([s % CHUNK, lat * (HALF - 0.9) + (r() - 0.5) * 0.7, seed, 0.84 + r() * 0.3], n * 4);
-      if (r() < 0.02) lamps.push(s % CHUNK, lat * (HALF - 0.9), seed);
+      if (r() < 0.055) lamps.push(s % CHUNK, lat * (HALF - 0.9), seed);
       n++;
     }
   const aI = new THREE.InstancedBufferAttribute(inst, 4);
