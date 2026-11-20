@@ -87,6 +87,7 @@ export function useMoment(world: WorldId, spec: MomentSpec): Moment {
         m.left = m.age;
         m.began = -1;
         m.calmT = 0;
+        m.t.value = 0;
         k = 0;
       }
     }
