@@ -2,7 +2,8 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUp, Download, EyeOff, Grid3x3, LayoutGrid, LocateFixed, Lock, LockOpen, Minus, Moon, Music2, Pause, PlaneLanding, Play, Plus, Route, Settings2, SkipBack, SkipForward, Smartphone, Sun, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUp, Download, EyeOff, Grid3x3, LayoutGrid, LocateFixed, Lock, LockOpen, Minus, Moon, Music2, Pause, PlaneLanding, Play, Plus, Route, Settings2, SkipBack, SkipForward, Smartphone, Sun, X, MousePointer2 } from "lucide-react";
+import { mouseLook } from "./Plane";
 import { gyroAvailable, gyroCentre, gyroStart, gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
@@ -1317,6 +1318,94 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
     else setCanGyro(false);
   };
   useEffect(() => () => gyroStop(), []);
+  // Mouse-look, with a mouse only: the pointer is locked to the scene (it disappears and cannot leave the window)
+  // and its movement turns the eye freely, as in a game; the keys still fly the plane. On from the bar's button or
+  // M; off with Esc (the browser's own way out of a locked pointer), M, or by landing. Losing the window lets the
+  // pointer go but keeps the choice: the next press on the scene takes it again.
+  const [look, setLook] = useState(false); // chosen
+  const [held, setHeld] = useState(false); // the pointer is locked now
+  const [lookTip, setLookTip] = useState(false);
+  const lookOn = useRef(false);
+  const [fine, setFine] = useState(false);
+  useEffect(() => setFine(!mobile && window.matchMedia("(pointer: fine)").matches && "requestPointerLock" in HTMLElement.prototype), [mobile]);
+  const sceneCanvas = () => [...document.querySelectorAll("canvas")].sort((a, b) => b.width * b.height - a.width * a.height)[0] ?? null;
+  const takePointer = () => {
+    try {
+      const p = sceneCanvas()?.requestPointerLock() as unknown as Promise<void> | undefined;
+      p?.catch?.(() => {});
+    } catch {
+      /* refused: pointerlockerror says so */
+    }
+  };
+  const setLooking = (on: boolean) => {
+    lookOn.current = on;
+    setLook(on);
+    if (on) takePointer();
+    else if (document.pointerLockElement) document.exitPointerLock();
+  };
+  useEffect(() => {
+    if (!fine) return;
+    let tip = 0;
+    const change = () => {
+      const on = !!document.pointerLockElement;
+      mouseLook.on = on;
+      mouseLook.dx = mouseLook.dy = 0;
+      setHeld(on);
+      window.clearTimeout(tip);
+      if (on) {
+        setLookTip(true);
+        tip = window.setTimeout(() => setLookTip(false), 2000);
+      } else {
+        setLookTip(false);
+        // (let go with Esc, the window still in front: the choice is off. Let go because the window was left: it stands)
+        if (document.hasFocus() && document.visibilityState === "visible") {
+          lookOn.current = false;
+          setLook(false);
+        }
+      }
+    };
+    const refused = () => {
+      mouseLook.on = false;
+      lookOn.current = false;
+      setLook(false);
+      setHeld(false);
+    };
+    const move = (e: MouseEvent) => {
+      if (!document.pointerLockElement) return;
+      mouseLook.dx += e.movementX;
+      mouseLook.dy += e.movementY;
+    };
+    // (chosen but not held, after the window was left and come back to: a press on the scene takes the pointer again)
+    const press = (e: PointerEvent) => {
+      if (lookOn.current && !document.pointerLockElement && (e.target as HTMLElement | null)?.tagName === "CANVAS") takePointer();
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat || (e.target as HTMLElement | null)?.tagName === "INPUT") return;
+      if (e.key.toLowerCase() === "m") setLooking(!lookOn.current);
+    };
+    document.addEventListener("pointerlockchange", change);
+    document.addEventListener("pointerlockerror", refused);
+    document.addEventListener("mousemove", move);
+    window.addEventListener("pointerdown", press, true);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.clearTimeout(tip);
+      document.removeEventListener("pointerlockchange", change);
+      document.removeEventListener("pointerlockerror", refused);
+      document.removeEventListener("mousemove", move);
+      window.removeEventListener("pointerdown", press, true);
+      window.removeEventListener("keydown", key);
+      // (the flight's chrome is going: another mode, the OS, the desk. The pointer is given back)
+      if (document.pointerLockElement) document.exitPointerLock();
+      mouseLook.on = false;
+      mouseLook.dx = mouseLook.dy = 0;
+      lookOn.current = false;
+    };
+  }, [fine]); // eslint-disable-line react-hooks/exhaustive-deps
+  // landing gives the pointer back
+  useEffect(() => {
+    if (!flying && lookOn.current) setLooking(false);
+  }, [flying]); // eslint-disable-line react-hooks/exhaustive-deps
   const def = WORLDS[world];
   const sub = world === "home" ? "" : def.year ? `M. K. Čiurlionis, ${def.year}` : "";
   const stop = { onClick: (e: React.MouseEvent) => e.stopPropagation(), onPointerDown: (e: React.PointerEvent) => e.stopPropagation() };
@@ -1379,6 +1468,11 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
           {locked ? <Lock size={isz} strokeWidth={sw} /> : <LockOpen size={isz} strokeWidth={sw} />}
         </button>
       )}
+      {fine && !gyro && (
+        <button type="button" aria-pressed={look} aria-label="Look round with the mouse" data-tip={look ? "Mouse look on  M" : "Mouse look  M"} data-flight="mouselook" className={`${ib(look)} transition-opacity disabled:opacity-40`} disabled={!flying} onClick={() => setLooking(!look)}>
+          <MousePointer2 size={isz} strokeWidth={sw} />
+        </button>
+      )}
       <button type="button" aria-label="Hide the controls" data-tip="Hide  H" data-flight="hide" className={ib(false)} onClick={() => (setPanel(null), chrome.hide())}>
         <EyeOff size={isz} strokeWidth={sw} />
       </button>
@@ -1426,9 +1520,11 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
 
   return (
     <>
-      <OnceHint id="fly" at="top-[34%]">
-        W A S D to fly · drag to look · scroll to zoom · H hides everything
-      </OnceHint>
+      {!held && (
+        <OnceHint id="fly" at="top-[34%]">
+          W A S D to fly · drag to look · scroll to zoom · H hides everything
+        </OnceHint>
+      )}
       <div data-chrome="" data-flight-ui="" className="pointer-events-none absolute inset-x-0 bottom-5 z-30 flex justify-center px-4 [@media(hover:hover)]:hover:!opacity-100" style={rest(0.16)}>
         <div className="absolute bottom-[50px] left-1/2 -translate-x-1/2" {...stop}>
           {panels}
@@ -1437,6 +1533,14 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
       </div>
       {/* where you are: the painting this world is built from, as plain type, for a few seconds */}
       <div className="pointer-events-none absolute bottom-7 left-6 z-30">{caption}</div>
+      {/* the pointer has just been taken: how to get it back, for two seconds */}
+      <AnimatePresence>
+        {held && lookTip && (
+          <motion.div key="esc" data-flight="esc-tip" className="pointer-events-none absolute inset-x-0 bottom-[74px] z-30 flex justify-center" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35, ease: EASE }}>
+            <span className="rounded-full bg-black/35 px-2.5 py-1 text-[11.5px] font-medium text-white/90 backdrop-blur-md">Esc to release</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

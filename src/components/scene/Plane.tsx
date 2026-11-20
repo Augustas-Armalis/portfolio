@@ -63,6 +63,11 @@ function spring2<K extends string>(st: Record<K, number>, x: K, v: K, to: number
   st[v] = (st[v] - w * t) * e;
   st[x] = to + (c + t) * e;
 }
+// Mouse-look (the flight bar's toggle, ModeUI): while the pointer is locked to the scene the mouse turns the eye
+// freely, all the way round, as in a game; the plane is still flown by the keys. ModeUI adds the mouse's movement
+// here (pixels), the plane's eye takes it up each frame.
+export const mouseLook = { on: false, dx: 0, dy: 0 };
+const MOUSE_TURN = 0.0024; // radians a pixel
 // how far one screen width of drag turns the eye (about 135 degrees)
 export const LOOK_PER_WIDTH = 2.35;
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -213,6 +218,7 @@ export function Plane({
       alt: 0, // metres of air under the plane
       camLift: 0,
       camLiftV: 0,
+      mouseWas: false,
       qFrom: new THREE.Quaternion(),
       upFrom: new THREE.Vector3(0, 1, 0),
     }),
@@ -341,7 +347,22 @@ export function Plane({
       st.lookTY = input.gyro.yaw;
       st.lookTP = THREE.MathUtils.clamp(input.gyro.pitch, -1.15, 1.35);
       st.lookIdle = 0;
+    } else if (mouseLook.on) {
+      if (mouseLook.dx || mouseLook.dy) {
+        // (right is right and down is down; round and round without an end, up and down within reason)
+        st.lookTY = wrap(st.lookTY - mouseLook.dx * MOUSE_TURN);
+        st.lookTP = THREE.MathUtils.clamp(st.lookTP - mouseLook.dy * MOUSE_TURN * 0.85, -1.15, 1.35);
+        mouseLook.dx = mouseLook.dy = 0;
+        st.lookIdle = 0;
+      } else st.lookIdle += dt;
+      if (!voyage.lockView && st.lookIdle > 3.2) {
+        const k = 1 - Math.exp(-dt * 1.15);
+        st.lookTY -= st.lookTY * k;
+        st.lookTP -= st.lookTP * k;
+      }
     } else if (L) {
+      // (the mouse has just been let go: the eye comes back behind the plane, unless the view is held)
+      if (st.mouseWas && !voyage.lockView) st.lookIdle = 9;
       if (L.dx || L.dy) {
         // grab the world, as at the desk: drag right and the eye swings round to the right, drag down and it rises
         st.lookTY = THREE.MathUtils.clamp(st.lookTY - L.dx * LOOK_PER_WIDTH, -2.95, 2.95);
@@ -354,8 +375,10 @@ export function Plane({
         st.lookTP -= st.lookTP * k;
       }
     }
-    const k = 1 - Math.exp(-dt * 6.5);
-    st.lookYaw += wrap(st.lookTY - st.lookYaw) * k;
+    st.mouseWas = mouseLook.on;
+    // (a mouse is followed more closely than a drag: it is the hand itself)
+    const k = 1 - Math.exp(-dt * (mouseLook.on ? 16 : 6.5));
+    st.lookYaw = wrap(st.lookYaw + wrap(st.lookTY - st.lookYaw) * k);
     st.lookPitch += (st.lookTP - st.lookPitch) * k;
   };
 
@@ -448,7 +471,7 @@ export function Plane({
     const touching = Math.abs(inSx) > 0.03 || Math.abs(inSy) > 0.03 || (input.climb ?? 0) !== 0;
     if (touching && !stale && !opts.hands) st.idle = 0;
     else st.idle += dt;
-    const want = opts.hands || opts.launching || (voyage.guide && (st.idle > 3.2 || (input.auto && !touching))) ? 1 : 0;
+    const want = opts.hands || opts.launching || (voyage.guide && (st.idle > 3.2 || (input.auto && !touching && st.idle > 1.4))) ? 1 : 0;
     voyage.assist = damp(voyage.assist, want, want ? 0.85 : 5.5, dt);
     noteAssist();
     const a = voyage.assist;
@@ -480,7 +503,8 @@ export function Plane({
       if (along < 0 && along > -150 && Math.abs(side) < 80) {
         const err = wrap(Math.atan2(rx, rz) - st.yaw);
         if (Math.abs(err) < 1.25) {
-          const k = smooth01((150 + along) / 80) * smooth01((80 - Math.abs(side)) / 45) * 0.6 * (1 - a);
+          // (only while the controls are left alone: a hand on them is never argued with)
+          const k = touching ? 0 : smooth01((150 + along) / 80) * smooth01((80 - Math.abs(side)) / 45) * 0.6 * (1 - a);
           sx = sx * (1 - k) + THREE.MathUtils.clamp(-err * 1.5, -1, 1) * k;
           const ay = THREE.MathUtils.clamp((Math.atan2(gate.pos.y - st.pos.y, Math.hypot(rx, rz) + 6) / 0.5) * 1.5, -1, 1);
           sy = sy * (1 - k) + ay * k;
@@ -494,13 +518,15 @@ export function Plane({
       const ex = lx - def.centre[0];
       const ez = lz - def.centre[1];
       const r = Math.hypot(ex, ez);
-      // (the painted worlds are wide: the plane may wander right out to where their far hills begin)
-      edge = id === "home" ? smooth01((r - def.radius * 0.86) / (def.radius * 0.2)) : smooth01((r - def.radius * 1.04) / (def.radius * 0.24));
+      // No walls: the plane may go wherever a world has anything to see, well past what its maker called its
+      // edge. Only far out, where the land has run out into haze, does the air lean it round in a wide easy
+      // turn (never more than three parts in four of the stick, and hardly at all once it is headed back in).
+      edge = smooth01((r - def.radius * 1.2) / (def.radius * 0.5));
       if (edge > 0) {
         const outward = (-Math.sin(st.yaw) * ex - Math.cos(st.yaw) * ez) / Math.max(r, 1);
         const err = wrap(Math.atan2(ex, ez) - st.yaw);
-        const k = edge * (outward > -0.2 ? 1 : 0.25);
-        sx = sx * (1 - k) + THREE.MathUtils.clamp(-err * 1.4, -1, 1) * k;
+        const k = edge * 0.75 * (outward > -0.2 ? 1 : 0.2);
+        sx = sx * (1 - k) + THREE.MathUtils.clamp(-err * 1.1, -1, 1) * k;
       }
     }
 
@@ -512,7 +538,8 @@ export function Plane({
       const ox = lx - ob.x;
       const oz = lz - ob.z;
       const d = Math.hypot(ox, oz);
-      const reach = 12 + st.speed * 0.9;
+      // (it may pass close by a tower or between two: it is only leaned off what it is about to meet)
+      const reach = 3 + st.speed * 0.4;
       const top = g0b(ob.x, ob.z) + ob.h;
       if (d > ob.r + reach || st.pos.y > top + 8) continue;
       // a bell narrows toward its crown: the plane may pass close over its shoulder
@@ -537,8 +564,10 @@ export function Plane({
     const g0 = ground(lx, lz);
     const g1 = ground(lx + hx * st.speed * 0.9, lz + hz * st.speed * 0.9);
     const g2 = ground(lx + hx * st.speed * 2.0, lz + hz * st.speed * 2.0);
+    // It may fly low: a metre and a half over land or water, level, for as long as it likes. The air only holds
+    // it off the ground it is SINKING toward (the faster it comes down, the sooner), and off ground that rises ahead.
     const floor = Math.max(g0, g1, g2 - 2) + 1.5 * gk;
-    const band = 2.6 + st.speed * 0.16;
+    const band = 0.5 + Math.max(0, -Math.sin(st.pitch) * st.speed) * 1.0 + Math.max(0, Math.max(g1, g2 - 2) - g0) * 0.5;
     const low = clamp01(1 - (st.pos.y - floor) / band);
     const low3 = low * low * low;
     // (W and S: he asked to go up and down quicker. The nose answers nearly twice as far as it did, eased in by the
@@ -553,13 +582,14 @@ export function Plane({
       for (const t of FAR_LOOK) {
         const d = Math.max(30, st.speed * t);
         const g = ground(lx + hx * d, lz + hz * d);
-        const need = Math.atan2(g + 5 + d * 0.03 - st.pos.y, d);
+        const need = Math.atan2(g + 1.6 + d * 0.012 - st.pos.y, d);
         if (need > 0) pitchT = Math.max(pitchT, Math.min(0.82, need * 1.2) * gk);
         rise = Math.max(rise, g);
       }
     }
-    const ceil = id === "home" ? Math.max(def.ceil, Math.max(g0, g2, rise) + 70) : def.ceil * 1.3;
-    const high = clamp01((st.pos.y - (ceil - 24)) / 24);
+    // (and high: two and a half times what a world called its ceiling, eased over sixty metres, not twenty-four)
+    const ceil = id === "home" ? Math.max(def.ceil * 2.5, Math.max(g0, g2, rise) + 120) : def.ceil * 2.5;
+    const high = clamp01((st.pos.y - (ceil - 60)) / 60);
     if (high > 0) pitchT = Math.min(pitchT, pitchT * (1 - high) - high * 0.3);
 
     // bank and pitch are critically damped springs: they arrive, they never snap or ring

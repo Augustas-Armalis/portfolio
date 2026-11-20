@@ -133,6 +133,7 @@ type S = {
   live: 0 | 1; // which deck has the stream
   decks: [Deck, Deck] | null;
   blocked: boolean; // streams have failed on this page: the hosted music stands in
+  failPlace: Place | null; // where the stream was being asked for when it last failed
   retries: number; // times the field's stream was asked for again from inside a later gesture
   patient: boolean; // the visitor has asked for the field's music by hand: from now on its player waits for them, and never times out
   askedAt: number; // performance.now() when the field's stream was last asked for
@@ -158,6 +159,7 @@ const st: S = (G.__aosMusic ??= {
   live: 0,
   decks: null,
   blocked: false,
+  failPlace: null,
   retries: 0,
   patient: false,
   askedAt: 0,
@@ -346,6 +348,7 @@ function onDeckFail(d: Deck, why: string) {
   // the hosted music stands in, for the rest of this page (and nothing of the stream is left sounding under it)
   d.stop(0.4);
   st.blocked = true;
+  st.failPlace = st.place;
   st.now = null;
   externalMusic(null, false);
   apply(FADE.pick);
@@ -376,6 +379,9 @@ function desk(on: boolean, fade: number) {
   if (on) {
     if (st.place === "flight") return; // the flight has the music
     if (st.place === "desk" && st.now) return;
+    // (a stream that failed up in the flight says nothing about the field's: coming home, the field's own music
+    // is asked for afresh, so a landing always hands back to it where it can play at all)
+    if (st.blocked && st.failPlace === "flight") st.blocked = false;
     st.place = "desk";
     note("desk: on");
     apply(fade);
