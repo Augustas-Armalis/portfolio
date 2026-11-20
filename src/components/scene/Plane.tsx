@@ -9,8 +9,8 @@ import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kin
 
 // A folded paper plane that lives on the desk. Click it and it takes off down
 // the road, and from there it is yours: it glides. The pointer (or A / D, or a
-// finger) banks it and the bank turns it; the pointer's height pitches it; W / S
-// or the wheel open and close the throttle, from barely moving to quick. It has
+// finger) banks it and the bank turns it; the pointer's height (or W / S) pitches it;
+// Shift and Ctrl (or E and Q, or the slider) open and close the throttle, from barely moving to very fast. It has
 // a little weight: every change eases in, nothing snaps. The ground, the tall
 // things and the edge of each world turn it aside gently and never stop it.
 // Leave the controls alone for a few seconds and a quiet hand takes over and
@@ -66,7 +66,9 @@ const smooth01 = (t: number) => {
   const k = clamp01(t);
   return k * k * (3 - 2 * k);
 };
-export const SPEED = { min: 3.2, max: 28 };
+// `cruise` is the top of the ordinary range; the last stretch of the throttle opens on up to `max`, three times as
+// fast, eased in so the rush builds instead of arriving
+export const SPEED = { min: 3.2, cruise: 28, max: 84 };
 // how far the chase camera stands back (1 = as designed), kept for the rest of the visit
 export const zoomMem = { v: 1, min: 0.55, max: 3.4 };
 const NO_INPUT: FlightInput = { sx: 0, sy: 0 };
@@ -75,7 +77,12 @@ const OPT_NONE = {};
 const OPT_HANDS = { hands: true };
 const OPT_LAUNCH = { launching: true };
 const OPT_LAUNCH_HANDS = { launching: true, hands: true };
-export const speedOf = (throttle: number) => SPEED.min + (SPEED.max - SPEED.min) * Math.pow(clamp01(throttle), 1.35);
+export const speedOf = (throttle: number) => {
+  const t = clamp01(throttle);
+  const rush = clamp01((t - 0.7) / 0.3);
+  const e = rush * rush * (3 - 2 * rush);
+  return SPEED.min + (SPEED.cruise - SPEED.min) * Math.pow(t, 1.35) + (SPEED.max - SPEED.cruise) * e * e;
+};
 
 // A classic dart, folded from one sheet: the keel pinched underneath, wings
 // with a slight dihedral, their tips creased up. Flat-shaded so every fold
@@ -234,7 +241,7 @@ export function Plane({
       st.tmp3.set(cam.position.x - Math.sin(yawC) * cp * 9, cam.position.y + Math.sin(pitC) * 9, cam.position.z - Math.cos(yawC) * cp * 9);
       cam.lookAt(st.tmp3.lerpVectors(st.look, st.tmp3, lw));
     } else cam.lookAt(st.look);
-    const fovT = Math.max(kv ? kv.fov : 0, 50 + clamp01((st.speed - SPEED.min) / (SPEED.max - SPEED.min)) * 16);
+    const fovT = Math.max(kv ? kv.fov : 0, 50 + clamp01((st.speed - SPEED.min) / (SPEED.cruise - SPEED.min)) * 16 + clamp01((st.speed - SPEED.cruise) / (SPEED.max - SPEED.cruise)) * 10);
     st.fov += (fovT - st.fov) * (1 - Math.exp(-dt * 2.4));
     cam.fov = st.fov;
     cam.updateProjectionMatrix();
@@ -442,7 +449,7 @@ export function Plane({
     const band = 2.6 + st.speed * 0.16;
     const low = clamp01(1 - (st.pos.y - floor) / band);
     const low3 = low * low * low;
-    let pitchT = sy * 0.4 + climb * 0.3;
+    let pitchT = sy * 0.4 + climb * 0.38;
     if (low > 0) pitchT = Math.max(pitchT, pitchT * (1 - low) + low3 * 0.6);
     const ceil = id === "home" ? def.ceil : def.ceil * 1.3;
     const high = clamp01((st.pos.y - (ceil - 24)) / 24);

@@ -1271,7 +1271,8 @@ function Scene({
     }
     if (s === "fly") {
       const inp = input.current;
-      // the pointer (or a finger) is the stick; A / D bank, W / S and the wheel work the throttle, E / Q climb and sink.
+      // the pointer (or a finger) is the stick; A / D bank, W / S (and Space) climb and dive, Shift and E open the
+      // throttle, Ctrl and Q close it (the slider works it too; the wheel is the lens's zoom).
       // With Follow the path on there is no stick (the mouse only looks, by dragging): the plane flies the path
       // through every gate, and the keys nudge it aside for as long as they are held.
       // (on a phone the stick is the glass one under the left thumb, and a drag anywhere else turns the eye)
@@ -1280,8 +1281,8 @@ function Scene({
       let sx = mobile ? inp.jx : auto ? 0 : inp.sx;
       const bank = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
       if (bank) sx = bank;
-      const thr = (k.has("w") || k.has("arrowup") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0);
-      const climb = (k.has("e") || k.has(" ") ? 1 : 0) - (k.has("q") || k.has("shift") ? 1 : 0);
+      const thr = (k.has("shift") || k.has("e") ? 1 : 0) - (k.has("control") || k.has("q") ? 1 : 0);
+      const climb = (k.has("w") || k.has("arrowup") || k.has(" ") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0);
       // a drag is measured in screen widths, so the same sweep turns the eye as far on any screen
       const W = Math.max(320, window.innerWidth);
       // with the phone as the eye a drag moves what "straight ahead" is
@@ -1733,8 +1734,9 @@ export default function Room({
   // keyboard: Esc exits any mode, piano keys, book arrows, flight keys
   useEffect(() => {
     const kd = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
+      // (Ctrl on its own is the plane's brake; with another key it is the browser's)
+      if (e.metaKey || e.altKey || (e.ctrlKey && !(mode === "plane" && k === "control"))) return;
       if (k === "escape") return exit();
       if (mode === "piano" && KEYMAP[k] !== undefined && !e.repeat) {
         strike(KEYMAP[k]);
