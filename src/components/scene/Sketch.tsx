@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
-import { useMemo, useRef, type MutableRefObject } from "react";
+import { useMemo, useRef, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { getMats } from "./materials";
 import { clamp01, easeInOutCubic } from "./shared";
@@ -11,11 +11,29 @@ import { SKY_U } from "./sky";
 // sketch mode the cover swings open and the right-hand page is a canvas you
 // draw on with a soft graphite line (width follows speed, smoothed with
 // quadratic midpoints). Clear and Save are driven from the DOM.
+//
+// Once something has been drawn the book is left lying open on the desk with
+// the drawing on its page, for the rest of the visit (nothing is stored: a
+// reload closes it): it can be photographed with the camera, seen from the
+// plane, and picked up again to go on with the same drawing. Clearing the
+// page lets it close. Lying open it is a real thing on the desk: the cover
+// comes to rest on the wood (not held level in the air at the page's height),
+// the pencil lies on the desk in front of it, and the two pages are drawn
+// just proud of what they lie on, so nothing shimmers from across the field.
 
 const W = 0.212;
 const D = 0.152;
 const PAGE_W = W - 0.008;
 const PAGE_D = D - 0.006;
+// The cover swings a little past flat: its far edge comes down to the desk (half a millimetre off it).
+const COVER_REST = Math.PI + Math.asin((0.0143 - 0.0026 - 0.0005) / W);
+// Opened, the book slides this far to its right (its own +x): the cover, as wide again as the book, then lies on
+// the desk instead of over its left edge. (Room's sketch view centres on the spine and allows for the same.)
+export const SKETCH_OPEN_SHIFT = 0.045;
+const sstep = (a: number, b: number, x: number) => {
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
+};
 const CW = 1024;
 const CH = Math.round((CW * PAGE_D) / PAGE_W);
 
@@ -42,9 +60,14 @@ export type SketchApi = { clear: () => void; save: () => void };
 
 export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: MutableRefObject<SketchApi | null> }) {
   const m = getMats();
+  const body = useRef<THREE.Group>(null);
   const cover = useRef<THREE.Group>(null);
   const pencil = useRef<THREE.Group>(null);
   const k = useRef(0);
+  const lamp = useRef(0);
+  // the page has been drawn on: the book stays open when it is put down
+  const [kept, setKept] = useState(false);
+  const lying = open || kept;
   const { canvas, base, tex, mat } = useMemo(() => {
     const canvas = paperCanvas();
     const base = document.createElement("canvas");
@@ -55,13 +78,14 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
     // after dark the page keeps a little light of its own, so the pencil can still be seen
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, emissive: "#ffffff", emissiveMap: tex, emissiveIntensity: 0 });
+    // (a page lies a twentieth of a millimetre over the block of pages under it: drawn just proud of it at any distance)
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, emissive: "#ffffff", emissiveMap: tex, emissiveIntensity: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
     return { canvas, base, tex, mat };
   }, []);
   const leftMat = useMemo(() => {
     const t = new THREE.CanvasTexture(paperCanvas());
     t.colorSpace = THREE.SRGBColorSpace;
-    return new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 });
+    return new THREE.MeshStandardMaterial({ map: t, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   }, []);
   const stroke = useRef<{ x: number; y: number; t: number; w: number } | null>(null);
   const mid = useRef<{ x: number; y: number } | null>(null);
@@ -70,6 +94,7 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
     clear: () => {
       canvas.getContext("2d")!.drawImage(base, 0, 0);
       tex.needsUpdate = true;
+      setKept(false);
     },
     save: () => {
       const a = document.createElement("a");
@@ -108,21 +133,26 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
   };
 
   useFrame((_, dt) => {
-    k.current += ((open ? 1 : 0) - k.current) * (1 - Math.exp(-dt * 4));
-    mat.emissiveIntensity = 0.3 * SKY_U.uNight.value * clamp01(k.current);
+    k.current += ((lying ? 1 : 0) - k.current) * (1 - Math.exp(-dt * 4));
+    // (the page's own light is for drawing after dark; left lying on the desk it is paper under the sky again)
+    lamp.current += ((open ? 1 : 0) - lamp.current) * (1 - Math.exp(-dt * 4));
+    mat.emissiveIntensity = 0.3 * SKY_U.uNight.value * clamp01(lamp.current);
     const e = easeInOutCubic(clamp01(k.current));
-    if (cover.current) cover.current.rotation.z = e * Math.PI;
+    if (body.current) body.current.position.x = e * SKETCH_OPEN_SHIFT;
+    if (cover.current) cover.current.rotation.z = e * COVER_REST;
     if (pencil.current) {
-      // the pencil slides off to the side when the book opens
-      pencil.current.position.set(-0.005 + e * 0.14, 0.0198 - e * 0.004, 0.012 + e * 0.02);
-      pencil.current.rotation.set(0, 0.42 - e * 0.3, 0);
+      // the pencil slides off the cover as it opens, out over the front edge, and is set down on the desk there
+      const out = sstep(0, 0.7, e);
+      const down = sstep(0.7, 1, e);
+      pencil.current.position.set(-0.005 + out * 0.012, 0.0198 - down * 0.0164, 0.012 + out * 0.08);
+      pencil.current.rotation.set(0, 0.42 - out * 0.34, 0);
     }
   });
 
   const sp = -W / 2 + 0.003;
-  const shown = k.current > 0.02 || open;
+  const shown = k.current > 0.02 || lying;
   return (
-    <group>
+    <group ref={body}>
       {/* back board, page block, spine */}
       <mesh material={m.linen} position={[0, 0.0013, 0]} castShadow receiveShadow>
         <boxGeometry args={[W, 0.0026, D]} />
@@ -138,11 +168,13 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
           material={mat}
           position={[0.002, 0.01305, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
+          receiveShadow
           onPointerDown={(e) => {
             if (!open) return;
             e.stopPropagation();
             const p = toPx(e);
             if (p) {
+              setKept(true);
               stroke.current = { ...p, t: performance.now(), w: 4.5 };
               mid.current = null;
               // the point of the pencil touching down: a dot, so a tap (the dot of an i, a full stop) leaves its mark
@@ -181,7 +213,7 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
           <boxGeometry args={[0.0045, 0.0006, D + 0.0005]} />
         </mesh>
         {shown && (
-          <mesh material={leftMat} position={[W / 2, -0.0002, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <mesh material={leftMat} position={[W / 2, -0.0002, 0]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[W - 0.008, D - 0.006]} />
           </mesh>
         )}
