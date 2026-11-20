@@ -7,7 +7,7 @@ import { Aperture, CalendarDays, Check, Copy, Github, Instagram, Linkedin, Mail,
 import { useState } from "react";
 import { bookCall, CONTACT_EMAIL, CONTACTS, contactList, type Channel, owner } from "@/content";
 import { useOS } from "@/store";
-import { Btn, Button, Toolbar, useChrome } from "../ui";
+import { Btn, Button, M, Toolbar, useChrome } from "../ui";
 import { XMark, useCopied } from "./shared";
 
 const channelIcon: Record<Channel["id"], React.ReactNode> = {
@@ -48,8 +48,8 @@ export function Contact() {
         <motion.div
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+          exit={{ opacity: 0, transition: M.out }}
+          transition={M.fade}
           className={`flex items-center gap-2.5 rounded-[12px] bg-[#E9F6EE] px-3 py-2.5 text-[13px] text-[#1F7A45] ${compact ? "mx-4 mt-3" : ""}`}
         >
           <Check size={15} strokeWidth={2.4} className="shrink-0" />

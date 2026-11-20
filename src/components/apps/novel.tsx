@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { BookOpen, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { novel } from "@/content";
-import { Btn, glass, SplitFrame, Toolbar, useChrome } from "../ui";
+import { Btn, glass, M, SplitFrame, Toolbar, useChrome } from "../ui";
 import { Empty } from "./shared";
 
 type Chapter = { id: string; title: string; paragraphs: string[]; words: number; image?: string };
@@ -167,11 +167,11 @@ export function Novel() {
       <div className="relative min-w-0 flex-1 bg-white">
         <AnimatePresence mode="wait" initial={false}>
           {book && ch !== null ? (
-            <motion.div key={`ch-${ch}`} className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
+            <motion.div key={`ch-${ch}`} className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade}>
               <ScrollReader book={book} ch={ch} setCh={setCh} start={saved?.ch === ch ? saved.at : 0} onPos={save} />
             </motion.div>
           ) : (
-            <motion.div key="lib" className="absolute inset-0 flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
+            <motion.div key="lib" className="absolute inset-0 flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade}>
               <Toolbar title="Library" sub={novel.years} />
               <div className="@container min-h-0 flex-1 overflow-auto">{library}</div>
             </motion.div>
@@ -294,7 +294,7 @@ function PagedReader({ book, ch, setCh, start, onPos, onClose }: { book: Book; c
       initial={{ y: "100%" }}
       animate={{ y: 0 }}
       exit={{ y: "100%" }}
-      transition={{ type: "spring", bounce: 0, duration: 0.42 }}
+      transition={M.ui}
       className="fixed inset-0 z-[70] flex flex-col bg-white"
     >
       {/* the same row as every app's Close: 44pt under the status bar */}

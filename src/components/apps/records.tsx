@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { art, novel, tracks } from "@/content";
 import { Bars } from "../Desktop";
 import { useOS } from "@/store";
-import { Btn, glass, List, ListRow, useChrome } from "../ui";
+import { Btn, glass, List, ListRow, M, useChrome } from "../ui";
 import { trackOf, player, usePlayer } from "./player";
 import { LiveWallpaper } from "../Apps";
 
@@ -102,7 +102,7 @@ function NowPlaying({ compact }: { compact: boolean }) {
           alt={lead.title}
           draggable={false}
           animate={{ scale: p.playing || !p.id ? 1 : 0.86 }}
-          transition={{ type: "spring", bounce: 0.25, duration: 0.6 }}
+          transition={M.glass}
           data-sq=""
           // in a short window the artwork gives way first, so the transport and the volume always fit
           style={compact ? undefined : { width: "min(340px, 100%, 100cqh - 300px)" }}
@@ -308,7 +308,7 @@ export function Records() {
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", bounce: 0, duration: 0.45 }}
+            transition={M.ui}
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
