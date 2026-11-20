@@ -753,16 +753,17 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // the mean sea so the swell has room to run under the plane
     terrain: FINALE_TERRAIN,
     water: null,
-    centre: [-150, 250],
-    radius: 1900,
-    ceil: 940,
-    pace: 2.1,
+    centre: [-500, 350],
+    radius: 3300,
+    ceil: 1950,
+    pace: 3.0,
     entry: FINALE_ENTRY,
     // at the wave's far end, in the hanging lace of its crest: out through it, into calm (no arch of light)
     gate: FINALE_GATE,
     path: FINALE_PATH,
     obstacles: [],
-    canvases: [{ painting: "sea-finale", x: 286, z: 520, yaw: -0.34 }],
+    // (hung early on the way in, over the quiet sea: nothing stands before the wave once the weather turns)
+    canvases: [{ painting: "sea-finale", x: 360, z: 1720, yaw: -0.34 }],
   },
   funeral: {
     id: "funeral",
