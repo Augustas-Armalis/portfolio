@@ -81,7 +81,7 @@ function ribbonGeometry(pts: THREE.Vector3[], width: number) {
 //   1  a river of small stars, drifting toward the gate and twinkling (Sonata of the Stars)
 //   2  a path of flowers: soft petals of light strewn along it, in the colours of the meadow (Fairy Tale, Paradise)
 //   3  a causeway of light on the water: broken glints that travel like the sun's road on a sea (Rex, Tranquility)
-const PATH_STYLE: Partial<Record<WorldId, 0 | 1 | 2 | 3>> = { stars: 1, fairy: 2, paradise: 2, rex: 3, sea: 3 };
+const PATH_STYLE: Partial<Record<WorldId, 0 | 1 | 2 | 3>> = { stars: 1, fairy: 2, paradise: 2, rex: 3, sea: 3, seafinale: 3 };
 const PATH_WIDTH = [0.9, 1.7, 1.5, 1.3];
 
 export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = true, marks = true, effects = 1, from = 0 }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; angels?: boolean; marks?: boolean; effects?: number; from?: number }) {
@@ -488,6 +488,7 @@ const WORLD_OF: [RegExp, WorldId][] = [
   [/^fairy/, "fairy"],
   [/^paradise|^angel|^spring/, "paradise"],
   [/^offering/, "gate"],
+  [/^sea-finale|^finale/, "seafinale"],
   [/^sea|^tranquil/, "sea"],
   [/^funeral/, "funeral"],
   [/^kings/, "kings"],
@@ -600,6 +601,7 @@ const HANG: Record<WorldId, { ink: "dark" | "light"; glow: number }> = {
   paradise: { ink: "light", glow: 0.3 },
   gate: { ink: "light", glow: 0.44 },
   sea: { ink: "light", glow: 0.4 },
+  seafinale: { ink: "light", glow: 0.42 },
   funeral: { ink: "light", glow: 0.55 },
   kings: { ink: "light", glow: 0.5 },
 };
@@ -805,15 +807,16 @@ export function Gallery({ def }: { def: WorldDef }) {
 }
 
 // ---------- the whole base of a world ----------
-// (`gate`: how the way on is drawn: "arch" the lancet of light (default), "veil" only its sheet of light, sized by
-// `gateSize` [half-width, rise], for a world that builds its own opening, "none" nothing; see LightGate)
-export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true, gate = "arch", gateSize }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean; gate?: GateLook; gateSize?: [number, number] }) {
+// (`ground={false}`: the world draws its own land. The way on: `gate` says how it is drawn: "arch" the lancet of
+// light (default), "veil" only its sheet of light, sized by `gateSize` [half-width, rise], for a world that builds
+// its own opening, "none" nothing at all; `arch={false}` is the same as gate="none". See LightGate.)
+export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true, ground = true, arch = true, gate = "arch", gateSize }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean; ground?: boolean; arch?: boolean; gate?: GateLook; gateSize?: [number, number] }) {
   return (
     <>
-      {def.terrain && <Ground def={def} pal={pal} mobile={props.mobile} size={groundSize} />}
+      {ground && def.terrain && <Ground def={def} pal={pal} mobile={props.mobile} size={groundSize} />}
       {grass && def.terrain && <WorldGrass def={def} pal={pal} tip={tip} mobile={props.mobile} density={props.grass} wind={props.reduced ? 0.25 : 1} mask={mask} tall={tall} />}
       <LightPath id={id} def={def} tint={pathTint} gain={pathGain} effects={props.effects} angels={angels} marks={marks} />
-      {def.gate && gate !== "none" && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} look={gate} half={gateSize?.[0]} rise={gateSize?.[1]} />}
+      {arch && def.gate && gate !== "none" && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} look={gate} half={gateSize?.[0]} rise={gateSize?.[1]} />}
       <Gallery def={def} />
     </>
   );

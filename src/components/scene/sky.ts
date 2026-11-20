@@ -97,13 +97,14 @@ const KEYS: Key[] = [
   { e: -14, zenith: C(0.003, 0.006, 0.018), upper: C(0.008, 0.014, 0.038), horizon: C(0.03, 0.04, 0.08), glow: C(0.02, 0.02, 0.04), sun: C(0.5, 0.6, 0.9), sunI: 0, amb: C(0.035, 0.05, 0.1), cloudLit: C(0.06, 0.07, 0.12), cloudShade: C(0.015, 0.02, 0.04), night: 1, exposure: 1.45 },
   { e: -6, zenith: C(0.02, 0.045, 0.13), upper: C(0.06, 0.1, 0.24), horizon: C(0.34, 0.27, 0.4), glow: C(0.55, 0.26, 0.2), sun: C(0.6, 0.5, 0.7), sunI: 0, amb: C(0.1, 0.12, 0.22), cloudLit: C(0.42, 0.28, 0.36), cloudShade: C(0.08, 0.09, 0.16), night: 0.55, exposure: 1.3 },
   { e: 1, zenith: C(0.07, 0.13, 0.32), upper: C(0.24, 0.27, 0.45), horizon: C(1.0, 0.52, 0.28), glow: C(1.0, 0.45, 0.18), sun: C(1.0, 0.48, 0.22), sunI: 1.8, amb: C(0.28, 0.27, 0.4), cloudLit: C(1.2, 0.6, 0.38), cloudShade: C(0.3, 0.26, 0.4), night: 0, exposure: 1.0 },
-  { e: 10, zenith: C(0.075, 0.16, 0.38), upper: C(0.22, 0.34, 0.56), horizon: C(0.8, 0.7, 0.6), glow: C(1.0, 0.6, 0.3), sun: C(1.0, 0.7, 0.44), sunI: 2.8, amb: C(0.32, 0.4, 0.56), cloudLit: C(1.15, 0.9, 0.74), cloudShade: C(0.42, 0.46, 0.58), night: 0, exposure: 0.92 },
-  { e: 30, zenith: C(0.06, 0.17, 0.44), upper: C(0.17, 0.34, 0.66), horizon: C(0.62, 0.72, 0.82), glow: C(1.0, 0.86, 0.68), sun: C(1.0, 0.93, 0.84), sunI: 3.2, amb: C(0.38, 0.48, 0.66), cloudLit: C(1.25, 1.22, 1.18), cloudShade: C(0.55, 0.6, 0.7), night: 0, exposure: 0.85 },
-  { e: 60, zenith: C(0.05, 0.16, 0.45), upper: C(0.15, 0.33, 0.68), horizon: C(0.6, 0.72, 0.84), glow: C(1.0, 0.92, 0.8), sun: C(1.0, 0.96, 0.9), sunI: 3.3, amb: C(0.4, 0.5, 0.7), cloudLit: C(1.3, 1.28, 1.25), cloudShade: C(0.58, 0.63, 0.73), night: 0, exposure: 0.84 },
+  { e: 10, zenith: C(0.075, 0.16, 0.38), upper: C(0.22, 0.34, 0.56), horizon: C(0.8, 0.7, 0.6), glow: C(1.0, 0.6, 0.3), sun: C(1.0, 0.7, 0.44), sunI: 2.8, amb: C(0.32, 0.4, 0.56), cloudLit: C(1.3, 0.98, 0.7), cloudShade: C(0.4, 0.42, 0.6), night: 0, exposure: 0.92 },
+  { e: 30, zenith: C(0.06, 0.17, 0.44), upper: C(0.17, 0.34, 0.66), horizon: C(0.62, 0.72, 0.82), glow: C(1.0, 0.86, 0.68), sun: C(1.0, 0.93, 0.84), sunI: 3.2, amb: C(0.38, 0.48, 0.66), cloudLit: C(1.36, 1.26, 1.08), cloudShade: C(0.5, 0.55, 0.74), night: 0, exposure: 0.85 },
+  { e: 60, zenith: C(0.05, 0.16, 0.45), upper: C(0.15, 0.33, 0.68), horizon: C(0.6, 0.72, 0.84), glow: C(1.0, 0.92, 0.8), sun: C(1.0, 0.96, 0.9), sunI: 3.3, amb: C(0.4, 0.5, 0.7), cloudLit: C(1.4, 1.34, 1.22), cloudShade: C(0.54, 0.6, 0.78), night: 0, exposure: 0.84 },
 ];
 
 // fx: how much of the sky's own furniture shows: [soft cloud layers, the long bars over the horizon, the sun's disc, stars]
-export type SkyState = Omit<Key, "e"> & { elev: number; sunDir: THREE.Vector3; moonDir: THREE.Vector3; keyDir: THREE.Vector3; keyCol: THREE.Color; keyI: number; label: string; fx: [number, number, number, number] };
+// cumulus: how much of the home sky's heaped clouds stand in it (the painted worlds have none: their skies are their paintings')
+export type SkyState = Omit<Key, "e"> & { elev: number; sunDir: THREE.Vector3; moonDir: THREE.Vector3; keyDir: THREE.Vector3; keyCol: THREE.Color; keyI: number; label: string; fx: [number, number, number, number]; cumulus?: number };
 
 const tmpA = new THREE.Color();
 export function skyState(h: number): SkyState {
@@ -148,6 +149,7 @@ export function skyState(h: number): SkyState {
     exposure: n(a.exposure, b.exposure),
     label,
     fx: [1, 1, 1, 1],
+    cumulus: 1,
   };
 }
 
@@ -202,6 +204,7 @@ export function airState(a: Air): SkyState {
     exposure: a.exposure,
     label: a.label,
     fx: a.fx,
+    cumulus: 0,
   };
 }
 // One sky into another (t 0..1): used only behind closed mist, so the cloud itself changes colour smoothly.
@@ -231,6 +234,7 @@ export function mixSky(a: SkyState, b: SkyState, t: number): SkyState {
     exposure: n(a.exposure, b.exposure),
     label: t < 0.5 ? a.label : b.label,
     fx: [n(a.fx[0], b.fx[0]), n(a.fx[1], b.fx[1]), n(a.fx[2], b.fx[2]), n(a.fx[3], b.fx[3])],
+    cumulus: n(a.cumulus ?? 0, b.cumulus ?? 0),
   };
 }
 
@@ -255,6 +259,8 @@ export const SKY_U = {
   uPulse: { value: 0 },
   // clouds, bars, sun disc, stars: see SkyState.fx
   uSkyFx: { value: new THREE.Vector4(1, 1, 1, 1) },
+  // the heaped clouds of the home sky, 0..1
+  uCumulus: { value: 1 },
 };
 
 export function applySky(s: SkyState) {
@@ -271,6 +277,7 @@ export function applySky(s: SkyState) {
   SKY_U.uCloudShade.value.copy(s.cloudShade);
   SKY_U.uNight.value = s.night;
   SKY_U.uSkyFx.value.set(s.fx[0], s.fx[1], s.fx[2], s.fx[3]);
+  SKY_U.uCumulus.value = s.cumulus ?? 0;
 }
 applySky(skyState(14));
 
@@ -278,7 +285,7 @@ applySky(skyState(14));
 export const GLSL_SKY = /* glsl */ `
 uniform vec3 uSunDir; uniform vec3 uMoonDir; uniform vec3 uKeyDir; uniform vec3 uKeyCol; uniform vec3 uSkyCol;
 uniform vec3 uZenith; uniform vec3 uUpper; uniform vec3 uHorizon; uniform vec3 uGlow;
-uniform vec3 uCloudLit; uniform vec3 uCloudShade; uniform float uNight; uniform float uTime; uniform float uMist; uniform float uPulse; uniform vec4 uSkyFx;
+uniform vec3 uCloudLit; uniform vec3 uCloudShade; uniform float uNight; uniform float uTime; uniform float uMist; uniform float uPulse; uniform vec4 uSkyFx; uniform float uCumulus;
 vec3 skyBase(vec3 d){
   float h = d.y;
   float hp = max(h, 0.0);

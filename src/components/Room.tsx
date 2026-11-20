@@ -19,7 +19,10 @@ import { getQuality, getQualityChoice, reportFrame, setQualityChoice, useQuality
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { DeskModel } from "./scene/glb";
 import { Flowers, Grass } from "./scene/Grass";
-import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone } from "./scene/models";
+import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone, setBlobStrength } from "./scene/models";
+import { ContactShadows } from "./scene/home/Contact";
+import { Clouds } from "./scene/home/Clouds";
+import { Butterflies, Skein } from "./scene/home/Life";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
 import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
@@ -39,7 +42,6 @@ import {
   RIG,
   bootProgress,
   clamp01,
-  lakeK,
   easeInOutCubic,
   easeInOutQuint,
   easeOutExpo,
@@ -53,10 +55,14 @@ import {
 import { TRACK, geist, geistReady } from "./scene/font";
 import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
-import { Trees } from "./scene/Trees";
+import { Forest } from "./scene/home/Forest";
 import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
 import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
-import { Birds, Ground, Lake, MistBands, Mountains, Sky, makeSkyMaterial } from "./scene/World";
+import { Birds, Sky, makeSkyMaterial } from "./scene/World";
+import { HomeMountains } from "./scene/home/Mountains";
+import { Land } from "./scene/home/Terrain";
+import { LakeMirror, Reeds } from "./scene/home/Water";
+import { hLakeK, homeLand } from "./scene/home/land";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
 // Everything on the desk does something: the display boots the OS, the piano
@@ -70,21 +76,60 @@ type Input = { dx: number; dy: number; zoom: number; dragging: boolean; last: nu
 
 const DUR = { approach: 1.55, push: 1.05, hold: 0.12, wake: 2.3, wakeDelay: 0.35, focus: 1.15 };
 const FOG = 0.016;
-// The arrival, in seconds from the moment the loader's line becomes the horizon.
-// It is short and physical: out of the dark the camera drops in, the display comes down out of the air and
-// lands with weight (a low thud, the frame shakes, dust), then each thing on the desk slams into its place in
-// turn, the paper plane last and lightest, and only then does the screen light up.
-const ARRIVE = 2.8; // the camera reaches its home pose
-const SETTLE = 1.62; // the first of the things on the desk lands
-const SLAM_DISPLAY = 1.22; // the display lands
-const SCREEN_ON = 2.35; // the lock screen begins to glow
-// On a phone the arrival is shorter and plainer: a quicker lifting of the dark, a descent of under four seconds,
-// and everything already in its place on the desk when it comes into view.
-const ARRIVE_PHONE = 3.6;
+// The arrival, in seconds from the moment the loader's line becomes the horizon. One unbroken descent:
+// the dark lifts on a view from a kilometre up, over the sea, level with the horizon (the loader's line IS that
+// horizon), the clouds below and the mountains' heads beyond them; the eye sinks into the cloud (white for a
+// breath), comes out under it over glittering water with the coast rushing up, crosses the beach, the meadows
+// and the wood, and comes down the last of the field to the desk, slowing all the way. Then the display comes
+// down out of the air and lands with weight (a low thud, the frame shakes, dust), each thing on the desk slams
+// into its place in turn, the paper plane last and lightest, and only then does the screen light up.
+const ARRIVE = 6.4; // the camera reaches its home pose
+const SETTLE = ARRIVE - 1.18; // the first of the things on the desk lands
+const SLAM_DISPLAY = ARRIVE - 1.58; // the display lands
+const SCREEN_ON = ARRIVE - 0.45; // the lock screen begins to glow
+// On a phone the descent is shorter, and everything is already in its place on the desk when it comes into view.
+const ARRIVE_PHONE = 4.6;
 const LOADER_RATE_PHONE = 1.5;
-// Where the camera begins, in the orbit rig's own coordinates around the desk:
-// far out and high in the mist, level with the horizon.
-const START = { r: 74, pol: 1.2, az: -0.1, mist: 0.045, fov: 9 };
+// Where the camera begins, in the orbit rig's own coordinates around the desk: out over the sea to the south,
+// a kilometre up, above the lower clouds.
+const START = { r: 2300, pol: 1.02, az: 0.1, fov: 9 };
+// the cloud it comes down through: how thick the white is at a height (per metre); nothing of it up where it begins
+const cloudMist = (y: number) => 0.034 * Math.exp(-(((y - 840) / 105) ** 2));
+// How the descent is paced: the share of the way down (in the logarithm of the distance, so the desk grows at an
+// even rate) reached at each share of the time. Slow above the clouds while the dark lifts; through the cloud;
+// a long second over the sea and the coast; the meadows and the wood; and a long slowing to the desk.
+const PACE: [number, number][] = [
+  [0, 0],
+  [0.15, 0.014],
+  [0.25, 0.045],
+  [0.33, 0.085],
+  [0.42, 0.2],
+  [0.56, 0.42],
+  [0.69, 0.67],
+  [0.81, 0.87],
+  [0.92, 0.975],
+  [1, 1],
+];
+// (a monotone cubic through those points: no overshoot, and it comes to rest at the end)
+const paceM = (() => {
+  const n = PACE.length;
+  const d = PACE.slice(1).map((p, i) => (p[1] - PACE[i][1]) / (p[0] - PACE[i][0]));
+  const m = PACE.map((_, i) => (i === 0 ? d[0] * 0.5 : i === n - 1 ? 0 : d[i - 1] * d[i] <= 0 ? 0 : (2 * d[i - 1] * d[i]) / (d[i - 1] + d[i])));
+  return m;
+})();
+function pace(k: number) {
+  if (k <= 0) return 0;
+  if (k >= 1) return 1;
+  let i = 0;
+  while (i < PACE.length - 2 && k > PACE[i + 1][0]) i++;
+  const [x0, y0] = PACE[i];
+  const [x1, y1] = PACE[i + 1];
+  const h = x1 - x0;
+  const t = (k - x0) / h;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * y0 + (t3 - 2 * t2 + t) * h * paceM[i] + (-2 * t3 + 3 * t2) * y1 + (t3 - t2) * h * paceM[i + 1];
+}
 if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __start0: START });
 
 // What three's default loaders are doing (textures, HDRIs), for the loader's line.
@@ -109,6 +154,12 @@ type Settle = { at: number; lift: number; slide?: [number, number]; yaw: number;
 type Impact = (weight: number, x: number, y: number, z: number) => void;
 const SLAM_FALL = 0.26;
 
+// What takes the pointer for a thing on the desk: boxes that stand still (in the piece's own frame, at rest),
+// a little larger than the thing. The thing itself lifts a few millimetres under the pointer, and if it were
+// its own hit volume it would lift out from under a pointer resting on its edge, fall back, and lift again,
+// every frame. So the hit volume never moves and only the inner group does.
+export type Hit = { pos: [number, number, number]; size: [number, number, number]; rot?: [number, number, number] };
+
 function Piece({
   p,
   settle,
@@ -121,6 +172,8 @@ function Piece({
   hidden,
   float,
   onImpact,
+  hits,
+  hoverLift = 0.006,
   children,
 }: {
   p: { pos: [number, number, number]; rot: number };
@@ -135,19 +188,28 @@ function Piece({
   onPick?: () => void;
   hidden?: boolean;
   float?: MutableRefObject<{ on: boolean; pos: THREE.Vector3; q: THREE.Quaternion } | null>;
+  hits?: Hit[];
+  hoverLift?: number;
   children: ReactNode;
 }) {
   const g = useRef<THREE.Group>(null);
+  const vis = useRef<THREE.Group>(null);
   const lift = useRef(0);
+  const liftV = useRef(0);
   const blend = useRef(0);
   const [hover, setHover] = useState(false);
   const base = useMemo(() => new THREE.Vector3(), []);
   const q0 = useMemo(() => new THREE.Quaternion(), []);
   const eul = useMemo(() => new THREE.Euler(), []);
   const landed = useRef(false);
-  useFrame((_, dt) => {
+  // a thing that stops being pickable while the pointer is on it (it was picked, a mode opened) lets go of its hover
+  useEffect(() => {
+    if (!hoverable) setHover(false);
+  }, [hoverable]);
+  useFrame((_, rawDt) => {
     const o = g.current;
     if (!o) return;
+    const dt = Math.min(rawDt, 0.05);
     // how far from rest: 1 while it waits above the desk, 0 once it has landed
     let r = 0;
     let rr = 0;
@@ -174,12 +236,22 @@ function Piece({
       }
     }
     o.visible = !hidden && !away;
-    lift.current += ((hover && hoverable ? 0.007 : 0) - lift.current) * Math.min(1, dt * 14);
+    // the lift under the pointer: a critically damped spring on the inner group alone (no overshoot, no step,
+    // and the hit volume it is judged by stays where it is)
+    const want = hover && hoverable ? hoverLift : 0;
+    const w = 17;
+    liftV.current += (w * w * (want - lift.current) - 2 * w * liftV.current) * dt;
+    lift.current += liftV.current * dt;
+    if (Math.abs(want - lift.current) < 1e-5 && Math.abs(liftV.current) < 1e-4) {
+      lift.current = want;
+      liftV.current = 0;
+    }
+    if (vis.current) vis.current.position.y = lift.current;
     if (settle) {
-      base.set(p.pos[0] + (settle.slide?.[0] ?? 0) * r, p.pos[1] + settle.lift * r + fall + lift.current, p.pos[2] + (settle.slide?.[1] ?? 0) * r);
+      base.set(p.pos[0] + (settle.slide?.[0] ?? 0) * r, p.pos[1] + settle.lift * r + fall, p.pos[2] + (settle.slide?.[1] ?? 0) * r);
       q0.setFromEuler(eul.set((settle.tilt?.[0] ?? 0) * rr, p.rot + settle.yaw * rr, (settle.tilt?.[1] ?? 0) * rr));
     } else {
-      base.set(p.pos[0], p.pos[1] + lift.current, p.pos[2]);
+      base.set(p.pos[0], p.pos[1], p.pos[2]);
       q0.setFromEuler(eul.set(0, p.rot, 0));
     }
     // music mode: the headphones float up beside the camera
@@ -194,35 +266,116 @@ function Piece({
       o.quaternion.copy(q0);
     }
   });
+  const over = (e: ThreeEvent<PointerEvent>) => {
+    if (!hoverable || !onPick) return;
+    e.stopPropagation();
+    setHover(true);
+    document.body.style.cursor = "pointer";
+  };
   return (
-    <group
-      ref={g}
-      onPointerOver={(e: ThreeEvent<PointerEvent>) => {
-        if (!hoverable || !onPick) return;
-        e.stopPropagation();
-        setHover(true);
-        document.body.style.cursor = "pointer";
-      }}
-      onPointerOut={() => {
-        if (!onPick) return;
-        setHover(false);
-        document.body.style.cursor = "";
-      }}
-      onClick={(e: ThreeEvent<MouseEvent>) => {
-        if (!hoverable || !onPick || e.delta > 6) return;
-        e.stopPropagation();
-        setHover(false);
-        document.body.style.cursor = "";
-        onPick();
-      }}
-    >
-      {children}
+    <group ref={g}>
+      <group ref={vis} name={label ? `lift-${label}` : undefined}>{children}</group>
+      {onPick && hits && (
+        <group
+          onPointerOver={over}
+          onPointerMove={over}
+          onPointerOut={() => {
+            setHover(false);
+            document.body.style.cursor = "";
+          }}
+          onClick={(e: ThreeEvent<MouseEvent>) => {
+            if (!hoverable || e.delta > 6) return;
+            e.stopPropagation();
+            setHover(false);
+            document.body.style.cursor = "";
+            onPick();
+          }}
+        >
+          {hits.map((h, i) => (
+            <mesh key={i} visible={false} position={h.pos} rotation={h.rot}>
+              <boxGeometry args={h.size} />
+            </mesh>
+          ))}
+        </group>
+      )}
       {hoverable && label && (
         <Html position={labelAt} center style={{ pointerEvents: "none" }} zIndexRange={[20, 0]}>
           <GlassTag label={label} show={hover} />
         </Html>
       )}
     </group>
+  );
+}
+
+// The fixed hit volumes of the things on the desk (metres, in each piece's own frame).
+const HITS: Record<ObjKind, Hit[]> = {
+  keys: [{ pos: [0, 0.019, 0], size: [0.358, 0.042, 0.148] }],
+  book: [{ pos: [0, 0.015, 0], size: [0.148, 0.036, 0.218] }],
+  sketchbook: [{ pos: [0, 0.015, 0], size: [0.226, 0.036, 0.166] }],
+  // (the band is thin and mostly air: the whole silhouette takes the click)
+  headphones: [{ pos: [0, 0.1, 0.02], size: [0.2, 0.205, 0.1] }],
+  camera: [{ pos: [0.002, 0.041, 0.012], size: [0.142, 0.086, 0.07] }],
+};
+const HITS_DISPLAY: Hit[] = [
+  { pos: [0, MONITOR.y, MONITOR.z], size: [0.635, 0.374, 0.034], rot: [MONITOR.tilt, 0, 0] },
+  { pos: [0, DESK.top + 0.1, MONITOR.z - 0.035], size: [0.16, 0.2, 0.17] },
+];
+// (a phone on a stand is a small thing to hit with a finger: the whole of it and a margin take the tap)
+const HITS_PHONE: Hit[] = [{ pos: [0, DESK.top + 0.085, 0], size: [0.13, 0.19, 0.1] }];
+
+// The paper plane's hover, from outside the plane itself: a hit volume fixed at its resting place and a small
+// sprung lift of everything inside. (The plane's own hover stepped it 8 mm up in one frame, hit box and all,
+// so a pointer at its edge switched it on and off every frame.)
+function PlaneHover({ spot, hoverable, onPick, children }: { spot: { pos: [number, number, number]; rot: number }; hoverable: boolean; onPick: () => void; children: ReactNode }) {
+  const g = useRef<THREE.Group>(null);
+  const hover = useRef(false);
+  const y = useRef(0);
+  const vy = useRef(0);
+  useEffect(() => {
+    if (!hoverable) hover.current = false;
+  }, [hoverable]);
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.05);
+    const want = hover.current && hoverable ? 0.007 : 0;
+    const w = 15;
+    vy.current += (w * w * (want - y.current) - 2 * w * vy.current) * dt;
+    y.current += vy.current * dt;
+    if (Math.abs(want - y.current) < 1e-5 && Math.abs(vy.current) < 1e-4) {
+      y.current = want;
+      vy.current = 0;
+    }
+    if (g.current) g.current.position.y = y.current;
+  });
+  const over = (e: ThreeEvent<PointerEvent>) => {
+    if (!hoverable) return;
+    e.stopPropagation();
+    hover.current = true;
+    document.body.style.cursor = "pointer";
+  };
+  return (
+    <>
+      <group ref={g} name="lift-Fly">{children}</group>
+      <mesh
+        visible={false}
+        position={[spot.pos[0], DESK.top + 0.034, spot.pos[2]]}
+        rotation={[0, spot.rot, 0]}
+        onPointerOver={over}
+        onPointerMove={over}
+        onPointerOut={() => {
+          hover.current = false;
+          document.body.style.cursor = "";
+        }}
+        onClick={(e: ThreeEvent<MouseEvent>) => {
+          if (!hoverable || e.delta > 6) return;
+          e.stopPropagation();
+          hover.current = false;
+          document.body.style.cursor = "";
+          onPick();
+        }}
+      >
+        <boxGeometry args={[0.185, 0.07, 0.265]} />
+      </mesh>
+    </>
   );
 }
 
@@ -324,6 +477,9 @@ function Scene({
   const lockOn = useRef(skipIntro ? 0 : 1);
   const offRef = useRef(skipIntro);
   const envSky = useMemo(() => makeSkyMaterial(true), []);
+  // the land's maps (where the woods are, the shade under each crown, the cloud field), made once before anything reads them
+  useMemo(() => homeLand(q.trees), [q.trees]);
+  useEffect(() => setBlobStrength(q.effects > 0.2 ? 0.3 : 1), [q.effects]);
   const screen = useRef<THREE.Mesh | null>(null);
   const introAt = useRef<number | null>(null);
   const instant = reduced || skipIntro;
@@ -413,7 +569,8 @@ function Scene({
   useEffect(() => {
     cam.fov = cfg.fov;
     cam.near = 0.01;
-    cam.far = 3000;
+    // (the sea runs out to its horizon)
+    cam.far = 12000;
     cam.updateProjectionMatrix();
   }, [cam, cfg]);
 
@@ -425,7 +582,7 @@ function Scene({
   }, [scene, fog]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.(), __worlds: { defs: WORLDS, origin: ORIGIN, WORLDS, ORIGIN, gateOf, groundAt }, __q: { get: getQuality, choice: getQualityChoice, set: setQualityChoice, report: reportFrame } });
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { __three: scene, __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.(), __worlds: { defs: WORLDS, origin: ORIGIN, WORLDS, ORIGIN, gateOf, groundAt }, __q: { get: getQuality, choice: getQualityChoice, set: setQualityChoice, report: reportFrame } });
     if (process.env.NODE_ENV === "production") return;
     // window.__scene: scrub the world deterministically and save stills.
     //   step(seconds, dt)  run the simulation forward in fixed steps (the pane itself only paints ~2 fps)
@@ -473,7 +630,7 @@ function Scene({
           advance(performance.now());
           const url = gl.domElement.toDataURL("image/jpeg", 0.9);
           const blob = await (await fetch(url)).blob();
-          await fetch(`http://127.0.0.1:3998/?name=${encodeURIComponent(name)}.jpg`, { method: "POST", mode: "no-cors", body: blob });
+          await fetch(`http://127.0.0.1:${(window as unknown as { __shotPort?: number }).__shotPort ?? 3998}/?name=${encodeURIComponent(name)}.jpg`, { method: "POST", mode: "no-cors", body: blob });
           return `${name}.jpg ${blob.size}`;
         },
       },
@@ -967,13 +1124,14 @@ function Scene({
     const at = introAt.current;
     if (!instant) {
       const k = at === null ? 0 : clamp01((now - at) / ARR);
-      const u = k * k * k * (k * (k * 6 - 15) + 10);
+      const u = pace(k);
       if (u < 1) {
         const R = Math.exp(THREE.MathUtils.lerp(Math.log(START.r), Math.log(rad), u));
         const P = THREE.MathUtils.lerp(START.pol, pol, u);
         const A = THREE.MathUtils.lerp(START.az, az, u);
         v.pos.set(tx + R * Math.sin(P) * Math.sin(A), ty + R * Math.cos(P), tz + R * Math.sin(P) * Math.cos(A));
-        const el = clamp01((k - 0.07) / 0.46);
+        // level above the clouds; the eye tips down inside the cloud, and comes out of it looking at the coast
+        const el = clamp01((k - 0.14) / 0.24);
         const le = el * el * el * (el * (el * 6 - 15) + 10);
         const dx = tx - v.pos.x;
         const dy = ty - v.pos.y;
@@ -1024,7 +1182,11 @@ function Scene({
       hemi.current.groundColor.copy(s.amb).multiply(new THREE.Color(0.5, 0.5, 0.3));
       hemi.current.intensity = 0.9;
     }
-    if (fill.current) fill.current.intensity = 0.1 + s.amb.r * 0.6;
+    // as the day goes, the desk's own fill and the sky it mirrors go down with the field's light, so it stays IN the dusk
+    // (while the sunset sky is what it mirrors: after dark it mirrors our own night sky, which is dark already)
+    const dayK = s.elev < -3 ? 1 : 0.42 + 0.58 * THREE.MathUtils.smoothstep(s.elev, -3, 7);
+    if (fill.current) fill.current.intensity = (0.1 + s.amb.r * 0.6) * (0.4 + 0.6 * THREE.MathUtils.smoothstep(s.elev, -9, 6));
+    scene.environmentIntensity = (s.elev >= 12 ? 0.9 : s.elev >= -3 ? 0.75 : 0.6) * (voyage.cur === "home" ? dayK : 1);
     const hdr = s.elev >= 12 ? "day" : s.elev >= -3 ? "sunset" : "night";
     if (s.label + hdr !== lastLabel.current) {
       lastLabel.current = s.label + hdr;
@@ -1118,7 +1280,7 @@ function Scene({
     // Auto quality listens to the real frame time while the scene is simply being looked at or flown through
     if (stage.current === "idle" || stage.current === "fly") reportFrame(rawDt, stage.current !== "fly");
     const flying = stage.current === "fly";
-    const lk = lakeK(cam.position.x, cam.position.z);
+    const lk = hLakeK(cam.position.x, cam.position.z);
     const wdef = WORLDS[voyage.cur];
     ambienceScene({
       night: SKY_U.uNight.value,
@@ -1157,7 +1319,7 @@ function Scene({
     }
     // arrival mist thins out, continuously, as the camera comes down
     const at = introAt.current;
-    const mist = instant ? 0 : at === null ? START.mist : START.mist * (1 - smooth(clamp01((now - at) / (ARR * 0.8))));
+    const mist = instant || (at !== null && now - at > ARR) ? 0 : cloudMist(cam.position.y);
     SKY_U.uMist.value = Math.max(mist, voyage.mist);
     // the plain three fog (the desk and its things) keeps pace with the shader fog
     fog.far = Math.min(176, 3 / (FOG + mist));
@@ -1413,10 +1575,6 @@ function Scene({
             <Headphones />
           </DeskModel>
           {mode !== "music" && <HeadphonesBlob />}
-          {/* the band is thin and mostly air: the whole silhouette takes the click */}
-          <mesh visible={false} position={[0, 0.1, 0]}>
-            <boxGeometry args={[0.19, 0.2, 0.085]} />
-          </mesh>
         </>
       );
     return (
@@ -1433,14 +1591,17 @@ function Scene({
       <Sky />
       {/* the desk's own field: not drawn while the plane is away in another world */}
       <HomeWorld>
-        <Mountains mobile={mobile} />
-        <Trees mobile={mobile || q.trees < 0.7} fogDensity={FOG * 0.42} />
-        {q.effects > 0.2 && <MistBands mobile={mobile || q.effects < 0.7} />}
-        <Ground fogDensity={FOG * 0.55} />
-        <Lake fogDensity={FOG * 0.7} />
+        <HomeMountains mobile={mobile} />
+        <Clouds mobile={mobile} amount={q.effects < 0.5 ? 0.5 : q.effects < 1 ? 0.7 : 1} />
+        <Forest amount={q.trees} mobile={mobile} />
+        <Land mobile={mobile} />
+        <Reeds mobile={mobile} />
+        {!mobile && q.effects > 0.5 && <LakeMirror quality={q.effects} />}
         <Grass mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} density={q.grass} />
         <Flowers mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} />
         <Birds />
+        {q.effects > 0.2 && <Butterflies count={mobile ? 20 : 46} />}
+        <Skein />
       </HomeWorld>
       {/* the path of light, the gate, and whichever painted world the plane is in */}
       <Worlds mobile={mobile} effects={q.effects} trees={q.trees} far={q.far} grass={q.grass} reduced={reduced} />
@@ -1482,15 +1643,11 @@ function Scene({
         label={LABELS.display}
         labelAt={mobile ? [0, DESK.top + 0.215, 0] : [0, MONITOR.y + MONITOR.h / 2 + 0.06, MONITOR.z]}
         onPick={() => startRef.current?.()}
+        hits={mobile ? HITS_PHONE : HITS_DISPLAY}
+        hoverLift={0}
       >
         {mobile ? (
-          <>
-            <Phone screenMat={screenMat} screenRef={screen} />
-            {/* a phone on a stand is a small thing to hit with a finger: the whole of it and a margin take the tap */}
-            <mesh visible={false} position={[0, DESK.top + 0.085, 0]}>
-              <boxGeometry args={[0.13, 0.19, 0.1]} />
-            </mesh>
-          </>
+          <Phone screenMat={screenMat} screenRef={screen} />
         ) : (
           <DeskModel name="display">
             <Monitor screenMat={screenMat} screenRef={screen} />
@@ -1511,14 +1668,18 @@ function Scene({
             label={LABELS[kind]}
             labelAt={[0, TAG_Y[kind], 0]}
             onPick={() => enter(MODE_OF[kind])}
+            hits={HITS[kind]}
             float={kind === "headphones" ? floatRef : undefined}
           >
             {objEl(o)}
           </Piece>
         );
       })}
-      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={SETTLE + 0.62} instant={instant || mobile} />
+      <PlaneHover spot={planeSpot} hoverable={idle && mode === "none"} onPick={() => enter("plane")}>
+        <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => {}} hoverable={false} introAt={introAt} introDelay={SETTLE + 0.62} instant={instant || mobile} />
+      </PlaneHover>
       <DeskDust apiRef={dust} />
+      {q.effects > 0.2 && <ContactShadows />}
       {idle && mode === "none" && <PlaneLabel spot={planeSpot} introAt={introAt} instant={instant} after={ARR + 2.2} />}
       <Post level={devPost ?? (mobile ? Math.min(1, q.post) : q.post)} />
     </>
@@ -1589,7 +1750,8 @@ function SkyEnvironment({ envSky }: { envSky: THREE.Material }) {
 function SkyLife({ reduced, amount }: { reduced: boolean; amount: number }) {
   const [night, setNight] = useState(false);
   useFrame(() => {
-    const n = SKY_U.uNight.value > 0.5;
+    // (the fireflies come out with the dusk, before the night has fully fallen)
+    const n = SKY_U.uNight.value > 0.22;
     if (n !== night) setNight(n);
   });
   // keyed by their number too: a change of graphics quality remakes them whole (drei's Sparkles left with a new count draws nothing)
@@ -1915,7 +2077,7 @@ export default function Room({
         frameloop={live && !hidden ? "always" : "never"}
         dpr={[Math.min(1, q.dpr), Math.min(q.dpr, isMobile ? 1.5 : 2)]}
         shadows={{ type: THREE.PCFSoftShadowMap }}
-        camera={{ fov: RIG[isMobile ? "mobile" : "desktop"].fov, near: 0.01, far: 3000, position: [0, 1.2, 2.2] }}
+        camera={{ fov: RIG[isMobile ? "mobile" : "desktop"].fov, near: 0.01, far: 12000, position: [0, 1.2, 2.2] }}
         gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;

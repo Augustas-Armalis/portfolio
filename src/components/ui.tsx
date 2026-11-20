@@ -70,12 +70,37 @@ export function Button({
   );
 }
 
-// Shared glass springs. One family, so every morph in the OS moves the same way.
-// SPRING_GLASS: a surface changing size (capsule into menu, the Dynamic Island). LEAD/TRAIL: the two edges of a
-// selection drop; the edge in front leaves first and the one behind catches up, so the drop stretches as it slides.
-export const SPRING_GLASS = { type: "spring", bounce: 0.26, duration: 0.5 } as const;
-export const SPRING_LEAD = { type: "spring", bounce: 0.18, duration: 0.36 } as const;
-export const SPRING_TRAIL = { type: "spring", bounce: 0.3, duration: 0.58 } as const;
+// ---------- motion: one language for the whole OS ----------
+// Every move in the OS takes its timing from here; nothing sets a spring or a duration of its own.
+// Springs are Apple's two numbers (duration = response, bounce = 1 - damping). The default has no bounce:
+// overshoot belongs to things that were thrown (a drag let go) and to glass, which is a drop, never to a menu
+// or a window that a click opened.
+export const EASE_IN_OUT = [0.77, 0, 0.175, 1] as const;
+export const M = {
+  // menus, popovers, tooltips, a switch: small, seen often, over in a quarter of a second
+  pop: { type: "spring", bounce: 0, duration: 0.24 },
+  // windows, panels, sidebars, pushes: anything that travels on screen
+  ui: { type: "spring", bounce: 0, duration: 0.38 },
+  // sheets, phone apps, full-screen surfaces (the one place half a second is right)
+  sheet: { type: "spring", bounce: 0, duration: 0.5 },
+  // a glass surface changing shape (Control Center, the Dynamic Island, a selection drop)
+  glass: { type: "spring", bounce: 0.2, duration: 0.45 },
+  // let go after a drag: seeded with the release velocity, the only bounce a finger earns
+  fling: { type: "spring", bounce: 0.15, duration: 0.5 },
+  // a move between two places on screen (minimise into the Dock)
+  move: { duration: 0.36, ease: EASE_IN_OUT },
+  // every exit: shorter than its entrance, all at once
+  out: { duration: 0.14, ease: EASE_OUT },
+  // a cross-fade
+  fade: { duration: 0.2, ease: EASE_OUT },
+  // rare: the system arriving (menu bar, Dock, the lock face)
+  arrive: { duration: 0.55, ease: EASE_OUT },
+} as const;
+// the glass family by its older names. LEAD/TRAIL: the two edges of a selection drop; the edge in front leaves
+// first and the one behind catches up, so the drop stretches as it slides.
+export const SPRING_GLASS = M.glass;
+export const SPRING_LEAD = { type: "spring", bounce: 0.14, duration: 0.34 } as const;
+export const SPRING_TRAIL = { type: "spring", bounce: 0.24, duration: 0.5 } as const;
 
 // While a glass surface is in motion it drops the refraction filter (plain frost is cheap to composite, an SVG
 // displacement backdrop is not) and takes it back when it lands. Spread the result on a motion element.
@@ -188,7 +213,7 @@ export function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boo
     >
       <motion.span
         animate={{ x: on ? 16 : 0 }}
-        transition={{ type: "spring", bounce: 0.3, duration: 0.35 }}
+        transition={M.pop}
         className="absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/0.2)]"
       />
     </button>
@@ -322,8 +347,8 @@ export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[
             key="ql"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.12 } }}
-            transition={{ duration: 0.16 }}
+            exit={{ opacity: 0, transition: M.out }}
+            transition={M.fade}
             className="fixed inset-0 z-[2400] flex flex-col bg-black"
           >
             <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={onClose} icon={<X size={17} className="bold" />} className="absolute right-4 top-[calc(var(--phone-top)+4px)] z-10 !h-11 !w-11" />
@@ -439,7 +464,7 @@ function ZoomImage({ src, alt, onZoom }: { src: string; alt: string; onZoom?: (z
   );
 }
 
-const SPRING_UI = { type: "spring", bounce: 0, duration: 0.42 } as const;
+const SPRING_UI = M.ui;
 
 function LookWindow({ it, index, count, onIndex, onClose }: { it: LookItem; index: number; count: number; onIndex?: (i: number) => void; onClose: () => void }) {
   const bounds = useRef<HTMLDivElement>(null);
@@ -540,7 +565,7 @@ function LookWindow({ it, index, count, onIndex, onClose }: { it: LookItem; inde
       <motion.div
         initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.14 } }}
+        exit={{ opacity: 0, scale: 0.96, transition: M.out }}
         transition={SPRING_UI}
         onPointerDown={focus}
         style={{ x, y, width: w, height: h }}
@@ -634,7 +659,7 @@ export function SplitView({
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+              transition={M.ui}
               className="min-h-[60vh]"
             >
               {!nav && (
@@ -650,7 +675,7 @@ export function SplitView({
               initial={{ x: "-25%", opacity: 0.6 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: "-25%", opacity: 0.6 }}
-              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+              transition={M.ui}
               className="px-4 pb-8"
             >
               {header}
@@ -951,7 +976,9 @@ function attachGlass(el: HTMLElement) {
     el.style.setProperty("--lx", `${(lx * 1.1).toFixed(2)}px`);
     el.style.setProperty("--ly", `${(0.6 + ((b.top + b.height / 2) / Math.max(1, window.innerHeight)) * 0.7).toFixed(2)}px`);
   };
-  // drawn a moment later, off the frame that mounts it, so opening a menu never waits on a canvas
+  // Drawn in the frame that mounts it (attachGlass runs before that frame paints), so a surface is never seen
+  // first as plain frost and a moment later bent at the rim. A map is a few milliseconds once and is kept by
+  // size, so the second menu of a size costs nothing. Only later size changes wait for an idle moment.
   let gone = false;
   let queued = false;
   const soon = () => {
@@ -962,7 +989,7 @@ function attachGlass(el: HTMLElement) {
       if (!gone) build();
     });
   };
-  soon();
+  build();
   const ro = new ResizeObserver(soon);
   ro.observe(el);
   return () => {
@@ -982,9 +1009,14 @@ function installGlass() {
   let raf = 0;
   const scan = () => {
     raf = 0;
-    // toolbar controls are glass capsules too; the cap keeps the number of live refraction filters sane
-    document.querySelectorAll<HTMLElement>("[data-glass], .toolbar .btn-bordered, .toolbar .btn-plain, .toolbar .seg, .toolbar .search").forEach((el) => {
-      if (!tracked.has(el) && tracked.size < MAX_GLASS) tracked.set(el, attachGlass(el));
+    // Only clear glass bends its backdrop: the Dock, widgets, the lock screen's controls, the round buttons over
+    // content. Dense glass (menus, panels, the menu bar: 66 to 82% fill) shows no bend through its tint, measured
+    // side by side, and neither do toolbar capsules over a white window, so they keep the frost and skip the
+    // filter. That takes an SVG backdrop pass off every menu and off every window that moves.
+    document.querySelectorAll<HTMLElement>("[data-glass]").forEach((el) => {
+      if (tracked.has(el) || tracked.size >= MAX_GLASS) return;
+      if (el.classList.contains("glass-pop") || el.classList.contains("glass-bar") || el.classList.contains("ios-bar") || el.classList.contains("ios-bar-dark")) return;
+      tracked.set(el, attachGlass(el));
     });
     tracked.forEach((stop, el) => {
       if (!el.isConnected) {
@@ -1145,8 +1177,8 @@ export function sfx(name: SfxName) {
 // Design system primitives. Screens compose these; they don't restyle them.
 // =====================================================================================================
 
-export const SPRING = { type: "spring", bounce: 0, duration: 0.42 } as const;
-export const SPRING_SOFT = { type: "spring", bounce: 0.12, duration: 0.55 } as const;
+export const SPRING = M.ui;
+export const SPRING_SOFT = M.sheet;
 
 // ---------- Squircle: Figma-style smoothed corners (smoothing 0.6) ----------
 // The path math follows figma-squircle (MIT): each corner is a straight run, a cubic into a short circular arc,

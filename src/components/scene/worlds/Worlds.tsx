@@ -17,6 +17,7 @@ import KingsWorld, { dropKings, prepareKings } from "./Kings";
 import ParadiseWorld from "./Paradise";
 import RexWorld from "./Rex";
 import SeaWorld from "./Sea";
+import SeaFinaleWorld from "./SeaFinale";
 import StarsWorld from "./Stars";
 import SunWorld from "./Sun";
 import { ORIGIN, WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, pathOf, useWorld, voyage, type WorldId } from "./voyage";
@@ -90,7 +91,7 @@ const HOME_FLOCKS: Flock[] = [
   { c: [-3, 12, -150], r: 20, n: 7, size: 0.38, speed: 6.5, spread: 6 },
 ];
 
-const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld, funeral: FuneralWorld, kings: KingsWorld };
+const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld, seafinale: SeaFinaleWorld, funeral: FuneralWorld, kings: KingsWorld };
 
 // While the plane flies through one world the next is made ready behind it, a little at a time, so that
 // passing the gate is only cloud closing and opening:

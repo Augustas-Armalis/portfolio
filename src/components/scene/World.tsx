@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { HOME_GATE_Z } from "./flightPath";
 import { DESK, GLSL_LAKE, GLSL_NOISE, GLSL_PATH, LAKE, MONITOR, lakeK, pathX } from "./shared";
 import { GLSL_SKY, SKY_U } from "./sky";
+import { GLSL_HOME_AIR, HOME_U, cloudTex } from "./home/land";
 
 // ---------- sky ----------
 
@@ -14,12 +15,13 @@ import { GLSL_SKY, SKY_U } from "./sky";
 // sun side. Dithered. `env` is the version rendered into the reflection cube:
 // darker ground, no stars.
 export function makeSkyMaterial(env = false) {
+  cloudTex();
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
     defines: env ? { ENV: 1 } : {},
-    uniforms: { ...SKY_U },
+    uniforms: { ...SKY_U, ...HOME_U },
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
       void main(){
@@ -32,9 +34,27 @@ export function makeSkyMaterial(env = false) {
       varying vec3 vWorld;
       ${GLSL_NOISE}
       ${GLSL_SKY}
+      ${GLSL_HOME_AIR}
       float clouds(vec2 uv, float t){
         return fbm(uv * 0.9 + vec2(t * 0.006, t * 0.002) + 7.3);
       }
+      #ifndef ENV
+      // a shooting star now and then: one short bright stroke that fades as it falls
+      float meteor(vec3 d){
+        float slot = floor(uTime / 6.5); float lt = fract(uTime / 6.5) * 6.5;
+        float h1 = hash12(vec2(slot, 3.7)); float h2 = hash12(vec2(slot, 9.1)); float h3 = hash12(vec2(slot, 17.3));
+        if (h3 > 0.55 || lt > 1.1) return 0.0;
+        float az = h1 * 6.2832; float el = 0.45 + h2 * 0.6;
+        vec3 a = vec3(cos(az) * cos(el), sin(el), sin(az) * cos(el));
+        vec3 dir = normalize(vec3(cos(az + 1.9), -0.55 - h3, sin(az + 1.9)));
+        vec3 head = normalize(a + dir * lt * 0.34);
+        vec3 tail = normalize(a + dir * max(lt - 0.28, 0.0) * 0.34);
+        vec3 ab = head - tail; float k = clamp(dot(d - tail, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+        float dist = length(d - (tail + ab * k));
+        float w = max(fwidth(dist) * 1.3, 0.0009);
+        return (1.0 - smoothstep(0.0, w, dist)) * k * k * (1.0 - smoothstep(0.5, 1.1, lt)) * smoothstep(0.0, 0.08, lt);
+      }
+      #endif
       vec3 hash33(vec3 p){ p = fract(p * vec3(.1031, .1030, .0973)); p += dot(p, p.yxz + 33.33); return fract((p.xxy + p.yxx) * p.zyx); }
       vec3 starLayer(vec3 dir, float scale, float density){
         vec3 p = dir * scale; vec3 id = floor(p); vec3 f = fract(p) - 0.5;
@@ -75,6 +95,7 @@ export function makeSkyMaterial(env = false) {
             vec3 mw = mix(vec3(0.05, 0.065, 0.13), vec3(0.2, 0.17, 0.24), dust * 2.0) * band * (0.25 + dust * 2.2);
             st += starLayer(d, 520.0, 0.85) * band * 0.55;
             col += (st + mw * (1.0 + uPulse * 0.6)) * uNight * hz * uSkyFx.w;
+            col += vec3(0.9, 0.95, 1.0) * meteor(d) * 2.5 * uNight * uSkyFx.w * uCumulus;
           }
           // moon: disc with soft maria and a halo
           if (uNight > 0.01) {
@@ -90,17 +111,18 @@ export function makeSkyMaterial(env = false) {
           float n1 = clouds(uv * vec2(0.55, 1.1), uTime);
           float n2 = fbm(uv * vec2(0.25, 0.5) * 0.7 - vec2(uTime * 0.003, 0.0) + 31.0);
           float fadeH = smoothstep(0.02, 0.22, h) * (1.0 - smoothstep(0.6, 0.98, h));
-          float cov1 = smoothstep(0.58, 0.82, n1) * fadeH * 0.6 * uSkyFx.x;
-          float cov2 = smoothstep(0.55, 0.78, n2) * fadeH * uSkyFx.x;
+          float cov1 = smoothstep(0.58, 0.82, n1) * fadeH * 0.6 * uSkyFx.x * (1.0 - 0.94 * uCumulus);
+          float cov2 = smoothstep(0.55, 0.78, n2) * fadeH * uSkyFx.x * (1.0 - 0.96 * uCumulus);
           float lit = clamp((n2 - fbm(uv * vec2(0.25, 0.5) * 0.7 - vec2(uTime * 0.003, 0.0) + 31.0 + uSunDir.xz * 0.1)) * 4.0 + 0.5, 0.0, 1.0);
           vec3 cc = mix(uCloudShade, uCloudLit, lit);
           cc += uGlow * pow(max(sd, 0.0), 8.0) * 1.4 * sunVis;
           col = mix(col, mix(uCloudShade, uCloudLit, 0.7), cov1 * 0.55);
           col = mix(col, cc, cov2 * 0.75);
           // long quiet bars of cloud stacked above the horizon, as he painted them
-          float bars = smoothstep(0.52, 0.7, fbm(vec2(atan(d.z, d.x) * 2.2 + uTime * 0.002, h * 26.0 + 2.0))) * smoothstep(0.015, 0.06, h) * (1.0 - smoothstep(0.14, 0.3, h)) * uSkyFx.y;
+          float bars = smoothstep(0.52, 0.7, fbm(vec2(atan(d.z, d.x) * 2.2 + uTime * 0.002, h * 26.0 + 2.0))) * smoothstep(0.015, 0.06, h) * (1.0 - smoothstep(0.14, 0.3, h)) * uSkyFx.y * (1.0 - 0.8 * uCumulus);
           col = mix(col, mix(uCloudShade, uCloudLit, 0.55) + uGlow * pow(max(sd, 0.0), 6.0) * 0.8 * sunVis, bars * 0.5);
           float cover = max(max(cov1, cov2), bars * 0.6);
+
           col += uGlow * uPulse * 0.1 * (1.0 - smoothstep(0.0, 0.5, h));
           // crepuscular rays fanning from a low sun through the haze
           float golden = sunVis * (1.0 - smoothstep(0.06, 0.4, uSunDir.y)) * uSkyFx.z;
@@ -111,6 +133,14 @@ export function makeSkyMaterial(env = false) {
             float rays = smoothstep(0.35, 0.95, vnoise(vec2(ang * 22.0, uTime * 0.03))) * 0.7 + smoothstep(0.5, 1.0, vnoise(vec2(ang * 57.0, 3.0 + uTime * 0.02))) * 0.3;
             col += uGlow * rays * pow(max(sd, 0.0), 5.0) * 0.42 * golden * smoothstep(-0.04, 0.2, d.y) * (1.0 - cover * 0.5);
           }
+          // fine rays standing round the sun itself, as he drew it
+          if (uCumulus > 0.01 && sunVis > 0.01) {
+            vec3 ax2 = normalize(cross(uSunDir, vec3(0.0, 1.0, 0.0)));
+            float ang2 = atan(dot(d, cross(ax2, uSunDir)), dot(d, ax2));
+            float fine = pow(vnoise(vec2(ang2 * 30.0, 1.0)), 2.0) * 0.6 + pow(vnoise(vec2(ang2 * 83.0, 5.0)), 3.0) * 0.4;
+            float rad = acos(clamp(sd, -1.0, 1.0));
+            col += mix(uGlow, vec3(1.0, 0.96, 0.88), 0.4) * fine * exp(-rad * 7.0) * smoothstep(0.012, 0.05, rad) * 0.5 * sunVis * uSkyFx.z * uCumulus * (1.0 - cover * 0.6);
+          }
           // sun disc + bloom
           float disc = smoothstep(0.99955, 0.99975, sd);
           vec3 sunC = mix(uGlow, vec3(1.0, 0.95, 0.88), 0.55);
@@ -118,6 +148,8 @@ export function makeSkyMaterial(env = false) {
           col += uGlow * (pow(max(sd, 0.0), 900.0) * 5.0 + pow(max(sd, 0.0), 160.0) * 0.8) * sunVis * uSkyFx.z;
           // arrival mist
           col = mix(col, uHorizon * 1.05 + uSkyCol * 0.2, clamp(uMist * 3.0, 0.0, 0.9) * (1.0 - smoothstep(0.1, 0.7, h)));
+          // inside a cloud of the home sky there is no sky at all: the same white all round
+          col = mix(col, uHorizon * 1.05 + uSkyCol * 0.2, clamp(uMist * 45.0 - 0.08, 0.0, 1.0) * uCumulus);
         #endif
         col += (hash12(gl_FragCoord.xy + fract(uTime)) - 0.5) / 255.0;
         gl_FragColor = vec4(col, 1.0);
@@ -133,7 +165,7 @@ export function Sky() {
   // the dome travels with the eye: the worlds of the flight lie far from the desk
   useFrame(({ camera }) => ref.current?.position.copy(camera.position));
   return (
-    <mesh ref={ref} material={mat} renderOrder={-10} frustumCulled={false}>
+    <mesh ref={ref} material={mat} renderOrder={-10} frustumCulled={false} onUpdate={(m) => m.layers.enable(2)}>
       <sphereGeometry args={[1500, 48, 24]} />
     </mesh>
   );
@@ -160,6 +192,17 @@ float deskShadow(vec3 p){
     s = max(s, rectShadow(q.xy, vec2(0.0, ${MONITOR.y.toFixed(3)}), vec2(${(MONITOR.w / 2).toFixed(3)}, ${(MONITOR.h / 2).toFixed(3)}), 0.02 + kz * 0.03));
   }
   return 1.0 - s * 0.85;
+}
+// The desk's own ambient shade, whatever the hour: soft dark under the top (deepest at the ground, gone by the
+// height of the apron) and a tight dark round each foot, where the leg meets the earth.
+float deskAO(vec3 p){
+  if (dot(p.xz, p.xz) > 6.0) return 1.0;
+  float low = 1.0 - smoothstep(0.0, 0.66, p.y);
+  float under = rectShadow(p.xz, vec2(0.0), vec2(${(DESK.w / 2 - 0.05).toFixed(3)}, ${(DESK.d / 2 - 0.05).toFixed(3)}), 0.32);
+  float ao = 1.0 - 0.36 * under * low;
+  float d = length(abs(p.xz) - vec2(${(DESK.w / 2 - 0.068).toFixed(3)}, ${(DESK.d / 2 - 0.052).toFixed(3)}));
+  ao *= 1.0 - 0.62 * exp(-d * d / 0.0065) * (1.0 - smoothstep(0.0, 0.28, p.y));
+  return ao;
 }
 `;
 

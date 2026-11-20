@@ -59,8 +59,9 @@ const bed = (o: Partial<Bed>): Bed => ({ wind: 0, hp: 120, lp: 1400, waves: 0, w
 const WIND_CEIL = 1000;
 const BEDS: Record<string, Bed> = {
   // home: an empty field. Soft filtered wind, nothing else (and the music: DESK_MUSIC below)
-  desk: bed({ wind: 1.0, hp: 80, lp: 650 }), // -40 by day, -44 at night (measured)
-  avenue: bed({ wind: 0.95, hp: 80, lp: 760 }), // the wood: the same air, a little more of it
+  // (a little quieter than it was: about 2.5 dB down by day and at night)
+  desk: bed({ wind: 0.75, hp: 80, lp: 650 }), // about -42.5 by day, -46.5 at night (measured: see the home scene's report)
+  avenue: bed({ wind: 0.72, hp: 80, lp: 760 }), // the wood: the same air, a little more of it
   // the painted worlds
   sun: bed({ wind: 1.6, hp: 150, lp: 950 }), // high open air
   stars: bed({ wind: 0.78, hp: 80, lp: 620 }), // a low breath in the dark: -40
@@ -611,7 +612,32 @@ function devHook(r: Rig) {
         }
         const rms = Math.sqrt(acc / n);
         sum += rms * rms;
-        res[id] = { gain: r3(level), hp: id === "wind" ? g.hp : st.hp[0].frequency.value, lp: Math.round(lp), dBFS: db(rms) };
+        // where its energy lies: under 250 Hz, 250 Hz to 1 kHz, above (two one-pole splits over the left channel), and its loudest 50 ms
+        const d0 = out.getChannelData(0);
+        const a1 = 1 - Math.exp((-2 * Math.PI * 250) / SR);
+        const a2 = 1 - Math.exp((-2 * Math.PI * 1000) / SR);
+        let l1 = 0;
+        let l2 = 0;
+        let eLow = 0;
+        let eMid = 0;
+        let eHigh = 0;
+        let win = 0;
+        let peak = 0;
+        const W = Math.round(SR * 0.05);
+        for (let i = SR; i < d0.length; i++) {
+          l1 += a1 * (d0[i] - l1);
+          l2 += a2 * (d0[i] - l2);
+          eLow += l1 * l1;
+          eMid += (l2 - l1) * (l2 - l1);
+          eHigh += (d0[i] - l2) * (d0[i] - l2);
+          win += d0[i] * d0[i];
+          if ((i - SR) % W === W - 1) {
+            peak = Math.max(peak, win / W);
+            win = 0;
+          }
+        }
+        const eAll = eLow + eMid + eHigh || 1;
+        res[id] = { gain: r3(level), hp: id === "wind" ? g.hp : st.hp[0].frequency.value, lp: Math.round(lp), dBFS: db(rms), loudest50ms_dBFS: db(Math.sqrt(peak)), under250Hz: Math.round((100 * eLow) / eAll) + "%", to1kHz: Math.round((100 * eMid) / eAll) + "%", above1kHz: Math.round((100 * eHigh) / eAll) + "%" };
       }
       const trim = channel("ambience").gain.value * MIX.ambience;
       res.total_dBFS = db(Math.sqrt(sum) * trim);
