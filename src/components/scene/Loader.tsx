@@ -17,7 +17,8 @@ import type { SkyState } from "./sky";
 //   the dark thins from the horizon outward, a wide soft gradient, never an edge.
 // Colours are display-referred sRGB, premultiplied.
 
-export const LOADER_T = { extend: 1.0, openAt: 0.3, open: 2.5, total: 3.4 };
+// (quick: the arrival after the click is under three seconds, and the dark lifts as the camera drops in)
+export const LOADER_T = { extend: 0.5, openAt: 0.1, open: 1.25, total: 1.6 };
 
 const FRAG = /* glsl */ `
 precision highp float;

@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { owner, type UserId } from "@/content";
 import { play } from "@/lib/sfx";
+import { DeskDust, type DustApi } from "./scene/Dust";
 import { useOS } from "@/store";
 import { ambienceMuted, ambienceScene, onAmbienceChange, setAmbienceMuted, startAmbience } from "@/lib/ambience";
 import { music, sampleMusic, stopOwner } from "@/lib/audio";
@@ -70,8 +71,13 @@ type Input = { dx: number; dy: number; zoom: number; dragging: boolean; last: nu
 const DUR = { approach: 1.55, push: 1.05, hold: 0.12, wake: 2.3, wakeDelay: 0.35, focus: 1.15 };
 const FOG = 0.016;
 // The arrival, in seconds from the moment the loader's line becomes the horizon.
-const ARRIVE = 6.0; // the camera reaches its home pose
-const SETTLE = ARRIVE - 1.4; // the things on the desk begin to alight, to land with the camera
+// It is short and physical: out of the dark the camera drops in, the display comes down out of the air and
+// lands with weight (a low thud, the frame shakes, dust), then each thing on the desk slams into its place in
+// turn, the paper plane last and lightest, and only then does the screen light up.
+const ARRIVE = 2.8; // the camera reaches its home pose
+const SETTLE = 1.62; // the first of the things on the desk lands
+const SLAM_DISPLAY = 1.22; // the display lands
+const SCREEN_ON = 2.35; // the lock screen begins to glow
 // On a phone the arrival is shorter and plainer: a quicker lifting of the dark, a descent of under four seconds,
 // and everything already in its place on the desk when it comes into view.
 const ARRIVE_PHONE = 3.6;
@@ -98,7 +104,10 @@ const MODE_OF: Record<ObjKind, Mode> = { keys: "piano", camera: "camera", headph
 // as the camera comes in each one alights: a critically damped fall (it starts
 // from rest and never overshoots) with the turn trailing just behind it, its
 // real shadow gathering under it as it lands. Each has its own weight.
-type Settle = { at: number; lift: number; slide?: [number, number]; yaw: number; tilt?: [number, number]; w: number };
+// `drop`: it falls in from that high and lands hard (`weight` 0..1: how hard the thud, the shake, the dust)
+type Settle = { at: number; lift: number; slide?: [number, number]; yaw: number; tilt?: [number, number]; w: number; drop?: number; weight?: number };
+type Impact = (weight: number, x: number, y: number, z: number) => void;
+const SLAM_FALL = 0.26;
 
 function Piece({
   p,
@@ -111,10 +120,12 @@ function Piece({
   onPick,
   hidden,
   float,
+  onImpact,
   children,
 }: {
   p: { pos: [number, number, number]; rot: number };
   settle?: Settle;
+  onImpact?: MutableRefObject<Impact | null>;
   introAt: MutableRefObject<number | null>;
   instant: boolean;
   hoverable: boolean;
@@ -133,22 +144,39 @@ function Piece({
   const base = useMemo(() => new THREE.Vector3(), []);
   const q0 = useMemo(() => new THREE.Quaternion(), []);
   const eul = useMemo(() => new THREE.Euler(), []);
+  const landed = useRef(false);
   useFrame((_, dt) => {
     const o = g.current;
     if (!o) return;
     // how far from rest: 1 while it waits above the desk, 0 once it has landed
     let r = 0;
     let rr = 0;
+    let fall = 0;
+    let away = false;
     if (settle && !instant) {
       const at = introAt.current;
-      const t = at === null ? -1 : nowS() - at - settle.at;
-      r = t > 3 ? 0 : 1 - spring(t, settle.w, 1);
-      rr = t > 3 ? 0 : 1 - spring(t - 0.05, settle.w * 0.8, 1);
+      const t = at === null ? -9 : nowS() - at - settle.at;
+      if (settle.drop) {
+        // out of sight until it falls; it falls faster and faster, lands, gives one small hard bounce and is still
+        away = t < -SLAM_FALL;
+        const u = clamp01((t + SLAM_FALL) / SLAM_FALL);
+        fall = t < 0 ? settle.drop * (1 - u * u) : t < 0.6 ? settle.drop * 0.03 * Math.exp(-t * 10) * Math.abs(Math.sin(t * 24)) : 0;
+        rr = t < 0 ? 1 - u * u : t < 0.6 ? 0.05 * Math.exp(-t * 9) * Math.sin(t * 30) : 0;
+        if (t < -SLAM_FALL) landed.current = false;
+        else if (!landed.current && t >= 0) {
+          landed.current = true;
+          // (only the first time, and not if it was skipped straight past)
+          if (t < 0.25) onImpact?.current?.(settle.weight ?? 0.5, p.pos[0], p.pos[1], p.pos[2]);
+        }
+      } else {
+        r = t > 3 ? 0 : 1 - spring(t, settle.w, 1);
+        rr = t > 3 ? 0 : 1 - spring(t - 0.05, settle.w * 0.8, 1);
+      }
     }
-    o.visible = !hidden;
+    o.visible = !hidden && !away;
     lift.current += ((hover && hoverable ? 0.007 : 0) - lift.current) * Math.min(1, dt * 14);
     if (settle) {
-      base.set(p.pos[0] + (settle.slide?.[0] ?? 0) * r, p.pos[1] + settle.lift * r + lift.current, p.pos[2] + (settle.slide?.[1] ?? 0) * r);
+      base.set(p.pos[0] + (settle.slide?.[0] ?? 0) * r, p.pos[1] + settle.lift * r + fall + lift.current, p.pos[2] + (settle.slide?.[1] ?? 0) * r);
       q0.setFromEuler(eul.set((settle.tilt?.[0] ?? 0) * rr, p.rot + settle.yaw * rr, (settle.tilt?.[1] ?? 0) * rr));
     } else {
       base.set(p.pos[0], p.pos[1] + lift.current, p.pos[2]);
@@ -310,6 +338,15 @@ function Scene({
   const fast = useRef(false);
   const musicVol = useRef(1);
   const gatePhase = useRef<string>("open");
+  // the arrival's impacts: a thud, the frame shaken by it, a little dust off the desk where it landed
+  const shake = useRef(0);
+  const dust = useRef<DustApi | null>(null);
+  const impact = useRef<Impact | null>(null);
+  impact.current = (w, x, y, z) => {
+    play("thud", { volume: w });
+    if (!reduced) shake.current = Math.max(shake.current, w);
+    dust.current?.burst(x, y + (w >= 1 ? DESK.top : 0), z, w);
+  };
   // the flight's input, filled in place each frame (nothing is allocated while flying)
   const flightIn = useRef<FlightInput>({ sx: 0, sy: 0, look: { dx: 0, dy: 0, held: false }, gyro: null });
   useEffect(() => {
@@ -1154,7 +1191,10 @@ function Scene({
     const lockTarget = (s === "idle" || s === "focus" || s === "unfocus" || s === "fly" || s === "land") && !offRef.current ? 1 : 0;
     lockOn.current += (lockTarget - lockOn.current) * Math.min(1, dt * (lockTarget ? 1.5 : 6));
     // the display is already on its lock screen when it comes into view
-    screenMat.uniforms.uLockMix.value = lockOn.current;
+    // (in the arrival the display is dark until everything has landed, then its glass lights up)
+    const atS = introAt.current;
+    const screenUp = instant || mobile || atS === null ? 1 : smooth(clamp01((now - atS - SCREEN_ON) / 0.5));
+    screenMat.uniforms.uLockMix.value = lockOn.current * screenUp;
     if (s === "idle" && nav === "explore") {
       exploreStep(dt);
       reflect.opacity = 1;
@@ -1166,6 +1206,14 @@ function Scene({
       cam.position.copy(v.pos);
       cam.up.copy(v.Y);
       cam.lookAt(v.look);
+      // an impact shakes the frame: a few millimetres, fast, gone in a third of a second
+      if (shake.current > 0.002) {
+        const k = shake.current * shake.current * 0.009;
+        cam.position.x += (Math.sin(now * 91) * 0.6 + Math.sin(now * 147 + 1.3) * 0.4) * k;
+        cam.position.y += (Math.sin(now * 113 + 0.7) * 0.6 + Math.sin(now * 171) * 0.4) * k;
+        cam.lookAt(v.look);
+        shake.current *= Math.exp(-dt * 9);
+      } else shake.current = 0;
       // a wider lens up high, closing as it lands
       if (!instant && !landedFov.current) {
         cam.fov = cfg.fov + START.fov * (1 - introK.current);
@@ -1329,12 +1377,13 @@ function Scene({
   // closing as they go; the paper plane is last and lightest. Under a second
   // from the first leaving its wait to the last at rest.
   const settleOf: Record<ObjKind, Settle> = {
-    keys: { at: SETTLE, lift: 0.03, yaw: 0.03, tilt: [0.05, 0], w: 8 },
-    book: { at: SETTLE + 0.1, lift: 0.04, yaw: -0.16, tilt: [0, 0.03], w: 9 },
-    sketchbook: { at: SETTLE + 0.19, lift: 0.036, yaw: 0.13, slide: [-0.012, 0.012], w: 9 },
-    headphones: { at: SETTLE + 0.27, lift: 0.05, yaw: 0.26, tilt: [-0.04, 0.03], w: 8.5 },
-    camera: { at: SETTLE + 0.34, lift: 0.044, yaw: -0.22, tilt: [0.03, -0.03], w: 9.5 },
+    keys: { at: SETTLE, lift: 0, yaw: 0.05, tilt: [0.08, 0], w: 8, drop: 0.55, weight: 0.7 },
+    book: { at: SETTLE + 0.13, lift: 0, yaw: -0.2, tilt: [0, 0.06], w: 9, drop: 0.5, weight: 0.55 },
+    sketchbook: { at: SETTLE + 0.24, lift: 0, yaw: 0.16, tilt: [0.05, 0], w: 9, drop: 0.48, weight: 0.45 },
+    headphones: { at: SETTLE + 0.35, lift: 0, yaw: 0.3, tilt: [-0.08, 0.05], w: 8.5, drop: 0.6, weight: 0.6 },
+    camera: { at: SETTLE + 0.45, lift: 0, yaw: -0.25, tilt: [0.06, -0.06], w: 9.5, drop: 0.52, weight: 0.55 },
   };
+  const displaySettle: Settle = { at: SLAM_DISPLAY, lift: 0, yaw: 0.12, tilt: [-0.1, 0.04], w: 8, drop: 1.4, weight: 1 };
 
   const objEl = (o: Placement) => {
     if (o.kind === "keys")
@@ -1424,6 +1473,8 @@ function Scene({
       </Piece>
       <Piece
         p={{ pos: [0, 0, 0], rot: 0 }}
+        settle={mobile ? undefined : displaySettle}
+        onImpact={impact}
         introAt={introAt}
         instant={instant}
         hoverable={idle}
@@ -1452,6 +1503,7 @@ function Scene({
             key={kind}
             p={{ pos: [o.pos[0], DESK.top, o.pos[2]], rot: o.rot }}
             settle={settleOf[kind]}
+            onImpact={impact}
             introAt={introAt}
             instant={instant || mobile}
             hoverable={idle && mode === "none"}
@@ -1464,7 +1516,8 @@ function Scene({
           </Piece>
         );
       })}
-      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={SETTLE + 0.4} instant={instant || mobile} />
+      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={SETTLE + 0.62} instant={instant || mobile} />
+      <DeskDust apiRef={dust} />
       {idle && mode === "none" && <PlaneLabel spot={planeSpot} introAt={introAt} instant={instant} after={ARR + 2.2} />}
       <Post level={devPost ?? (mobile ? Math.min(1, q.post) : q.post)} />
     </>
@@ -1623,8 +1676,35 @@ export default function Room({
     if (process.env.NODE_ENV !== "production") ((window as unknown as { __t: Record<string, number> }).__t.ready = performance.now());
     // the line finishes drawing before anything opens, and the loader is never
     // a flash: at least 1.3 s from navigation even when everything is cached
-    const t = window.setTimeout(() => setRevealed(true), Math.max(650, 1300 - performance.now()));
-    return () => window.clearTimeout(t);
+    const minWait = Math.max(650, 1300 - performance.now());
+    // A returning visitor, or one who asked for less motion, goes straight in. Otherwise the line is across and it
+    // waits for one click (or key, or tap): the arrival has sound, and sound may only begin with a gesture. If no
+    // one clicks it goes in on its own after a while, silently.
+    if (skipIntro || reduced) {
+      const t = window.setTimeout(() => setRevealed(true), minWait);
+      return () => window.clearTimeout(t);
+    }
+    let go = false;
+    const enter = () => {
+      if (go) return;
+      go = true;
+      startAmbience();
+      loader.ask(null);
+      setRevealed(true);
+    };
+    const t0 = window.setTimeout(() => {
+      loader.ask(isMobile ? "Tap to enter" : "Click to enter");
+      window.addEventListener("pointerdown", enter, { once: true });
+      window.addEventListener("keydown", enter, { once: true });
+    }, minWait);
+    const t1 = window.setTimeout(enter, minWait + 14000);
+    return () => {
+      window.clearTimeout(t0);
+      window.clearTimeout(t1);
+      window.removeEventListener("pointerdown", enter);
+      window.removeEventListener("keydown", enter);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
   // the DOM layer lets go: into the canvas (which is drawing the same frame), or a plain fade when there is no arrival
   useEffect(() => {

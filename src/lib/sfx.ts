@@ -26,7 +26,8 @@ export type Sfx =
   | "plane"
   | "trash"
   | "shutdown"
-  | "shutter";
+  | "shutter"
+  | "thud";
 
 // Each name maps to one or more candidate files; the first that decodes wins,
 // and names with several variants pick one at random each time.
@@ -54,6 +55,7 @@ const FILES: Record<Sfx, { files: string[]; vol?: number; random?: boolean; slic
   plane: { files: [] },
   // (the recording holds two releases, the second 2.2 s after the first: only the first is ever played)
   shutter: { files: ["/assets/sfx/shutter.ogg"], vol: 0.55, trim: true, len: 0.95 },
+  thud: { files: [] }, // something heavy set down on the desk, generated below
 };
 
 const KEY = "aos.sound";
@@ -208,6 +210,50 @@ function air(ctx: AudioContext, dest: AudioNode, dur: number, vol: number) {
   track("sfx", s, "air");
 }
 
+// Something heavy set down on a wooden desk: a low body (a sine falling from about 90 Hz to 36 Hz, the
+// desk's own boom), a short dull knock of filtered noise on top, and for the heaviest a deeper sub under both.
+// `w` 0..1 is how heavy. Kept quiet: it is felt more than heard.
+function thud(ctx: AudioContext, dest: AudioNode, w: number) {
+  const t = ctx.currentTime + 0.003;
+  const v = 0.32 * Math.max(0.15, Math.min(1, w));
+  const body = ctx.createOscillator();
+  body.type = "sine";
+  body.frequency.setValueAtTime(70 + 30 * w, t);
+  body.frequency.exponentialRampToValueAtTime(34 + 6 * w, t + 0.24 + 0.1 * w);
+  const bg = ctx.createGain();
+  bg.gain.setValueAtTime(0.0001, t);
+  bg.gain.exponentialRampToValueAtTime(v, t + 0.006);
+  bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.3 + 0.25 * w);
+  body.connect(bg).connect(dest);
+  body.start(t);
+  body.stop(t + 0.62);
+  track("sfx", body, "thud");
+  if (!noise) {
+    noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const d = noise.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < d.length; i++) {
+      last = last * 0.6 + (Math.random() * 2 - 1) * 0.4;
+      d[i] = last;
+    }
+  }
+  const knock = ctx.createBufferSource();
+  knock.buffer = noise;
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.Q.value = 0.7;
+  lp.frequency.setValueAtTime(1100 - 500 * w, t);
+  lp.frequency.exponentialRampToValueAtTime(140, t + 0.09);
+  const kg = ctx.createGain();
+  kg.gain.setValueAtTime(0.0001, t);
+  kg.gain.exponentialRampToValueAtTime(v * 0.9, t + 0.003);
+  kg.gain.exponentialRampToValueAtTime(0.0001, t + 0.1 + 0.05 * w);
+  knock.connect(lp).connect(kg).connect(dest);
+  knock.start(t, Math.random() * 1.5);
+  knock.stop(t + 0.2);
+  track("sfx", knock, "thud");
+}
+
 const lastAt = new Map<Sfx, number>();
 
 export function play(name: Sfx, opts?: { volume?: number }) {
@@ -225,6 +271,7 @@ export function play(name: Sfx, opts?: { volume?: number }) {
     if (nowMs - (lastAt.get(name) ?? -1e9) < 60) return;
     lastAt.set(name, nowMs);
     if (name === "boot") return chime();
+    if (name === "thud") return thud(ctx, out, opts?.volume ?? 0.5);
     if (name === "shutdown") return shutdownChord();
     if (name === "whoosh" || name === "plane") return air(ctx, out, name === "plane" ? 1.1 : 0.55, (opts?.volume ?? 1) * (name === "plane" ? 0.5 : 0.35));
     const asked = performance.now();

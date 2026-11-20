@@ -88,6 +88,12 @@ export const loader = {
   // where the hairline sits, in CSS px: the canvas draws its own from this
   line: null as { left: number; right: number; top: number; height: number } | null,
   el: null as HTMLElement | null,
+  // when everything is ready: the line is across and it waits for a click (sound may only begin with one)
+  prompt: null as string | null,
+  ask(text: string | null) {
+    loader.prompt = text;
+    subs.forEach((f) => f());
+  },
   measure() {
     const r = loader.el?.getBoundingClientRect();
     if (r && r.width > 0) loader.line = { left: r.left, right: r.right, top: r.top, height: r.height };
@@ -109,6 +115,7 @@ export const loader = {
   reset() {
     loader.progress = 0;
     loader.phase = "load";
+    loader.prompt = null;
     subs.forEach((f) => f());
   },
 };
@@ -122,6 +129,8 @@ const LOADER_CSS = `
 .ld-sky{transition:opacity .5s cubic-bezier(.4,0,.2,1),transform .6s cubic-bezier(.23,1,.32,1),filter .6s cubic-bezier(.23,1,.32,1)}
 .ld-halo{opacity:0;transition:opacity .9s cubic-bezier(.23,1,.32,1)}
 .ld-type{transition:opacity .7s cubic-bezier(.23,1,.32,1),filter .7s cubic-bezier(.23,1,.32,1),transform .7s cubic-bezier(.23,1,.32,1)}
+@keyframes ld-breathe{0%,100%{opacity:.42}50%{opacity:.9}}
+.ld-ask{animation:ld-breathe 2.4s cubic-bezier(.45,0,.55,1) infinite}
 `;
 
 function localTime() {
@@ -203,6 +212,13 @@ export function Preloader({ hideForReducedMotion = false }: { hideForReducedMoti
     <div
       className={`${geist.className} pointer-events-none fixed inset-0 z-[50] text-white ${hideForReducedMotion ? "motion-reduce:hidden" : ""}`}
       style={{
+        // centred by an explicit grid on the viewport itself (inline: it holds before any stylesheet has arrived)
+        position: "fixed",
+        inset: 0,
+        width: "100vw",
+        height: "100dvh",
+        display: "grid",
+        placeItems: "center",
         letterSpacing: TRACK.body,
         // open: the canvas is already showing this exact black, so the layer simply lets go
         background: open ? "transparent" : "#050506",
@@ -212,7 +228,7 @@ export function Preloader({ hideForReducedMotion = false }: { hideForReducedMoti
       aria-hidden={out}
     >
       <style dangerouslySetInnerHTML={{ __html: LOADER_CSS }} />
-      <div className="absolute left-1/2 top-1/2 w-[min(360px,64vw)] -translate-x-1/2">
+      <div className="relative" style={{ width: "min(360px, 64vw)", height: 1 }}>
         {/* the half-sun, rising out of the line (it is clipped at the horizon, a breath above it, as in the mark) */}
         <div className="ld-sky pointer-events-none absolute bottom-[7px] left-1/2 h-[26px] w-[52px] -translate-x-1/2 overflow-hidden" style={out ? { opacity: 0, transform: "scale(1.5)", filter: "blur(6px)" } : undefined} aria-hidden>
           <div ref={sun} className="ld-sun h-[52px] w-[52px] rounded-full bg-white" />
@@ -227,6 +243,10 @@ export function Preloader({ hideForReducedMotion = false }: { hideForReducedMoti
           <span className="tabular-nums text-white/50 max-md:hidden" style={{ opacity: time ? 1 : 0, transition: "opacity .6s cubic-bezier(.23,1,.32,1)" }}>
             Kaunas · {time ?? "00:00"}
           </span>
+        </div>
+        {/* the line is across: one click and the world arrives (with its sound) */}
+        <div className="absolute inset-x-0 top-[44px] text-center text-[12px] font-medium text-white" style={{ opacity: loader.prompt && !out ? 1 : 0, transition: "opacity .8s cubic-bezier(.23,1,.32,1)" }} aria-live="polite">
+          {loader.prompt && <span className="ld-ask">{loader.prompt}</span>}
         </div>
         <div ref={line} className="relative h-px">
           <div className="absolute inset-0 bg-white/[0.14]" style={{ opacity: out ? 0 : 1, transition: "opacity .28s linear" }} />
