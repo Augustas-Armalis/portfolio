@@ -290,11 +290,12 @@ export const peakRadius = (o: { y0: number; y1: number; R: number; pow?: number 
 
 // the peaks about the castle: the great one it climbs, a tall slim one to its right, lesser ones left and behind
 export const PEAKS = [
-  { x: 4, z: -10, y0: 418, y1: 724, R: 104, seed: 2.1, pow: 1.3 },
-  { x: 106, z: 16, y0: 386, y1: 640, R: 54, seed: 5.3, pow: 1.15, lean: [-8, -4] as [number, number] },
-  { x: -100, z: -6, y0: 392, y1: 582, R: 47, seed: 8.7, pow: 1.12, lean: [6, 0] as [number, number] },
-  { x: -18, z: -94, y0: 398, y1: 612, R: 55, seed: 11.9, pow: 1.15 },
-  { x: 58, z: -80, y0: 402, y1: 562, R: 41, seed: 14.2, pow: 1.1 },
+  // (each stands well down in the slope under it, so none shows its foot)
+  { x: 4, z: -10, y0: 380, y1: 724, R: 114, seed: 2.1, pow: 1.4 },
+  { x: 106, z: 16, y0: 318, y1: 640, R: 66, seed: 5.3, pow: 1.3, lean: [-8, -4] as [number, number] },
+  { x: -100, z: -6, y0: 330, y1: 582, R: 58, seed: 8.7, pow: 1.28, lean: [6, 0] as [number, number] },
+  { x: -18, z: -94, y0: 340, y1: 612, R: 66, seed: 11.9, pow: 1.3 },
+  { x: 58, z: -80, y0: 345, y1: 562, R: 50, seed: 14.2, pow: 1.25 },
 ];
 // the castle's three wards: drums of stone standing out of the front of the great peak (worlds/fairy/castle.ts)
 export const WARDS = [

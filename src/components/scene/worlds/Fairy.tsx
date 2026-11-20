@@ -190,7 +190,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const plain: Crown[] = [];
     const close: Crown[] = [];
     const track = pathOf("fairy").pts.filter((_, i) => i % 6 === 0);
-    const nearTrack = (x: number, z: number) => track.some((q) => q.y < 240 && Math.abs(q.x - x) < 150 && Math.abs(q.z - z) < 150);
+    const nearTrack = (x: number, z: number) => track.some((q) => q.y < 300 && Math.abs(q.x - x) < 170 && Math.abs(q.z - z) < 170);
     const nearN = Math.round(7000 * few);
     for (let i = 0, guard = 0; i < nearN && guard < nearN * 8; guard++) {
       const a = r() * Math.PI * 2;
@@ -214,7 +214,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       const z = 120 + Math.sin(a) * d;
       if (woodF(x, z) < 0.05 + r() * 0.15) continue;
       const s = 9 + (d - 1100) * 0.008 + r() * 6;
-      plain.push({ p: [x, g(x, z) - s * 0.1, z], r: s, h: 0.9 + r() * 0.5, seed: r() });
+      (nearTrack(x, z) ? close : plain).push({ p: [x, g(x, z) - s * 0.1, z], r: s, h: 1.1 + r() * 0.55, seed: r() });
       i++;
     }
     // a few stand alone in the meadows and along the hedges
