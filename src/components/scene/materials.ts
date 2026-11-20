@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { POST_U } from "./Post";
 import { BOOT } from "./shared";
+import { appleLogoCanvas } from "../Mark";
 
 // Procedural textures and the shared PBR materials. Built once, client only.
 
@@ -417,6 +418,18 @@ export const coverReady = () => {
 export function makeScreenMaterial(size: [number, number]) {
   const { sunR, sunY, gap, lineH, lineHalf, barY, barW, barH } = BOOT;
   const f = (n: number) => n.toFixed(3);
+  // the Apple logo, from the visitor's own system font, as a texture (4x the frame's px); the half-sun without it
+  const logo = typeof document !== "undefined" ? appleLogoCanvas(BOOT.logoH * 4) : null;
+  let logoTex: THREE.Texture | null = null;
+  const logoBox = new THREE.Vector2(1, 1);
+  if (logo) {
+    logoTex = new THREE.CanvasTexture(logo.canvas);
+    logoTex.generateMipmaps = true;
+    logoTex.minFilter = THREE.LinearMipmapLinearFilter;
+    logoTex.magFilter = THREE.LinearFilter;
+    logoTex.anisotropy = 8;
+    logoBox.set(logo.w / 4, logo.h / 4);
+  }
   return new THREE.ShaderMaterial({
     toneMapped: false,
     // the display's layers sit fractions of a millimetre apart: each is pulled toward the eye in the depth test
@@ -431,6 +444,9 @@ export function makeScreenMaterial(size: [number, number]) {
       uProg: { value: 0 },
       uLock: { value: null as THREE.Texture | null },
       uLockMix: { value: 0 },
+      uLogo: { value: logoTex },
+      uLogoOn: { value: logoTex ? 1 : 0 },
+      uLogoBox: { value: logoBox },
       ...POST_U,
     },
     vertexShader: /* glsl */ `
@@ -439,6 +455,7 @@ export function makeScreenMaterial(size: [number, number]) {
     fragmentShader: /* glsl */ `
       uniform vec2 uSize; uniform float uPx; uniform float uMark; uniform float uProg;
       uniform sampler2D uLock; uniform float uLockMix; uniform float uLinearOut;
+      uniform sampler2D uLogo; uniform float uLogoOn; uniform vec2 uLogoBox;
       varying vec2 vUv;
       float seg(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h); }
       float rbox(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r; }
@@ -450,6 +467,11 @@ export function makeScreenMaterial(size: [number, number]) {
         float sun = max(length(p - sc) - ${f(sunR)}, p.y - sc.y);
         float horizon = rbox(p - vec2(0.0, ${f(sunY + gap + lineH / 2)}), vec2(${f(lineHalf)}, ${f(lineH / 2)}), ${f(lineH / 2)});
         float mark = max(cover(sun), cover(horizon));
+        if (uLogoOn > 0.5) {
+          // the logo's box is centred on the frame; q runs 0..1 across it, top to bottom
+          vec2 q = p / uLogoBox + 0.5;
+          mark = (q.x > 0.0 && q.x < 1.0 && q.y > 0.0 && q.y < 1.0) ? texture2D(uLogo, vec2(q.x, 1.0 - q.y)).a : 0.0;
+        }
         vec2 bp = p - vec2(0.0, ${f(barY)});
         float track = cover(rbox(bp, vec2(${f(barW / 2)}, ${f(barH / 2)}), ${f(barH / 2)}));
         float fw = max(${f(barW)} * uProg, ${f(barH)});

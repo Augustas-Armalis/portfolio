@@ -4,17 +4,29 @@ import { motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { TRACK, geist } from "./font";
 import { BOOT } from "./shared";
+import { SYSTEM_FONT, appleInk } from "../Mark";
 
 const { sunR, sunY, gap, lineH, lineHalf, barY, barW, barH } = BOOT;
 
 // The boot mark and bar, drawn in CSS px from the viewport centre, the same
 // numbers the 3D screen shader uses.
 function BootMark({ w, h, color, track, prog }: { w: number; h: number; color: string; track: string; prog: number }) {
+  const ink = appleInk();
+  const fs = ink.ok ? BOOT.logoH / (ink.a + ink.d) : 0;
   return (
     <svg className="absolute inset-0 h-full w-full" viewBox={`${-w / 2} ${-h / 2} ${w} ${h}`} aria-hidden>
-      {/* the half-sun on its horizon */}
-      <path d={`M${-sunR} ${sunY}A${sunR} ${sunR} 0 0 1 ${sunR} ${sunY}Z`} fill={color} />
-      <rect x={-lineHalf} y={sunY + gap} width={lineHalf * 2} height={lineH} rx={lineH / 2} fill={color} />
+      {ink.ok ? (
+        // the Apple logo from the system font, set by its ink: the same box the 3D screen draws its texture in
+        <text x={(-(ink.l + ink.r) / 2 + ink.l) * fs} y={(-(ink.a + ink.d) / 2 + ink.a) * fs} fontSize={fs} fill={color} style={{ fontFamily: SYSTEM_FONT }}>
+          {"\uF8FF"}
+        </text>
+      ) : (
+        <>
+          {/* the half-sun on its horizon */}
+          <path d={`M${-sunR} ${sunY}A${sunR} ${sunR} 0 0 1 ${sunR} ${sunY}Z`} fill={color} />
+          <rect x={-lineHalf} y={sunY + gap} width={lineHalf * 2} height={lineH} rx={lineH / 2} fill={color} />
+        </>
+      )}
       <rect x={-barW / 2} y={barY - barH / 2} width={barW} height={barH} rx={barH / 2} fill={track} />
       <rect
         x={-barW / 2}
