@@ -832,7 +832,9 @@ export function kingsView(y: number, ahead: number) {
   const mid = kingsDome().y + KINGS.domeR * (1.85 + 0.25 * smooth01((230 - ahead) / 130));
   // how far above level the eye should look, and how much of that it has taken up
   const elev = Math.atan2(mid - y, Math.max(ahead, 30));
-  const fov = 50 + 16 * smooth01((330 - ahead) / 190) - 10 * smooth01((95 - ahead) / 60);
+  // (a tall narrow screen sees less to either side: there the lens opens further, so both kings are still in it)
+  const tall = typeof window !== "undefined" && window.innerHeight > window.innerWidth * 1.15;
+  const fov = 50 + (tall ? 30 : 16) * smooth01((330 - ahead) / 190) - (tall ? 16 : 10) * smooth01((95 - ahead) / 60);
   return { w, elev, fov };
 }
 // How much of the frame the little world's light has taken: nothing until the plane is close, all of it at the glass.

@@ -749,6 +749,31 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
   );
 }
 
+// Development: how long the whole of it takes to make, and the longest single piece of that work (the hitch a frame
+// would feel while it is made ahead of time): window.__kingsBuild({ mobile, trees, effects }, budget).
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production")
+  Object.assign(window, {
+    __kingsBuild: (props: Pick<WorldProps, "mobile" | "trees" | "effects"> = { mobile: false, trees: 0.75, effects: 0.6 }, budget = 5) => {
+      const g = woodSteps(props, budget);
+      let longest = 0;
+      let steps = 0;
+      const t0 = performance.now();
+      for (;;) {
+        const t = performance.now();
+        const r = g.next();
+        longest = Math.max(longest, performance.now() - t);
+        steps++;
+        if (r.done) {
+          const w = r.value as Record<string, unknown>;
+          const tris = (k: string) => Math.round(((w[k] as THREE.BufferGeometry).index?.count ?? 0) / 3);
+          const out = { totalMs: Math.round(performance.now() - t0), longestStepMs: Math.round(longest), steps, wood: tris("wood"), left: tris("left"), right: tris("right"), crowns: tris("leftCrown") + tris("rightCrown") };
+          for (const v of Object.values(w)) if (v instanceof THREE.BufferGeometry || v instanceof THREE.Material) v.dispose();
+          return out;
+        }
+      }
+    },
+  });
+
 // Returns a step to call once a frame until it says it is done.
 export function prepareKings(props: Pick<WorldProps, "mobile" | "trees" | "effects">, budget = 5) {
   const key = woodKey(props);

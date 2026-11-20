@@ -112,14 +112,14 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number): Gener
     body.limb(P(4.05, -2.7), P(3.72, 0.0), 1.72 * R, 1.36 * R, ROBE, { flat: 1.12, soft: 3, s0: 0 });
     body.limb(P(3.72, 0.0), P(2.98, 1.52), 1.36 * R, 1.0 * R, ROBE, { flat: 1.2, soft: 3, s0: 2.7 * R });
     body.ball(P(2.86, 1.72), rr(0.86, 0.68, 1.42), ROBE, { soft: 3, s0: 3.9 * R });
-    body.limb(P(2.7, -0.55), P(1.95, -2.7), 0.9 * R, 1.2 * R, ROBE, { flat: 1.3, soft: 3, s0: 0 });
+    body.limb(P(2.7, -0.55), P(1.62, -2.7), 0.9 * R, 1.34 * R, ROBE, { flat: 1.3, soft: 3, s0: 0 });
     // the shirt at his breast, under the beard
     body.ball(P(2.06, 1.2), rr(0.34, 0.6, 0.6), SHIRT, { paint: true, soft: 3 });
   } else {
     body.limb(P(4.1, -2.7), P(3.88, 0.6), 1.78 * R, 1.42 * R, ROBE, { flat: 1.12, soft: 3, s0: 0 });
     body.limb(P(3.88, 0.6), P(3.32, 2.46), 1.42 * R, 1.06 * R, ROBE, { flat: 1.2, soft: 3, s0: 3.3 * R });
     body.ball(P(3.16, 2.74), rr(0.92, 0.72, 1.48), ROBE, { soft: 3, s0: 4.9 * R });
-    body.limb(P(3.0, -0.3), P(2.25, -2.7), 0.9 * R, 1.25 * R, ROBE, { flat: 1.3, soft: 3, s0: 0 });
+    body.limb(P(3.0, -0.3), P(1.7, -2.7), 0.9 * R, 1.38 * R, ROBE, { flat: 1.3, soft: 3, s0: 0 });
     // a collar worked in gold thread
     body.ball(P(2.72, 2.86), rr(0.5, 0.26, 0.9), SHIRT, { paint: true, soft: 2.4 });
   }
@@ -170,6 +170,8 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number): Gener
     head.ball(F(0.585 - 0.01 * (1 - g), -0.1), rr(0.165, 0.062 + 0.012 * (1 - g), 0.038 + 0.014 * (1 - g)), SKIN, { x: nd, y: np, k: 0.025 * R });
     head.ball(F(0.665 - 0.02 * (1 - g), -0.235), rr(0.045, 0.04, 0.052 + 0.016 * (1 - g)), SKIN, { ...ax, k: 0.02 * R });
   }
+  // (the root of the nose runs into the brow without a crease)
+  head.ball(F(0.49, 0.03), rr(0.085, 0.085, 0.085), SKIN, { ...ax, k: 0.07 * R });
   // the lips, thin, and the chin
   head.ball(F(0.5, -0.39), rr(0.085, 0.045, 0.13), SKIN, { ...ax, k: 0.04 * R });
   head.ball(F(0.495, -0.475), rr(0.07, 0.035, 0.1), SKIN, { ...ax, k: 0.035 * R });
@@ -179,39 +181,42 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number): Gener
     // cheekbones, and under them the cheeks fallen in
     head.ball(F(0.3, -0.15, s * 0.28), rr(0.14, 0.08, 0.09), SKIN, { ...ax, k: 0.05 * R });
     head.ball(F(0.36, -0.4, s * 0.42), rr(0.16, 0.17, 0.06 + 0.05 * g), SKIN, { ...ax, cut: true, k: 0.08 * R });
-    // the eye: a shallow hollow under the brow, the closed lid lying round in it
-    head.ball(F(0.525, -0.05, s * 0.19), rr(0.075, 0.045, 0.1), SKIN, { ...ax, cut: true, k: 0.04 * R });
-    head.ball(F(0.43, -0.058, s * 0.18), rr(0.075, 0.05, 0.085), SKIN, { ...ax, k: 0.02 * R });
+    // (the eye itself is drawn, under the shade of the brow: see the material)
+    head.ball(F(0.455, -0.03, s * 0.11), rr(0.075, 0.075, 0.075), SKIN, { ...ax, k: 0.07 * R });
     // the temple hollowed a little, the ear
     head.ball(F(0.2, 0.1, s * 0.47), rr(0.16, 0.14, 0.05), SKIN, { ...ax, cut: true, k: 0.06 * R });
     if (!pale) head.ball(F(-0.04, -0.12, s * 0.45), rr(0.07, 0.13, 0.05), SKIN, { ...ax, k: 0.03 * R });
   }
   head.limb(F(-0.14, -0.34), neck, 0.4 * R, 0.46 * R, pale ? HAIR : SKIN, { k: 0.1 * R });
+  // the hair on the head itself, and where the beard leaves the chin, belong to the head's own clay: the hairline is
+  // then paint on one skin, not two skins crossing
+  head.ball(F(-0.36, 0.1), rr(0.46, 0.56, 0.47), HAIR, { ...ax, k: 0.06 * R, soft: 0.7 });
+  if (pale) head.ball(F(0.26, -0.7), rr(0.2, 0.13, 0.26), BEARD, { ...ax, k: 0.06 * R, soft: 0.7 });
+  else {
+    head.ball(F(0.24, -0.67), rr(0.22, 0.1, 0.28), BEARD, { ...ax, k: 0.05 * R, soft: 0.7 });
+    for (const s of [-1, 1]) head.ball(F(-0.14, -0.1, s * 0.44), rr(0.3, 0.42, 0.1), HAIR, { ...ax, k: 0.06 * R, soft: 0.7 });
+  }
 
   // ---- hair and beard ----
   const hair = new Clay(0.1 * R);
-  hair.ball(F(-0.36, 0.1), rr(0.46, 0.56, 0.46), HAIR, { ...ax, k: 0.06 * R });
+  hair.ball(F(-0.44, 0.06), rr(0.3, 0.4, 0.34), HAIR, { ...ax, k: 0.06 * R });
   if (pale) {
     for (const s of [-1, 1]) {
       // over the shoulder and down the arm
-      hair.chain([F(-0.12, 0.08, s * 0.4), P(2.3, 2.7, s * 0.34), P(2.6, 2.3, s * 0.95), P(2.86, 1.66, s * 1.5), P(3.02, 0.9, s * 1.82), P(3.0, 0.28, s * 1.9)], [0.24 * R, 0.3 * R, 0.42 * R, 0.5 * R, 0.4 * R, 0.14 * R], HAIR, { k: 0.12 * R, soft: 1.5 });
+      hair.chain([F(-0.24, 0.06, s * 0.38), P(2.3, 2.7, s * 0.34), P(2.6, 2.3, s * 0.95), P(2.86, 1.66, s * 1.5), P(3.02, 0.9, s * 1.82), P(3.0, 0.28, s * 1.9)], [0.2 * R, 0.3 * R, 0.42 * R, 0.5 * R, 0.4 * R, 0.14 * R], HAIR, { k: 0.12 * R, soft: 1.5 });
     }
     // one great fall from the crown over the back of the neck and the shoulders
     hair.ball(P(2.72, 2.36), rr(0.82, 0.5, 1.2), HAIR, { k: 0.14 * R, soft: 1.5 });
     hair.chain([P(2.9, 2.5), P(3.5, 1.9), P(3.86, 1.0)], [0.5 * R, 0.5 * R, 0.2 * R], HAIR, { k: 0.14 * R, flat: 2.0, soft: 1.5 });
     // the long beard, from under the chin down to the forearm
-    hair.chain([F(0.3, -0.72), P(1.74, 1.36), P(1.9, 0.7), P(2.1, 0.26)], [0.21 * R, 0.33 * R, 0.26 * R, 0.09 * R], BEARD, { k: 0.08 * R, flat: 1.5, soft: 1.2 });
-    hair.ball(F(0.26, -0.68), rr(0.2, 0.12, 0.26), BEARD, { ...ax, k: 0.06 * R, soft: 0.8 });
+    hair.chain([F(0.24, -0.68), P(1.74, 1.36), P(1.9, 0.7), P(2.1, 0.26)], [0.14 * R, 0.33 * R, 0.26 * R, 0.09 * R], BEARD, { k: 0.08 * R, flat: 1.5, soft: 1.2 });
   } else {
     // a dark mantle of hair on the shoulders, and to either side of the face a curtain of it hanging straight down
     hair.ball(P(2.96, 3.26), rr(0.8, 0.4, 1.26), HAIR, { k: 0.12 * R, soft: 1.5 });
     for (const s of [-1, 1]) {
-      hair.ball(F(-0.12, -0.1, s * 0.46), rr(0.3, 0.42, 0.09), HAIR, { ...ax, k: 0.06 * R, soft: 1 });
-      hair.chain([F(-0.1, -0.2, s * 0.5), P(1.98, 2.1, s * 0.52), P(2.0, 1.15, s * 0.5)], [0.2 * R, 0.17 * R, 0.05 * R], HAIR, { k: 0.08 * R, flat: 0.45, soft: 1 });
-      hair.chain([F(-0.3, -0.3, s * 0.48), P(2.3, 2.0, s * 0.62), P(2.34, 1.3, s * 0.6)], [0.2 * R, 0.16 * R, 0.05 * R], HAIR, { k: 0.08 * R, flat: 0.45, soft: 1 });
+      hair.chain([F(-0.12, -0.16, s * 0.45), P(1.98, 2.1, s * 0.52), P(2.0, 1.15, s * 0.5)], [0.12 * R, 0.17 * R, 0.05 * R], HAIR, { k: 0.08 * R, flat: 0.45, soft: 1 });
+      hair.chain([F(-0.3, -0.24, s * 0.44), P(2.3, 2.0, s * 0.62), P(2.34, 1.3, s * 0.6)], [0.12 * R, 0.16 * R, 0.05 * R], HAIR, { k: 0.08 * R, flat: 0.45, soft: 1 });
     }
-    // a short beard along the jaw
-    hair.ball(F(0.24, -0.66), rr(0.22, 0.1, 0.28), BEARD, { ...ax, k: 0.05 * R, soft: 0.8 });
   }
   // it falls in locks: grooves between them, running the way it hangs
   const hd: [number, number] = pale ? [side * 0.5, -0.866] : [side * 0.12, -0.993];
@@ -247,8 +252,8 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number): Gener
         const len = [0.9, 1.0, 0.95, 0.78][i];
         finger([P(0.16, -0.32, z0), P(0.16 - 0.3 * len, -0.335, z0 * 1.02), P(0.16 - 0.56 * len, -0.3, z0 * 1.04), P(0.16 - 0.74 * len, -0.2, z0 * 1.05)], 0.07);
       }
-      // the thumb, up round the edge of the dish
-      finger([P(0.78, -0.27, s * 0.64), P(0.5, -0.2, s * 0.8), P(0.3, -0.06, s * 0.9), P(0.2, 0.06, s * 0.93)], 0.085);
+      // the thumb lies along the palm's edge
+      finger([P(0.78, -0.28, s * 0.64), P(0.52, -0.31, s * 0.74), P(0.32, -0.32, s * 0.77), P(0.16, -0.3, s * 0.76)], 0.085);
     } else {
       // resting on its rim, the fingers bent down over the edge
       hands.limb(P(2.02, 0.31, s * 0.82), P(1.62, 0.2, s * 0.7), 0.3 * R, 0.2 * R, SKIN, { k: 0.08 * R });
@@ -262,11 +267,12 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number): Gener
     }
   }
   const parts = [
-    yield* body.meshSteps(1.3 * v, paints, undefined, budget, { detail: folds, band: 3.4 }),
-    yield* head.meshSteps(0.42 * v, paints, undefined, budget),
-    yield* hair.meshSteps(0.8 * v, paints, undefined, budget, { detail: locks, band: 2 }),
-    yield* hands.meshSteps(0.42 * v, paints, undefined, budget),
+    yield* body.meshSteps(1.5 * v, paints, undefined, budget, { detail: folds, band: 3.6 }),
+    yield* head.meshSteps(0.5 * v, paints, undefined, budget),
+    yield* hair.meshSteps(0.95 * v, paints, undefined, budget, { detail: locks, band: 2.2 }),
+    yield* hands.meshSteps(0.62 * v, paints, undefined, budget),
   ];
+  if (process.env.NODE_ENV !== "production") console.info(`[kings] ${pale ? "pale" : "dark"} king, triangles: body ${Math.round(parts[0].index!.count / 3)}, head ${Math.round(parts[1].index!.count / 3)}, hair ${Math.round(parts[2].index!.count / 3)}, hands ${Math.round(parts[3].index!.count / 3)}`);
   const geo = mergeGeometries(parts)!;
   parts.forEach((p) => p.dispose());
   geo.computeBoundingSphere();
@@ -477,9 +483,13 @@ export function makeKingMaterial(k: King) {
           vec3 hp = (vObj - uHeadC) / uR;
           float fa = dot(hp, uHeadF); float fb = dot(hp, uCrownUp); float fz = abs(hp.z);
           float lw = fwidth(fb) + fwidth(fz);
-          float front = smoothstep(0.22, 0.34, fa);
-          float lash = lineAA(fb + 0.09 + 2.2 * (fz - 0.18) * (fz - 0.18), 0.014, lw) * smoothstep(0.06, 0.1, fz) * (1.0 - smoothstep(0.27, 0.31, fz));
-          float mouth = lineAA(fb + 0.432 + 1.2 * fz * fz, 0.011, lw) * (1.0 - smoothstep(0.13, 0.17, fz)) * smoothstep(0.38, 0.46, fa);
+          float front = smoothstep(0.16, 0.26, fa);
+          // (the eye is one long arc from beside the nose round onto the side of the face, so it is there in profile too)
+          float es = mix(0.27 + (0.46 - fa), fz, smoothstep(0.43, 0.49, fa));
+          float lash = lineAA(fb + 0.1 + 1.5 * (es - 0.24) * (es - 0.24), 0.014, lw) * smoothstep(0.1, 0.15, es) * (1.0 - smoothstep(0.4, 0.46, es));
+          // (a second, fainter line over it: the crease of the lid)
+          lash += lineAA(fb + 0.058 + 1.9 * (es - 0.24) * (es - 0.24), 0.007, lw) * smoothstep(0.09, 0.14, es) * (1.0 - smoothstep(0.34, 0.4, es)) * 0.5;
+          float mouth = lineAA(fb + 0.432 + 1.1 * fz * fz, 0.011, lw) * (1.0 - smoothstep(0.19, 0.24, fz)) * smoothstep(0.36, 0.44, fa);
           float foldW = 0.07 + 0.11 * clamp((-0.27 - fb) / 0.2, 0.0, 1.0);
           float fold = lineAA(fz - foldW, 0.01, lw) * smoothstep(-0.52, -0.45, fb) * (1.0 - smoothstep(-0.3, -0.26, fb)) * 0.55 * smoothstep(0.36, 0.46, fa);
           float nostril = 1.0 - smoothstep(0.008, 0.022, length(vec2(fb + 0.272, (fz - 0.04) * 0.7)));
@@ -487,8 +497,7 @@ export function makeKingMaterial(k: King) {
           float drawn = clamp(lash + mouth + fold + nostril * 0.45, 0.0, 1.0) * front * skinW;
           alb = mix(alb, vec3(${pale ? "0.1, 0.04, 0.028" : "0.045, 0.02, 0.014"}), drawn * 0.9);
           // a flush of blood in the cheek and the lip, a shadow of colour round the eye
-          alb = mix(alb, alb * vec3(1.12, 0.8, 0.74), skinW * front * (1.0 - smoothstep(0.03, 0.09, abs(fb + 0.432))) * (1.0 - smoothstep(0.1, 0.16, fz)) * 0.7);
-          alb = mix(alb, alb * vec3(0.8, 0.7, 0.72), skinW * front * (1.0 - smoothstep(0.05, 0.13, length(vec2(fb + 0.06, fz - 0.18)))) * 0.5);
+          alb = mix(alb, alb * vec3(1.12, 0.8, 0.74), skinW * front * (1.0 - smoothstep(0.02, 0.06, abs(fb + 0.432))) * (1.0 - smoothstep(0.08, 0.14, fz)) * smoothstep(0.44, 0.5, fa) * 0.5);
         }
         alb *= 1.0 + (dabs(vObj) - 0.5) * 0.18;
         n = bumpN(n, vWorld, height, 1.0);
@@ -497,7 +506,7 @@ export function makeKingMaterial(k: King) {
         vec3 Ld = normalize(uDome + vec3(0.0, uR * 0.35, 0.0) - vWorld);
         vec2 dl = domeLight(vWorld, n);
         float att = dl.y;
-        float ao = mix(1.0, vAO, 0.9);
+        float ao = mix(1.0, vAO, mix(0.9, 0.4, skinW));
         float wk2 = mix(0.3, 0.55, skinW);
         float wrap = clamp((dl.x + wk2) / (1.0 + wk2), 0.0, 1.0);
         vec3 warm = DOME_WARM * att * wrap * wrap * 3.7 * mix(1.0, ao, 0.7);

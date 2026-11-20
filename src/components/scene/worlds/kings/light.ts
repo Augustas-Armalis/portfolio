@@ -77,7 +77,8 @@ float domeVis(vec3 p){
 // how strongly it lights a surface at P facing n (x), and how near it is (y)
 vec2 domeLight(vec3 P, vec3 n){
   vec3 L = uDome + vec3(0.0, uR * 0.35, 0.0) - P; float d = length(L); L /= max(d, 0.001);
-  float att = 1.0 / (1.0 + d * d / (uR * uR * 7.5));
+  // (it breathes with the two who hold it, a twentieth brighter and dimmer)
+  float att = (1.0 + 0.05 * sin(uTime * 0.38)) / (1.0 + d * d / (uR * uR * 7.5));
   // it shines up and out: the dish and the hands shade whatever lies below it
   att *= smoothstep(-0.62, 0.1, -L.y);
   return vec2(dot(n, L), att);
@@ -87,8 +88,9 @@ vec2 domeLight(vec3 P, vec3 n){
 float domeBeams(vec3 v){
   float r = length(v);
   vec3 d = v / max(r, 0.001);
-  float az = atan(d.z, d.x);
-  float n = vnoise(vec2(az * 3.3 + 1.0, d.y * 2.6 + uTime * 0.006)) * 0.6 + vnoise(vec2(az * 9.0 - uTime * 0.009, d.y * 6.5 + 3.0)) * 0.4;
+  // (laid on the directions as seen from above, so there is no seam and nothing gathers straight overhead)
+  vec2 q = d.xz * (1.0 + 0.5 * d.y * d.y);
+  float n = vnoise(q * 4.6 + vec2(1.0, uTime * 0.006)) * 0.6 + vnoise(q * 11.0 + vec2(-uTime * 0.009, 3.0) + d.y * 2.0) * 0.4;
   float beam = smoothstep(0.3, 0.74, n);
   float wide = smoothstep(uR * 1.3, uR * 5.0, r);
   return mix(1.0, 0.3 + 1.3 * beam, wide * uFogK.z);
@@ -118,8 +120,8 @@ vec3 airFrom(vec3 col, vec3 ro, vec3 P){
   // (what lies between the eye and that place dims it a little)
   k *= exp(-od * (tc / max(len, 0.001)) * 0.6);
   // it does not light the air beneath the dish
-  k *= mix(0.35, 1.0, smoothstep(-0.7, 0.15, q.y / max(sqrt(p2), 1.0)));
-  return col + DOME_WARM * gathered * k * uR * 0.082 * (1.0 + uPulse * 0.25);
+  k *= mix(0.2, 1.0, smoothstep(-0.7, 0.15, q.y / max(sqrt(p2), 1.0)));
+  return col + DOME_WARM * gathered * k * uR * 0.082 * (1.0 + uPulse * 0.25) * (1.0 + 0.05 * sin(uTime * 0.38));
 }
 vec3 kingsAir(vec3 col, vec3 P){ return airFrom(col, cameraPosition, P); }
 

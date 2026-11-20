@@ -358,7 +358,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
   };
 
   // ---------- trees ----------
-  const SIDES = lo ? 9 : 14;
+  const SIDES = lo ? 9 : 12;
   // a bough: thick where it leaves, arching up and over, wandering
   const bough = (p0: V3, a: number, len: number, rise: number, rad: number, depth: number, sides: number) => {
     const ph = r() * 6.28;
@@ -370,7 +370,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
       const w = Math.sin(u * 5.2 + ph) * wob * u;
       return [p0[0] + Math.cos(aa) * len * Math.pow(u, 1.12) - Math.sin(aa) * w, p0[1] + rise * (1 - (1 - u) * (1 - u)) - rise * droop * u * u * u + Math.cos(u * 4.1 + ph) * wob * 0.6 * u, p0[2] + Math.sin(aa) * len * Math.pow(u, 1.12) + Math.cos(aa) * w];
     };
-    b.tube([p0, q(0.14), q(0.32), q(0.52), q(0.74), q(1)], [rad, rad * 0.86, rad * 0.68, rad * 0.5, rad * 0.3, rad * 0.08], BARK_TOP, BARK_TOP, BARK, { sides, seg: depth ? (lo ? 9 : 13) : lo ? 14 : 22, twist: 1.2, ph, flute: () => 0.06 });
+    b.tube([p0, q(0.14), q(0.32), q(0.52), q(0.74), q(1)], [rad, rad * 0.86, rad * 0.68, rad * 0.5, rad * 0.3, rad * 0.08], BARK_TOP, BARK_TOP, BARK, { sides, seg: depth ? (lo ? 8 : 10) : lo ? 12 : 16, twist: 1.2, ph, flute: () => 0.06 });
     return q;
   };
   const forkOf: (V3 | null)[] = [];
@@ -406,7 +406,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
       BARK_C,
       BARK_TOP,
       BARK,
-      { sides: SIDES, seg: lo ? 20 : 30, twist: 2.4, ph, flute: (k) => 0.3 * Math.pow(1 - k, 3) + 0.1 },
+      { sides: SIDES, seg: lo ? 18 : 24, twist: 2.4, ph, flute: (k) => 0.3 * Math.pow(1 - k, 3) + 0.1 },
     );
     // roots: out over the ground from between the buttresses, and under
     const nR = lo ? 3 : 4 + Math.floor(r() * 3);
@@ -420,7 +420,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
         const z = t.z + Math.sin(aa) * (t.R * 1.1 + len * u);
         return [x, gy(x, z) + up, z];
       };
-      b.tube([q(0, t.R * 0.7), q(0.25, t.R * 0.22), q(0.6, t.R * 0.08), q(1, -t.R * 0.5)], [t.R * 0.62, t.R * 0.44, t.R * 0.3, t.R * 0.12], BARK_C, BARK_C, BARK, { sides: lo ? 5 : 7, seg: lo ? 6 : 9, ph: ph + j, flute: () => 0.08 });
+      b.tube([q(0, t.R * 0.7), q(0.25, t.R * 0.22), q(0.6, t.R * 0.08), q(1, -t.R * 0.5)], [t.R * 0.62, t.R * 0.44, t.R * 0.3, t.R * 0.12], BARK_C, BARK_C, BARK, { sides: lo ? 5 : 6, seg: lo ? 6 : 7, ph: ph + j, flute: () => 0.08 });
     }
     const p0 = at(1);
     forkOf.push(p0);
@@ -429,11 +429,11 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     const zt = KINGS.z + ahead(t.z) * 0.75;
     const a0 = t.aim ?? (r() < 0.75 ? Math.atan2(zt - t.z, aisleX(zt) - t.x) + (r() - 0.5) * 0.9 : r() * 6.28);
     const grow = (from: V3, a: number, len: number, rise: number, rad: number) => {
-      const q = bough(from, a, len, rise, rad, 0, lo ? 7 : 9);
+      const q = bough(from, a, len, rise, rad, 0, lo ? 7 : 8);
       // it forks again, and ends in a few twigs
       const u1 = 0.36 + r() * 0.16;
       const a2 = a + (r() < 0.5 ? 1 : -1) * (0.6 + r() * 0.6);
-      const q2 = bough(q(u1), a2, len * (0.5 + r() * 0.2), rise * 0.5 + 14, rad * 0.5, 1, lo ? 5 : 7);
+      const q2 = bough(q(u1), a2, len * (0.5 + r() * 0.2), rise * 0.5 + 14, rad * 0.5, 1, lo ? 5 : 6);
       for (const [qq, u, k] of [
         [q, 0.72, 0.2],
         [q, 0.96, 0.12],
@@ -559,13 +559,13 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     }
 
   // white lights hung far up among the boughs, small as stars
-  const nStar = lo ? 70 : 170;
+  const nStar = lo ? 90 : 260;
   for (let i = 0; i < nStar; i++) {
     const x = (r() - 0.5) * 1100;
     const z = KINGS.z + 420 - r() * 980;
     const y = by + 30 + Math.pow(r(), 0.8) * 250;
     if (Math.abs(x) < 190 && Math.abs(z - KINGS.z) < 90 && y < by + 5.6 * R) continue;
-    stars.push({ p: [x, y, z], size: 1.5 + r() * 1.5, col: r() < 0.72 ? [0.86, 0.92, 1.0] : [1, 0.86, 0.64], k: 0.45 + r() * 0.5 });
+    stars.push({ p: [x, y, z], size: 2.0 + r() * r() * 3.0, col: r() < 0.72 ? [0.86, 0.92, 1.0] : [1, 0.86, 0.64], k: 0.7 + r() * 0.8 });
   }
   yield;
   const geo = b.build();
@@ -626,7 +626,10 @@ export function makeWoodMaterial() {
         float wfw = fw * 0.45;
         float win = (1.0 - smoothstep(0.19 - wfw, 0.19 + wfw, abs(wf.x))) * (1.0 - smoothstep(0.2 - wfw, 0.2 + wfw, abs(wf.y + 0.04)));
         float mull = max(1.0 - smoothstep(0.015, 0.035, abs(wf.x)), 1.0 - smoothstep(0.015, 0.035, abs(wf.y + 0.04)));
-        float litW = step(0.52, hash12(wi + 3.7));
+        // (more of them are lit near the eye than far from it: as the plane comes by, a town wakes, window by window)
+        float wake = 1.0 - smoothstep(70.0, 260.0, length(cameraPosition - vWorld));
+        float wth = mix(0.6, 0.26, wake);
+        float litW = smoothstep(wth - 0.03, wth + 0.03, hash12(wi + 3.7));
         float crisp = 1.0 - smoothstep(0.35, 1.5, fw);
         float candle = 0.84 + 0.16 * sin(uTime * (0.6 + hash12(wi) * 0.8) + hash12(wi + 1.0) * 40.0);
         float glowW = mix(0.016, win * litW * (1.0 - mull * 0.6 * crisp), crisp) * isWall * candle;
