@@ -75,7 +75,8 @@ export type LoaderOverlay = {
 
 const fwd = new THREE.Vector3();
 
-export function makeLoaderOverlay(): LoaderOverlay {
+// `rate`: how much faster than written the opening plays (a phone's is quicker)
+export function makeLoaderOverlay(rate = 1): LoaderOverlay {
   const u = {
     uRes: { value: new THREE.Vector2(1, 1) },
     uLine: { value: new THREE.Vector4(0, 1, 0.5, 1) },
@@ -104,6 +105,7 @@ export function makeLoaderOverlay(): LoaderOverlay {
   return {
     mat,
     update(t, cam, size, buf) {
+      if (t > 0) t *= rate;
       const k = buf.y / Math.max(1, size.height); // buffer px per CSS px
       u.uRes.value.copy(buf);
       const l = t < 0.5 ? loader.measure() : loader.line;

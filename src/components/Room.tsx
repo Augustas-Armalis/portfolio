@@ -71,6 +71,10 @@ const FOG = 0.016;
 // The arrival, in seconds from the moment the loader's line becomes the horizon.
 const ARRIVE = 6.0; // the camera reaches its home pose
 const SETTLE = ARRIVE - 1.4; // the things on the desk begin to alight, to land with the camera
+// On a phone the arrival is shorter and plainer: a quicker lifting of the dark, a descent of under four seconds,
+// and everything already in its place on the desk when it comes into view.
+const ARRIVE_PHONE = 3.6;
+const LOADER_RATE_PHONE = 1.5;
 // Where the camera begins, in the orbit rig's own coordinates around the desk:
 // far out and high in the mist, level with the horizon.
 const START = { r: 74, pol: 1.2, az: -0.1, mist: 0.045, fov: 9 };
@@ -297,7 +301,8 @@ function Scene({
   const sketch = useRef<SketchApi | null>(null);
   const [reading, setReading] = useState(false);
   // the loader's in-canvas half, drawn over the finished frame until the dark has lifted
-  const veil = useMemo(() => (instant ? null : makeLoaderOverlay()), [instant]);
+  const ARR = mobile ? ARRIVE_PHONE : ARRIVE;
+  const veil = useMemo(() => (instant ? null : makeLoaderOverlay(mobile ? LOADER_RATE_PHONE : 1)), [instant, mobile]);
   const fast = useRef(false);
   const musicVol = useRef(1);
   const gatePhase = useRef<string>("open");
@@ -407,7 +412,7 @@ function Scene({
           introAt.current = nowS() - t;
           fast.current = false;
           landedFov.current = false;
-          if (veil && t < LOADER_T.total) postCtl.overlay = veil.mat;
+          if (veil && t < LOADER_T.total / (mobile ? LOADER_RATE_PHONE : 1)) postCtl.overlay = veil.mat;
         },
         view: (o: typeof dev.current.view) => (dev.current.view = o),
         post: postCtl,
@@ -565,7 +570,7 @@ function Scene({
     return { cover, fit };
   };
 
-  const ready = () => instant || (introAt.current !== null && nowS() - introAt.current > ARRIVE);
+  const ready = () => instant || (introAt.current !== null && nowS() - introAt.current > ARR);
 
   // boot (display click)
   startRef.current = () => {
@@ -885,7 +890,7 @@ function Scene({
     // still a speck in the haze, and stays on it.
     const at = introAt.current;
     if (!instant) {
-      const k = at === null ? 0 : clamp01((now - at) / ARRIVE);
+      const k = at === null ? 0 : clamp01((now - at) / ARR);
       const u = k * k * k * (k * (k * 6 - 15) + 10);
       if (u < 1) {
         const R = Math.exp(THREE.MathUtils.lerp(Math.log(START.r), Math.log(rad), u));
@@ -1071,12 +1076,12 @@ function Scene({
     // a click during the arrival plays the rest of it through at speed
     const at0 = introAt.current;
     if (fast.current && at0 !== null) {
-      if (now - at0 < ARRIVE + 1) introAt.current = at0 - dt * 7;
+      if (now - at0 < ARR + 1) introAt.current = at0 - dt * 7;
       else fast.current = false;
     }
     // arrival mist thins out, continuously, as the camera comes down
     const at = introAt.current;
-    const mist = instant ? 0 : at === null ? START.mist : START.mist * (1 - smooth(clamp01((now - at) / (ARRIVE * 0.8))));
+    const mist = instant ? 0 : at === null ? START.mist : START.mist * (1 - smooth(clamp01((now - at) / (ARR * 0.8))));
     SKY_U.uMist.value = Math.max(mist, voyage.mist);
     // the plain three fog (the desk and its things) keeps pace with the shader fog
     fog.far = Math.min(176, 3 / (FOG + mist));
@@ -1377,7 +1382,7 @@ function Scene({
             p={{ pos: [o.pos[0], DESK.top, o.pos[2]], rot: o.rot }}
             settle={settleOf[kind]}
             introAt={introAt}
-            instant={instant}
+            instant={instant || mobile}
             hoverable={idle && mode === "none"}
             label={LABELS[kind]}
             labelAt={[0, TAG_Y[kind], 0]}
@@ -1388,8 +1393,8 @@ function Scene({
           </Piece>
         );
       })}
-      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={SETTLE + 0.4} instant={instant} />
-      {idle && mode === "none" && <PlaneLabel spot={planeSpot} introAt={introAt} instant={instant} />}
+      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={SETTLE + 0.4} instant={instant || mobile} />
+      {idle && mode === "none" && <PlaneLabel spot={planeSpot} introAt={introAt} instant={instant} after={ARR + 2.2} />}
       <Post level={devPost ?? (mobile ? Math.min(1, q.post) : q.post)} />
     </>
   );
@@ -1413,13 +1418,13 @@ function Held({ away, children }: { away: boolean; children: ReactNode }) {
 }
 
 // "Fly" hint that floats over the paper plane so it's obviously interactive.
-function PlaneLabel({ spot, introAt, instant }: { spot: { pos: [number, number, number] }; introAt: MutableRefObject<number | null>; instant: boolean }) {
+function PlaneLabel({ spot, introAt, instant, after }: { spot: { pos: [number, number, number] }; introAt: MutableRefObject<number | null>; instant: boolean; after: number }) {
   const [show, setShow] = useState(false);
   // only once the desk has long settled, and it eases in like every other tag
   useFrame(() => {
     if (show) return;
     const at = introAt.current;
-    if (instant ? nowS() - mountedAt.current > 1.5 : at !== null && nowS() - at > ARRIVE + 2.2) setShow(true);
+    if (instant ? nowS() - mountedAt.current > 1.5 : at !== null && nowS() - at > after) setShow(true);
   });
   const mountedAt = useRef(nowS());
   return (
@@ -1525,6 +1530,8 @@ export default function Room({
     return () => document.removeEventListener("visibilitychange", v);
   }, []);
   useEffect(() => ambienceScene({ active }), [active]);
+  // a phone hears only a very soft wind: no birds, no water, no piano notes
+  useEffect(() => ambienceScene({ minimal: isMobile }), [isMobile]);
   // the room going away (or being rebuilt by a hot reload) takes its music with it
   useEffect(
     () => () => {
@@ -1555,9 +1562,9 @@ export default function Room({
   const [introDone, setIntroDone] = useState(false);
   useEffect(() => {
     if (!revealed) return;
-    const t = window.setTimeout(() => setIntroDone(true), (skipIntro || reduced ? 0.4 : ARRIVE + 0.7) * 1000);
+    const t = window.setTimeout(() => setIntroDone(true), (skipIntro || reduced ? 0.4 : (isMobile ? ARRIVE_PHONE : ARRIVE) + 0.7) * 1000);
     return () => window.clearTimeout(t);
-  }, [revealed, skipIntro, reduced]);
+  }, [revealed, skipIntro, reduced, isMobile]);
   const idle = stage === "idle" && active && revealed && introDone && mode === "none";
   const live = active;
   const exit = useCallback(() => exitRef.current?.(), []);

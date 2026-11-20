@@ -52,7 +52,10 @@ import { playPiano, preloadPiano } from "@/lib/piano";
 // last value.
 
 export type Place = "meadow" | "forest" | "sea" | "sky" | "none";
-type Scene = { night: number; water: number; speed: number; boost: number; active: boolean; place?: Place; world?: string };
+// `minimal` (phones): only the wind, at a low level. No birds, no water, no piano notes, and the files for
+// them are never fetched.
+type Scene = { night: number; water: number; speed: number; boost: number; active: boolean; place?: Place; world?: string; minimal?: boolean };
+const MINIMAL_WIND = 0.55; // about 5 dB under the desk's ordinary wind
 const scene: Scene = { night: 0, water: 0, speed: 0, boost: 0, active: true };
 
 // One row per place. Levels are shares of the calibrated full level (LEVEL).
@@ -430,6 +433,19 @@ function targets(s: Scene) {
   const boost = clamp01(s.boost);
   // birds are a thing of the day: gone by dusk, back after dawn
   const day = 1 - smooth(0.3, 0.6, night);
+  if (s.minimal)
+    return {
+      key,
+      wind: LEVEL.wind * b.wind * (1 - 0.45 * night) * MINIMAL_WIND,
+      windTone: b.tone * (1 - 0.3 * night),
+      air: LEVEL.air * b.wind * fly * fly * MINIMAL_WIND,
+      airTone: 480 + fly * 420,
+      water: 0,
+      birds: 0,
+      birdsTone: BIRDS.lpFar,
+      day,
+      piano: false,
+    };
   return {
     key,
     // the wind settles and darkens after dark
@@ -557,7 +573,7 @@ function tick() {
   });
   if (r.swells.until < t + 30) runSwell(r.swells, t, t + 90);
   // birds where there are birds, by day (a little hysteresis around dusk)
-  forestTick(r, on && BEDS[g.key].birds > 0 && g.day > (forest.on ? 0.02 : 0.2));
+  forestTick(r, on && g.birds > 0 && BEDS[g.key].birds > 0 && g.day > (forest.on ? 0.02 : 0.2));
   const now = performance.now();
   // coming back from silence: no note until the bed has settled
   if (on && !wasOn) nextNote = Math.max(nextNote, now + 20000 + Math.random() * 20000);
@@ -616,7 +632,7 @@ export function startAmbience() {
       const { ctx } = audioGraph();
       rig = build(ctx, channel("ambience"));
       rig.sources.forEach((s, i) => track("ambience", s, ["wind", "air", "water"][i]));
-      preloadPiano(36, 64);
+      if (!scene.minimal) preloadPiano(36, 64);
       if (DEV) devHook(rig);
     }
     running = true;

@@ -199,7 +199,8 @@ export function Preloader({ hideForReducedMotion = false }: { hideForReducedMoti
           style={out ? { opacity: 0, filter: "blur(5px)", transform: "translateY(-5px)", transitionDelay: open ? "0.12s" : "0s" } : undefined}
         >
           <span>Augustas Armalis</span>
-          <span className="tabular-nums text-white/50" style={{ opacity: time ? 1 : 0, transition: "opacity .6s cubic-bezier(.23,1,.32,1)" }}>
+          {/* (a phone's loader carries the name alone) */}
+          <span className="tabular-nums text-white/50 max-md:hidden" style={{ opacity: time ? 1 : 0, transition: "opacity .6s cubic-bezier(.23,1,.32,1)" }}>
             Kaunas · {time ?? "00:00"}
           </span>
         </div>
