@@ -52,17 +52,17 @@ export function buildIsland(mobile: boolean) {
       pos.push(ISLAND.x + xn * ISLAND.half, y, z);
       // deep green at the head, through grey-green, to a pale grey-violet at the far tip (the air inside one object)
       const far = Math.min(1, Math.max(0, (0.5 - xn) / 1.5));
-      let r = 0.03 + (0.12 - 0.03) * far;
-      let g = 0.105 + (0.14 - 0.105) * far;
-      let b = 0.046 + (0.15 - 0.046) * far;
+      let r = 0.03 + (0.115 - 0.03) * far;
+      let g = 0.122 + (0.15 - 0.122) * far;
+      let b = 0.05 + (0.15 - 0.05) * far;
       // the crown and the face of the head catch the last light: a lighter, yellower green
       const top = crown * Math.max(0, Math.min(1, (y / Math.max(h, 1) - 0.7) / 0.24));
       const fk = Math.max(0, 1 - Math.abs(xn - 0.76) / 0.16);
       const face = fk * fk * (3 - 2 * fk) * (v > 0 ? 1 : 0.3);
       const lit = Math.min(1, top * 1.2 + face * 0.3);
-      r += (0.12 - r) * lit;
-      g += (0.3 - g) * lit;
-      b += (0.09 - b) * lit;
+      r += (0.13 - r) * lit;
+      g += (0.34 - g) * lit;
+      b += (0.085 - b) * lit;
       // the gullies hold darker paint
       const dk = 0.86 + 0.5 * gully;
       col.push(r * dk, g * dk, b * dk, far);
@@ -182,6 +182,24 @@ export function makeIslandMaterial() {
         vec3 V = normalize(cameraPosition - vWorld);
         float dist = length(vWorld - cameraPosition);
         vec3 l = vLocal;
+        // Close to, the rock has relief of its own: level beds that stand out as ledges, upright cracks, pitted
+        // faces. It is a height worked out from the place on the rock, and the light is turned by its slope
+        // (the surface's own derivatives), so ledges catch the sky and cracks hold shade as the eye passes.
+        float nearK = 1.0 - smoothstep(60.0, 520.0, dist);
+        float ledgeW = vnoise(l.xz * 0.02) * 4.0 + vnoise(vec2(l.x * 0.004, l.z * 0.01)) * 9.0;
+        float ledge = fract(l.y * 0.085 + ledgeW);
+        float crackN = vnoise(vec2(l.x * 0.21 + l.z * 0.17 + vnoise(l.xy * 0.05) * 2.0, l.y * 0.035));
+        float crack = 1.0 - smoothstep(0.0, 0.07, abs(crackN - 0.5));
+        float pit = vnoise(l.xy * 0.9 + l.z * 0.7) * 0.6 + vnoise(l.xz * 2.3 + l.y * 1.9) * 0.4;
+        float steep0 = smoothstep(0.2, 0.6, 1.0 - n.y);
+        float relief = (smoothstep(0.0, 0.16, ledge) * (1.0 - smoothstep(0.75, 1.0, ledge)) * 1.3 - crack * 1.6) * steep0 + pit * 0.5;
+        if (nearK > 0.01) {
+          vec3 sx = dFdx(vWorld); vec3 sy = dFdy(vWorld);
+          vec3 r1 = cross(sy, n); vec3 r2 = cross(n, sx);
+          float det = dot(sx, r1);
+          vec3 grad = sign(det) * (dFdx(relief) * r1 + dFdy(relief) * r2);
+          n = normalize(abs(det) * n - grad * 1.5 * nearK);
+        }
         // rock, laid in soft dabs: level beds broken by the slope, long stains running down the steep faces
         float steep = 1.0 - n.y;
         float dab = vnoise(l.xz * 0.11 + l.y * 0.09) * 0.6 + vnoise(l.xy * 0.37 + l.z * 0.3) * 0.4;
@@ -192,6 +210,11 @@ export function makeIslandMaterial() {
         // moss and low growth on what faces the sky, yellower where the evening still finds it
         float moss = smoothstep(0.5, 0.82, n.y) * smoothstep(0.35, 0.7, vnoise(l.xz * 0.045 + 5.0) * 0.6 + dab * 0.4);
         alb = mix(alb, vCol.rgb * vec3(1.5, 1.6, 0.9) + vec3(0.01, 0.02, 0.0), moss * 0.55);
+        // the cracks are dark, the lips of the ledges pale and dry; lichen in small pale and ochre spots
+        alb *= 1.0 - 0.5 * crack * steep0 * nearK;
+        alb *= 1.0 + 0.3 * smoothstep(0.7, 0.98, ledge) * steep0 * nearK;
+        float lich = smoothstep(0.7, 0.86, vnoise(l.xy * 0.55 + l.z * 0.45 + 9.0)) * smoothstep(0.45, 0.65, pit) * nearK;
+        alb = mix(alb, mix(vec3(0.2, 0.24, 0.17), vec3(0.3, 0.24, 0.1), step(0.5, vnoise(l.xz * 0.13 + 2.0))), lich * 0.55);
         // the grain of the chalk, close to
         float near = 1.0 - smoothstep(40.0, 420.0, dist);
         float tooth = vnoise(l.xz * 1.9 + l.y * 1.3) * 0.5 + vnoise(l.xy * 4.3 - l.z * 3.1) * 0.5;
@@ -227,7 +250,7 @@ export function makeIslandMaterial() {
 }
 
 // inside the grotto: wet black-green rock; the eyes' light just reaches its lip; and far in, round the bend, a
-// faint green-gold glimmer of the sea that waits beyond
+// faint blue glimmer: the ultramarine night of the Funeral Symphony, which lies beyond the rock
 export function makeGrottoMaterial() {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
@@ -253,11 +276,11 @@ export function makeGrottoMaterial() {
         vec3 col = alb * uSkyCol * (1.0 - 0.85 * smoothstep(0.0, 0.35, deep));
         // the eyes' light on the lip
         col += alb * vec3(1.0, 0.7, 0.34) * (uEyeK.x + uEyeK.y) * 0.7 * exp(-deep * 9.0);
-        // and the glimmer from within: green and amber, moving like light off water on the vault
+        // and the glimmer from within: a cold blue, moving like light off water on the vault
         float shimmer = vnoise(vec2(vLocal.x * 0.09 + uTime * 0.07, vLocal.z * 0.07 - uTime * 0.05)) * vnoise(vec2(vLocal.z * 0.13 + uTime * 0.04, vLocal.y * 0.2 + 3.0));
         // (its closed end is a soft pool of the same light, brightest at its heart)
         float end = step(1.1, deep);
-        col += mix(vec3(0.1, 0.4, 0.24), vec3(0.8, 0.6, 0.24), smoothstep(0.75, 1.25, deep)) * deep * deep * mix(0.02 + 0.3 * shimmer, 0.16 * exp(-vK.y * 2.0), end) * (0.5 + 0.5 * rib) * glowK() * 1.6;
+        col += mix(vec3(0.05, 0.16, 0.42), vec3(0.16, 0.34, 0.9), smoothstep(0.75, 1.25, deep)) * deep * deep * mix(0.02 + 0.3 * shimmer, 0.16 * exp(-vK.y * 2.0), end) * (0.5 + 0.5 * rib) * glowK() * 1.6;
         gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,
