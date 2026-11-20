@@ -133,6 +133,7 @@ type S = {
   live: 0 | 1; // which deck has the stream
   decks: [Deck, Deck] | null;
   blocked: boolean; // streams have failed on this page: the hosted music stands in
+  retries: number; // times the field's stream was asked for again from inside a later gesture
   patient: boolean; // the visitor has asked for the field's music by hand: from now on its player waits for them, and never times out
   askedAt: number; // performance.now() when the field's stream was last asked for
   lastFail: string | null;
@@ -157,6 +158,7 @@ const st: S = (G.__aosMusic ??= {
   live: 0,
   decks: null,
   blocked: false,
+  retries: 0,
   patient: false,
   askedAt: 0,
   lastFail: null,
@@ -549,8 +551,18 @@ function init() {
   });
   // the desk's background music is asked for and sent away by the ambience
   setDeskMusic(desk, () => {
-    // (inside the first gesture: the hosted stand-in may start later without one)
+    // (inside a gesture: the hosted stand-in may start later without one)
     voicePrime(bgVoice());
+    // The scene may be let in by the loader's own clock, before the visitor has touched anything: the field's
+    // stream is then asked for with no gesture behind it and a browser refuses it. The next touches of the scene
+    // (the ambience calls this from every one) ask again from inside the gesture, twice at most; after that it
+    // is left to the "Play field music" pill.
+    if (st.blocked && st.place === "desk" && !st.now && st.retries < 2 && performance.now() - st.askedAt > 2500) {
+      st.retries++;
+      st.blocked = false;
+      note(`field music asked again inside a gesture (${st.retries})`);
+      apply(FADE.desk);
+    }
   });
   st.off.push(
     // somebody else takes the music (the headphones, the OS's player): ours leaves as a voice would
