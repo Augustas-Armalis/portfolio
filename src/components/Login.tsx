@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Mark } from "./Mark";
+import { Mark, MarkDeep } from "./Mark";
 import { useEffect } from "react";
 import { mainWork, owner } from "@/content";
 import { useOS, useWallpaper } from "@/store";
@@ -17,7 +17,7 @@ export function Monogram({ size = 88 }: { size?: number }) {
       role="img"
       aria-label={owner.name}
     >
-      <Mark size={Math.round(size * 0.62)} />
+      <MarkDeep size={Math.round(size * 0.62)} />
     </div>
   );
 }
