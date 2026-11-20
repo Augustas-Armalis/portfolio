@@ -2,12 +2,13 @@
 
 import * as THREE from "three";
 import { GLSL_SKY, SKY_U } from "../sky";
+import { buildTree, makeLeafTexture } from "../home/trees";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { buildCastle } from "./fairy/castle";
 import { MT, PEAKS, WARDS, buildMountain, buildPeaks, buildRamp, mountainCrowns, peakRadius, rampLine, roadLine, surfaceY } from "./fairy/mountain";
-import { GLSL_GROUND_LIFE, Kindling, archGeometry, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp } from "./fairy/shared";
+import { GLSL_GROUND_LIFE, Kindling, archGeometry, leafyMesh, makeLeafyMaterial, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp } from "./fairy/shared";
 import { WORLDS, gateOf, groundAt, pathOf } from "./voyage";
 
 // Fairy Tale (Castle Fairy Tale, 1909), after the painting and after the way the film "Angelų takais" built it
@@ -251,22 +252,39 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       plain.push({ p: [x, g(x, z) - s * 0.1, z], r: s, h: 1 + r() * 0.5, seed: r() });
     }
 
-    // the trees the plane passes low over as the world opens: these are looked at, so each is a round crown with
-    // two or three lesser ones clustered against it
-    const nearest: Crown[] = [];
-    const low = pathOf("fairy").pts.filter((q, i) => i % 5 === 0 && q.y < 140);
-    for (let i = close.length - 1; i >= 0; i--) {
-      const c = close[i];
-      if (!low.some((q) => Math.abs(q.x - c.p[0]) < 95 && Math.abs(q.z - c.p[2]) < 95)) continue;
-      close.splice(i, 1);
-      nearest.push(c);
-      const m = props.mobile ? 1 : 2;
-      for (let j = 0; j < m; j++) {
-        const a = r() * Math.PI * 2;
-        const s2 = c.r * (0.5 + r() * 0.22);
-        nearest.push({ p: [c.p[0] + Math.cos(a) * c.r * 0.72, c.p[1] + c.r * (0.05 + r() * 0.35), c.p[2] + Math.sin(a) * c.r * 0.72], r: s2, h: 0.95 + r() * 0.3, seed: r() });
-      }
+    // The trees the plane passes as the world opens are real trees (a short trunk, boughs, a crown of leaf clumps):
+    // richly made where it passes close, in fewer larger clumps at mid distance. None stands under the way itself,
+    // and those beside it are kept low, so the plane rides over the wood and no crown fills the eye.
+    const nearTrees: Crown[] = [];
+    const midTrees: Crown[] = [];
+    const low = pathOf("fairy").pts.filter((q, i) => i % 4 === 0 && q.y < 150);
+    const NEAR_MAX = props.mobile ? 40 : 130;
+    const MID_MAX = props.mobile ? 420 : 1500;
+    const ranked = close
+      .map((c) => {
+        let d = 1e9;
+        for (const q of low) d = Math.min(d, Math.hypot(q.x - c.p[0], q.z - c.p[2]));
+        return { c, d };
+      })
+      .sort((u, v) => u.d - v.d);
+    close.length = 0;
+    for (const { c, d } of ranked) {
+      if (d < 30) continue;
+      const tree: Crown = { p: [c.p[0], g(c.p[0], c.p[2]) - 0.4, c.p[2]], r: d < 110 ? Math.min(c.r, 6.2) : c.r * 0.9, h: 1, seed: c.seed };
+      if (d < 150 && nearTrees.length < NEAR_MAX) nearTrees.push(tree);
+      else if (midTrees.length < MID_MAX) midTrees.push(tree);
+      else plain.push(c);
     }
+    const leaves = makeLeafTexture();
+    const leafy = makeLeafyMaterial(leaves);
+    const treeMeshes = [0, 1].flatMap((v) => {
+      const rich = buildTree("broad", v, props.mobile ? 0 : 1);
+      const coarse = buildTree("broad", v, 0);
+      const out = [leafyMesh(nearTrees.filter((_, i) => i % 2 === v), rich, leafy), leafyMesh(midTrees.filter((_, i) => i % 2 === v), coarse, leafy)];
+      rich.dispose();
+      coarse.dispose();
+      return out;
+    });
     // low bushes scattered through the meadows, so no stretch of ground is bare
     for (let i = 0; i < Math.round(1500 * few); i++) {
       const a = r() * Math.PI * 2;
@@ -281,7 +299,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     }
     // (none stands in the way on)
     const gate = def.gate!;
-    for (const list of [plain, close]) for (let i = list.length - 1; i >= 0; i--) if (Math.hypot(list[i].p[0] - gate.x, list[i].p[2] - gate.z) < 95) list.splice(i, 1);
+    for (const list of [plain, midTrees]) for (let i = list.length - 1; i >= 0; i--) if (Math.hypot(list[i].p[0] - gate.x, list[i].p[2] - gate.z) < 95) list.splice(i, 1);
 
     // ---- hamlets in their fields: a tower, a huddle of roofs, lit windows, cypresses standing by
     const k = new Kit();
@@ -505,8 +523,9 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       slopes,
       wood,
       plain: crownMesh(plain, wood, false),
-      close: crownMesh(close, wood, true),
-      near: crownMesh(nearest, wood, "near"),
+      leaves,
+      leafy,
+      treeMeshes,
       cypress: cypressMesh(cyp, makeCrownMaterial({ a: [0.045, 0.12, 0.06], b: [0.07, 0.15, 0.06], shade: [0.02, 0.05, 0.055], wind: 0.5, gold: 0 })),
       set: k.build(),
       lamps,
@@ -546,8 +565,9 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
         <Walkers road={b.road} n={props.mobile ? 60 : 150} speed={1.5} size={1.1} />
       </group>
       <primitive object={b.plain} />
-      <primitive object={b.close} />
-      <primitive object={b.near} />
+      {b.treeMeshes.map((m, i) => (
+        <primitive key={i} object={m} />
+      ))}
       <primitive object={b.cypress} />
       <mesh geometry={b.set} material={b.stone} />
       <Halos list={b.lamps} />
