@@ -734,7 +734,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -500, z: -640, r: 50, h: 60, bell: true },
       { x: 720, z: -640, r: 55, h: 70, bell: true },
     ],
-    canvases: [{ painting: "tranquility", x: -62, z: 760, yaw: 0.8 }],
+    canvases: [{ painting: "tranquility", x: -40, z: 400, yaw: 0.8 }],
   },
   seafinale: {
     id: "seafinale",

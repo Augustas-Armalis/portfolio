@@ -10,6 +10,7 @@ import { GLSL_AIR, Kit, WORLD_U, angel, haloGeometry, makeHaloMaterial, makePoin
 import { Birds, GreatSun, type Flock } from "./life";
 import { makeCloudPaint, paintedCloudGeometry, type PCloud } from "./stars/forms";
 import { ORIGIN, WORLDS, pathOf } from "./voyage";
+import { useDeepLens } from "./fairy/shared";
 
 // Rex (1909). Umber dusk, almost one colour. On a still sea a globe lies half
 // in the water, dark, with paler lands drifting on it; before it a blade of
@@ -275,6 +276,8 @@ function crescent(R: number) {
 }
 
 export default function RexWorld({ props }: { props: WorldProps }) {
+  // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
+  useDeepLens("rex");
   const comets = useRef<THREE.Group>(null);
   const sky = useRef<THREE.Group>(null);
   const b = useDisposable(() => {

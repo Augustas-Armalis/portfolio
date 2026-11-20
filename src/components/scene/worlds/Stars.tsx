@@ -10,6 +10,7 @@ import { Birds, LightShafts, type Flock, type Shaft } from "./life";
 import { linesGeometry, makeCloudPaint, makeLineMaterial, makeRayDiscMaterial, makeSoftMaterial, paintedCloudGeometry, ribbonGeometry, softGeometry, type PCloud, type Seg, type Soft } from "./stars/forms";
 import { FIG_KINDS, constellation, heroAngel, makeGlobeGlass, makePyramidVeil, makeStarRiver, makeWaveBand, makeWaveSea, riverGeometry, wingFan } from "./stars/parts";
 import { ORIGIN, WORLDS, groundAt, pathOf } from "./voyage";
+import { useDeepLens } from "./fairy/shared";
 
 // Sonata of the Stars (Allegro and Andante, 1908), built as a cosmos to fly through.
 //
@@ -40,6 +41,8 @@ export const GLOBE = { x: -330, z: 150, r: 150 };
 const GOLD: V3 = [1.0, 0.82, 0.46];
 
 export default function StarsWorld({ props }: { props: WorldProps }) {
+  // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
+  useDeepLens("stars");
   const wings = useRef<(THREE.Group | null)[]>([]);
   const walker = useRef<THREE.Group>(null);
   const globe = useRef<THREE.Group>(null);

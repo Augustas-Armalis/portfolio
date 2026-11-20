@@ -7,6 +7,8 @@ import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { GLSL_AIR, WORLD_U, haloGeometry, makeHaloMaterial, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff } from "./kit";
 import { GLSL_SKY, SKY_U, airState, mixSky, type SkyState } from "../sky";
 import { Birds, type Flock } from "./life";
+import { useMoment } from "./moments";
+import { useDeepLens } from "./fairy/shared";
 import { SEA_LIFE_U, dolphinsGeometry, makeDolphinMaterial, makeRingMaterial, ringsGeometry, type Dolphin } from "./sea/life";
 import { ORIGIN, WORLDS, voyage } from "./voyage";
 import { ISLAND_U, buildGrotto, buildIsland, makeGrottoMaterial, makeIslandMaterial } from "./sea/island";
@@ -103,7 +105,7 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
     );
     // the pod: seven, two of them young, each with its own beat
     const pod: Dolphin[] = [];
-    for (let i = 0; i < 7; i++) pod.push({ side: (r() - 0.5) * 30, back: i * 7 + r() * 6, size: i > 4 ? 1.7 : 2.5 + r() * 0.6, phase: r() * 5, period: 4.1 + r() * 1.6, high: i > 4 ? 1.8 : 2.5 + r() * 1.2 });
+    for (let i = 0; i < 7; i++) pod.push({ side: (r() - 0.2) * 26, back: i * 7 + r() * 5, size: i > 4 ? 2.4 : 3.6 + r() * 0.8, phase: r() * 5, period: 4.1 + r() * 1.6, high: i > 4 ? 2.2 : 3.0 + r() * 1.4 });
     // skerries: a few low rocks awash off the tip of the tail and beyond the spit, each standing in the glass
     const skerries = new THREE.BufferGeometry();
     {
@@ -201,7 +203,10 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
       SEA_LIFE_U.uPodT.value = -1;
     };
   }, []);
-  const ev = useRef({ t: 0, on: false, wake: -1 });
+  const ev = useRef({ on: false, wake: -1, pod: false, podT0: -1 });
+  // (a moment of the flight: worlds/moments.tsx; in development __moments.fire("dolphins") brings them at once)
+  const pod = useMoment("sea", { id: "dolphins", after: 18, at: [60, 9, 330], within: 270, ease: 1, hold: 44, out: 1 });
+  useDeepLens("sea");
   useFrame(({ camera }) => {
     // made ready ahead of time, it waits: the air is still the world's before it
     const e = ev.current;
@@ -213,19 +218,17 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
     if (!e.on) {
       // each coming is the first: the eyes are shut, the pod has not been
       e.on = true;
-      e.t = now;
       e.wake = -1;
-      SEA_LIFE_U.uPodT.value = -1;
+      e.podT0 = -1;
     }
-    // the pod comes up once, after a calm while, ahead and to the right, and goes away to the left across the bay
-    const lz = camera.position.z - ORIGIN.z;
-    if (SEA_LIFE_U.uPodT.value < 0) {
-      if (now - e.t > 20 && lz < 430 && lz > 120 && voyage.phase === "open") {
-        SEA_LIFE_U.uPod.value.set(camera.position.x - ORIGIN.x + 58, lz - 150, -0.423, -0.906);
-        SEA_LIFE_U.uPodT.value = 0;
-        e.t = now;
-      }
-    } else SEA_LIFE_U.uPodT.value = now - e.t;
+    // the pod comes up once, after a calm while, close ahead and to the right, and goes with the plane toward the island for a while
+    // (the moment says when; its seconds are counted on the sky's own clock, which is the one the water runs on)
+    if (pod.on && !e.pod) {
+      SEA_LIFE_U.uPod.value.set(camera.position.x - ORIGIN.x + 24, camera.position.z - ORIGIN.z - 62, -0.08, -0.997);
+      e.podT0 = now;
+    }
+    e.pod = pod.on;
+    SEA_LIFE_U.uPodT.value = e.podT0 >= 0 && now - e.podT0 < 52 ? now - e.podT0 : -1;
     // the head of the island, from the eye
     const d = Math.hypot(camera.position.x - ORIGIN.x - GROTTO.x, camera.position.z - ORIGIN.z - ISLAND.z);
     // evening into a deep green dusk as the island comes near; the air clears as the light goes

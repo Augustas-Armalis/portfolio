@@ -8,6 +8,7 @@ import { Kit, makeTempera, rng, type GroundPalette, type Puff, type V3 } from ".
 import { Birds, GreatSun, PaintedClouds, type Flock, type PaintedCloud } from "./life";
 import { SKY_U } from "../sky";
 import { WORLDS, voyage } from "./voyage";
+import { useDeepLens } from "./fairy/shared";
 import { buildCrest, buildSea, buildSpray, makeCrestMaterial, makeSeaMaterial, makeSprayMaterial, signTexture } from "./seafinale/ocean";
 import { SHIPS, bodyAt, onFace, swellAt, swellDamp } from "./seafinale/shape";
 
@@ -105,6 +106,8 @@ function shipGeometry() {
 }
 
 export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
+  // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
+  useDeepLens("seafinale");
   const ships = useRef<(THREE.Mesh | null)[]>([]);
   const b = useDisposable(() => {
     const r = rng(1908);

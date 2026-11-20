@@ -12,6 +12,7 @@ import { SUN_GRASS_MASK, SUN_PAL, groveMap, sunPlotJS } from "./sun/ground";
 import { SUN_LIFE_U, bannersGeometry, greatSunMaterial, hungBellGeometry, makeBannerMaterial, makeHungBellMaterial, makeSkeinMaterial, makeSunsMaterial, makeWalkerMaterial, skeinGeometry, sunsGeometry, walkersGeometry, type Banner, type Hung, type KSun, type Skein, type Walker } from "./sun/life";
 import { SUN_BELLS, SUN_BRIDGES, SUN_GARDEN, SUN_GATEHOUSES, SUN_ROAD_Z, SUN_SKY, sunRoadX, type SunBridge } from "./sun/shape";
 import { ORIGIN, WORLDS, gateOf, groundAt, pathOf, voyage } from "./voyage";
+import { useDeepLens } from "./fairy/shared";
 
 // Sonata of the Sun (Allegro, 1907), built as a place to cross: a vast open plain under an amber air, and far
 // off on it, hundreds of metres apart, the bells.
@@ -302,6 +303,8 @@ function aqueduct(k: Kit, suns: KSun[], hung: Hung[], banners: Banner[], b: SunB
 }
 
 export default function SunWorld({ props }: { props: WorldProps }) {
+  // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
+  useDeepLens("sun");
   const b = useDisposable(() => {
     const r = rng(1907);
     const k = new Kit();
