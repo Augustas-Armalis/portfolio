@@ -20,7 +20,7 @@ export type AppId =
   // Music, writing, pictures
   | "records" | "piano" | "novel" | "gallery" | "notes"
   // System
-  | "about" | "contact" | "terminal" | "game" | "settings" | "trash" | "launchpad";
+  | "about" | "contact" | "terminal" | "game" | "settings" | "trash" | "launchpad" | "browser";
 
 export const owner = {
   name: "Augustas",
@@ -56,8 +56,10 @@ export const loginWallpaper = wallpapers[0];
 // The Dock, left to right: his apps, then the system ones after the divider.
 export const dockApps: AppId[] = ["projects", "games", "records", "novel", "notes", "shots", "gallery", "piano"];
 export const sharedApps: AppId[] = ["contact", "terminal", "settings"];
+// The desktop's dock also has the Browser beside them (the phone has a browser of its own).
+export const deskSharedApps: AppId[] = ["browser", ...sharedApps];
 // Everything that can be opened by name (Apps grid, Spotlight, Terminal).
-export const allApps: AppId[] = [...dockApps, "doom", "blocks", "taste", "kit", ...sharedApps, "about"];
+export const allApps: AppId[] = [...dockApps, "doom", "blocks", "taste", "kit", ...deskSharedApps, "about"];
 
 // The Projects folder, in its groups.
 export const projectGroups: { id: string; title: string; apps: AppId[] }[] = [
@@ -132,6 +134,7 @@ export const apps: Record<AppId, { title: string; size: Size }> = {
   notes: { title: "Notes", size: { w: 760, h: 520 } },
   contact: { title: "Get in Touch", size: { w: 720, h: 640 } },
   terminal: { title: "Terminal", size: { w: 680, h: 440 } },
+  browser: { title: "Browser", size: { w: 1080, h: 720 } },
   game: { title: "Catch", size: { w: 460, h: 400 } },
   settings: { title: "System Settings", size: { w: 820, h: 560 } },
   trash: { title: "Trash", size: { w: 620, h: 420 } },

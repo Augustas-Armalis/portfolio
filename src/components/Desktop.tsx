@@ -15,7 +15,7 @@ import {
 import { Lock, Search, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { about, allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, sharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
+import { about, allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, deskSharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
 import { focusedApp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
@@ -489,7 +489,7 @@ function MenuBar() {
               </MenuItem>
             ))}
             <Sep />
-            {sharedApps.map((id) => (
+            {deskSharedApps.map((id) => (
               <MenuItem key={id} onClick={run(() => open(id))}>
                 {apps[id].title}
               </MenuItem>
@@ -760,7 +760,7 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
       onPointerDown={(e) => {
         focus(win.id);
         const t = e.target as HTMLElement;
-        if (e.button === 0 && !win.max && t.closest("[data-drag]") && !t.closest("button,a,input,textarea,select,label,[role=switch],[role=button],[contenteditable]")) startMove(e);
+        if (e.button === 0 && !win.max && t.closest("[data-drag]") && !t.closest("button,a,input,textarea,select,label,[role=switch],[role=button],[contenteditable],[data-no-drag]")) startMove(e);
       }}
       onDoubleClick={(e) => {
         const t = e.target as HTMLElement;
@@ -971,7 +971,7 @@ function Dock() {
           ))}
         </Reorder.Group>
         <div className="relative mx-1 mb-[12px] h-[40px] w-px self-end bg-black/[0.14]" />
-        {sharedApps.map((id) => (
+        {deskSharedApps.map((id) => (
           <div key={id} className="relative">
             <DockIcon id={id} mouseX={mouseX} running={running.has(id)} front={front === id} dark={dark} dragging={false} />
           </div>

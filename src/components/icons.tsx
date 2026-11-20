@@ -24,6 +24,7 @@ export const SYSTEM_ICONS: Partial<Record<AppId, string>> = {
   game: "games.svg",
   contact: "mail.svg",
   terminal: "terminal.svg",
+  browser: "browser.svg",
   settings: "settings.svg",
   about: "about.svg",
   launchpad: "apps.svg",

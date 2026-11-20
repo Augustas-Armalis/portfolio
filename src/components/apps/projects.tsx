@@ -9,6 +9,7 @@ import { bookCall, projectGroups, projects, type AppId } from "@/content";
 import { AppIcon } from "../icons";
 import { Badge, Btn, dragFile, glass, InfoGrid, List, ListRow, SectionHeader, Squircle, StatsRow, QuickLook, Toolbar, useChrome } from "../ui";
 import { type StoryItem, CROP, ShotImg, storyImage, isShot, SHOT_BG } from "./shared";
+import { Browser } from "./browser";
 
 // One card face for every story. Photo stories put the app icon on the picture; screenshot stories float the
 // screenshot over a wallpaper, like an App Store feature.
@@ -389,12 +390,14 @@ function LiveSite({ it }: { it: StoryItem }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [reload, setReload] = useState(0);
-  // a site that never loads (blocked from framing) falls back to its story
+  // on the phone a site that never loads (blocked from framing) falls back to its story; on the desktop the
+  // browser says so itself and offers a new tab
   useEffect(() => {
+    if (!compact) return;
     setLoaded(false);
     const t = window.setTimeout(() => setFailed((f) => f || !loadedRef.current), 9000);
     return () => window.clearTimeout(t);
-  }, [reload]);
+  }, [reload, compact]);
   const loadedRef = useRef(false);
   // when the window gets too narrow for both, the site keeps the room and Info waits behind its button
   const root = useRef<HTMLDivElement>(null);
@@ -476,34 +479,31 @@ function LiveSite({ it }: { it: StoryItem }) {
         </AnimatePresence>
       </div>
     );
+  // on the desktop the site opens in a small browser: its own address, back and forward, anywhere it links to
   return (
-    <div ref={root} className="@container/site flex h-full min-h-0 flex-col">
-      <div data-drag className="toolbar flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--separator)] pl-[84px] pr-3">
-        <Btn variant="plain" size="sm" iconOnly label="Reload" onClick={() => setReload((r) => r + 1)} icon={<RotateCw size={14} />} />
-        <div className="search mx-auto flex h-[30px] w-[min(420px,60%)] items-center justify-center gap-1.5 rounded-[10px] bg-[var(--fill-2)] px-3">
-          {it.app ? <AppIcon id={it.app} size={16} flat /> : <Lock size={11} className="text-ink-2" />}
-          <span className="m-body truncate font-medium text-ink">{domain}</span>
-        </div>
-        <Btn variant="plain" size="sm" iconOnly label="Open in a new tab" href={href} icon={<ArrowUpRight size={15} />} />
-        <Btn variant={info ? "tinted" : "plain"} size="sm" iconOnly label="Info" onClick={() => setInfo((v) => !v)} icon={<Info size={15} />} />
-      </div>
-      <div className="relative flex min-h-0 flex-1">
-        {frame}
-        <AnimatePresence initial={false}>
-          {info && (
-            <motion.aside
-              key="inspector"
-              initial={{ x: 280, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 280, opacity: 0 }}
-              transition={{ type: "spring", bounce: 0, duration: 0.36 }}
-              className="inspector w-[272px] shrink-0 overflow-auto p-5 @max-[699px]/site:absolute @max-[699px]/site:inset-y-0 @max-[699px]/site:right-0 @max-[699px]/site:z-10 @max-[699px]/site:max-w-[calc(100%-16px)] @max-[699px]/site:shadow-[var(--shadow-3)]"
-            >
-              <Inspector it={it} />
-            </motion.aside>
-          )}
-        </AnimatePresence>
-      </div>
+    <div ref={root} className="h-full min-h-0">
+      <Browser
+        start={href}
+        title={it.p.name}
+        lead={it.app ? <AppIcon id={it.app} size={16} flat /> : undefined}
+        end={<Btn variant={info ? "tinted" : "plain"} size="sm" iconOnly label="Info" onClick={() => setInfo((v) => !v)} icon={<Info size={15} />} />}
+        side={
+          <AnimatePresence initial={false}>
+            {info && (
+              <motion.aside
+                key="inspector"
+                initial={{ x: 280, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: 280, opacity: 0 }}
+                transition={{ type: "spring", bounce: 0, duration: 0.36 }}
+                className="inspector w-[272px] shrink-0 overflow-auto p-5 @max-[699px]/site:absolute @max-[699px]/site:inset-y-0 @max-[699px]/site:right-0 @max-[699px]/site:z-10 @max-[699px]/site:max-w-[calc(100%-16px)] @max-[699px]/site:shadow-[var(--shadow-3)]"
+              >
+                <Inspector it={it} />
+              </motion.aside>
+            )}
+          </AnimatePresence>
+        }
+      />
     </div>
   );
 }

@@ -21,6 +21,7 @@ const loaders = {
   system: () => import("./apps/system"),
   finder: () => import("./apps/finder"),
   notes: () => import("./apps/notes"),
+  browser: () => import("./apps/browser"),
 };
 // Fetch every app's code once the machine is idle (not on a data-saver connection), so the first open is instant.
 let warmed = false;
@@ -51,6 +52,7 @@ const Game = lazy(() => loaders.system().then((x) => x.Game));
 const SettingsApp = lazy(() => loaders.system().then((x) => x.SettingsApp));
 const Finder = lazy(() => loaders.finder().then((x) => x.Finder));
 const Notes = lazy(() => loaders.notes().then((x) => x.Notes));
+const BrowserApp = lazy(() => loaders.browser().then((x) => x.BrowserApp));
 
 // The live shader, with a still photo under it: if WebGL is missing or its context is lost, the photo shows
 // instead of a blank canvas.
@@ -131,6 +133,8 @@ export function AppView({ id }: { id: AppId }) {
       return <TrashApp />;
     case "terminal":
       return <Terminal />;
+    case "browser":
+      return <BrowserApp />;
     case "game":
       return <Game />;
     case "settings":

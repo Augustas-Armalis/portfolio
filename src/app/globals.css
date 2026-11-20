@@ -1396,3 +1396,26 @@ html.win-busy * {
   user-select: none !important;
   -webkit-user-select: none !important;
 }
+
+/* The browser's loading line (apps/browser.tsx): it runs most of the way while a page loads and fills when it lands */
+.browser-progress {
+  width: 0;
+}
+.browser-progress.is-loading {
+  animation: browser-load 9s cubic-bezier(0.08, 0.7, 0.2, 1) forwards;
+}
+.browser-progress.is-done {
+  width: 100%;
+  transition: width 0.2s ease-out;
+}
+@keyframes browser-load {
+  to {
+    width: 88%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .browser-progress.is-loading {
+    animation: none;
+    width: 40%;
+  }
+}
