@@ -9,7 +9,7 @@ import { useState } from "react";
 import { bookCall, CONTACT_EMAIL, CONTACTS, contactList, type Channel, owner } from "@/content";
 import { useOS } from "@/store";
 import { Btn, Button, M, Toolbar, useChrome } from "../ui";
-import { Monogram } from "../Login";
+import { Monogram } from "../shell";
 import { XMark, useCopied } from "./shared";
 
 const channelIcon: Record<Channel["id"], React.ReactNode> = {

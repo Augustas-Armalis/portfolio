@@ -24,9 +24,9 @@ function CardFace({ it, big, open }: { it: StoryItem; big?: boolean; open?: bool
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={shot ? SHOT_BG[it.key] ?? "/wallpapers/engineer-pawel-structure.webp" : storyImage(it)} alt="" draggable={false} className="h-full w-full object-cover" />
       </motion.div>
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.42)_0%,rgb(0_0_0/0.08)_38%,rgb(0_0_0/0)_55%,rgb(0_0_0/0.5)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.56)_0%,rgb(0_0_0/0.3)_24%,rgb(0_0_0/0.06)_44%,rgb(0_0_0/0)_58%,rgb(0_0_0/0.5)_100%)]" />
       {shot && (
-        <div className={`absolute inset-x-0 bottom-0 flex justify-center ${CROP[storyImage(it)] ? "items-center pb-[6%]" : "items-start"} ${open ? (compact ? "top-[calc(var(--phone-top)+172px)]" : "top-[190px]") : "top-[38%]"}`}>
+        <div className={`absolute inset-x-0 bottom-0 flex justify-center ${CROP[storyImage(it)] && !open ? "items-center pb-[6%]" : "items-start"} ${open ? (compact ? "top-[calc(var(--phone-top)+204px)]" : "top-[190px]") : "top-[38%]"}`}>
           <Squircle radius={16} className="w-[84%] overflow-hidden shadow-[0_24px_60px_-20px_rgb(0_0_0/0.7),0_0_0_0.5px_rgb(255_255_255/0.2)]">
             <ShotImg src={storyImage(it)} alt="" draggable={false} />
           </Squircle>
@@ -39,12 +39,12 @@ function CardFace({ it, big, open }: { it: StoryItem; big?: boolean; open?: bool
         <div className={`mt-1 max-w-[18ch] font-bold leading-[1.05] tracking-[-0.025em] text-white [text-wrap:balance] ${open ? (compact ? "text-[34px]" : "text-[40px]") : big ? "text-[34px]" : "text-[26px]"}`}>
           {it.p.name}
         </div>
-        {it.p.what && (shot || open) && <p className={`mt-1.5 text-white/85 [text-wrap:pretty] ${open && !compact ? "t-body max-w-[56ch]" : "t-sub max-w-[34ch]"}`}>{it.p.what}</p>}
+        {it.p.what && (shot || open) && <p className={`mt-1.5 text-white/90 [text-shadow:0_1px_10px_rgb(0_0_0/0.35)] [text-wrap:pretty] ${open && !compact ? "t-body max-w-[56ch]" : "t-sub max-w-[34ch]"}`}>{it.p.what}</p>}
       </motion.div>
       {/* photo stories: the app icon, then the one-liner, stacked from the bottom edge so neither can collide */}
       {!shot && (
         <div className={`absolute inset-x-0 bottom-0 flex flex-col items-start gap-3 ${pad}`}>
-          {it.app && <AppIcon id={it.app} size={big || open ? 64 : 52} />}
+          {it.app && !open && <AppIcon id={it.app} size={big ? 64 : 52} />}
           {it.p.what && !open && (
             <motion.p layoutId={`sub-${it.key}`} className={`max-w-[46ch] text-white/90 [text-wrap:pretty] ${big ? "t-body" : "t-sub"}`}>
               {it.p.what}

@@ -20,7 +20,7 @@ import { about, allApps, apps, minSize, desktopItems, dockApps, mainWork, otherW
 import { focusedApp, isUp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
-import { Monogram } from "./Login";
+import { Bars, DeskArt, Monogram, Resume } from "./shell";
 import { Btn, Chrome, EASE_OUT, FILE_MIME, M, QuickLook, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useMorph, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
 import { EDGES, EDGE_CURSOR, EDGE_ZONE, clampMove, pointerGesture, resizeRect, type Bounds, type Edge } from "./windowFrame";
@@ -554,17 +554,6 @@ function MenuBar() {
   );
 }
 
-// Now-playing bars. A CSS animation on transform only: it runs on the compositor for as long as music plays,
-// instead of a script laying three bars out again every frame.
-export function Bars({ light = false }: { light?: boolean }) {
-  return (
-    <span className="flex h-3 items-end gap-[2px]" aria-hidden>
-      {[0, 1, 2].map((i) => (
-        <span key={i} className={`eq-bar h-full w-[2px] rounded-full ${light ? "bg-white" : "bg-ink"}`} style={{ animationDelay: `${i * -0.37}s` }} />
-      ))}
-    </span>
-  );
-}
 
 // ---------- windows ----------
 
@@ -911,7 +900,8 @@ function DockIcon({ id, mouseX, running, front = false, dark, dragging }: { id: 
                       ] as MenuAction[])
                     : []),
                 ];
-          ctx.open(e, items);
+          // a Dock menu stands on its icon, like the Dock's own
+          ctx.open(e, items, e.currentTarget.getBoundingClientRect());
         }}
         data-trash={id === "trash" ? "" : undefined}
         className="dock-btn relative flex items-end justify-center"
@@ -1106,71 +1096,7 @@ const EDGE = 10;
 type Cell = { c: number; r: number };
 const cellKey = (p: Cell) => `${p.c}:${p.r}`;
 
-export function Resume() {
-  const founder = projectGroups[1].apps.filter((a) => projects[a]);
-  return (
-    <div className="flex justify-center bg-[#E9EAED] p-6">
-      <article className="w-full max-w-[560px] bg-white px-12 py-11 text-ink shadow-[0_1px_3px_rgb(0_0_0/0.12)]">
-        <h2 className="text-[26px] font-semibold tracking-[-0.022em]">{about.name}</h2>
-        <p className="mt-1 text-[13px] text-ink-2">
-          {owner.role}. {owner.city}.
-        </p>
-        <h2 className="mt-8 border-b border-black/[0.08] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">Work</h2>
-        {[mainWork, ...otherWork].map((p) => (
-          <div key={p.id} className="mt-3 flex gap-4 text-[13px]">
-            <span className="w-24 shrink-0 tabular-nums text-ink-3">{p.years}</span>
-            <span>
-              <span className="font-semibold">{p.name}</span>
-              {p.role && <span className="text-ink-2">, {p.role.toLowerCase()}</span>}
-              {p.what && <span className="block text-ink-2">{p.what}</span>}
-            </span>
-          </div>
-        ))}
-        <h2 className="mt-7 border-b border-black/[0.08] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">Founder</h2>
-        {founder.map((a) => {
-          const p = projects[a]!;
-          return (
-            <div key={a} className="mt-3 flex gap-4 text-[13px]">
-              <span className="w-24 shrink-0 tabular-nums text-ink-3">{p.years ?? p.status}</span>
-              <span>
-                <span className="font-semibold">{p.name}</span>
-                {p.what && <span className="block text-ink-2">{p.what}</span>}
-              </span>
-            </div>
-          );
-        })}
-        <h2 className="mt-7 border-b border-black/[0.08] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">Elsewhere</h2>
-        <p className="mt-3 text-[13px] text-ink-2">
-          {owner.studio.label}, {owner.x.label} on X
-        </p>
-      </article>
-    </div>
-  );
-}
 
-export function DeskArt({ item }: { item: DeskItem }) {
-  if (item.art)
-    return (
-      <span className="flex h-16 w-16 items-center justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.art} alt="" draggable={false} className="h-[58px] w-[58px] rounded-[8px] bg-white object-contain p-[3px] shadow-[0_1px_3px_rgb(0_0_0/0.3),0_0_0_0.5px_rgb(0_0_0/0.1)]" />
-      </span>
-    );
-  if (item.kind === "folder") return <FolderArt size={64} glyph={item.id === "projects" || item.id === "games" || item.id === "documents" ? item.id : undefined} />;
-  if (item.kind === "doc") return <DocArt size={64} />;
-  if (item.kind === "image" && "src" in item.open)
-    return (
-      <span className="flex h-16 w-16 items-center justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.open.src} alt="" draggable={false} className="max-h-[60px] max-w-[52px] border-[2px] border-white shadow-[0_1px_3px_rgb(0_0_0/0.35)]" />
-      </span>
-    );
-  return "app" in item.open ? (
-    <span className="flex h-16 w-16 items-center justify-center">
-      <AppIcon id={item.open.app} size={56} />
-    </span>
-  ) : null;
-}
 
 function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
   const trash = useOS((s) => s.trash);
@@ -1419,7 +1345,8 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
               e.preventDefault();
               if (!on) setSel([it.id]);
               const b = layer.current!.getBoundingClientRect();
-              setMenu({ x: e.clientX - b.left, y: e.clientY - b.top, id: it.id });
+              // kept on the screen: a menu opened beside the right edge or over the Dock opens back from it
+              setMenu({ x: Math.min(e.clientX - b.left, b.width - 208), y: Math.min(e.clientY - b.top, b.height - 190), id: it.id });
             }}
             style={{ right: EDGE + cell.c * CELL_W, top: EDGE + cell.r * CELL_H, x: on ? dx : 0, y: on ? dy : 0 }}
             className="absolute flex w-[108px] flex-col items-center gap-[3px] pt-1 outline-none"
@@ -1429,7 +1356,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
             </span>
             <span
               className={`line-clamp-2 max-w-[104px] rounded-[6px] px-[5px] py-px text-center text-[12px] font-medium leading-[15px] [text-wrap:balance] ${
-                on ? "bg-[#0A84FF] text-white" : dark ? "text-white [text-shadow:0_1px_1px_rgb(0_0_0/0.75)]" : "text-[#1a1b1e] [text-shadow:0_0_3px_rgb(255_255_255/0.95)] dark:text-white dark:[text-shadow:0_1px_1px_rgb(0_0_0/0.75)]"
+                on ? "bg-[#0A84FF] text-white" : dark ? "text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.85),0_0_7px_rgb(0_0_0/0.5)]" : "text-[#1a1b1e] [text-shadow:0_0_3px_rgb(255_255_255/0.95)] dark:text-white dark:[text-shadow:0_1px_2px_rgb(0_0_0/0.85),0_0_7px_rgb(0_0_0/0.5)]"
               }`}
             >
               {it.name}
@@ -1566,6 +1493,7 @@ export default function Desktop(_: { user?: UserId }) {
   useGlassScope();
   const windows = useOS((s) => s.windows);
   const topZ = useOS((s) => s.topZ);
+  const overlay = useOS((s) => s.overlay);
   const area = useRef<HTMLDivElement>(null);
   const wp = useWallpaper();
 
@@ -1611,7 +1539,7 @@ export default function Desktop(_: { user?: UserId }) {
       {wp.src.startsWith("live:") && <LiveWallpaper />}
       <MenuBar />
       {/* isolate: windows stack among themselves, always under the menu bar and the dock */}
-      <div ref={area} id="os-window-layer" className="absolute inset-x-0 bottom-0 top-[24px] isolate">
+      <div ref={area} id="os-window-layer" data-overlay={overlay ?? undefined} className="absolute inset-x-0 bottom-0 top-[24px] isolate">
         <Welcome />
         <DesktopIcons area={area} />
         <AnimatePresence>

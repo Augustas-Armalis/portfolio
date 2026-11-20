@@ -7,7 +7,7 @@ import { ArrowUpRight, ChevronLeft, ListMusic, Pause, Play, Rewind, FastForward 
 import { Sym } from "../symbols";
 import { useEffect, useState } from "react";
 import { art, novel, tracks } from "@/content";
-import { Bars } from "../Desktop";
+import { Bars } from "../shell";
 import { useOS } from "@/store";
 import { Btn, glass, List, ListRow, M, useChrome } from "../ui";
 import { trackOf, player, usePlayer } from "./player";

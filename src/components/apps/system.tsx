@@ -8,8 +8,7 @@ import { Sym } from "../symbols";
 import { useEffect, useRef, useState } from "react";
 import { about, apps, desktopItems, allApps, owner, projectApps, timeline, wallpapers, type AppId } from "@/content";
 import MusicShader from "../scene/MusicShader";
-import { DeskArt } from "../Desktop";
-import { Monogram } from "../Login";
+import { DeskArt, Monogram } from "../shell";
 import { useOS, useWallpaperIndex } from "@/store";
 import { QUALITY_LABELS, setQualityChoice, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { Btn, Button, IconTile, List, ListRow, M, SectionHeader, Squircle, sfx, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
@@ -124,10 +123,21 @@ function AboutPane() {
     if (st.isMobile) st.openPhoneApp(id);
     else st.open(id);
   };
-  const rows = (list: { label: string; value: string }[]) => (
+  const rows = (list: { label: string; value: string }[], stack = compact && list.some((r) => r.value.length > 18)) => (
     <List mac={!compact}>
       {list.map((r) => (
-        <ListRow mac={!compact} key={r.label} title={r.label} detail={<span className="block max-w-[26ch] truncate @md:max-w-[44ch]">{r.value}</span>} />
+        // on a phone, a list with a long value in it puts every value under its label, where it can wrap: neither is
+        // ever cut to "Desi…", and the rows of one list all read the same way
+        stack ? (
+          <div key={r.label} className="list-row">
+            <span className="list-body !block py-2.5">
+              <span className="t-foot block text-[var(--label-2)]">{r.label}</span>
+              <span className="t-body block text-[var(--label)] [text-wrap:pretty]">{r.value}</span>
+            </span>
+          </div>
+        ) : (
+          <ListRow mac={!compact} key={r.label} title={r.label} detail={<span className="block max-w-[26ch] truncate @md:max-w-[44ch]">{r.value}</span>} />
+        )
       ))}
     </List>
   );
@@ -366,6 +376,19 @@ export function Game() {
   );
 }
 
+// whether this browser will give a WebGL context at all (asked once): the live wallpaper's preview is a shader
+let webgl: boolean | null = null;
+function canWebGL() {
+  if (webgl !== null) return webgl;
+  try {
+    const c = document.createElement("canvas");
+    webgl = !!(c.getContext("webgl2") ?? c.getContext("webgl"));
+  } catch {
+    webgl = false;
+  }
+  return webgl;
+}
+
 export function SettingsApp() {
   const wallpaper = useWallpaperIndex();
   const { sound, setSound, setWallpaper, appearance, setAppearance, reduceEffects, setReduceEffects, shutdown } = useOS();
@@ -443,10 +466,11 @@ export function SettingsApp() {
                 <button type="button" key={w.src} onClick={() => setWallpaper(i)} aria-pressed={on} className="press text-left">
                   <Squircle
                     radius={12}
-                    className={`relative block aspect-[16/10] overflow-hidden bg-cover bg-center ${on ? "ring-[3px] ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-elevated)]" : "shadow-[var(--shadow-1)]"} ${live ? "bg-[#070b16]" : ""}`}
+                    className={`relative block aspect-[16/10] overflow-hidden bg-cover bg-center ${on ? "ring-[3px] ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-elevated)]" : "shadow-[var(--shadow-1)]"} ${live ? "bg-[radial-gradient(120%_100%_at_28%_18%,#2c4a8c_0%,#14204a_42%,#070b16_100%)]" : ""}`}
                     style={live ? undefined : { backgroundImage: `url(${w.src})` }}
                   >
-                    {live && (
+                    {/* the shader itself where the browser can draw it; the night gradient under it is the still */}
+                    {live && canWebGL() && (
                       <span className="absolute inset-0">
                         <MusicShader intensity={0.6} palette="night" />
                       </span>

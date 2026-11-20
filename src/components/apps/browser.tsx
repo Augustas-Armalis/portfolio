@@ -5,11 +5,13 @@
 // read), loads what is typed in the address field (an address, or a search), and says so plainly when a site
 // refuses to be shown inside another page instead of leaving a blank window.
 
-import { ArrowUpRight, ChevronLeft, ChevronRight, Globe, RotateCw, Search, ShieldOff, X } from "lucide-react";
+import { ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, Github, Globe, Instagram, Linkedin, RotateCw, Search, ShieldOff, X } from "lucide-react";
 import { Sym } from "../symbols";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { owner, projects } from "@/content";
-import { Btn, useChrome } from "../ui";
+import { bookCall, contactList, projects, type AppId, type Channel } from "@/content";
+import { AppIcon } from "../icons";
+import { Btn, List, ListRow, SectionHeader, useChrome } from "../ui";
+import { XMark } from "./shared";
 
 // Searches go to Bing: it is the one large engine that lets itself be shown in a frame (Google, DuckDuckGo, Brave,
 // Qwant, Ecosia and Startpage all send X-Frame-Options or frame-ancestors).
@@ -59,38 +61,76 @@ function Favicon({ url, size = 16 }: { url: string; size?: number }) {
   return <img src={favicon(url)} alt="" width={size} height={size} onError={() => setBad(true)} className="shrink-0 rounded-[3px]" style={{ width: size, height: size }} />;
 }
 
-// his work on the open web: every project with a link, then the studio and his X
-export function favourites(): { name: string; url: string }[] {
+// The start page, like Safari's: his work on the open web under Favourites (every project with a link, wearing its
+// own icon), and where else he is under Elsewhere. Only real links: a channel he hasn't confirmed is left out.
+type Fav = { name: string; url: string; app?: AppId; sub: string; glyph?: ReactNode };
+export function favourites(): Fav[] {
   const seen = new Set<string>();
-  const out: { name: string; url: string }[] = [];
+  const out: Fav[] = [];
   for (const p of Object.values(projects)) {
     const href = p?.link?.href;
     if (!p || !href || seen.has(hostOf(href) + new URL(href).pathname)) continue;
     seen.add(hostOf(href) + new URL(href).pathname);
-    out.push({ name: p.name, url: href });
+    out.push({ name: p.name, url: href, app: p.id as AppId, sub: hostOf(href) });
   }
-  if (!out.some((f) => hostOf(f.url) === hostOf(owner.studio.href))) out.push({ name: "Larpo", url: owner.studio.href });
-  out.push({ name: "X", url: owner.x.href });
   return out;
+}
+const GLYPH: Partial<Record<Channel["id"], ReactNode>> = {
+  x: <XMark size={24} />,
+  linkedin: <Sym icon={Linkedin} size={26} weight="medium" />,
+  instagramStudio: <Sym icon={Instagram} size={26} weight="medium" />,
+  instagram: <Sym icon={Instagram} size={26} weight="medium" />,
+  github: <Sym icon={Github} size={26} weight="medium" />,
+};
+export function elsewhere(): Fav[] {
+  const links = contactList.filter((c) => c.href && c.id !== "larpo" && c.id !== "email").map((c) => ({ name: c.label, url: c.href!, sub: c.value, glyph: GLYPH[c.id] ?? <Sym icon={Globe} size={26} weight="medium" /> }));
+  return [...links, { name: bookCall.label, url: bookCall.href, sub: bookCall.sub, glyph: <Sym icon={CalendarDays} size={26} weight="medium" /> }];
+}
+// one tile: a project's own icon, or a glyph on a quiet squircle of the same size
+function FavTile({ f, size }: { f: Fav; size: number }) {
+  if (f.app) return <AppIcon id={f.app} size={size} />;
+  return (
+    <span className="flex items-center justify-center bg-[var(--surface-2)] text-ink shadow-[0_0_0_0.5px_var(--separator)]" data-sq="" style={{ width: size, height: size, borderRadius: size * 0.225 }}>
+      {f.glyph}
+    </span>
+  );
 }
 
 function StartPage({ go }: { go: (url: string) => void }) {
-  const favs = favourites();
+  const groups = [
+    { title: "Favourites", items: favourites() },
+    { title: "Elsewhere", items: elsewhere() },
+  ];
   return (
     <div className="absolute inset-0 overflow-auto bg-[var(--bg)]">
-      <div className="mx-auto max-w-[640px] px-8 pb-12 pt-14">
-        <h2 className="m-title text-ink">Favourites</h2>
-        <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-x-3 gap-y-5">
-          {favs.map((f) => (
-            <button key={f.url} type="button" onClick={() => go(f.url)} className="press group flex flex-col items-center gap-2 rounded-[14px] p-1.5 text-center" data-favourite={hostOf(f.url)}>
-              <span className="flex h-[60px] w-[60px] items-center justify-center rounded-[14px] bg-[var(--surface-2)] shadow-[0_0_0_0.5px_var(--separator)] transition-colors hov:group-hover:bg-[var(--hover)]">
-                <Favicon url={f.url} size={28} />
-              </span>
-              <span className="m-sub w-full truncate text-ink">{f.name}</span>
-            </button>
-          ))}
-        </div>
-        <p className="m-sub mt-10 text-ink-3">Type an address or a search in the field above. Some sites don&rsquo;t allow being shown inside another page; those open in a new tab.</p>
+      {/* one column in the middle of the page, as wide as four tiles: both rows share its left edge */}
+      <div className="mx-auto flex min-h-full w-[472px] max-w-full flex-col justify-center px-4 py-10">
+        {groups.map((g) => (
+          <section key={g.title} className="pb-8">
+            <h2 className="m-headline px-1 text-ink-2">{g.title}</h2>
+            <div className="mt-3 grid grid-cols-4 gap-y-5">
+              {g.items.map((f) => (
+                <button
+                  key={f.url}
+                  type="button"
+                  // a site that refuses to sit in a frame opens in a tab of its own, at once
+                  onClick={() => (refusesFrames(f.url) ? window.open(f.url, "_blank", "noreferrer") : go(f.url))}
+                  className="press group flex flex-col items-center gap-2 rounded-[16px] px-1 py-1.5 text-center outline-none focus-visible:bg-[var(--hover)]"
+                  data-favourite={hostOf(f.url)}
+                >
+                  <span className="transition-transform duration-200 ease-out hov:group-hover:scale-[1.04]">
+                    <FavTile f={f} size={64} />
+                  </span>
+                  <span className="w-full min-w-0">
+                    <span className="m-body block truncate font-medium text-ink">{f.name}</span>
+                    <span className="m-sub block truncate text-ink-3">{f.sub}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+        <p className="m-sub px-1 text-ink-3 [text-wrap:pretty]">Type an address or a search in the field above. Some sites don&rsquo;t allow being shown inside another page; those open in a new tab.</p>
       </div>
     </div>
   );
@@ -275,17 +315,30 @@ export function BrowserApp() {
   if (compact)
     return (
       <div className="px-4 pb-10">
-        <div className="overflow-hidden rounded-[12px] bg-[var(--bg-elevated)]">
-          {favourites().map((f, i) => (
-            <a key={f.url} href={f.url} target="_blank" rel="noreferrer" className="press-row flex min-h-[52px] items-center gap-3 pl-4">
-              <Favicon url={f.url} size={22} />
-              <span className={`flex min-h-[52px] flex-1 items-center justify-between pr-4 ${i ? "border-t-[0.5px] border-[var(--separator)]" : ""}`}>
-                <span className="text-[17px] text-ink">{f.name}</span>
-                <Sym icon={ArrowUpRight} size={16} weight="medium" className="text-ink-3" />
-              </span>
-            </a>
-          ))}
-        </div>
+        {[
+          { title: "Favourites", items: favourites() },
+          { title: "Elsewhere", items: elsewhere() },
+        ].map((g) => (
+          <div key={g.title} className="mb-6">
+            <SectionHeader>{g.title}</SectionHeader>
+            <List>
+              {g.items.map((f) => (
+                <ListRow
+                  key={f.url}
+                  href={f.url}
+                  icon={
+                    <span className="my-1.5 flex h-11 w-11 shrink-0 items-center justify-center">
+                      <FavTile f={f} size={40} />
+                    </span>
+                  }
+                  title={f.name}
+                  sub={f.sub}
+                  detail={<Sym icon={ArrowUpRight} size={18} weight="medium" className="text-[var(--label-3)]" />}
+                />
+              ))}
+            </List>
+          </div>
+        ))}
       </div>
     );
   return <Browser title="Browser" />;

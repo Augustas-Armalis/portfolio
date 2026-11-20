@@ -111,7 +111,7 @@ const ART: Partial<Record<AppId, Art>> = {
 type Logo = { src: string; bg: string; mark?: boolean };
 export const LOGOS: Partial<Record<AppId, Logo>> = {
   larpo: { src: "/logos/larpo.png", bg: "#f2f2f2" },
-  capto: { src: "/logos/capto.png", bg: "#000000" },
+  capto: { src: "/logos/capto.webp", bg: "#000000" },
   contles: { src: "/logos/contles.png", bg: "#030303" },
   filzy: { src: "/logos/filzy.png", bg: "#050505" },
   filzymovie: { src: "/logos/filzy.png", bg: "#050505" },
@@ -253,9 +253,9 @@ const DOC_TONE: Record<string, string> = { PDF: "#e5484d", EPUB: "#f08a00", TXT:
 export function DocArt({ size = 64, label = "PDF" }: { size?: number; label?: string }) {
   const w = label.length > 3 ? 21 : 17;
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden className="shrink-0">
-      <path d="M14 6.5h25.5L52 19v37c0 1.4-1.1 2.5-2.5 2.5h-35A2.5 2.5 0 0 1 12 56V9c0-1.4 1.1-2.5 2.5-2.5z" fill="#fff" stroke="#000" strokeOpacity=".12" />
-      <path d="M39.5 6.5V16c0 1.7 1.3 3 3 3H52" fill="#eef0f3" stroke="#000" strokeOpacity=".12" />
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden className="shrink-0 drop-shadow-[0_1px_1.5px_rgb(0_0_0/0.14)]">
+      <path d="M14 6.5h25.5L52 19v37c0 1.4-1.1 2.5-2.5 2.5h-35A2.5 2.5 0 0 1 12 56V9c0-1.4 1.1-2.5 2.5-2.5z" fill="#fff" stroke="#000" strokeOpacity=".2" />
+      <path d="M39.5 6.5V16c0 1.7 1.3 3 3 3H52" fill="#e6e8ed" stroke="#000" strokeOpacity=".2" />
       {[27, 31, 35, 39].map((y, i) => (
         <rect key={y} x="18" y={y} width={i === 3 ? 16 : 28} height="1.6" rx=".8" fill="#c9ccd3" />
       ))}

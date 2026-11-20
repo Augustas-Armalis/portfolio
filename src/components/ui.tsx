@@ -353,7 +353,11 @@ export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[
             className="fixed inset-0 z-[2400] flex flex-col bg-black"
           >
             <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={onClose} icon={<Sym icon={X} size={17} weight="semibold" />} className="absolute right-4 top-[calc(var(--phone-top)+4px)] z-10 !h-11 !w-11" />
+            {/* a document (the résumé) is longer than the screen: it scrolls from its top, under the Close button,
+                instead of being centred with its head cut off */}
+            {it.node && <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#E9EAED] pt-[calc(var(--phone-top)+52px)]">{it.node}</div>}
             <motion.div
+              hidden={!!it.node}
               drag={many && !zoomed ? "x" : false}
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.5}
@@ -362,9 +366,9 @@ export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[
                 if (info.offset.x < -80) onIndex((index + 1) % items.length);
                 if (info.offset.x > 80) onIndex((index - 1 + items.length) % items.length);
               }}
-              className="flex min-h-0 flex-1 touch-pan-y items-center justify-center"
+              className={it.node ? "hidden" : "flex min-h-0 flex-1 touch-pan-y items-center justify-center"}
             >
-              {it.node ?? (it.src && <ZoomImage key={it.src} src={it.src} alt={it.title} onZoom={setZoomed} />)}
+              {!it.node && it.src && <ZoomImage key={it.src} src={it.src} alt={it.title} onZoom={setZoomed} />}
             </motion.div>
             <div className="pb-[calc(var(--phone-bottom)+10px)] pt-3 text-center text-[15px] font-semibold text-white">
               {it.title}
@@ -1110,11 +1114,13 @@ export function useContextMenu() {
       window.removeEventListener("blur", off);
     };
   }, [m]);
-  const open = (e: React.MouseEvent, items: MenuAction[]) => {
+  // `anchor`: the box of the thing the menu belongs to (a Dock icon): the menu then stands centred above it
+  const open = (e: React.MouseEvent, items: MenuAction[], anchor?: DOMRect) => {
     e.preventDefault();
     e.stopPropagation();
-    const x = Math.min(e.clientX, window.innerWidth - 210);
-    const y = Math.min(e.clientY, window.innerHeight - (items.length * 24 + 20));
+    const h = items.reduce((a, it) => a + (it === "sep" ? 11 : 24), 10);
+    const x = Math.max(8, Math.min(anchor ? anchor.left + anchor.width / 2 - 100 : e.clientX, window.innerWidth - 208));
+    const y = anchor ? Math.max(32, anchor.top - h - 10) : Math.min(e.clientY, window.innerHeight - h - 8);
     setM({ x, y, items });
   };
   const node =
@@ -1468,12 +1474,16 @@ export function SectionHeader({ children, mac = false }: { children: ReactNode; 
   return <div className={mac ? "m-headline mb-1.5 px-1 text-[var(--label)]" : "t-foot mb-[7px] px-4 uppercase text-[var(--label-2)]"}>{children}</div>;
 }
 export function StatsRow({ stats }: { stats: { k: string; v: string; sub?: string }[] }) {
+  const { compact } = useChrome();
   if (!stats.length) return null;
+  // four figures do not fit across a phone with their labels whole: there they stand two by two
+  const cols = compact && stats.length > 3 ? 2 : stats.length;
   return (
-    <div className="grid" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}>
+    <div className="grid gap-y-4" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
       {stats.map((s, i) => (
-        <div key={s.k} className={`min-w-0 px-2 text-center ${i ? "shadow-[inset_0.5px_0_0_var(--separator-opaque)]" : ""}`}>
-          <div className="t-cap2 truncate font-semibold uppercase text-[var(--label-2)]">{s.k}</div>
+        // a long label takes a second line instead of being cut; the figures still share one line (labels sit on it)
+        <div key={s.k} className={`flex min-w-0 flex-col justify-end px-2 text-center ${i % cols ? "shadow-[inset_0.5px_0_0_var(--separator-opaque)]" : ""}`}>
+          <div className="t-cap2 line-clamp-2 font-semibold uppercase text-[var(--label-2)] [text-wrap:balance]">{s.k}</div>
           <div className="t-title3 mt-1 truncate font-bold text-[var(--label-2)]">{s.v}</div>
           {s.sub && <div className="t-cap mt-0.5 truncate text-[var(--label-3)]">{s.sub}</div>}
         </div>

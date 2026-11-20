@@ -6,7 +6,7 @@ import { ArrowDownToLine, ArrowDownUp, ChevronRight } from "lucide-react";
 import { Sym, type PartName } from "../symbols";
 import { useState } from "react";
 import { owner, places, type AppId, type FinderItem, type PlaceId } from "@/content";
-import { Resume } from "../Desktop";
+import { Resume } from "../shell";
 import { useOS } from "@/store";
 import { AppIcon, DocArt, FolderArt } from "../icons";
 import { Btn, GlassMenu, TabBar, List, ListRow, SectionHeader, QuickLook, SearchField, Segmented, SplitView, Toolbar, useChrome, type LookItem } from "../ui";
