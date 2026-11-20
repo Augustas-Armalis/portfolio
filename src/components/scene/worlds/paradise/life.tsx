@@ -254,9 +254,9 @@ export function CloudDeck({ y = 1250, size = 9000 }: { y?: number; size?: number
           float dab = vnoise(vec2(q.x * 0.012, q.y * 0.045)) ;
           vec3 col = mix(uCloudShade * vec3(0.8, 0.86, 0.95), uCloudLit, lit * (0.55 + 0.45 * dab));
           vec3 dv = vWorld - cameraPosition; float dist = length(dv);
-          float far = smoothstep(900.0, 4200.0, dist);
+          float far = smoothstep(900.0, 5200.0, dist);
           col = mix(col, airCol(dv / dist), far * 0.8);
-          gl_FragColor = vec4(col, a * 0.82 * (1.0 - smoothstep(3200.0, 4500.0, dist)));
+          gl_FragColor = vec4(col, a * 0.82 * (1.0 - smoothstep(5000.0, 9000.0, dist)));
           ${END}
         }`,
     });

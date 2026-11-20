@@ -480,9 +480,10 @@ export function RayedSun({ size = 0.62, gain = 1 }: { size?: number; gain?: numb
         uniform vec3 uSunDir; uniform float uSize;
         varying vec2 vUv;
         void main(){
-          vec3 c = cameraPosition + normalize(uSunDir) * 2700.0;
+          // (far out, behind everything the world holds, inside the lens's far plane)
+          vec3 c = cameraPosition + normalize(uSunDir) * 9000.0;
           vec4 mv = viewMatrix * vec4(c, 1.0);
-          mv.xy += position.xy * 2700.0 * uSize;
+          mv.xy += position.xy * 9000.0 * uSize;
           vUv = position.xy;
           gl_Position = projectionMatrix * mv;
         }`,

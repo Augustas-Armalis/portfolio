@@ -289,9 +289,9 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
     <>
       <WorldBase id="paradise" def={def} pal={PARADISE_PAL} props={b.base} tip={[0.44, 0.48, 0.14]} pathTint={[1, 0.95, 0.76]} tall={0.8} mask={GRASS_MASK} groundSize={2600} angels={false} />
       <RayedSun size={0.46} gain={0.45} />
-      <CloudDeck />
+      <CloudDeck size={20000} />
       <mesh material={b.sea} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
-        <planeGeometry args={[9000, 9000]} />
+        <planeGeometry args={[30000, 30000]} />
       </mesh>
       <mesh geometry={b.steps} material={b.stone} />
       <mesh material={b.pool} rotation={[-Math.PI / 2, 0, 0]} position={[0, TOP_Y + 0.5, 0]}>

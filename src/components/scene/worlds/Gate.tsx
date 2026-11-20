@@ -373,9 +373,9 @@ export default function GateWorld({ props }: { props: WorldProps }) {
   });
   return (
     <>
-      <WorldBase id="gate" def={def} pal={GATE_PAL} props={b.base} tip={[0.4, 0.36, 0.14]} pathTint={[1, 0.86, 0.6]} groundSize={5600} angels={false} mask={GRASS_MASK} />
+      <WorldBase id="gate" def={def} pal={GATE_PAL} props={b.base} tip={[0.4, 0.36, 0.14]} pathTint={[1, 0.86, 0.6]} groundSize={12000} angels={false} mask={GRASS_MASK} />
       <RayedSun size={0.5} gain={0.9} />
-      <CloudDeck y={1500} size={9000} />
+      <CloudDeck y={1500} size={20000} />
       <group position={[0, 0, GATE.z]}>
         <mesh geometry={b.left} material={b.rock} />
         <mesh geometry={b.right} material={b.rock} />

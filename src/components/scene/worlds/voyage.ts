@@ -164,7 +164,7 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // Fairy Tale: a high gold afternoon over the plain, turquoise between ranks of gilded cloud; the sun stands just
   // over the mountain's point as the plane comes in, so the whole of it is violet shade edged with light
   fairy: {
-    label: "Fairy Tale",
+    label: "Castle Fairy Tale",
     zenith: [0.1, 0.27, 0.44],
     upper: [0.24, 0.45, 0.52],
     horizon: [0.58, 0.58, 0.46],
@@ -200,7 +200,7 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   },
   // the mountain gate under the sky of "Offering": dull gold banded with olive, the last sun low in the pass
   gate: {
-    label: "Offering",
+    label: "The Offering",
     zenith: [0.17, 0.19, 0.15],
     upper: [0.42, 0.36, 0.17],
     horizon: [0.72, 0.52, 0.2],
@@ -529,12 +529,12 @@ export const WORLDS: Record<WorldId, WorldDef> = {
   },
   fairy: {
     id: "fairy",
-    title: "Fairy Tale",
+    title: "Castle Fairy Tale",
     year: "1909",
     music: "fairy",
     place: "sky",
     air: AIR.fairy,
-    fog: [0.00016, 0.0045],
+    fog: [0.00016, 0.0022],
     // a wide plain of woods and fields, low hills far off; the mountain itself is built, not ground (worlds/fairy/mountain.ts)
     terrain: {
       base: 0,
@@ -671,12 +671,12 @@ export const WORLDS: Record<WorldId, WorldDef> = {
   },
   gate: {
     id: "gate",
-    title: "Offering",
+    title: "The Offering",
     year: "1909",
     music: "gate",
     place: "forest",
     air: AIR.gate,
-    fog: [0.00015, 0.005],
+    fog: [0.00015, 0.003],
     // a long valley between wooded heights, climbing to the pass; the terrace on the left, the altar on the right
     terrain: {
       base: 0,
