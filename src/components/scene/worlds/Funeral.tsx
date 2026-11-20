@@ -9,6 +9,7 @@ import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common
 import { Kit, makePoints, makeTempera, noise2, paint, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, PaintedClouds, type Flock, type PaintedCloud } from "./life";
 import { ORIGIN, WORLDS, voyage } from "./voyage";
+import { useDeepLens } from "./fairy/shared";
 import { ROAD_W, funeralLand } from "./funeral/land";
 import { buildFuneralRock, makeLedgeMaterial, makeRockMaterial } from "./funeral/rock";
 import { buildSouls } from "./funeral/souls";
@@ -145,6 +146,8 @@ function makeSkyGrainMaterial() {
 }
 
 export default function FuneralWorld({ props }: { props: WorldProps }) {
+  // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
+  useDeepLens("funeral");
   const shell = useRef<THREE.Mesh>(null);
   const b = useDisposable(() => {
     const L = funeralLand();

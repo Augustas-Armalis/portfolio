@@ -17,7 +17,7 @@ export const SEA_LIFE_U = {
   uPod: { value: new THREE.Vector4(0, 0, 0, -1) }, // where it comes up (x, z) and the way it goes (x, z)
   uPodT: { value: -1 }, // seconds since it came up (-1: not yet)
 };
-const SPEED = 13;
+const SPEED = 16;
 const LEAP = 1.5; // seconds in the air
 const LAST = 44; // seconds the pod stays
 const POD_GLSL = /* glsl */ `
