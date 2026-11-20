@@ -263,8 +263,17 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
 // ---------- the gate ----------
 // A tall lancet of pale light standing on the path, a slow veil of mist and
 // light inside it: the brightest thing in its world, so the eye always knows
-// the way on.
-export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15, rise = 23 }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; half?: number; rise?: number }) {
+// the way on. It is a threshold: the sheet inside it is a glimpse of the next
+// world's own sky, and its rim, its halo and the motes round it take that
+// world's light, so every gate is coloured by where it leads.
+//
+// `look` says how much of it is drawn (the way through is the same in every case: see passage() in Plane.tsx):
+//   "arch"  the whole of it (the default)
+//   "veil"  no stone, no mist at its feet: only the sheet of light, the motes and a soft glow, for a world that
+//           builds its own opening (a cave mouth, a doorway) and wants the light in it; `half` and `rise` size it
+//   "none"  nothing at all: the world draws its own way out
+export type GateLook = "arch" | "veil" | "none";
+export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15, rise = 23, look = "arch" }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; half?: number; rise?: number; look?: GateLook }) {
   const b = useDisposable(() => {
     const gate = gateOf(id)!;
     const c = Math.cos(gate.yaw);
@@ -274,6 +283,15 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
     const foot = Math.min(g0, def.water ?? g0) - 1.5;
     const top = gate.pos.y + rise;
     const spring = gate.pos.y + 2;
+    // where it leads
+    const nextId = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1];
+    const na = nextId ? WORLDS[nextId].air : null;
+    const nZen = na ? na.zenith : ([0.3, 0.42, 0.62] as V3);
+    const nHor = na ? na.horizon : ([0.8, 0.72, 0.6] as V3);
+    const nGlow = na ? na.glow : ([1, 0.8, 0.5] as V3);
+    // the light of where it leads, kept bright (a dark world's glow is still a light here), halfway to this world's own
+    const nMax = Math.max(nGlow[0], nGlow[1], nGlow[2], 0.001);
+    const lead: V3 = [(tint[0] + nGlow[0] / nMax) / 2, (tint[1] + nGlow[1] / nMax) / 2, (tint[2] + nGlow[2] / nMax) / 2];
     const k = new Kit();
     // the lancet: two long legs leaning a breath inward, meeting in a point
     const leg = (side: number): V3[] => {
@@ -289,11 +307,11 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
     const stone: V3 = [0.78 * tint[0], 0.74 * tint[1], 0.66 * tint[2]];
     for (const side of [-1, 1]) {
       k.tube(leg(side), 0.42, stone, { glow: 0.5 * gain, seg: 60, sides: 7 });
-      // a thread of brighter light on the inner edge
+      // a thread of brighter light on the inner edge, in the colour of where the gate leads
       k.tube(
         leg(side).map((p, i): V3 => (i === 0 ? p : [p[0] - c * side * 0.5, p[1] - (i > 2 ? 0.3 : 0), p[2] + s * side * 0.5])),
         0.09,
-        tint,
+        lead,
         { glow: 2.6 * gain, seg: 60, sides: 4 },
       );
     }
@@ -316,11 +334,6 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
     // The threshold itself: a breathing sheet of light you can half see through, and through it, warped as if by
     // water or old glass, a glimpse of the next world's own sky (its horizon, its zenith, the glow of its light).
     // When the plane goes through, a ripple runs out from where it crossed and the light flares (uHit).
-    const nextId = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1];
-    const na = nextId ? WORLDS[nextId].air : null;
-    const nZen = na ? na.zenith : ([0.3, 0.42, 0.62] as V3);
-    const nHor = na ? na.horizon : ([0.8, 0.72, 0.6] as V3);
-    const nGlow = na ? na.glow : ([1, 0.8, 0.5] as V3);
     const veil = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -329,6 +342,7 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
         ...SKY_U,
         ...WORLD_U,
         uTint: { value: new THREE.Color(...tint) },
+        uLead: { value: new THREE.Color(...lead) },
         uGain: { value: gain },
         uSpan: { value: new THREE.Vector3(half, foot - gate.pos.y, top - gate.pos.y) },
         uNZen: { value: new THREE.Color(...nZen) },
@@ -341,7 +355,7 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
         varying vec3 vLocal; varying vec3 vWorld;
         void main(){ vLocal = position; vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform vec3 uTint; uniform float uGain; uniform vec3 uSpan;
+        uniform vec3 uTint; uniform vec3 uLead; uniform float uGain; uniform vec3 uSpan;
         uniform vec3 uNZen; uniform vec3 uNHor; uniform vec3 uNGlow; uniform float uHit; uniform vec2 uHitP;
         varying vec3 vLocal; varying vec3 vWorld;
         ${GLSL_NOISE}
@@ -376,7 +390,11 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
           // the rim of the sheet, where it meets the arch, is brightest
           float rim = smoothstep(0.7, 1.0, abs(p.x) / uSpan.x) + smoothstep(uSpan.z * 0.7, uSpan.z, p.y);
           float flare = exp(-max(age, 0.0) * 2.2) * step(0.0, age);
-          vec3 col = mix(glimpse * 0.95, uTint * 0.9 * glowK(), 0.08 + 0.1 * n) + uTint * (caustic * 0.25 + rim * 0.8) * glowK();
+          // (the caustic threads and the rim carry the light of the world beyond)
+          vec3 col = mix(glimpse * 0.95, uTint * 0.9 * glowK(), 0.08 + 0.1 * n) + uLead * (caustic * 0.3 + rim * 0.8) * glowK();
+          // a fine bright line where the sheet meets the air, so the threshold itself can be seen from far off
+          float edge = smoothstep(0.93, 0.995, abs(p.x) / uSpan.x) * (1.0 - smoothstep(0.995, 1.0, abs(p.x) / uSpan.x));
+          col += uLead * edge * 0.9 * glowK();
           col *= uGain * breath * (1.0 + flare * 2.6 + abs(ring) * 1.2);
           float a = (0.6 + 0.15 * smoothstep(0.25, 0.75, n) + caustic * 0.1 + rim * 0.3) * up * (0.4 + 0.6 * down) * side;
           float dist = length(vWorld - cameraPosition);
@@ -396,8 +414,8 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
       },
       31,
     );
-    const halos: Halo[] = [{ p: [gate.pos.x, top + 0.6, gate.pos.z], size: 6, col: tint, k: 0.7 * gain }];
-    const glow: Halo[] = [{ p: [gate.pos.x, gate.pos.y + 2, gate.pos.z], size: 60, col: tint, k: 0.3 * gain }];
+    const halos: Halo[] = [{ p: [gate.pos.x, top + 0.6, gate.pos.z], size: 6, col: lead, k: 0.7 * gain }];
+    const glow: Halo[] = [{ p: [gate.pos.x, gate.pos.y + 2, gate.pos.z], size: look === "arch" ? 60 : half * 3, col: lead, k: (look === "arch" ? 0.3 : 0.22) * gain }];
     const puffs: Puff[] = [];
     const r = rng(17);
     for (let i = 0; i < 7; i++) puffs.push({ p: at((r() - 0.5) * half * 3.4, Math.max(foot + 3, gate.pos.y - 12) + r() * 5), size: 16 + r() * 16, a: 0.8 });
@@ -413,11 +431,11 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
       puffs: puffGeometry(puffs),
       puffMat: makePuffMaterial(),
       motes,
-      moteMat: makePoints({ a: tint, b: [1, 0.96, 0.86], scale: 140, drift: 2.2, gain: 1.1, max: 16 }),
+      moteMat: makePoints({ a: lead, b: [1, 0.96, 0.86], scale: 140, drift: 2.2, gain: 1.1, max: 16 }),
       pos: gate.pos.toArray() as V3,
       yaw: gate.yaw,
     };
-  }, [id]);
+  }, [id, half, rise, look]);
   // the moment of going through: a ripple from where the plane crossed, and a flare of light
   useFrame(() => {
     const h = voyage.gateHit;
@@ -427,14 +445,16 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
       (u.uHitP.value as THREE.Vector2).set(h.side, h.up);
     } else u.uHit.value = 99;
   });
+  if (look === "none") return null;
+  const arch = look === "arch";
   return (
     <>
-      <mesh geometry={b.arch} material={b.tempera} />
+      {arch && <mesh geometry={b.arch} material={b.tempera} />}
       <points geometry={b.motes} material={b.moteMat} />
-      <mesh geometry={b.puffs} material={b.puffMat} renderOrder={3} />
+      {arch && <mesh geometry={b.puffs} material={b.puffMat} renderOrder={3} />}
       <mesh geometry={b.veilGeo} material={b.veil} position={b.pos} rotation={[0, b.yaw, 0]} renderOrder={5} />
       <mesh geometry={b.glow} material={b.glowMat} renderOrder={6} />
-      <mesh geometry={b.halos} material={b.haloMat} renderOrder={6} />
+      {arch && <mesh geometry={b.halos} material={b.haloMat} renderOrder={6} />}
     </>
   );
 }
@@ -785,13 +805,15 @@ export function Gallery({ def }: { def: WorldDef }) {
 }
 
 // ---------- the whole base of a world ----------
-export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean }) {
+// (`gate`: how the way on is drawn: "arch" the lancet of light (default), "veil" only its sheet of light, sized by
+// `gateSize` [half-width, rise], for a world that builds its own opening, "none" nothing; see LightGate)
+export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true, gate = "arch", gateSize }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean; gate?: GateLook; gateSize?: [number, number] }) {
   return (
     <>
       {def.terrain && <Ground def={def} pal={pal} mobile={props.mobile} size={groundSize} />}
       {grass && def.terrain && <WorldGrass def={def} pal={pal} tip={tip} mobile={props.mobile} density={props.grass} wind={props.reduced ? 0.25 : 1} mask={mask} tall={tall} />}
       <LightPath id={id} def={def} tint={pathTint} gain={pathGain} effects={props.effects} angels={angels} marks={marks} />
-      {def.gate && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} />}
+      {def.gate && gate !== "none" && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} look={gate} half={gateSize?.[0]} rise={gateSize?.[1]} />}
       <Gallery def={def} />
     </>
   );
