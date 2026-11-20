@@ -337,7 +337,7 @@ function PlaneHover({ spot, hoverable, onPick, children }: { spot: { pos: [numbe
   }, [hoverable]);
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
-    const want = hover.current && hoverable ? 0.007 : 0;
+    const want = 0; // the plane stays put under the pointer (no lift on hover)
     const w = 15;
     vy.current += (w * w * (want - y.current) - 2 * w * vy.current) * dt;
     y.current += vy.current * dt;
