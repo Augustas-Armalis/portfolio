@@ -8,6 +8,7 @@ import { useState } from "react";
 import { bookCall, CONTACT_EMAIL, CONTACTS, contactList, type Channel, owner } from "@/content";
 import { useOS } from "@/store";
 import { Btn, Button, M, Toolbar, useChrome } from "../ui";
+import { Monogram } from "../Login";
 import { XMark, useCopied } from "./shared";
 
 const channelIcon: Record<Channel["id"], React.ReactNode> = {
@@ -68,7 +69,7 @@ export function Contact() {
     return (
       <div className="pb-10">
         <div className="flex flex-col items-center px-4 pt-1 text-center">
-          <div className="flex h-[84px] w-[84px] items-center justify-center rounded-full bg-gradient-to-b from-[#A8ADB8] to-[#868B96] text-[36px] font-semibold text-white">A</div>
+          <Monogram size={84} />
           <div className="mt-3 text-[22px] font-semibold tracking-[-0.02em] text-ink">{owner.name}</div>
           <div className="text-[15px] text-ink-2">{owner.role}</div>
         </div>
@@ -134,7 +135,7 @@ export function Contact() {
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         {/* the contact card: who you're writing to, and the other ways to reach him */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-[var(--separator)] px-5 py-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-[#A8ADB8] to-[#7E838E] text-[24px] font-semibold text-white">A</div>
+          <Monogram size={56} />
           <div className="min-w-[150px] flex-1">
             <div className="m-title truncate text-ink">{owner.name}</div>
             <div className="m-body truncate text-ink-2">{owner.role}</div>
