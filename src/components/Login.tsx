@@ -242,7 +242,7 @@ export default function Login() {
   return (
     <div className="absolute inset-0 overflow-hidden bg-black">
       {/* the page's one h1, on the lock screen and the desktop alike: every window's own title is an h2 under it */}
-      <h1 className="sr-only">Augustas Armalis, design engineer and founder</h1>
+      <h1 className="sr-only text-white">Augustas Armalis, design engineer and founder</h1>
       {user && (
         <div className="absolute inset-0" inert={!up}>
           <Desktop />
