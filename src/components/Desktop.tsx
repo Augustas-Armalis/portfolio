@@ -7,7 +7,6 @@ import {
   animate,
   motion,
   useAnimation,
-  useDragControls,
   useMotionValue,
   useSpring,
   useTransform,
@@ -23,6 +22,7 @@ import { DocArt, FolderArt, TrashArt } from "./icons";
 import { LockActions, LockFace, Monogram, PowerOverlay } from "./Login";
 import { Btn, Chrome, EASE_OUT, FILE_MIME, QuickLook, SPRING_GLASS, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useMorph, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
+import { EDGES, EDGE_CURSOR, EDGE_ZONE, clampMove, pointerGesture, resizeRect, type Bounds, type Edge } from "./windowFrame";
 
 // ---------- menu bar ----------
 
@@ -578,33 +578,24 @@ type Rect = { left: number; top: number; w: number; h: number };
 const MIN_W = 320;
 const MIN_H = 220;
 const DOCK_SPACE = 92;
-// Keep every window fully on screen, above the dock, never smaller than the minimum.
-function clampRect(r: Rect, W: number, H: number, min = { w: MIN_W, h: MIN_H }): Rect {
-  const w = Math.max(Math.min(r.w, W - 24), Math.min(min.w, W - 24));
-  const h = Math.max(Math.min(r.h, H - DOCK_SPACE - 16), Math.min(min.h, H - DOCK_SPACE - 16));
-  const left = Math.min(Math.max(r.left, 12), Math.max(12, W - w - 12));
-  const top = Math.min(Math.max(r.top, 8), Math.max(8, H - DOCK_SPACE - h));
-  return { left, top, w, h };
+// Where a window may be: under the menu bar (the layer starts below it), 12px off the sides, above the dock.
+function winBounds(W: number, H: number): Bounds {
+  return { left: 12, top: 8, right: W - 12, bottom: H - DOCK_SPACE };
 }
-const EDGES = ["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const;
-type Edge = (typeof EDGES)[number];
-const edgeCls: Record<Edge, string> = {
-  n: "left-2 right-2 -top-1 h-2 cursor-ns-resize",
-  s: "left-2 right-2 -bottom-1 h-2 cursor-ns-resize",
-  e: "top-2 bottom-2 -right-1 w-2 cursor-ew-resize",
-  w: "top-2 bottom-2 -left-1 w-2 cursor-ew-resize",
-  ne: "-right-1 -top-1 h-3 w-3 cursor-nesw-resize",
-  sw: "-left-1 -bottom-1 h-3 w-3 cursor-nesw-resize",
-  nw: "-left-1 -top-1 h-3 w-3 cursor-nwse-resize",
-  se: "-right-1 -bottom-1 h-3 w-3 cursor-nwse-resize",
-};
+// Keep every window fully on screen, above the dock, never smaller than the minimum. Dragging and resizing use the
+// same bounds, so letting go never makes a window jump.
+function clampRect(r: Rect, W: number, H: number, min = { w: MIN_W, h: MIN_H }): Rect {
+  const b = winBounds(W, H);
+  const w = Math.max(Math.min(r.w, b.right - b.left), Math.min(min.w, b.right - b.left));
+  const h = Math.max(Math.min(r.h, b.bottom - b.top), Math.min(min.h, b.bottom - b.top));
+  return clampMove({ left: r.left, top: r.top, w, h }, b);
+}
 
 function Window({ win, index, area, focused }: { win: Win; index: number; area: RefObject<HTMLDivElement | null>; focused: boolean }) {
   // each app has its own floor (content.ts): a window never gets smaller than its layout can take
   const min = minSize(win.id);
   const { focus, close, toggleMin, toggleMax } = useOS();
   const app = apps[win.id];
-  const controls = useDragControls();
   const outer = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -691,58 +682,63 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [win.min]);
 
-  // Resize from any edge or corner, tracked 1:1 with pointer capture. The frame is written straight to the element
-  // once per animation frame; React only hears about it when the pointer lets go.
+  // Move by the title bar and resize from any edge or corner (windowFrame.ts): the pointer is captured, every
+  // frame is written straight to the element (a transform while moving, the frame while resizing) and React only
+  // hears about it when the pointer lets go. A move keeps the grab point under the pointer; both stay in bounds.
+  const startMove = (e: React.PointerEvent) => {
+    const { W, H } = areaSize();
+    const b = winBounds(W, H);
+    const r0 = { ...rect };
+    const at = (dx: number, dy: number) => clampMove({ ...r0, left: r0.left + dx, top: r0.top + dy }, b);
+    pointerGesture(
+      e,
+      "default",
+      (dx, dy) => {
+        const r = at(dx, dy);
+        x.set(r.left - r0.left);
+        y.set(r.top - r0.top);
+      },
+      (dx, dy) => {
+        const r = at(dx, dy);
+        const o = outer.current;
+        // the frame takes the position before the transform lets go of it, so there is no frame in between
+        if (o) {
+          o.style.left = `${r.left}px`;
+          o.style.top = `${r.top}px`;
+        }
+        x.set(0);
+        y.set(0);
+        setRect(r);
+      },
+      3,
+    );
+  };
   const startResize = (edge: Edge) => (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
     focus(win.id);
-    const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
-    const sx = e.clientX;
-    const sy = e.clientY;
-    const r0 = { ...rect, left: rect.left + x.get(), top: rect.top + y.get() };
-    x.set(0);
-    y.set(0);
-    let next = r0;
-    let raf = 0;
-    const paint = () => {
-      raf = 0;
+    const { W, H } = areaSize();
+    const b = winBounds(W, H);
+    const max = { w: b.right - b.left, h: b.bottom - b.top };
+    const r0 = { ...rect };
+    const paint = (r: Rect) => {
       const o = outer.current;
       if (!o) return;
-      o.style.left = `${next.left}px`;
-      o.style.top = `${next.top}px`;
-      o.style.width = `${next.w}px`;
-      o.style.height = `${next.h}px`;
+      o.style.left = `${r.left}px`;
+      o.style.top = `${r.top}px`;
+      o.style.width = `${r.w}px`;
+      o.style.height = `${r.h}px`;
     };
-    const move = (ev: PointerEvent) => {
-      const dx = ev.clientX - sx;
-      const dy = ev.clientY - sy;
-      const r = { ...r0 };
-      if (edge.includes("e")) r.w = Math.max(min.w, r0.w + dx);
-      if (edge.includes("s")) r.h = Math.max(min.h, r0.h + dy);
-      if (edge.includes("w")) {
-        r.w = Math.max(min.w, r0.w - dx);
-        r.left = r0.left + (r0.w - r.w);
-      }
-      if (edge.includes("n")) {
-        r.h = Math.max(min.h, r0.h - dy);
-        r.top = Math.max(0, r0.top + (r0.h - r.h));
-      }
-      next = r;
-      if (!raf) raf = requestAnimationFrame(paint);
-    };
-    const up = () => {
-      el.removeEventListener("pointermove", move);
-      el.removeEventListener("pointerup", up);
-      el.removeEventListener("pointercancel", up);
-      cancelAnimationFrame(raf);
-      paint();
-      setRect(next);
-    };
-    el.addEventListener("pointercancel", up);
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", up);
+    pointerGesture(
+      e,
+      EDGE_CURSOR[edge],
+      (dx, dy) => paint(resizeRect(r0, edge, dx, dy, min, max, b)),
+      (dx, dy) => {
+        const r = resizeRect(r0, edge, dx, dy, min, max, b);
+        paint(r);
+        setRect(r);
+      },
+    );
   };
 
   const live = !win.min;
@@ -761,17 +757,10 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
   return (
     <motion.div
       ref={outer}
-      drag={!win.max}
-      dragControls={controls}
-      dragListener={false}
-      dragMomentum={false}
-      dragElastic={0.05}
-      dragConstraints={area}
-      onDragEnd={settle}
       onPointerDown={(e) => {
         focus(win.id);
         const t = e.target as HTMLElement;
-        if (!win.max && t.closest("[data-drag]") && !t.closest("button,a,input,label,[role=switch]")) controls.start(e);
+        if (e.button === 0 && !win.max && t.closest("[data-drag]") && !t.closest("button,a,input,textarea,select,label,[role=switch],[role=button],[contenteditable]")) startMove(e);
       }}
       onDoubleClick={(e) => {
         const t = e.target as HTMLElement;
@@ -822,7 +811,7 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
         </Chrome.Provider>
       </motion.div>
       </motion.div>
-      {!win.max && live && EDGES.map((ed) => <div key={ed} onPointerDown={startResize(ed)} className={`absolute z-30 touch-none ${edgeCls[ed]}`} />)}
+      {!win.max && live && EDGES.map((ed) => <div key={ed} data-edge={ed} onPointerDown={startResize(ed)} className={`absolute z-30 touch-none ${EDGE_ZONE[ed]}`} style={{ cursor: EDGE_CURSOR[ed] }} />)}
     </motion.div>
   );
 }

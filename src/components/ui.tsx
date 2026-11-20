@@ -1,11 +1,12 @@
 "use client";
 
-import { AnimatePresence, animate, motion, useDragControls, useMotionValue, useTransform } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react";
 import { ChevronLeft, ChevronRight, PanelLeft, Search, X } from "lucide-react";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { apps, type AppId } from "@/content";
 import { useOS } from "@/store";
+import { EDGES, EDGE_CURSOR, EDGE_ZONE, clampMove, pointerGesture, resizeRect, type Edge } from "./windowFrame";
 import { isSoundEnabled, play as playSfx, setSoundEnabled } from "@/lib/sfx";
 
 // Shared Apple-style primitives. Light first, cool greys, 1px rings,
@@ -441,7 +442,6 @@ function ZoomImage({ src, alt, onZoom }: { src: string; alt: string; onZoom?: (z
 const SPRING_UI = { type: "spring", bounce: 0, duration: 0.42 } as const;
 
 function LookWindow({ it, index, count, onIndex, onClose }: { it: LookItem; index: number; count: number; onIndex?: (i: number) => void; onClose: () => void }) {
-  const controls = useDragControls();
   const bounds = useRef<HTMLDivElement>(null);
   // the area above the dock line, under the menu bar
   const W = typeof window !== "undefined" ? window.innerWidth : 1280;
@@ -485,29 +485,41 @@ function LookWindow({ it, index, count, onIndex, onClose }: { it: LookItem; inde
     }
     setFull(!full);
   };
-  // resize from the right edge, the bottom edge or the corner; never past the dock line
-  const resize = (edge: "e" | "s" | "se") => (e: React.PointerEvent) => {
+  // the same frame rules as an app window (windowFrame.ts): under the menu bar, 12px off the sides, above the dock
+  const frameBounds = () => {
+    const el = bounds.current;
+    const W = el?.clientWidth ?? window.innerWidth;
+    const H = el?.clientHeight ?? window.innerHeight - 24 - 92;
+    return { left: 12, top: 8, right: W - 12, bottom: H };
+  };
+  const now = () => ({ left: x.get(), top: y.get(), w: w.get(), h: h.get() });
+  // move by the title bar: the grab point stays under the pointer, one write per frame, never out of bounds
+  const move = (e: React.PointerEvent) => {
+    if (full || e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
+    const b = frameBounds();
+    const r0 = now();
+    const at = (dx: number, dy: number) => {
+      const r = clampMove({ ...r0, left: r0.left + dx, top: r0.top + dy }, b);
+      x.set(r.left);
+      y.set(r.top);
+    };
+    pointerGesture(e, "default", at, at, 3);
+  };
+  // resize from every edge and corner, within the minimum and the space above the dock
+  const resize = (edge: Edge) => (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
     focus();
-    const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
-    const sx = e.clientX;
-    const sy = e.clientY;
-    const w0 = w.get();
-    const h0 = h.get();
-    const maxW = window.innerWidth - x.get();
-    const maxH = window.innerHeight - 24 - 92 - y.get();
-    const move = (ev: PointerEvent) => {
-      if (edge !== "s") w.set(Math.min(maxW, Math.max(320, w0 + ev.clientX - sx)));
-      if (edge !== "e") h.set(Math.min(maxH, Math.max(240, h0 + ev.clientY - sy)));
+    const b = frameBounds();
+    const r0 = now();
+    const at = (dx: number, dy: number) => {
+      const r = resizeRect(r0, edge, dx, dy, { w: 320, h: 240 }, { w: b.right - b.left, h: b.bottom - b.top }, b);
+      x.set(r.left);
+      y.set(r.top);
+      w.set(r.w);
+      h.set(r.h);
     };
-    const up = () => {
-      el.removeEventListener("pointermove", move);
-      el.removeEventListener("pointerup", up);
-    };
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", up);
+    pointerGesture(e, EDGE_CURSOR[edge], at, at);
   };
   const light = (c: string, label: string, glyph: string, on?: () => void) => (
     <button
@@ -526,21 +538,16 @@ function LookWindow({ it, index, count, onIndex, onClose }: { it: LookItem; inde
   return (
     <div ref={bounds} className="pointer-events-none absolute inset-x-0 bottom-[92px] top-0" style={{ zIndex: z }}>
       <motion.div
-        drag
-        dragListener={false}
-        dragControls={controls}
-        dragMomentum={false}
-        dragConstraints={bounds}
-        dragElastic={0}
         initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.14 } }}
         transition={SPRING_UI}
         onPointerDown={focus}
         style={{ x, y, width: w, height: h }}
-        className={`win pointer-events-auto absolute left-0 top-0 flex flex-col overflow-hidden ${focused ? "is-focused" : ""}`}
-        data-sq=""
+        className="pointer-events-auto absolute left-0 top-0"
+        data-look-window=""
       >
+      <div className={`win flex h-full w-full flex-col overflow-hidden ${focused ? "is-focused" : ""}`} data-sq="">
         {/* one frame: the image runs edge to edge under a glass title bar */}
         <div className="absolute inset-0 bg-[var(--surface-2)]">
           {it.node ? (
@@ -553,8 +560,8 @@ function LookWindow({ it, index, count, onIndex, onClose }: { it: LookItem; inde
           )}
         </div>
         <div
-          onPointerDown={(e) => !(e.target as HTMLElement).closest("button") && controls.start(e)}
-          onDoubleClick={toggleFull}
+          onPointerDown={move}
+          onDoubleClick={(e) => !(e.target as HTMLElement).closest("button") && toggleFull()}
           data-glass=""
           className="glass glass-bar group/ql relative z-10 flex h-[38px] shrink-0 items-center justify-center px-20"
         >
@@ -572,13 +579,8 @@ function LookWindow({ it, index, count, onIndex, onClose }: { it: LookItem; inde
             </span>
           )}
         </div>
-        {!full && (
-          <>
-            <div onPointerDown={resize("e")} className="absolute bottom-3 right-0 top-[38px] z-20 w-[6px] cursor-ew-resize touch-none" />
-            <div onPointerDown={resize("s")} className="absolute bottom-0 left-3 right-3 z-20 h-[6px] cursor-ns-resize touch-none" />
-            <div onPointerDown={resize("se")} className="absolute bottom-0 right-0 z-20 h-4 w-4 cursor-nwse-resize touch-none" />
-          </>
-        )}
+      </div>
+        {!full && EDGES.map((ed) => <div key={ed} data-edge={ed} onPointerDown={resize(ed)} className={`absolute z-20 touch-none ${EDGE_ZONE[ed]}`} style={{ cursor: EDGE_CURSOR[ed] }} />)}
       </motion.div>
     </div>
   );

@@ -1384,3 +1384,15 @@ a.list-row:active {
     transform: none !important;
   }
 }
+
+/* A window being moved or resized (windowFrame.ts): no iframe takes the pointer, the gesture's cursor holds
+   everywhere, and nothing gets selected on the way */
+html.win-busy iframe {
+  pointer-events: none !important;
+}
+html.win-busy,
+html.win-busy * {
+  cursor: var(--win-cursor) !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
