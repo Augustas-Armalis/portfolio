@@ -54,6 +54,17 @@ const WHITE = new THREE.Color(1, 1, 1);
 // paintings) mark themselves with alpha 0 and pass through untouched while
 // they are in focus, so the boot hand-off to the DOM stays exact.
 
+// Low has no lens: every material goes straight to the screen through three's own filmic curve, and a sun, a gate's
+// light or a lamp came out as a flat white hole. The curve itself is given the lens's highlight compression (the
+// brightest channel eased toward a ceiling, the ratio between channels kept), so on Low too a light keeps its
+// colour and its form. three only uses this curve when drawing to the screen: with a lens nothing changes.
+const ACES_HEAD = "vec3 ACESFilmicToneMapping( vec3 color ) {";
+if (!THREE.ShaderChunk.tonemapping_pars_fragment.includes("agTop"))
+  THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace(
+    ACES_HEAD,
+    `${ACES_HEAD}\n\tfloat agTop = max( color.r, max( color.g, color.b ) );\n\tif ( agTop > 1.5 ) color *= ( 1.5 + ( agTop - 1.5 ) / ( 1.0 + ( agTop - 1.5 ) * 0.55 ) ) / agTop;`,
+  );
+
 export const POST_U = {
   // 1 while the scene is being drawn into the linear target, 0 straight to screen
   uLinearOut: { value: 0 },
@@ -274,11 +285,16 @@ ${GLSL_DEPTH}
 float ign(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 vec3 posAt(vec2 uv){ float z = viewZ(uv); return vec3((uv * 2.0 - 1.0) / uProj * z, -z); }
 void main(){
-  if (texture2D(tDepth, vUv).x >= 0.99995) { gl_FragColor = vec4(1.0, uFar, 0.0, 1.0); return; }
-  vec3 p = posAt(vUv);
+  // (This pass is at half size, so its pixel centres fall exactly on the corners of the depth's texels, where
+  // which of the four is read is decided by rounding: row by row the step up or down came back as no step at
+  // all, the normal was nonsense, and flat ground and still water got dark bands. Everything is read from the
+  // middle of one texel instead.)
+  vec2 c = (floor(vUv / uTexel) + 0.5) * uTexel;
+  if (texture2D(tDepth, c).x >= 0.99995) { gl_FragColor = vec4(1.0, uFar, 0.0, 1.0); return; }
+  vec3 p = posAt(c);
   float z = -p.z;
-  vec3 x1 = posAt(vUv + vec2(uTexel.x, 0.0)) - p; vec3 x0 = p - posAt(vUv - vec2(uTexel.x, 0.0));
-  vec3 y1 = posAt(vUv + vec2(0.0, uTexel.y)) - p; vec3 y0 = p - posAt(vUv - vec2(0.0, uTexel.y));
+  vec3 x1 = posAt(c + vec2(uTexel.x, 0.0)) - p; vec3 x0 = p - posAt(c - vec2(uTexel.x, 0.0));
+  vec3 y1 = posAt(c + vec2(0.0, uTexel.y)) - p; vec3 y0 = p - posAt(c - vec2(0.0, uTexel.y));
   vec3 n = normalize(cross(abs(x1.z) < abs(x0.z) ? x1 : x0, abs(y1.z) < abs(y0.z) ? y1 : y0));
   float R = uRadius * max(1.0, z * 0.5);
   // (the radius on screen, as a share of the frame's height: never under two pixels, never a great smear)
@@ -292,10 +308,10 @@ void main(){
     float t = (float(i) + 0.5) / float(TAPS);
     float a = a0 + float(i) * 2.39996;
     vec2 o = vec2(cos(a) * uProj.x / uProj.y, sin(a)) * sqrt(t) * rs;
-    vec2 uv = vUv + o;
+    vec2 uv = c + o;
     // (nothing is known of what lies beyond the frame: such a tap says nothing)
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) continue;
-    vec3 q = posAt(uv) - p;
+    vec3 q = posAt((floor(uv / uTexel) + 0.5) * uTexel) - p;
     float dd = dot(q, q);
     // how far above the surface the neighbour stands, over how far away it is; nothing counts from beyond the reach
     occ += max(dot(q, n) - bias, 0.0) / (dd + 0.01 * R * R) * R * (1.0 - smoothstep(R * R, 4.0 * R * R, dd));
