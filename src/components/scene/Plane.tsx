@@ -643,7 +643,17 @@ export function Plane({
       }
     } else if (voyage.phase === "closing") {
       voyage.veil = Math.min(1, voyage.veil + dt / 1.0);
-      if (voyage.veil >= 1 && voyage.next) {
+      // (a world with something heavy in it is made in slices: a little each frame while the cloud closes, more once it
+      // is shut and nothing else is seen; the world is not swapped in until that is done, so no single frame is long)
+      let made = true;
+      if (voyage.prep) {
+        const t0 = performance.now();
+        const budget = voyage.veil >= 1 ? 13 : 3;
+        do made = voyage.prep();
+        while (!made && performance.now() - t0 < budget);
+        if (made) voyage.prep = null;
+      }
+      if (voyage.veil >= 1 && voyage.next && made) {
         const to = voyage.next;
         voyage.next = null;
         // a world made ready while this one was flown is simply shown
