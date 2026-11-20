@@ -10,16 +10,17 @@ import Desktop from "./Desktop";
 import { EASE_OUT, glass, reducedMotion, sfx, useGlassScope } from "./ui";
 import { useClock, useDate } from "./useClock";
 
-// His mark: a soft glass sphere with the initial (to be swapped for his photo later).
+// His mark as an account picture: the gold circle on a near-black disc, the app icon made round
+// (to be swapped for his photo later).
 export function Monogram({ size = 88 }: { size?: number }) {
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-[radial-gradient(120%_120%_at_30%_15%,#ffffff_0%,#e9eaee_45%,#c9ccd3_100%)] font-semibold tracking-[-0.03em] text-[#17181b] shadow-[0_10px_26px_-12px_rgb(16_18_24/0.5),inset_0_-2px_6px_rgb(0_0_0/0.06),0_0_0_0.5px_rgb(0_0_0/0.08)]"
-      style={{ width: size, height: size, fontSize: size * 0.42 }}
+      className="flex shrink-0 items-center justify-center rounded-full bg-[linear-gradient(180deg,#1b1c21_0%,#0a0b0d_100%)] shadow-[0_10px_26px_-12px_rgb(16_18_24/0.5),inset_0_0_0_0.5px_rgb(255_255_255/0.14),0_0_0_0.5px_rgb(0_0_0/0.3)]"
+      style={{ width: size, height: size }}
       role="img"
       aria-label={owner.name}
     >
-      <MarkDeep size={Math.round(size * 0.62)} />
+      <MarkDeep size={Math.round(size * 0.56)} />
     </div>
   );
 }
