@@ -1,5 +1,6 @@
 import { audioGraph, audioHushed, channel, compressorGain, deskMusicAsk, deskMusicPrime, fadeParam, MIX, music, onMuteChange, resumeAudio, sceneMuted, setSceneMuted, voice, voicePlay, voicePrime, voiceRoute, voiceStop, type Voice } from "@/lib/audio";
 import { playPiano, preloadPiano } from "@/lib/piano";
+import { ambienceGain, subscribeSoundSettings } from "@/lib/soundSettings";
 
 // The sound of the place itself: real recordings only (all CC0, see
 // CREDITS.md), kept quiet under everything else.
@@ -10,8 +11,9 @@ import { playPiano, preloadPiano } from "@/lib/piano";
 //   waves   sea-waves.mp3    waves on a beach (2.9 min)
 //   birds   forest-birds.mp3 a forest by day: only in Paradise, whose painting has its white birds, and quietly
 //
-// The desk and the field round it are an empty field and music: the wind bed alone, barely there (about -52
-// dBFS), and once the visitor has clicked, the field's own quiet music (the music director's: see deskMusic
+// The desk and the field round it are an empty field and music: the wind bed alone, a faint air (about -61
+// dBFS: it is felt more than heard, and the music is the sound of the field), and once the visitor has clicked,
+// the field's own music (the music director's: see deskMusic
 // below; the mute pill silences it with everything else in the world). No birds, no meadow, no animals.
 //
 // How it is put together:
@@ -105,7 +107,9 @@ const LEVEL = { piano: 0.04, wet: 0.8 };
 // He found the field's air far too loud. Every bed is cut hard from the table's figures: at the desk and in the
 // avenue by 9.5 dB (about -52 dBFS by day: barely there, a breath under the field's music), in the painted worlds
 // by 6 dB (between -37 and -48).
-const CUT = { desk: 0.335, world: 0.5 };
+// Then he could not hear the field's music for the air: at the desk and in the avenue it is taken down another
+// 9 dB (about -61 dBFS by day, -65 at night), a faint air under the music and nothing more.
+const CUT = { desk: 0.12, world: 0.5 };
 const DUCK = 0.45; // the bed under music: -7 dB
 const DUCK_IN = 0.5; // time constants (s): about 1.5 s down
 const DUCK_OUT = 0.9; // about 2.7 s back up
@@ -261,6 +265,7 @@ let timer = 0;
 let nextNote = 0;
 let wasOn = false;
 let held = false; // development: the scene is being driven by hand
+let offSound: (() => void) | null = null;
 let lastMusic = -1e9;
 const DUCK_HOLD = 800; // ms the bed waits after the music stops before it returns
 function ducked() {
@@ -380,7 +385,8 @@ function tick() {
   if (!r) return;
   const t = r.ctx.currentTime;
   const on = isOn();
-  r.out.gain.setTargetAtTime(on ? 1 : 0, t, on ? FADE_IN : FADE_OUT);
+  // (the visitor's own ambience level, from Settings: lib/soundSettings.ts)
+  r.out.gain.setTargetAtTime(on ? ambienceGain() : 0, t, on ? FADE_IN : FADE_OUT);
   const under = ducked();
   r.duck.gain.setTargetAtTime(under ? DUCK : 1, t, under ? DUCK_IN : DUCK_OUT);
   const g = targets(scene);
@@ -432,6 +438,8 @@ function dispose() {
   const was = running;
   window.clearInterval(timer);
   document.removeEventListener("visibilitychange", onVisibility);
+  offSound?.();
+  offSound = null;
   running = false;
   const r = rig;
   rig = null;
@@ -474,6 +482,8 @@ export function startAmbience() {
     nextNote = performance.now() + 20000 + Math.random() * 20000;
     timer = window.setInterval(tick, 200);
     document.addEventListener("visibilitychange", onVisibility);
+    offSound?.();
+    offSound = subscribeSoundSettings(tick);
     tick();
   } catch (e) {
     if (DEV) console.warn("ambience failed to start", e);
@@ -486,6 +496,8 @@ export function stopAmbience() {
   if (typeof window === "undefined") return;
   window.clearInterval(timer);
   document.removeEventListener("visibilitychange", onVisibility);
+  offSound?.();
+  offSound = null;
   running = false;
   wasOn = false;
   rig?.out.gain.setTargetAtTime(0, rig.ctx.currentTime, FADE_OUT);
