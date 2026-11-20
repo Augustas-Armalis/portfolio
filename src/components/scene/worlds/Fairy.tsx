@@ -259,7 +259,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const midTrees: Crown[] = [];
     const low = pathOf("fairy").pts.filter((q, i) => i % 4 === 0 && q.y < 150);
     const NEAR_MAX = props.mobile ? 40 : 130;
-    const MID_MAX = props.mobile ? 420 : 1500;
+    const MID_MAX = props.mobile ? 420 : 1050;
     const ranked = close
       .map((c) => {
         let d = 1e9;
@@ -481,6 +481,25 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       belt.push({ p: [MT.x + Math.cos(a) * d, y0 + 205 + r() * 90, MT.z + Math.sin(a) * d], w: 70 + r() * 70, seed: r(), tall: 0.7 });
     }
     const puffs: Puff[] = [];
+    // air in layers: a band of low mist across the valley between the rise and the mountain (the mountain stands
+    // up out of it), mist in the woods about its foot, and long banks behind it so the far plain goes back in steps
+    for (let i = 0; i < (props.mobile ? 10 : 24); i++) {
+      const x = -900 + (i / 23) * 1800 + (r() - 0.5) * 60;
+      const z = 330 + (r() - 0.5) * 260 + Math.abs(x) * 0.12;
+      if (Math.abs(x) < 70) continue;
+      puffs.push({ p: [x, g(x, z) + 14 + r() * 16, z], size: 170 + r() * 120, a: 0.5 });
+    }
+    for (let i = 0; i < (props.mobile ? 8 : 20); i++) {
+      const a = (i / 20) * Math.PI * 2 + r() * 0.2;
+      const d = 405 + r() * 130;
+      // (thinner in front, where the road and the ramp are to be seen)
+      puffs.push({ p: [MT.x + Math.cos(a) * d, y0 + 16 + r() * 34, MT.z + Math.sin(a) * d], size: 120 + r() * 90, a: Math.sin(a) > 0.3 ? 0.3 : 0.55 });
+    }
+    for (let i = 0; i < (props.mobile ? 8 : 18); i++) {
+      const x = -1700 + (i / 17) * 3400;
+      const z = -1100 - r() * 900;
+      puffs.push({ p: [x, g(x, z) + 30 + r() * 60, z], size: 320 + r() * 220, a: 0.5 });
+    }
     // mist lying in the hollows of the plain, far out
     for (let i = 0; i < (props.mobile ? 14 : 34); i++) {
       const a = r() * Math.PI * 2;
