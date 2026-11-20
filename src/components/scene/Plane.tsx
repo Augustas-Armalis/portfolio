@@ -477,8 +477,9 @@ export function Plane({
     // the kings' wood is gone through slowly
     // and at a cruise the quiet hand takes its time everywhere
     st.cruise = damp(st.cruise, voyage.cruise ? 1 : 0, 1.4, dt);
-    const pace = (id === "kings" ? kingsPace(lz - KINGS.z) : 1) * (1 - 0.55 * st.cruise * a);
-    const vT = opts.launching ? Math.min(speedOf(voyage.throttle), 2 + st.t * 3.6) : speedOf(voyage.throttle) * pace - Math.sin(st.pitch) * 5 * pace;
+    // (a world built several times the size of the others is flown that much faster: WorldDef.pace; the top speed is held near the ordinary one)
+    const pace = (id === "kings" ? kingsPace(lz - KINGS.z) : (def.pace ?? 1)) * (1 - 0.55 * st.cruise * a);
+    const vT = opts.launching ? Math.min(speedOf(voyage.throttle), 2 + st.t * 3.6) : Math.min(speedOf(voyage.throttle) * pace, SPEED.max * Math.max(1, (def.pace ?? 1) * 0.5)) - Math.sin(st.pitch) * 5 * pace;
     // (eased twice over: the pace a moment ago leads the pace now, so a change of speed has no corner in it)
     st.speedT = damp(st.speedT, Math.max(SPEED.min * 0.8, vT), opts.launching ? 3 : 1.6, dt);
     st.speed = damp(st.speed, st.speedT, opts.launching ? 3 : 1.6, dt);
