@@ -216,7 +216,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     const nC = props.mobile ? 50 : Math.round(90 + 60 * props.effects);
     for (let i = 0; i < nC; i++) {
       const a = r() * Math.PI * 2;
-      const lowLayer = i % 3 !== 0;
+      const lowLayer = i % 5 !== 0;
       const d = lowLayer ? 300 + r() * 1500 : 1300 + r() * 1100;
       const x = Math.cos(a) * d;
       const z = Math.sin(a) * d - 200;
@@ -225,7 +225,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       const long = 1.6 + r() * 2.2;
       if (nearPath(x, y, z) < s * long * 1.4 + 60) continue;
       // (drawn out across the view, like staves)
-      cumulus(clouds, [x, y, z], s, lowLayer ? [0.15, 0.3, 0.31] : [0.13, 0.24, 0.33], r, { glow: 0.012, long, yaw: (r() - 0.5) * 0.5 });
+      cumulus(clouds, [x, y, z], s, lowLayer ? [0.15, 0.3, 0.31] : [0.07, 0.14, 0.22], r, { glow: 0.012, long: lowLayer ? long : long * 1.5, yaw: (r() - 0.5) * 0.5, sy: lowLayer ? 0.7 : 0.4 });
     }
     // mist lying in the troughs of the waves
     const puffs: Puff[] = [];

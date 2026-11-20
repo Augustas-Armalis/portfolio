@@ -35,7 +35,7 @@ const def = WORLDS.sun;
 // (pale gold, lighter toward the top of every form; its shade is turned violet-blue by the paint itself: sun/gold.ts)
 const STONE: V3 = [0.86, 0.6, 0.24];
 const STONE_TOP: V3 = [1.0, 0.84, 0.5];
-const DARK: V3 = [0.34, 0.24, 0.2];
+const DARK: V3 = [0.4, 0.27, 0.14];
 // the low sun the whole world is lit from (the same numbers as the sky's: voyage.ts AIR.sun)
 const SUN_DIR = new THREE.Vector3(Math.sin(0.2094) * Math.cos(0.2269), Math.sin(0.2269), -Math.cos(0.2094) * Math.cos(0.2269));
 const GOLD: V3 = [1.0, 0.7, 0.22];
