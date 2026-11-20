@@ -798,13 +798,14 @@ export function Gallery({ def }: { def: WorldDef }) {
 }
 
 // ---------- the whole base of a world ----------
-export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean }) {
+// (`ground={false}`: the world draws its own land; `arch={false}`: its way on is not the lancet of light but something of its own, a cave's mouth, say)
+export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true, ground = true, arch = true }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean; ground?: boolean; arch?: boolean }) {
   return (
     <>
-      {def.terrain && <Ground def={def} pal={pal} mobile={props.mobile} size={groundSize} />}
+      {ground && def.terrain && <Ground def={def} pal={pal} mobile={props.mobile} size={groundSize} />}
       {grass && def.terrain && <WorldGrass def={def} pal={pal} tip={tip} mobile={props.mobile} density={props.grass} wind={props.reduced ? 0.25 : 1} mask={mask} tall={tall} />}
       <LightPath id={id} def={def} tint={pathTint} gain={pathGain} effects={props.effects} angels={angels} marks={marks} />
-      {def.gate && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} />}
+      {arch && def.gate && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} />}
       <Gallery def={def} />
     </>
   );
