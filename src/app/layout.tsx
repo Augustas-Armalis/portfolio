@@ -63,6 +63,7 @@ const jsonLd = {
   "@type": "Person",
   name: TITLE,
   url: SITE,
+  image: `${SITE}/img/augustas.jpg`,
   jobTitle: "Design engineer and founder",
   homeLocation: { "@type": "Place", name: "Kaunas, Lithuania" },
   sameAs: [

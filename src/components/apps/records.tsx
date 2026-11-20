@@ -131,7 +131,7 @@ function NowPlaying({ compact }: { compact: boolean }) {
 }
 
 function VolumeSlider() {
-  const [v, setV] = useState(1);
+  const v = usePlayer().vol;
   return (
     <div className="mt-5 flex items-center gap-2.5 text-white/70">
       <Sym icon="speaker1" size={16} />
@@ -142,10 +142,7 @@ function VolumeSlider() {
         max={1}
         step={0.01}
         value={v}
-        onChange={(e) => {
-          setV(+e.target.value);
-          player.volume(+e.target.value);
-        }}
+        onChange={(e) => player.volume(+e.target.value)}
         className="scrub scrub-light min-w-0 flex-1"
         style={{ ["--p" as string]: `${v * 100}%` }}
       />

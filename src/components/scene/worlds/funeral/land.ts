@@ -19,7 +19,11 @@ const OFF = RHO / Math.SQRT2; // rows this far either side of the middle give a 
 const SPACE = 30;
 
 // the road: x, z and how high its crest stands
+// (it begins far inside the southern mountain: the first three hundred metres of it lie in a cutting so deep that
+// it is roofed over, the cave the procession and the plane come out of)
 const CTRL: [number, number, number][] = [
+  [352, 1320, 2],
+  [346, 1180, 2],
   [330, 1040, 2],
   [290, 940, 4],
   [232, 800, 9],
@@ -47,8 +51,8 @@ const CTRL: [number, number, number][] = [
   [40, -830, 308],
 ];
 // where along the road (by its control points) things stand
-const AT_PASS = 20;
-const AT_MOUTH = 21;
+const AT_PASS = 22;
+const AT_MOUTH = 23;
 
 // the land the road is laid over: the valley, the walls, the far ranges
 const BASE: B[] = [
@@ -222,23 +226,29 @@ function build() {
   const iGate = iMouth + 9; // 36 m inside
   const iEnd = Math.min(N - 1, iMouth + 62);
 
-  // the path of light: beside the road on its valley side, a little above the hoods; round each turn on the
+  // the cave it comes out of: as far along the road as the mountain still stands high enough over it to be a roof
+  let iOut = 0;
+  while (iOut < N - 1 && baseAt(pts[iOut + 1].x, pts[iOut + 1].z) - ys[iOut + 1] > 62) iOut++;
+
+  // the path of light: out of the cave over the road's middle, rising as the valley opens so the whole climb is
+  // seen at once; then down beside the road on its valley side, a little above the hoods; round each turn on the
   // outside, over the drop, looking back at the crowd on the edge; at the pass over their heads and in
-  const iIn = ctlI[1] + 6;
+  const iIn = ctlI[0] + 16;
   const path: [number, number, number][] = [];
   for (let i = iIn; i <= iGate + 10; i += 10) {
     const p = pts[i];
     const intoCave = sstep(iPass - 30, iPass + 6, i);
-    const k = 1 - intoCave;
+    const out = sstep(iOut - 4, iOut + 26, i);
+    const k = (1 - intoCave) * out;
     const x = p.x;
     const z = p.z + 13 * k;
     const turn = Math.min(1, Math.abs(p.x) / 230);
-    const lift = 7.5 + 2.5 * turn * turn * k + 3.5 * intoCave + (1 - sstep(iIn, ctlI[3], i)) * 18;
+    const lift = 7.5 + 2.5 * turn * turn * k + 3.5 * intoCave + 6.5 * (1 - out) + out * (1 - sstep(iOut + 30, ctlI[5], i)) * 34;
     path.push([x, z, Math.max(3.5, ys[i] + lift - ground(x, z))]);
   }
   const entry = { x: path[0][0], z: path[0][1], above: path[0][2], yaw: Math.atan2(-tan[iIn][0], -tan[iIn][1]) };
-  // the painting stands on the valley floor to the right of the way in
-  const iC = ctlI[2] + 4;
+  // (well up the first climb: nothing hangs in the mouth of the cave the plane comes out of)
+  const iC = ctlI[7] + 4;
   const canvas = { x: pts[iC].x - tan[iC][1] * 74, z: pts[iC].z + tan[iC][0] * 74, yaw: Math.atan2(-tan[iC][0], -tan[iC][1]) - 0.5 };
   const g = pts[iGate];
   const gate = { x: g.x, z: g.z, above: 11 + ys[iGate] - ground(g.x, g.z), yaw: Math.atan2(-tan[iGate][0], -tan[iGate][1]) };
@@ -257,6 +267,9 @@ function build() {
     // the rock either side of the cave's mouth
     { x: m.x + mn[0] * 52, z: m.z + mn[1] * 52, r: 26, h: 170 },
     { x: m.x - mn[0] * 52, z: m.z - mn[1] * 52, r: 26, h: 170 },
+    // the rock either side of the mouth it comes out of
+    { x: pts[iOut].x - tan[iOut][1] * 54, z: pts[iOut].z + tan[iOut][0] * 54, r: 28, h: 120 },
+    { x: pts[iOut].x + tan[iOut][1] * 54, z: pts[iOut].z - tan[iOut][0] * 54, r: 28, h: 120 },
     // the great walls: the plane leans away from them early
     { x: -330, z: -830, r: 300, h: 1080, bell: true },
     { x: 480, z: -780, r: 270, h: 860, bell: true },
@@ -264,7 +277,7 @@ function build() {
     { x: -800, z: 120, r: 320, h: 840, bell: true },
   ];
 
-  return { terrain, pts, tan, y: ys, crest, N, STEP, len: (N - 1) * STEP, ground, baseAt, iPass, iMouth, iGate, iEnd, path, entry, gate, canvas, cyp, obstacles };
+  return { terrain, pts, tan, y: ys, crest, N, STEP, len: (N - 1) * STEP, ground, baseAt, iPass, iMouth, iGate, iEnd, iOut, iIn, path, entry, gate, canvas, cyp, obstacles };
 }
 
 let land: ReturnType<typeof build> | null = null;

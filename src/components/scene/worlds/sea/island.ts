@@ -182,23 +182,25 @@ export function makeIslandMaterial() {
         vec3 V = normalize(cameraPosition - vWorld);
         float dist = length(vWorld - cameraPosition);
         vec3 l = vLocal;
-        // Close to, the rock has relief of its own: level beds that stand out as ledges, upright cracks, pitted
+        // Close to, the rock has relief of its own: level beds that stand out a little, a few upright cracks, pitted
         // faces. It is a height worked out from the place on the rock, and the light is turned by its slope
         // (the surface's own derivatives), so ledges catch the sky and cracks hold shade as the eye passes.
-        float nearK = 1.0 - smoothstep(60.0, 520.0, dist);
-        float ledgeW = vnoise(l.xz * 0.02) * 4.0 + vnoise(vec2(l.x * 0.004, l.z * 0.01)) * 9.0;
-        float ledge = fract(l.y * 0.085 + ledgeW);
-        float crackN = vnoise(vec2(l.x * 0.21 + l.z * 0.17 + vnoise(l.xy * 0.05) * 2.0, l.y * 0.035));
-        float crack = 1.0 - smoothstep(0.0, 0.07, abs(crackN - 0.5));
-        float pit = vnoise(l.xy * 0.9 + l.z * 0.7) * 0.6 + vnoise(l.xz * 2.3 + l.y * 1.9) * 0.4;
+        float nearK = 1.0 - smoothstep(50.0, 420.0, dist);
+        vec3 n0 = n;
+        // (broad beds, nearly level, only a little wandering; a few upright cracks; soft pitting: never a net of lines)
+        float ledge = fract(l.y * 0.05 + vnoise(l.xz * 0.012) * 1.3);
+        float bedH = smoothstep(0.0, 0.3, ledge) * (1.0 - smoothstep(0.8, 1.0, ledge));
+        float crackN = vnoise(vec2(l.x * 0.11 + l.z * 0.09 + vnoise(l.xy * 0.03) * 1.5, l.y * 0.016));
+        float crack = (1.0 - smoothstep(0.0, 0.03, abs(crackN - 0.5))) * smoothstep(0.55, 0.75, vnoise(l.xz * 0.02 + 4.0));
+        float pit = vnoise(l.xy * 0.5 + l.z * 0.4) * 0.6 + vnoise(l.xz * 1.3 + l.y * 1.1) * 0.4;
         float steep0 = smoothstep(0.2, 0.6, 1.0 - n.y);
-        float relief = (smoothstep(0.0, 0.16, ledge) * (1.0 - smoothstep(0.75, 1.0, ledge)) * 1.3 - crack * 1.6) * steep0 + pit * 0.5;
+        float relief = (bedH * 0.9 - crack * 1.2) * steep0 + pit * 0.35;
         if (nearK > 0.01) {
           vec3 sx = dFdx(vWorld); vec3 sy = dFdy(vWorld);
           vec3 r1 = cross(sy, n); vec3 r2 = cross(n, sx);
           float det = dot(sx, r1);
           vec3 grad = sign(det) * (dFdx(relief) * r1 + dFdy(relief) * r2);
-          n = normalize(abs(det) * n - grad * 1.5 * nearK);
+          n = normalize(abs(det) * n - grad * 0.7 * nearK);
         }
         // rock, laid in soft dabs: level beds broken by the slope, long stains running down the steep faces
         float steep = 1.0 - n.y;
@@ -211,8 +213,8 @@ export function makeIslandMaterial() {
         float moss = smoothstep(0.5, 0.82, n.y) * smoothstep(0.35, 0.7, vnoise(l.xz * 0.045 + 5.0) * 0.6 + dab * 0.4);
         alb = mix(alb, vCol.rgb * vec3(1.5, 1.6, 0.9) + vec3(0.01, 0.02, 0.0), moss * 0.55);
         // the cracks are dark, the lips of the ledges pale and dry; lichen in small pale and ochre spots
-        alb *= 1.0 - 0.5 * crack * steep0 * nearK;
-        alb *= 1.0 + 0.3 * smoothstep(0.7, 0.98, ledge) * steep0 * nearK;
+        alb *= 1.0 - 0.4 * crack * steep0 * nearK;
+        alb *= 1.0 - 0.16 * (1.0 - bedH) * steep0 * nearK;
         float lich = smoothstep(0.7, 0.86, vnoise(l.xy * 0.55 + l.z * 0.45 + 9.0)) * smoothstep(0.45, 0.65, pit) * nearK;
         alb = mix(alb, mix(vec3(0.2, 0.24, 0.17), vec3(0.3, 0.24, 0.1), step(0.5, vnoise(l.xz * 0.13 + 2.0))), lich * 0.55);
         // the grain of the chalk, close to
@@ -236,7 +238,7 @@ export function makeIslandMaterial() {
           vec3 dv = uEyes[i] - l;
           float d2 = dot(dv, dv);
           float k = i == 0 ? uEyeK.x : uEyeK.y;
-          float facing = clamp(dot(n, normalize(dv)) * 0.6 + 0.4, 0.0, 1.0);
+          float facing = clamp(dot(mix(n0, n, 0.35), normalize(dv)) * 0.6 + 0.4, 0.0, 1.0);
           vec3 warm = mix(alb, vec3(dot(alb, vec3(0.3, 0.5, 0.2))), 0.7) * vec3(1.0, 0.7, 0.34);
           col += (warm * 3.4 + 0.004) * k * facing * 200.0 / (d2 + 200.0) * (0.4 + 0.6 * exp(-d2 * 0.0006));
         }
@@ -280,7 +282,7 @@ export function makeGrottoMaterial() {
         float shimmer = vnoise(vec2(vLocal.x * 0.09 + uTime * 0.07, vLocal.z * 0.07 - uTime * 0.05)) * vnoise(vec2(vLocal.z * 0.13 + uTime * 0.04, vLocal.y * 0.2 + 3.0));
         // (its closed end is a soft pool of the same light, brightest at its heart)
         float end = step(1.1, deep);
-        col += mix(vec3(0.05, 0.16, 0.42), vec3(0.16, 0.34, 0.9), smoothstep(0.75, 1.25, deep)) * deep * deep * mix(0.02 + 0.3 * shimmer, 0.16 * exp(-vK.y * 2.0), end) * (0.5 + 0.5 * rib) * glowK() * 1.6;
+        col += mix(vec3(0.05, 0.16, 0.42), vec3(0.16, 0.34, 0.9), smoothstep(0.75, 1.25, deep)) * deep * deep * mix(0.02 + 0.3 * shimmer, 0.05, end) * (0.5 + 0.5 * rib) * glowK() * 1.6;
         gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,
