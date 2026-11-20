@@ -16,10 +16,10 @@ import { Lock, Search, SlidersHorizontal, Volume2, VolumeX } from "lucide-react"
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { about, allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, deskSharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
-import { focusedApp, useOS, useWallpaper, type Win } from "@/store";
+import { focusedApp, isUp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
-import { LockActions, LockFace, Monogram, PowerOverlay } from "./Login";
+import { Monogram } from "./Login";
 import { Btn, Chrome, EASE_OUT, FILE_MIME, QuickLook, SPRING_GLASS, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useMorph, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
 import { EDGES, EDGE_CURSOR, EDGE_ZONE, clampMove, pointerGesture, resizeRect, type Bounds, type Edge } from "./windowFrame";
@@ -1016,6 +1016,7 @@ function Spotlight() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!isUp(useOS.getState())) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette(!useOS.getState().palette);
@@ -1440,7 +1441,7 @@ function SpaceLook({ sel, items, run, active }: { sel: string[]; items: DeskItem
     if (!active || sel.length !== 1) return;
     const onKey = (e: KeyboardEvent) => {
       const t = (e.target as HTMLElement)?.tagName;
-      if (e.key !== " " || t === "INPUT" || t === "TEXTAREA") return;
+      if (e.key !== " " || t === "INPUT" || t === "TEXTAREA" || !isUp(useOS.getState())) return;
       const it = items.find((x) => x.id === sel[0]);
       if (it && !("app" in it.open)) {
         e.preventDefault();
@@ -1507,27 +1508,6 @@ function Welcome() {
 }
 
 // `user` is still passed by the intro (Experience.tsx); there is one desktop, so it is not read.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-// Unlocking: the lock screen's face stays for a moment over the desktop it was covering, then lets go. The clock
-// drifts up and softens, the dimming lifts, and under it the menu bar, the Dock and the windows arrive in turn.
-function UnlockVeil() {
-  const [on, setOn] = useState(() => useOS.getState().entry === "lock");
-  if (!on) return null;
-  const reduce = reducedMotion();
-  return (
-    <motion.div
-      aria-hidden
-      initial={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-      animate={{ opacity: 0, y: reduce ? 0 : -28, scale: reduce ? 1 : 1.03, filter: reduce ? "blur(0px)" : "blur(6px)" }}
-      transition={{ duration: 0.55, ease: EASE_OUT }}
-      onAnimationComplete={() => setOn(false)}
-      className="pointer-events-none absolute inset-0 z-[5000]"
-    >
-      <LockFace still action={<LockActions inert />} />
-    </motion.div>
-  );
-}
-
 export default function Desktop(_: { user?: UserId }) {
   useGlassScope();
   const windows = useOS((s) => s.windows);
@@ -1540,6 +1520,8 @@ export default function Desktop(_: { user?: UserId }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const st = useOS.getState();
+      // the session is still here under the lock screen, but it does not hear the keyboard
+      if (!isUp(st)) return;
       if (e.key === "F3" || (e.ctrlKey && e.key === "ArrowUp")) {
         e.preventDefault();
         return st.setOverlay(st.overlay === "mission" ? null : "mission");
@@ -1588,10 +1570,8 @@ export default function Desktop(_: { user?: UserId }) {
       </div>
       <AppsOverlay />
       <MissionControl />
-      <UnlockVeil />
       <Dock />
       <Spotlight />
-      <PowerOverlay />
     </div>
   );
 }

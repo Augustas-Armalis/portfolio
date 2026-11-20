@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { apps, bookCall, dockApps, gameApps, mainWork, owner, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
 import { flightMusicPrime } from "@/lib/flightMusic";
 import { handoff } from "@/lib/handoff";
-import { useOS, useWallpaper } from "@/store";
+import { isUp, useOS, useWallpaper } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, player, usePlayer, warmApps } from "./Apps";
 import { Bars } from "./Desktop";
 import { Monogram, PowerOverlay } from "./Login";
@@ -904,13 +904,12 @@ function AppWindow({ id, origin, onClosed }: { id: AppId; origin: Origin | null;
 export default function PhoneOS() {
   useGlassScope();
   useEffect(warmApps, []);
-  const phase = useOS((s) => s.phase);
-  const user = useOS((s) => s.user);
+  const up = useOS(isUp);
   const phoneApp = useOS((s) => s.phoneApp);
   const origin = useOS((s) => s.phoneOrigin);
   const openPhoneApp = useOS((s) => s.openPhoneApp);
   const heroDark = useOS((s) => s.heroDark);
-  const lightBar = !(phase === "os" && !!user) || !phoneApp || phoneApp === "terminal" || phoneApp === "doom" || phoneApp === "blocks" || (!!phoneApp && heroDark);
+  const lightBar = !(up) || !phoneApp || phoneApp === "terminal" || phoneApp === "doom" || phoneApp === "blocks" || (!!phoneApp && heroDark);
   const shutdown = useOS((s) => s.shutdown);
   const [power, setPower] = useState(false);
   // A real phone already has a status bar and an island of its own: ours would sit under them, everything twice.
@@ -944,7 +943,7 @@ export default function PhoneOS() {
       {!real && <StatusBar light={lightBar} />}
       <Island real={real} />
       <AnimatePresence initial={false}>
-        {phase === "os" && user ? (
+        {up ? (
           <motion.div
             key="home"
             className="absolute inset-0"
@@ -968,7 +967,7 @@ export default function PhoneOS() {
           </motion.div>
         )}
       </AnimatePresence>
-      {phase === "os" && phoneApp && <AppWindow key={phoneApp} id={phoneApp} origin={origin} onClosed={() => openPhoneApp(null)} />}
+      {up && phoneApp && <AppWindow key={phoneApp} id={phoneApp} origin={origin} onClosed={() => openPhoneApp(null)} />}
       <AnimatePresence>{power && <PowerSheet key="power" onClose={() => setPower(false)} />}</AnimatePresence>
       <PowerOverlay />
     </div>

@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { wallpapers, type AppId, type UserId } from "@/content";
 
+// "room": the 3D desk. "login": the OS is on the display, either its lock screen or its desktop (isUp says which).
+// The OS never sets "os": going from the lock screen to the desktop is the OS's own move, on one screen, so nothing
+// outside it is told to swap pages.
 export type Phase = "room" | "login" | "os";
 export type Win = { id: AppId; z: number; min: boolean; max: boolean };
 type Origin = { x: number; y: number; w: number; h: number };
@@ -165,10 +168,10 @@ export const useOS = create<OS>((set, get) => ({
     const { locked, user, phase } = get();
     const entry = phase === "login" ? "lock" : "boot";
     // unlocking brings the windows back as they were
-    if (locked && user) return set({ phase: "os", locked: false, entry });
-    set({ user: "engineer", phase: "os", locked: false, entry, phoneApp: null, topZ: 11, windows: firstWindows() });
+    if (locked && user) return set({ phase: "login", locked: false, entry });
+    set({ user: "engineer", phase: "login", locked: false, entry, phoneApp: null, topZ: 11, windows: firstWindows() });
   },
-  lockScreen: () => set({ phase: "login", locked: true, palette: false, phoneApp: null, seamless: false }),
+  lockScreen: () => set({ phase: "login", locked: true, palette: false, overlay: null, phoneApp: null, seamless: false }),
   sleep: (on) => set({ sleeping: on }),
   restart: () => {
     // black first (250ms), then the session ends under it; the windows are only dropped once nothing can be seen
@@ -218,6 +221,9 @@ export const useOS = create<OS>((set, get) => ({
   openPhoneApp: (id, origin) => set(origin ? { phoneApp: id, phoneOrigin: origin } : { phoneApp: id }),
   setWallpaper: (i) => set({ wallpaper: i }),
 }));
+
+// The session is up: signed in and not locked (the desktop on a Mac, the home screen on a phone).
+export const isUp = (s: { phase: Phase; user: UserId | null; locked: boolean }) => s.phase !== "room" && !!s.user && !s.locked;
 
 // The app that is focused right now (top of the stack, not minimised).
 export function focusedApp(windows: Win[]): AppId | null {
