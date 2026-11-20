@@ -64,7 +64,7 @@ import { Sky, makeSkyMaterial } from "./scene/World";
 import { HomeMountains } from "./scene/home/Mountains";
 import { Land } from "./scene/home/Terrain";
 import { LakeMirror, Reeds } from "./scene/home/Water";
-import { CALM, HOLD, hLakeK, homeLand } from "./scene/home/land";
+import { CALM, HLAKE, HOLD, SEA, hLakeK, homeLand, landH } from "./scene/home/land";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
 // Everything on the desk does something: the display boots the OS, the piano
@@ -898,7 +898,7 @@ function Scene({
     } else if (m === "book" || m === "sketch") {
       const { c, rot } = P(m === "book" ? "book" : "sketchbook");
       // (the sketchbook slides a little to its right as it opens, to keep its cover on the desk)
-      const spineX = m === "book" ? -0.0675 : -0.103 + SKETCH_OPEN_SHIFT;
+      const spineX = m === "book" ? -0.0675 : -0.103 + (mobile ? 0 : SKETCH_OPEN_SHIFT);
       const w = m === "book" ? 0.29 : 0.44;
       const h = m === "book" ? 0.22 : 0.17;
       // on a phone the novel is read a page at a time: one page fills the width, and the eye goes over to the other
@@ -1068,10 +1068,12 @@ function Scene({
   };
 
   // The camera in the hand: a free flight over the field. Drag turns the view
-  // (the world follows the pointer, as everywhere else), W A S D and Q / E
-  // move, Shift hurries; on touch two fingers slide the world and a pinch
-  // walks in or out. It leaves from rest and glides back to rest, and the
-  // edge of the field gives instead of stopping it dead.
+  // (the world follows the pointer, as everywhere else), W A S D move, Space
+  // rises and Shift sinks (straight up and down, whatever the lens is turned
+  // to), E hurries and Q creeps; on touch two fingers slide the world, a pinch
+  // walks in or out, and two small buttons by the shutter rise and sink. It
+  // leaves from rest and glides back to rest, and the edge of the field, the
+  // ground under it and the ceiling over it give instead of stopping it dead.
   const photoFov = () => {
     const f = photoCtl.frame.h > 0.05 ? photoCtl.frame.h : 1;
     return Math.min(104, THREE.MathUtils.radToDeg(2 * Math.atan(photoCtl.sensorH / 2 / photoCtl.focal / f)));
@@ -1095,10 +1097,10 @@ function Scene({
     if (k.has("s") || k.has("arrowdown")) want.sub(fwd);
     if (k.has("d") || k.has("arrowright")) want.add(right);
     if (k.has("a") || k.has("arrowleft")) want.sub(right);
-    if (k.has("e")) want.y += 1;
-    if (k.has("q")) want.y -= 1;
+    if (k.has(" ")) want.y += 1;
+    if (k.has("shift")) want.y -= 1;
     const moving = want.lengthSq() > 0;
-    if (moving) want.normalize().multiplyScalar(k.has("shift") ? 6.5 : 1.7);
+    if (moving) want.normalize().multiplyScalar(k.has("e") ? 6.5 : k.has("q") ? 0.55 : 1.7);
     P.vel.lerp(want, 1 - Math.exp(-dt * (moving ? 5 : 7)));
     P.pos.addScaledVector(P.vel, dt);
     if (inp.tx || inp.ty || inp.pinch) {
@@ -1113,9 +1115,11 @@ function Scene({
       P.pos.x -= P.pos.x * back;
       P.pos.z -= P.pos.z * back;
     }
-    if (P.pos.y < 0.22) P.pos.y += (0.22 - P.pos.y) * (1 - Math.exp(-dt * 12));
+    // never under the ground: the meadow rises and falls away from the desk, and the lake and the sea count as ground
+    const ground = Math.max(landH(P.pos.x, P.pos.z), hLakeK(P.pos.x, P.pos.z) < 1.1 ? HLAKE.y : SEA);
+    if (P.pos.y < ground + 0.22) P.pos.y += (ground + 0.22 - P.pos.y) * (1 - Math.exp(-dt * 12));
     if (P.pos.y > 36) P.pos.y += (36 - P.pos.y) * give;
-    P.pos.y = Math.max(0.08, P.pos.y);
+    P.pos.y = Math.max(ground + 0.08, P.pos.y);
     cam.position.copy(P.pos);
     cam.up.copy(v.Y);
     v.look.copy(P.pos).add(fwd);
@@ -1651,7 +1655,7 @@ function Scene({
     if (o.kind === "sketchbook")
       return (
         <Held away={mobile && (mode === "book" || reading)}>
-          <SketchbookLive open={mode === "sketch"} apiRef={sketch} />
+          <SketchbookLive open={mode === "sketch"} shift={mobile ? 0 : SKETCH_OPEN_SHIFT} apiRef={sketch} />
         </Held>
       );
     if (o.kind === "headphones")
@@ -1991,6 +1995,12 @@ export default function Room({
       if (mode === "plane" || mode === "camera" || (nav === "explore" && mode === "none")) {
         // an arrow pressed on a slider belongs to the slider
         if (k.startsWith("arrow") && (e.target as HTMLElement | null)?.tagName === "INPUT") return;
+        // with the camera in the hand Space rises: it must not scroll the page, nor press whatever was clicked last
+        // (a control reached with the keyboard keeps its own Space)
+        if (mode === "camera" && k === " ") {
+          if ((e.target as HTMLElement | null)?.closest?.("button, a, input")) return;
+          e.preventDefault();
+        }
         input.current.keys.add(k);
         if (k.startsWith("arrow")) e.preventDefault();
       }
@@ -2239,6 +2249,14 @@ export default function Room({
             mobile={isMobile}
             onExit={exit}
             onShoot={() => apiRef.current?.shoot() ?? null}
+            onLift={(d) => {
+              // (the two touch buttons hold the same keys down)
+              const k = input.current.keys;
+              k.delete(" ");
+              k.delete("shift");
+              if (d > 0) k.add(" ");
+              else if (d < 0) k.add("shift");
+            }}
             hours={hours}
             live={liveSky}
             onTime={(h) => {

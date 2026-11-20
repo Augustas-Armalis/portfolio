@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, ChevronsUp, Download, EyeOff, Grid3x3, LayoutGrid, LocateFixed, Lock, LockOpen, Minus, Moon, Music2, Pause, PlaneLanding, Play, Plus, Route, Settings2, SkipBack, SkipForward, Smartphone, Sun, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUp, Download, EyeOff, Grid3x3, LayoutGrid, LocateFixed, Lock, LockOpen, Minus, Moon, Music2, Pause, PlaneLanding, Play, Plus, Route, Settings2, SkipBack, SkipForward, Smartphone, Sun, X } from "lucide-react";
 import { gyroAvailable, gyroCentre, gyroStart, gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
@@ -158,6 +158,7 @@ export function CameraUI({
   mobile,
   onExit,
   onShoot,
+  onLift,
   hours,
   live,
   onTime,
@@ -166,6 +167,7 @@ export function CameraUI({
   mobile: boolean;
   onExit: () => void;
   onShoot: () => Capture | null;
+  onLift: (dir: -1 | 0 | 1) => void;
   hours: number;
   live: boolean;
   onTime: (h: number) => void;
@@ -288,8 +290,9 @@ export function CameraUI({
   };
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
-      if (e.key !== " " && e.key !== "Enter") return;
-      // a focused control keeps its own Space and Enter
+      // (Space is no longer the shutter: it lifts the camera, with Shift to bring it down: Room's photoStep)
+      if (e.key !== "Enter") return;
+      // a focused control keeps its own Enter
       if ((e.target as HTMLElement | null)?.closest?.("button, a, input")) return;
       e.preventDefault();
       if (!e.repeat) shoot();
@@ -298,7 +301,7 @@ export function CameraUI({
     return () => window.removeEventListener("keydown", k);
   });
 
-  // a click hands the keyboard back to the camera (Space is the shutter); keyboard focus stays where it was put
+  // a click hands the keyboard back to the camera (Space lifts it, Enter is the shutter); keyboard focus stays where it was put
   const release = (e: React.MouseEvent) => {
     if (e.detail > 0) (document.activeElement as HTMLElement | null)?.blur?.();
   };
@@ -324,7 +327,7 @@ export function CameraUI({
 
   return (
     <>
-      <TopBar title="Camera" hint={mobile ? "Drag to look · two fingers to move · tap to focus" : "Drag to look · W A S D to move · click to focus · Space to shoot"} hintId="camera" onExit={onExit} />
+      <TopBar title="Camera" hint={mobile ? "Drag to look · two fingers to move · tap to focus" : "W A S D to move · Space up · Shift down · drag to look · click to focus · Enter to shoot"} hintId={mobile ? "camera" : "camera-keys"} onExit={onExit} />
       <motion.div ref={host} className="pointer-events-none absolute inset-0 z-20" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45, ease: EASE }}>
         {vp.w > 0 && (
           <>
@@ -484,11 +487,43 @@ export function CameraUI({
             <Shots shots={shots} onSaved={(id) => setShots((s) => s.map((x) => (x.id === id ? { ...x, saved: true } : x)))} />
           </div>
           <Glass className="pointer-events-auto shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-            <button type="button" aria-label="Take photo" className="group grid h-12 w-12 place-items-center rounded-full max-sm:h-14 max-sm:w-14" onClick={(e) => (e.stopPropagation(), shoot())}>
+            <button type="button" aria-label="Take photo (Enter)" className="group grid h-12 w-12 place-items-center rounded-full max-sm:h-14 max-sm:w-14" onClick={(e) => (e.stopPropagation(), release(e), shoot())}>
               <span className="h-9 w-9 rounded-full bg-white shadow-[0_1px_6px_rgb(0_0_0/0.25)] transition-transform duration-150 ease-out group-active:scale-90 max-sm:h-11 max-sm:w-11" />
             </button>
           </Glass>
-          <div className="hidden flex-1 max-sm:block" />
+          {/* with no keyboard: the camera is raised and lowered from two small buttons, held down */}
+          {mobile ? (
+            <div className="flex flex-1 items-center justify-end">
+              <Glass className="pointer-events-auto flex shrink-0 items-center p-0.5" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} data-camera="lift">
+                {([1, -1] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-label={d > 0 ? "Raise the camera" : "Lower the camera"}
+                    className="lg-btn grid h-10 w-10 touch-none select-none place-items-center text-white/95"
+                    onPointerDown={(e) => {
+                      // (held: the finger may slide off the button and the camera still moves until it lifts)
+                      try {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                      } catch {
+                        /* not captured: letting go over the button still stops it */
+                      }
+                      onLift(d);
+                    }}
+                    onPointerUp={() => onLift(0)}
+                    onPointerCancel={() => onLift(0)}
+                    onLostPointerCapture={() => onLift(0)}
+                    onPointerLeave={(e) => !e.currentTarget.hasPointerCapture(e.pointerId) && onLift(0)}
+                    onContextMenu={(e) => e.preventDefault()}
+                  >
+                    {d > 0 ? <ChevronUp size={18} strokeWidth={2.2} /> : <ChevronDown size={18} strokeWidth={2.2} />}
+                  </button>
+                ))}
+              </Glass>
+            </div>
+          ) : (
+            <div className="hidden flex-1 max-sm:block" />
+          )}
         </div>
       </motion.div>
     </>
