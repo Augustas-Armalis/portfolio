@@ -5,7 +5,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { useDisposable } from "./common";
-import { GLSL_AIR, WORLD_U, rng, type V3 } from "./kit";
+import { GLSL_AIR, PLAY_U, WORLD_U, rng, type V3 } from "./kit";
 
 // What moves in a world and what burns over it: flocks of birds wheeling, and a sky's own great sun.
 
@@ -18,7 +18,9 @@ const END = /* glsl */ `
 // then. Drawn as dark strokes that the air takes into itself with distance, as he drew them: a small "v".
 export type Flock = { c: V3; r: number; n: number; size?: number; speed?: number; spread?: number; climb?: number };
 // `lit`: pale birds that catch the light (the white birds of Paradise) instead of dark strokes
-export function Birds({ flocks, tint = [0.12, 0.1, 0.08], seed = 5, lit = false }: { flocks: Flock[]; tint?: V3; seed?: number; lit?: boolean }) {
+// `scatter`: metres round the plane within which the birds give way as it passes (they part round it and a little
+// upward, beat faster, and close again behind it); 0, the default, leaves them as they were
+export function Birds({ flocks, tint = [0.12, 0.1, 0.08], seed = 5, lit = false, scatter = 0 }: { flocks: Flock[]; tint?: V3; seed?: number; lit?: boolean; scatter?: number }) {
   const b = useDisposable(() => {
     const r = rng(seed);
     const g = new THREE.InstancedBufferGeometry();
@@ -51,21 +53,34 @@ export function Birds({ flocks, tint = [0.12, 0.1, 0.08], seed = 5, lit = false 
       side: THREE.DoubleSide,
       transparent: true,
       depthWrite: false,
-      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) }, uLit: { value: lit ? 1 : 0 } },
+      uniforms: { ...SKY_U, ...WORLD_U, uPlane: PLAY_U.uPlane, uPlaneTrail: PLAY_U.uPlaneTrail, uScatter: { value: scatter }, uTint: { value: new THREE.Color(...tint) }, uLit: { value: lit ? 1 : 0 } },
       vertexShader: /* glsl */ `
         attribute vec4 aOrbit; attribute vec4 aPh;
-        uniform float uTime;
+        uniform float uTime; uniform vec3 uPlane; uniform vec3 uPlaneTrail; uniform float uScatter;
         varying vec3 vWorld; varying float vSide;
         void main(){
           float a = aPh.x + uTime * aPh.y;
           float rr = aOrbit.z * (1.0 + 0.08 * sin(uTime * 0.05 + aPh.x * 3.0));
           vec3 c = vec3(aOrbit.x + cos(a) * rr, aOrbit.w + sin(uTime * 0.11 + aPh.x * 5.0) * 4.0, aOrbit.y + sin(a) * rr);
+          // the plane's passing: each bird gives way from where the plane is and from where it just was, each a
+          // little differently, and comes back as it goes
+          float startle = 0.0;
+          if (uScatter > 0.0) {
+            vec3 cw = (modelMatrix * vec4(c, 1.0)).xyz;
+            vec3 d1 = cw - uPlane; vec3 d2 = cw - uPlaneTrail;
+            float k1 = 1.0 - smoothstep(0.0, uScatter, length(d1));
+            float k2 = (1.0 - smoothstep(0.0, uScatter * 1.25, length(d2))) * 0.75;
+            startle = max(k1, k2);
+            startle = startle * startle * (3.0 - 2.0 * startle);
+            vec3 away = normalize((k1 > k2 ? d1 : d2) + vec3(sin(aPh.x * 37.0), 0.6 + 0.4 * sin(aPh.x * 91.0), cos(aPh.x * 53.0)) * uScatter * 0.25);
+            c += away * startle * uScatter * (0.7 + 0.5 * fract(aPh.x * 7.31));
+          }
           // heading along the ring
           vec3 fwd = normalize(vec3(-sin(a), 0.0, cos(a)) * sign(aPh.y));
           vec3 side = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
           // beat, and now and then a long glide with the wings held a little up
           float glide = smoothstep(0.55, 0.8, sin(uTime * 0.31 + aPh.x * 11.0));
-          float beat = mix(sin(uTime * aPh.z + aPh.x * 17.0), 0.25, glide);
+          float beat = mix(mix(sin(uTime * aPh.z + aPh.x * 17.0), 0.25, glide), sin(uTime * aPh.z * 2.2 + aPh.x * 17.0), startle);
           float s = aPh.w * 1.6;
           vec3 p = position;
           float tip = abs(p.x);
@@ -89,7 +104,7 @@ export function Birds({ flocks, tint = [0.12, 0.1, 0.08], seed = 5, lit = false 
         }`,
     });
     return { g, mat };
-  }, [flocks, seed, lit]);
+  }, [flocks, seed, lit, scatter]);
   return <mesh geometry={b.g} material={b.mat} frustumCulled={false} renderOrder={4} />;
 }
 

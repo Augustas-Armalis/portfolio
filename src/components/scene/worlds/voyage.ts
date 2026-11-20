@@ -72,7 +72,7 @@ export type WorldDef = {
   music: string;
   place: "meadow" | "forest" | "sea" | "sky" | "none";
   air: Air | null; // null: the live sky of the visitor's own hour
-  fog: [density: number, heightFalloff: number];
+  fog: [density: number, heightFalloff: number, dissolveFrom?: number, dissolveTo?: number]; // (the last two: see "the far dissolve" in kit.ts)
   terrain: Terrain | null;
   water: number | null; // the level of still water, if the world has any
   centre: [number, number];
@@ -313,9 +313,10 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     fog: [0.004, 0.05],
     terrain: T0,
     water: null,
-    centre: [0, -120],
-    radius: 300,
-    ceil: 70,
+    // (room to explore: the plane may wander well over a kilometre from the avenue, and high, before the air leans it back)
+    centre: [0, -160],
+    radius: 1300,
+    ceil: 170,
     entry: { x: 1.4, z: -40, above: 6, yaw: 0 },
     gate: { x: roadX(HOME_GATE_Z), z: HOME_GATE_Z, above: roadY(HOME_GATE_Z), yaw: 0 },
     path: [], // follows the road: see pathOf()
@@ -954,6 +955,10 @@ export const voyage = {
   skyMod: null as ((s: SkyState) => SkyState) | null,
   warm: 0, // 0..1 the closing cloud is that world's light instead of the air's colour
   onHome: null as (() => void) | null,
+  // where the plane is (world space) and how fast, written by Plane.tsx every frame of the flight: for whatever in a
+  // world answers to its passing (worlds/play.tsx: lanterns, birds that part)
+  planePos: new THREE.Vector3(0, -1e4, 0),
+  planeSpeed: 0,
 };
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
