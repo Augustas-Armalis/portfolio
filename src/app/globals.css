@@ -1431,6 +1431,10 @@ html.win-busy * {
 .dark .win[data-win="settings"] {
   background-color: var(--bg-grouped);
 }
+/* on that grey the light sidebar is a whiter glass, so it still steps off the frame (it was drawn for white) */
+html:not(.dark) .win[data-win="settings"] aside[data-drag] {
+  background-color: rgb(255 255 255 / 0.74) !important;
+}
 /* a sidebar row that leads with a coloured tile: the tile sits as far from the row's left edge as from its top
    and bottom (4px), and the row's corner is the tile's plus that inset (4.8 + 4), so the two curves nest */
 .win .split-side button:has(> span > .icon-tile) {
