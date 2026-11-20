@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GEIST, geistReady } from "../font";
 import { POST_U } from "../Post";
@@ -9,11 +9,11 @@ import { WorldGrass } from "../Grass";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { GLSL_AIR, Kit, WORLD_U, angel, haloGeometry, makeCanvasMaterial, makeHaloMaterial, makePoints, makePuffMaterial, makeTempera, makeTerrainMaterial, pointsGeometry, puffGeometry, rng, terrainGeometry, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
-import { WORLDS, WORLD_ORDER, gateOf, groundAt, pathOf, voyage, type WorldDef, type WorldId } from "./voyage";
+import { WORLDS, WORLD_ORDER, gateOf, groundAt, heightGLSL, originOf, pathOf, voyage, type WorldDef, type WorldId } from "./voyage";
 
 // What every world shares: its ground and grass, the path of light with its
-// waymarks and angels, the gate onward, and the paintings standing in their
-// gallery of light.
+// waymarks and angels, the gate onward, and the painting it was made from,
+// floating beside the way.
 
 export type WorldProps = { mobile: boolean; effects: number; trees: number; far: number; grass: number; reduced: boolean };
 
@@ -262,8 +262,17 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
 // ---------- the gate ----------
 // A tall lancet of pale light standing on the path, a slow veil of mist and
 // light inside it: the brightest thing in its world, so the eye always knows
-// the way on.
-export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15, rise = 23 }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; half?: number; rise?: number }) {
+// the way on. It is a threshold: the sheet inside it is a glimpse of the next
+// world's own sky, and its rim, its halo and the motes round it take that
+// world's light, so every gate is coloured by where it leads.
+//
+// `look` says how much of it is drawn (the way through is the same in every case: see passage() in Plane.tsx):
+//   "arch"  the whole of it (the default)
+//   "veil"  no stone, no mist at its feet: only the sheet of light, the motes and a soft glow, for a world that
+//           builds its own opening (a cave mouth, a doorway) and wants the light in it; `half` and `rise` size it
+//   "none"  nothing at all: the world draws its own way out
+export type GateLook = "arch" | "veil" | "none";
+export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15, rise = 23, look = "arch" }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; half?: number; rise?: number; look?: GateLook }) {
   const b = useDisposable(() => {
     const gate = gateOf(id)!;
     const c = Math.cos(gate.yaw);
@@ -273,6 +282,15 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
     const foot = Math.min(g0, def.water ?? g0) - 1.5;
     const top = gate.pos.y + rise;
     const spring = gate.pos.y + 2;
+    // where it leads
+    const nextId = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1];
+    const na = nextId ? WORLDS[nextId].air : null;
+    const nZen = na ? na.zenith : ([0.3, 0.42, 0.62] as V3);
+    const nHor = na ? na.horizon : ([0.8, 0.72, 0.6] as V3);
+    const nGlow = na ? na.glow : ([1, 0.8, 0.5] as V3);
+    // the light of where it leads, kept bright (a dark world's glow is still a light here), halfway to this world's own
+    const nMax = Math.max(nGlow[0], nGlow[1], nGlow[2], 0.001);
+    const lead: V3 = [(tint[0] + nGlow[0] / nMax) / 2, (tint[1] + nGlow[1] / nMax) / 2, (tint[2] + nGlow[2] / nMax) / 2];
     const k = new Kit();
     // the lancet: two long legs leaning a breath inward, meeting in a point
     const leg = (side: number): V3[] => {
@@ -288,11 +306,11 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
     const stone: V3 = [0.78 * tint[0], 0.74 * tint[1], 0.66 * tint[2]];
     for (const side of [-1, 1]) {
       k.tube(leg(side), 0.42, stone, { glow: 0.5 * gain, seg: 60, sides: 7 });
-      // a thread of brighter light on the inner edge
+      // a thread of brighter light on the inner edge, in the colour of where the gate leads
       k.tube(
         leg(side).map((p, i): V3 => (i === 0 ? p : [p[0] - c * side * 0.5, p[1] - (i > 2 ? 0.3 : 0), p[2] + s * side * 0.5])),
         0.09,
-        tint,
+        lead,
         { glow: 2.6 * gain, seg: 60, sides: 4 },
       );
     }
@@ -315,11 +333,6 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
     // The threshold itself: a breathing sheet of light you can half see through, and through it, warped as if by
     // water or old glass, a glimpse of the next world's own sky (its horizon, its zenith, the glow of its light).
     // When the plane goes through, a ripple runs out from where it crossed and the light flares (uHit).
-    const nextId = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1];
-    const na = nextId ? WORLDS[nextId].air : null;
-    const nZen = na ? na.zenith : ([0.3, 0.42, 0.62] as V3);
-    const nHor = na ? na.horizon : ([0.8, 0.72, 0.6] as V3);
-    const nGlow = na ? na.glow : ([1, 0.8, 0.5] as V3);
     const veil = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -328,6 +341,7 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
         ...SKY_U,
         ...WORLD_U,
         uTint: { value: new THREE.Color(...tint) },
+        uLead: { value: new THREE.Color(...lead) },
         uGain: { value: gain },
         uSpan: { value: new THREE.Vector3(half, foot - gate.pos.y, top - gate.pos.y) },
         uNZen: { value: new THREE.Color(...nZen) },
@@ -340,7 +354,7 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
         varying vec3 vLocal; varying vec3 vWorld;
         void main(){ vLocal = position; vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform vec3 uTint; uniform float uGain; uniform vec3 uSpan;
+        uniform vec3 uTint; uniform vec3 uLead; uniform float uGain; uniform vec3 uSpan;
         uniform vec3 uNZen; uniform vec3 uNHor; uniform vec3 uNGlow; uniform float uHit; uniform vec2 uHitP;
         varying vec3 vLocal; varying vec3 vWorld;
         ${GLSL_NOISE}
@@ -375,7 +389,11 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
           // the rim of the sheet, where it meets the arch, is brightest
           float rim = smoothstep(0.7, 1.0, abs(p.x) / uSpan.x) + smoothstep(uSpan.z * 0.7, uSpan.z, p.y);
           float flare = exp(-max(age, 0.0) * 2.2) * step(0.0, age);
-          vec3 col = mix(glimpse * 0.95, uTint * 0.9 * glowK(), 0.08 + 0.1 * n) + uTint * (caustic * 0.25 + rim * 0.8) * glowK();
+          // (the caustic threads and the rim carry the light of the world beyond)
+          vec3 col = mix(glimpse * 0.95, uTint * 0.9 * glowK(), 0.08 + 0.1 * n) + uLead * (caustic * 0.3 + rim * 0.8) * glowK();
+          // a fine bright line where the sheet meets the air, so the threshold itself can be seen from far off
+          float edge = smoothstep(0.93, 0.995, abs(p.x) / uSpan.x) * (1.0 - smoothstep(0.995, 1.0, abs(p.x) / uSpan.x));
+          col += uLead * edge * 0.9 * glowK();
           col *= uGain * breath * (1.0 + flare * 2.6 + abs(ring) * 1.2);
           float a = (0.6 + 0.15 * smoothstep(0.25, 0.75, n) + caustic * 0.1 + rim * 0.3) * up * (0.4 + 0.6 * down) * side;
           float dist = length(vWorld - cameraPosition);
@@ -395,8 +413,8 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
       },
       31,
     );
-    const halos: Halo[] = [{ p: [gate.pos.x, top + 0.6, gate.pos.z], size: 6, col: tint, k: 0.7 * gain }];
-    const glow: Halo[] = [{ p: [gate.pos.x, gate.pos.y + 2, gate.pos.z], size: 60, col: tint, k: 0.3 * gain }];
+    const halos: Halo[] = [{ p: [gate.pos.x, top + 0.6, gate.pos.z], size: 6, col: lead, k: 0.7 * gain }];
+    const glow: Halo[] = [{ p: [gate.pos.x, gate.pos.y + 2, gate.pos.z], size: look === "arch" ? 60 : half * 3, col: lead, k: (look === "arch" ? 0.3 : 0.22) * gain }];
     const puffs: Puff[] = [];
     const r = rng(17);
     for (let i = 0; i < 7; i++) puffs.push({ p: at((r() - 0.5) * half * 3.4, Math.max(foot + 3, gate.pos.y - 12) + r() * 5), size: 16 + r() * 16, a: 0.8 });
@@ -412,11 +430,11 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
       puffs: puffGeometry(puffs),
       puffMat: makePuffMaterial(),
       motes,
-      moteMat: makePoints({ a: tint, b: [1, 0.96, 0.86], scale: 140, drift: 2.2, gain: 1.1, max: 16 }),
+      moteMat: makePoints({ a: lead, b: [1, 0.96, 0.86], scale: 140, drift: 2.2, gain: 1.1, max: 16 }),
       pos: gate.pos.toArray() as V3,
       yaw: gate.yaw,
     };
-  }, [id]);
+  }, [id, half, rise, look]);
   // the moment of going through: a ripple from where the plane crossed, and a flare of light
   useFrame(() => {
     const h = voyage.gateHit;
@@ -426,14 +444,16 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
       (u.uHitP.value as THREE.Vector2).set(h.side, h.up);
     } else u.uHit.value = 99;
   });
+  if (look === "none") return null;
+  const arch = look === "arch";
   return (
     <>
-      <mesh geometry={b.arch} material={b.tempera} />
+      {arch && <mesh geometry={b.arch} material={b.tempera} />}
       <points geometry={b.motes} material={b.moteMat} />
-      <mesh geometry={b.puffs} material={b.puffMat} renderOrder={3} />
+      {arch && <mesh geometry={b.puffs} material={b.puffMat} renderOrder={3} />}
       <mesh geometry={b.veilGeo} material={b.veil} position={b.pos} rotation={[0, b.yaw, 0]} renderOrder={5} />
       <mesh geometry={b.glow} material={b.glowMat} renderOrder={6} />
-      <mesh geometry={b.halos} material={b.haloMat} renderOrder={6} />
+      {arch && <mesh geometry={b.halos} material={b.haloMat} renderOrder={6} />}
     </>
   );
 }
@@ -446,6 +466,76 @@ export function Mist({ puffs }: { puffs: Puff[] }) {
 export function Halos({ list, kind = 0 }: { list: Halo[]; kind?: 0 | 1 | 2 | 3 }) {
   const b = useDisposable(() => ({ geo: haloGeometry(list), mat: makeHaloMaterial(kind) }), [list, kind]);
   return <mesh geometry={b.geo} material={b.mat} renderOrder={6} />;
+}
+
+// ---------- grounding ----------
+// Nothing should simply stick out of the ground. Two helpers for where a thing meets the land:
+//
+//   <ContactShade def={def} spots={[{ x, z, r, k? }, ...]} />
+//       a soft shade lying on the terrain round the foot of anything standing on it (a tower, a figure, a rock):
+//       one instanced decal per spot that follows the ground's own relief, darkest hard against the thing and
+//       gone by `r` metres (give r about one and a half times the thing's own radius at the ground; k is its
+//       strength, default 0.5). Cool, never black; it thins with distance into the air like everything else.
+//   bank(kit, [x, groundY, z], r, h, col, top?)   (kit.ts)
+//       earth banked up against a base: a low, flaring skirt of the ground's own colour, r metres across at its
+//       top and half as wide again at its foot, h metres high, sunk a little into the ground. Put one under every
+//       wall, pier, plinth and trunk, and the join is a slope instead of a line.
+//
+// Together: the bank makes the form meet the land, the shade makes it sit on it.
+export type ShadeSpot = { x: number; z: number; r: number; k?: number };
+export function ContactShade({ def, spots }: { def: WorldDef; spots: ShadeSpot[] }) {
+  const b = useDisposable(() => {
+    const g = new THREE.InstancedBufferGeometry();
+    const base = new THREE.CircleGeometry(1, 28);
+    base.rotateX(-Math.PI / 2);
+    g.index = base.index;
+    g.setAttribute("position", base.attributes.position);
+    const at = new Float32Array(spots.length * 4);
+    const box = new THREE.Box3();
+    spots.forEach((sp, i) => {
+      at.set([sp.x, sp.z, sp.r, sp.k ?? 0.5], i * 4);
+      box.expandByPoint(new THREE.Vector3(sp.x, groundAt(def, sp.x, sp.z), sp.z));
+    });
+    g.setAttribute("aAt", new THREE.InstancedBufferAttribute(at, 4));
+    g.instanceCount = spots.length;
+    g.boundingSphere = spots.length ? box.getBoundingSphere(new THREE.Sphere()) : new THREE.Sphere();
+    g.boundingSphere.radius += 60;
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -60,
+      uniforms: { ...SKY_U, ...WORLD_U },
+      vertexShader: /* glsl */ `
+        attribute vec4 aAt;
+        varying float vR; varying float vK; varying vec3 vWorld;
+        ${heightGLSL(def.terrain)}
+        void main(){
+          vec2 q = aAt.xy + position.xz * aAt.z;
+          vR = length(position.xz); vK = aAt.w;
+          // it lies on the land itself, a hand above it
+          vec4 wp = modelMatrix * vec4(q.x, max(terrainH(q), ${(def.water ?? -1e5).toFixed(2)}) + 0.06, q.y, 1.0);
+          vWorld = wp.xyz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }`,
+      fragmentShader: /* glsl */ `
+        varying float vR; varying float vK; varying vec3 vWorld;
+        ${GLSL_SKY}
+        ${GLSL_AIR}
+        void main(){
+          // darkest against the thing, a long soft edge, nothing at the rim
+          float a = (1.0 - smoothstep(0.0, 1.0, vR)); a = a * a * vK;
+          a *= 1.0 - airAmt(vWorld);
+          // a cool shade taken from the sky, so it belongs to the hour
+          gl_FragColor = vec4(uSkyCol * 0.07 + vec3(0.012, 0.014, 0.03), a);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    return { g, mat };
+  }, [def, spots]);
+  return <mesh geometry={b.g} material={b.mat} renderOrder={-3} />;
 }
 
 // ---------- the paintings ----------
@@ -474,49 +564,47 @@ const WORLD_OF: [RegExp, WorldId][] = [
 ];
 const worldOfPainting = (id: string) => WORLD_OF.find(([re]) => re.test(id))?.[1] ?? null;
 
-// The label: title, painter, year, set small in Geist. Dark ink on a pale wall, pale on a dark one.
-// (`line`: the whole label as one larger line, "Title, year", for a picture hung without a wall)
-function captionTexture(title: string, year: string, ink: "dark" | "light", line = false) {
+// The caption: "Title, year" in one line of Geist, with a soft halo of the opposite tone so it reads against
+// whatever lies behind it (it hangs in the open air, not on a wall).
+function captionTexture(title: string, year: string, ink: "dark" | "light") {
   const c = document.createElement("canvas");
   c.width = 1536;
-  c.height = line ? 236 : 384;
+  c.height = 236;
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
-  const rgb = ink === "dark" ? "34,28,22" : "255,250,238";
+  const rgb = ink === "dark" ? "30,24,18" : "255,251,240";
+  const halo = ink === "dark" ? "rgba(255,248,230,0.55)" : "rgba(10,10,16,0.85)";
   const draw = () => {
     const g = c.getContext("2d")!;
     g.clearRect(0, 0, c.width, c.height);
     g.textBaseline = "alphabetic";
+    g.textAlign = "center";
     const spaced = g as unknown as { letterSpacing: string };
-    g.fillStyle = `rgba(${rgb},0.94)`;
-    if (line) {
-      const text = year ? `${title}, ${year}` : title;
-      let size = 156;
-      do {
-        g.font = `500 ${size}px ${GEIST}`;
-        spaced.letterSpacing = `${(-size * 0.022).toFixed(1)}px`;
-        size -= 4;
-      } while (g.measureText(text).width > c.width - 24 && size > 60);
-      g.textAlign = "center";
-      g.fillText(text, c.width / 2, 164);
-      tex.needsUpdate = true;
-      return;
-    }
-    // a long title steps down a size rather than running off the wall
-    let size = 104;
+    // the title leads, the year follows it a little lighter; a long title steps down a size
+    let size = 132;
+    const sep = year ? "   " : "";
     do {
       g.font = `500 ${size}px ${GEIST}`;
-      spaced.letterSpacing = `${(-size * 0.03).toFixed(1)}px`;
+      spaced.letterSpacing = `${(-size * 0.022).toFixed(1)}px`;
       size -= 4;
-    } while (g.measureText(title).width > c.width - 16 && size > 52);
-    g.fillText(title, 6, 112);
-    g.font = `400 68px ${GEIST}`;
-    spaced.letterSpacing = "-0.6px";
-    g.fillStyle = `rgba(${rgb},0.8)`;
-    g.fillText("M. K. Čiurlionis", 6, 222);
-    g.fillStyle = `rgba(${rgb},0.6)`;
-    if (year) g.fillText(year, 6, 318);
+    } while (g.measureText(title + sep + year).width > c.width - 60 && size > 56);
+    const wt = g.measureText(title + sep).width;
+    const wy = year ? g.measureText(year).width : 0;
+    const x0 = (c.width - wt - wy) / 2;
+    g.textAlign = "left";
+    // (the halo is laid down three times, wide to close, so the type has a soft dark ground of its own)
+    for (const blur of [44, 22, 9, 0]) {
+      g.shadowColor = blur ? halo : "transparent";
+      g.shadowBlur = blur;
+      g.shadowOffsetY = blur ? 2 : 0;
+      g.fillStyle = `rgba(${rgb},0.97)`;
+      g.fillText(title, x0, 156);
+      if (year) {
+        g.fillStyle = `rgba(${rgb},${blur ? 0.97 : 0.72})`;
+        g.fillText(year, x0 + wt, 156);
+      }
+    }
     tex.needsUpdate = true;
   };
   draw();
@@ -524,240 +612,233 @@ function captionTexture(title: string, year: string, ink: "dark" | "light", line
   return tex;
 }
 
-// The light a painting stands in: a soft wash down the wall from a lamp held
-// out above the frame, and the pool it leaves on the floor. Added to what is
-// there, and never over the canvas itself, which keeps its own colours.
-function makePoolMaterial(kind: "wall" | "floor", size: [number, number], hole: [number, number, number, number]) {
+// The light a floating painting gives off: a hairline of light round its edge and a soft glow that falls away
+// into the air. One quad behind the canvas, added to what is there (and never over the canvas itself, which
+// keeps its own colours).
+function makeAuraMaterial(size: [number, number], half: [number, number], tint: V3, gain: number) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
+    side: THREE.DoubleSide,
     blending: THREE.CustomBlending,
     blendSrc: THREE.OneFactor,
     blendDst: THREE.OneFactor,
     blendSrcAlpha: THREE.ZeroFactor,
     blendDstAlpha: THREE.OneFactor,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -40,
-    uniforms: { ...SKY_U, ...WORLD_U, uLinearOut: POST_U.uLinearOut, uSize: { value: new THREE.Vector2(...size) }, uHole: { value: new THREE.Vector4(...hole) } },
+    uniforms: { ...SKY_U, ...WORLD_U, uLinearOut: POST_U.uLinearOut, uSize: { value: new THREE.Vector2(...size) }, uHalf: { value: new THREE.Vector2(...half) }, uTint: { value: new THREE.Color(...tint) }, uGain: { value: gain }, uShow: { value: 0 } },
     vertexShader: /* glsl */ `
-      varying vec2 vP; varying vec3 vWorld;
-      uniform vec2 uSize;
-      void main(){ vP = uv * uSize - vec2(uSize.x * 0.5, 0.0); vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      varying vec2 vP; varying vec3 vWorld; uniform vec2 uSize;
+      void main(){ vP = (uv - 0.5) * uSize; vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
-      uniform vec2 uSize; uniform vec4 uHole; uniform float uLinearOut;
+      uniform vec2 uSize; uniform vec2 uHalf; uniform vec3 uTint; uniform float uGain; uniform float uShow; uniform float uLinearOut;
       varying vec2 vP; varying vec3 vWorld;
       ${GLSL_SKY}
       ${GLSL_AIR}
       void main(){
-        float a;
-        ${
-          kind === "wall"
-            ? `// uHole: the canvas (x half-width, y0, y1), w: the lamp's height
-               float dx = vP.x / (uHole.x * 1.5);
-               float below = max(uHole.w - vP.y, 0.0);
-               float above = max(vP.y - uHole.w, 0.0);
-               a = exp(-dx * dx * (1.0 + below * 0.012)) * exp(-below / (uHole.w * 0.62)) * exp(-above * above * 0.22);
-               a *= smoothstep(0.5, 0.36, abs(vP.x) / uSize.x) * smoothstep(0.0, 0.08, vP.y / uSize.y);
-               // the canvas itself is left alone
-               a *= 1.0 - step(abs(vP.x), uHole.x) * step(uHole.y, vP.y) * step(vP.y, uHole.z);`
-            : `vec2 q = vec2(vP.x / (uSize.x * 0.42), (vP.y - uSize.y * 0.16) / (uSize.y * 0.6));
-               a = exp(-dot(q, q) * 2.2) * 0.62 * smoothstep(0.5, 0.3, abs(vP.x) / uSize.x) * smoothstep(1.0, 0.7, vP.y / uSize.y);`
-        }
+        vec2 q = abs(vP) - uHalf;
+        float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+        float o = max(d, 0.0);
+        // the hairline: a fine thread hard against the canvas, kept at least a pixel wide however far away
+        float w = max(0.07, fwidth(d) * 1.1);
+        float hair = (1.0 - smoothstep(w, w * 1.8, o)) * step(0.0, d);
+        // the glow: close and bright at the edge, then long and faint, breathing very slowly
+        float breath = 0.9 + 0.1 * sin(uTime * 0.45 + vWorld.x * 0.05);
+        float glow = (exp(-o * 1.5) * 0.5 + exp(-o * 0.38) * 0.2) * breath * step(0.0, d);
+        // nothing reaches the edge of the quad
+        glow *= smoothstep(0.0, 2.0, min(uSize.x * 0.5 - abs(vP.x), uSize.y * 0.5 - abs(vP.y)));
         float dist = length(vWorld - cameraPosition);
-        // by day a breath of warmth, at night a lamp
+        float air = (1.0 - 0.75 * airAmt(vWorld)) * exp(-dist * uMist * 1.5);
         // (without the lens the light is added after the tone curve, where a little goes a long way)
-        float k = mix(0.36, 0.3, uNight) * mix(0.3, 1.0, uLinearOut) * (1.0 - 0.7 * airAmt(vWorld)) * exp(-dist * uMist * 1.5);
-        gl_FragColor = vec4(vec3(1.0, 0.86, 0.64) * a * k, 0.0);
+        float k = uGain * mix(0.42, 1.0, uLinearOut) * air * uShow;
+        vec3 col = uTint * glow * k + mix(uTint, vec3(1.0), 0.5) * hair * (0.85 + 0.6 * k) * air * uShow;
+        gl_FragColor = vec4(col, 0.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
   });
 }
 
-// How each world hangs its painting: the stone of the wall (it is lit by that
-// world's own sky, so it belongs there) and the ink of the label.
-const HANG: Record<WorldId, { wall: V3; ink: "dark" | "light"; plain?: boolean }> = {
-  home: { wall: [0.6, 0.58, 0.54], ink: "dark" },
-  sun: { wall: [0.62, 0.64, 0.68], ink: "dark" },
-  stars: { wall: [0.2, 0.19, 0.25], ink: "light" },
-  rex: { wall: [0.3, 0.25, 0.22], ink: "light" },
-  fairy: { wall: [1.0, 0.8, 0.56], ink: "dark" },
-  paradise: { wall: [0.86, 0.78, 0.5], ink: "dark" },
-  gate: { wall: [0.3, 0.26, 0.26], ink: "light" },
-  sea: { wall: [0.28, 0.28, 0.22], ink: "light" },
-  seafinale: { wall: [0.34, 0.3, 0.2], ink: "light" },
-  funeral: { wall: [0.1, 0.13, 0.24], ink: "light" },
-  kings: { wall: [0.2, 0.26, 0.27], ink: "light", plain: true },
+// How much of its own light the picture gives off in each world (more where the world is dark). Its caption is
+// pale everywhere, with a dark halo: the air of these worlds is full of light, which lifts dark ink to the tone of
+// whatever is behind it, while pale type stays above it.
+const HANG: Record<WorldId, { ink: "dark" | "light"; glow: number }> = {
+  home: { ink: "light", glow: 0.3 },
+  sun: { ink: "light", glow: 0.34 },
+  stars: { ink: "light", glow: 0.5 },
+  rex: { ink: "light", glow: 0.5 },
+  fairy: { ink: "light", glow: 0.3 },
+  paradise: { ink: "light", glow: 0.3 },
+  gate: { ink: "light", glow: 0.44 },
+  sea: { ink: "light", glow: 0.4 },
+  seafinale: { ink: "light", glow: 0.42 },
+  funeral: { ink: "light", glow: 0.55 },
+  kings: { ink: "light", glow: 0.5 },
 };
 
 const CANVAS_H = 18;
-// a picture hung in the dark is given more of its lamp
-const lit = (m: THREE.ShaderMaterial, k: number) => {
-  m.uniforms.uLit.value = k;
-  return m;
-};
-function CanvasStand({ p, x, z, y, yaw, world, lift }: { p: PaintingInfo; x: number; z: number; y: number; yaw: number; world: WorldId; lift: number }) {
+const wrapPi = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+// A painting, floating. No wall, no plinth, no lamp: the picture itself, upright in the air at the height of
+// whoever passes on the path, softly lit from within so its colours are its own, a hairline of light round its
+// edge and a faint glow behind it, a few motes drifting round it. It rises and falls a hand's breadth, slowly,
+// and turns gently to face whoever comes; its name (title, year) fades in beneath it as they come near.
+function CanvasStand({ p, x, z, cy, yaw, world }: { p: PaintingInfo; x: number; z: number; cy: number; yaw: number; world: WorldId }) {
   const aspect = p.width / p.height;
-  const H = aspect > 1.25 ? CANVAS_H * 0.84 : CANVAS_H;
+  const H = canvasH(p);
   const W = H * aspect;
-  const m = /^(.*?)\s*\((\d{4})\)\s*$/.exec(p.title);
-  // "English name (Lithuanian name, 1909)": the label carries his own title
-  const lt = /\(([^()]+?),\s*(\d{4})\)\s*$/.exec(p.title);
-  const title = lt ? lt[1] : m ? m[1] : p.title;
-  const year = lt ? lt[2] : m ? m[2] : "";
+  // The caption is English: "Title (1909)" or "Title (his own Lithuanian title, 1909)" both give Title, 1909.
+  const m = /^(.*?)\s*\((?:[^()]*?,\s*)?(\d{4})\)\s*$/.exec(p.title);
+  const title = m ? m[1] : p.title;
+  const year = m ? m[2] : "";
   const b = useDisposable(() => {
-    const state = { loaded: false };
+    const state = { loaded: false, yaw, near: 0, seed: (x * 12.9898 + z * 78.233) % 6.283 };
     const map = new THREE.TextureLoader().load(p.file, () => (state.loaded = true));
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 8;
-    const k = new Kit();
     const hang = HANG[world];
-    const wall = hang.wall;
-    // In the kings' wood there is no wall: the picture stands in a plain dark frame on two posts, a slim lamp
-    // over it, its name beneath in one line.
-    if (hang.plain) {
-      const dk: V3 = [0.075, 0.058, 0.048];
-      const B = 0.62;
-      const cy = lift + H / 2;
-      for (const sy of [-1, 1]) k.box(W + B * 2, B, 0.7, [0, cy + sy * (H / 2 + B / 2), 0.1], dk, { glow: 0.12 });
-      for (const sx of [-1, 1]) k.box(B, H, 0.7, [sx * (W / 2 + B / 2), cy, 0.1], dk, { glow: 0.12 });
-      // a hair of dull gold against the canvas, so the dark picture has an edge in the dark
-      for (const sy of [-1, 1]) k.box(W + 0.12, 0.06, 0.1, [0, cy + sy * (H / 2 + 0.03), 0.42], [0.5, 0.34, 0.14], { glow: 0.1 });
-      for (const sx of [-1, 1]) k.box(0.06, H + 0.12, 0.1, [sx * (W / 2 + 0.03), cy, 0.42], [0.5, 0.34, 0.14], { glow: 0.1 });
-      k.box(W + 0.3, H + 0.3, 0.3, [0, cy, -0.1], [0.02, 0.018, 0.016]);
-      for (const sx of [-1, 1]) k.box(0.5, lift + 8, 0.5, [sx * (W / 2 - 1.4), (lift - 8) / 2, -0.2], dk);
-      const ly = cy + H / 2 + B + 1.3;
-      k.box(W * 0.46, 0.1, 0.18, [0, ly, 2.1], [1, 0.86, 0.62], { glow: 0.55 });
-      for (const sx of [-1, 1]) k.box(0.06, 0.06, 2.1, [sx * W * 0.16, ly + 0.06, 1.05], dk);
-      const capH = (W + B * 2) * (236 / 1536);
-      return {
-        map,
-        state,
-        canvas: lit(makeCanvasMaterial(map), 1.7),
-        cap: captionTexture(title, year, hang.ink, true),
-        stand: k.build(),
-        tempera: makeTempera({ amb: 1, key: 0.3, dab: 0.5 }),
-        wallPool: null,
-        floorPool: null,
-        cy,
-        WW: W + B * 2,
-        WH: 0,
-        FD: 0,
-        capX: 0,
-        capY: lift - B - 0.25 - capH / 2,
-        capW: W + B * 2,
-        capH,
-      };
-    }
-    const mul = (c: V3, f: number): V3 => [c[0] * f, c[1] * f, c[2] * f];
-    const gilt: V3 = [0.8, 0.58, 0.25];
-    const mat: V3 = [0.86, 0.82, 0.72];
-    const MAT = 1.15; // the mat round the canvas
-    const BAR = 0.3; // the gilt moulding round the mat
-    const side = 4.4; // bare wall either side of the frame
-    const base = lift; // the canvas' lower edge above the floor
-    const WW = W + (MAT + BAR + side) * 2;
-    const WH = base + H + MAT + BAR + 5.2;
-    const cy = base + H / 2;
-    // the floor: one broad low step of the same stone, its foot well down in the ground
-    const FD = 12;
-    k.box(WW + 9, 7, FD, [0, -3.2, FD / 2 - 3.2], mul(wall, 0.8), { top: mul(wall, 0.94) });
-    // the wall: a plain standing slab, a shadow gap where it meets the floor
-    k.box(WW - 0.5, 0.5, 1.0, [0, 0.55, -0.7], mul(wall, 0.3));
-    k.box(WW, WH - 0.8, 1.5, [0, 0.8 + (WH - 0.8) / 2, -0.75], mul(wall, 0.9), { top: wall });
-    // the frame: a thin gilt moulding, a broad pale mat set back in it, a fine gilt fillet against the canvas
-    const fw = W + (MAT + BAR) * 2;
-    const fh = H + (MAT + BAR) * 2;
-    for (const sy of [-1, 1]) {
-      k.box(fw, BAR, 0.46, [0, cy + sy * (fh / 2 - BAR / 2), 0.23], gilt, { glow: 0.1, top: mul(gilt, 1.15) });
-      k.box(W + 0.14, 0.07, 0.12, [0, cy + sy * (H / 2 + 0.035), 0.2], gilt, { glow: 0.14 });
-    }
-    for (const sx of [-1, 1]) {
-      k.box(BAR, fh, 0.46, [sx * (fw / 2 - BAR / 2), cy, 0.23], gilt, { glow: 0.1 });
-      k.box(0.07, H + 0.14, 0.12, [sx * (W / 2 + 0.035), cy, 0.2], gilt, { glow: 0.14 });
-    }
-    k.box(W + MAT * 2, H + MAT * 2, 0.16, [0, cy, 0.08], mat);
-    // the lamp: a slim bar held out over the frame on two fine arms
-    const ly = cy + fh / 2 + 1.5;
-    k.box(W * 0.5, 0.12, 0.2, [0, ly, 1.9], [1, 0.9, 0.72], { glow: 1.1 });
-    k.box(W * 0.5 + 0.3, 0.07, 0.3, [0, ly + 0.1, 1.9], mul(gilt, 0.5));
-    for (const sx of [-1, 1]) k.box(0.06, 0.06, 1.9, [sx * W * 0.17, ly + 0.08, 0.95], mul(gilt, 0.5));
+    const air = WORLDS[world].air;
+    const g = air ? air.glow : ([1, 0.86, 0.62] as V3);
+    // the light it gives is the world's own light, taken halfway to white
+    const tint: V3 = [0.5 + g[0] * 0.5, 0.5 + g[1] * 0.5, 0.5 + g[2] * 0.5];
+    const PAD = 9;
+    const capW = Math.min(W * 1.05, 17);
+    const motes = pointsGeometry(
+      34,
+      (i, q) => {
+        // most of them close round the edge, a few further out
+        const side = q() < 0.5;
+        const u = (q() - 0.5) * (W + (side ? 7 : 2.5));
+        const v = (q() - 0.5) * (H + (side ? 2.5 : 7));
+        return [u, v, (q() - 0.5) * 5, 0.5 + q() * 1.1];
+      },
+      Math.round(Math.abs(x * 7 + z * 13)) + 3,
+    );
     return {
       map,
       state,
-      canvas: makeCanvasMaterial(map),
+      canvas: makeCanvasMaterial(map, { twoSided: true }),
+      aura: makeAuraMaterial([W + PAD * 2, H + PAD * 2], [W / 2, H / 2], tint, hang.glow),
+      auraSize: [W + PAD * 2, H + PAD * 2] as [number, number],
       cap: captionTexture(title, year, hang.ink),
-      stand: k.build(),
-      tempera: makeTempera({ amb: 1, key: 0.34, dab: 0.5 }),
-      wallPool: makePoolMaterial("wall", [WW, WH], [W / 2, base, base + H, ly]),
-      floorPool: makePoolMaterial("floor", [WW + 9, FD - 2.6], [0, 0, 0, 0]),
-      cy,
-      WW,
-      WH,
-      FD,
-      capX: -fw / 2 + 6,
-      capY: base - (MAT + BAR) - 2.3,
-      capW: 12,
-      capH: 3,
+      capMat: new THREE.MeshBasicMaterial({ transparent: true, toneMapped: false, depthWrite: false, fog: false, opacity: 0, color: new THREE.Color(1.35, 1.35, 1.35) }),
+      capW,
+      capH: capW * (236 / 1536),
+      motes,
+      moteMat: makePoints({ a: tint, b: [1, 0.97, 0.9], scale: 120, drift: 0.9, gain: 0.8 + hang.glow, max: 9 }),
     };
-  }, [p.file, world, lift]);
-  useFrame((_, dt) => {
+  }, [p.file, world]);
+  b.capMat.map = b.cap;
+  const group = useRef<THREE.Group>(null);
+  useFrame(({ camera }, rawDt) => {
+    const dt = Math.min(rawDt, 0.1);
+    const st = b.state;
     const u = b.canvas.uniforms.uShow;
-    if (b.state.loaded && u.value < 1) u.value = Math.min(1, u.value + Math.min(dt, 0.1) / 0.9);
+    if (st.loaded && u.value < 1) u.value = Math.min(1, u.value + dt / 0.9);
+    b.aura.uniforms.uShow.value = u.value;
+    const g = group.current;
+    if (!g) return;
+    // it turns to face whoever comes, slowly, and never quite stops moving
+    const o = originOf(world);
+    const dx = camera.position.x - (o.x + x);
+    const dz = camera.position.z - (o.z + z);
+    const dist = Math.hypot(dx, dz);
+    const want = dist > 4 ? Math.atan2(dx, dz) : st.yaw;
+    st.yaw += wrapPi(want - st.yaw) * (1 - Math.exp(-dt * 1.3));
+    const t = SKY_U.uTime.value + st.seed;
+    g.rotation.set(Math.sin(t * 0.31) * 0.012, st.yaw + Math.sin(t * 0.23) * 0.02, Math.sin(t * 0.37) * 0.008);
+    g.position.y = cy + Math.sin(t * 0.52) * 0.32;
+    // its name fades in as they come near
+    const near = 1 - THREE.MathUtils.smoothstep(dist, 70, 150);
+    st.near += (near - st.near) * (1 - Math.exp(-dt * 3));
+    b.capMat.opacity = st.near * u.value;
   });
   return (
-    <group position={[x, y, z]} rotation={[0, yaw, 0]}>
-      <mesh geometry={b.stand} material={b.tempera} />
-      <mesh position={[0, b.cy, 0.2]} material={b.canvas}>
+    <group ref={group} position={[x, cy, z]} rotation={[0, yaw, 0]}>
+      <mesh position={[0, 0, -0.06]} material={b.aura} renderOrder={3}>
+        <planeGeometry args={b.auraSize} />
+      </mesh>
+      <mesh material={b.canvas}>
         <planeGeometry args={[W, H]} />
       </mesh>
-      <mesh position={[b.capX, b.capY, 0.02]} renderOrder={2}>
+      <points geometry={b.motes} material={b.moteMat} renderOrder={4} />
+      <mesh position={[0, -H / 2 - 0.9 - b.capH / 2, 0.02]} material={b.capMat} renderOrder={5}>
         <planeGeometry args={[b.capW, b.capH]} />
-        <meshBasicMaterial map={b.cap} transparent toneMapped={false} depthWrite={false} fog={false} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-80} />
       </mesh>
-      {b.wallPool && (
-        <mesh position={[0, b.WH / 2, 0.5]} material={b.wallPool} renderOrder={3}>
-          <planeGeometry args={[b.WW, b.WH]} />
-        </mesh>
-      )}
-      {b.floorPool && (
-        <mesh position={[0, 0.32, (b.FD - 2.6) / 2 + 0.05]} rotation={[-Math.PI / 2, 0, 0]} material={b.floorPool} renderOrder={3}>
-          <planeGeometry args={[b.WW + 9, b.FD - 2.6]} />
-        </mesh>
-      )}
     </group>
   );
 }
 
-// the floor a painting stands on clears the ground under the whole of it, so no grass comes up through the stone
-function floorAt(def: WorldDef, x: number, z: number, yaw = 0) {
-  const c = Math.cos(yaw);
-  const s = Math.sin(yaw);
-  let h = groundAt(def, x, z);
-  for (const [u, v] of [
-    [-18, -3],
-    [18, -3],
-    [-18, 9],
-    [18, 9],
-    [0, 9],
-  ])
-    h = Math.max(h, groundAt(def, x + c * u + s * v, z - s * u + c * v));
-  return Math.max(h, (def.water ?? -99) + 0.4);
-}
-// The canvas hangs so that its middle is level with the eye of whoever passes on the path of light.
-function liftOf(def: WorldDef, x: number, z: number, yaw: number, p: PaintingInfo) {
-  const H = p.width / p.height > 1.25 ? CANVAS_H * 0.84 : CANVAS_H;
-  let eye = 0;
-  let best = 1e9;
-  for (const q of pathOf(def.id).pts) {
-    const d = Math.hypot(q.x - x, q.z - z);
-    if (d < best) {
-      best = d;
-      eye = q.y;
+// Where a painting floats. A world names a place for its picture (`canvases` in voyage.ts); it is hung from the
+// path of light near there, so that whoever flies the path always meets it: ahead and a little to one side (the
+// side the world chose) for a good while before it is passed, at the height of the eye, clear of the tall things
+// and of the ground, and never right at the entry where it would be beside or behind the plane from the first moment.
+const canvasH = (p: PaintingInfo) => (p.width / p.height > 1.25 ? CANVAS_H * 0.84 : CANVAS_H);
+function hangOnPath(def: WorldDef, spot: { x: number; z: number }, p: PaintingInfo, taken: number[]) {
+  const pts = pathOf(def.id).pts;
+  const n = pts.length;
+  let i0 = 0;
+  let bd = 1e12;
+  for (let i = 0; i < n; i++) {
+    const d = (pts[i].x - spot.x) ** 2 + (pts[i].z - spot.z) ** 2;
+    if (d < bd) {
+      bd = d;
+      i0 = i;
     }
   }
-  return THREE.MathUtils.clamp(eye - 1 - floorAt(def, x, z, yaw) - H / 2, 5.6, 10.5);
+  const tanAt = (i: number) => {
+    const a = pts[Math.max(0, i - 2)];
+    const b = pts[Math.min(n - 1, i + 2)];
+    const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return [(b.x - a.x) / l, (b.z - a.z) / l];
+  };
+  const [tx0, tz0] = tanAt(i0);
+  // which side of the way the world put it on, and how far off
+  const cross = tx0 * (spot.z - pts[i0].z) - tz0 * (spot.x - pts[i0].x);
+  const side = cross >= 0 ? 1 : -1;
+  const H = canvasH(p);
+  const W = H * (p.width / p.height);
+  // (far enough aside that it never stands in front of what the path of light is leading to)
+  const lat = THREE.MathUtils.clamp(Math.sqrt(bd), 30, 38) + W * 0.2;
+  // (points are 4 m apart) not before 150 m of flight, not in the last 200 m before the gate
+  const lo = Math.min(Math.round(150 / 4), Math.round(n * 0.3));
+  const hi = Math.max(lo, n - Math.round(200 / 4));
+  // Each place it could hang is judged by how it is seen on the way to it: from 60 to 200 m before, how far off
+  // the plane's own line it stands (the path bends, and a picture on the outside of a bend is behind the wing
+  // before it is ever seen). The world's own side is preferred; the other is taken if it is much the better.
+  const seen = (x: number, z: number, i: number) => {
+    let sum = 0;
+    let k = 0;
+    for (let j = i - 50; j <= i - 15; j += 5) {
+      if (j < 0) continue;
+      const [tx, tz] = tanAt(j);
+      const dx = x - pts[j].x;
+      const dz = z - pts[j].z;
+      sum += Math.abs(Math.atan2(tx * dz - tz * dx, tx * dx + tz * dz));
+      k++;
+    }
+    return k ? sum / k : 0.5;
+  };
+  let best: { x: number; z: number; i: number; score: number } | null = null;
+  for (let i = THREE.MathUtils.clamp(i0, lo, hi), tries = 0; tries < 12 && i <= hi; tries++, i += 6) {
+    for (const sd of [side, -side]) {
+      const [tx, tz] = tanAt(i);
+      const x = pts[i].x - tz * sd * lat;
+      const z = pts[i].z + tx * sd * lat;
+      const clear = def.obstacles.every((ob) => Math.hypot(ob.x - x, ob.z - z) > ob.r + W * 0.5 + 6);
+      const open = groundAt(def, x, z) < pts[i].y - H * 0.5 + 2;
+      const apart = taken.every((j) => Math.abs(j - i) > 22);
+      // (radians off the line of flight; a blocked place is a last resort, a later place costs a little)
+      const score = seen(x, z, i) + (sd === side ? 0 : 0.1) + tries * 0.03 + (clear && open && apart ? 0 : 2);
+      if (!best || score < best.score) best = { x, z, i, score };
+    }
+    // (a picture 36 m aside is about 15 degrees off the line from 130 m back on a straight way: within 22 will do)
+    if (best && best.score < 0.38) break;
+  }
+  const at = best!;
+  taken.push(at.i);
+  // it begins turned toward where the visitor comes from
+  const from = pts[Math.max(0, at.i - 24)];
+  const ground = Math.max(groundAt(def, at.x, at.z), def.water ?? -1e9);
+  return { x: at.x, z: at.z, yaw: Math.atan2(from.x - at.x, from.z - at.z), cy: Math.max(pts[at.i].y - 0.5, ground + H / 2 + 2.5) };
 }
 
 export function Gallery({ def }: { def: WorldDef }) {
@@ -770,44 +851,40 @@ export function Gallery({ def }: { def: WorldDef }) {
     };
   }, []);
   const stands = useMemo(() => {
-    const out: { p: PaintingInfo; x: number; z: number; yaw: number }[] = [];
+    const out: { p: PaintingInfo; x: number; z: number; yaw: number; cy: number }[] = [];
     const named = new Set(def.canvases.map((c) => c.painting));
+    const taken: number[] = [];
     for (const c of def.canvases) {
       const p = list.find((q) => q.id === c.painting);
-      if (p) out.push({ p, x: c.x, z: c.z, yaw: c.yaw });
+      if (p) out.push({ p, ...hangOnPath(def, c, p, taken) });
     }
-    // late arrivals: stood in a row beside the world's own canvas, each a little further along
+    // late arrivals (a painting added to the folder for this world): hung further along the same way
     const base = def.canvases[def.canvases.length - 1];
-    if (base) {
-      let n = 0;
-      for (const p of list) {
-        if (named.has(p.id) || worldOfPainting(p.id) !== def.id) continue;
-        n++;
-        const side = base.yaw > 0 ? -1 : 1; // away from the path
-        const step = 34 * n;
-        out.push({ p, x: base.x + Math.cos(base.yaw) * side * step - Math.sin(base.yaw) * 6 * n, z: base.z - Math.sin(base.yaw) * side * step - Math.cos(base.yaw) * 6 * n, yaw: base.yaw + side * -0.12 * n });
-      }
-    }
+    if (base) for (const p of list) if (!named.has(p.id) && worldOfPainting(p.id) === def.id) out.push({ p, ...hangOnPath(def, base, p, taken) });
+    // dev: where they hang, for framing stills
+    if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") ((window as unknown as { __canvasSpots?: Record<string, unknown> }).__canvasSpots ??= {})[def.id] = out.map((s) => ({ id: s.p.id, x: +s.x.toFixed(1), z: +s.z.toFixed(1), cy: +s.cy.toFixed(1), yaw: +s.yaw.toFixed(2) }));
     return out;
   }, [list, def]);
   return (
     <>
       {stands.map((s) => (
-        <CanvasStand key={s.p.id} p={s.p} x={s.x} z={s.z} y={floorAt(def, s.x, s.z, s.yaw)} yaw={s.yaw} world={def.id} lift={liftOf(def, s.x, s.z, s.yaw, s.p)} />
+        <CanvasStand key={s.p.id} p={s.p} x={s.x} z={s.z} cy={s.cy} yaw={s.yaw} world={def.id} />
       ))}
     </>
   );
 }
 
 // ---------- the whole base of a world ----------
-// (`ground={false}`: the world draws its own land; `arch={false}`: its way on is not the lancet of light but something of its own, a cave's mouth, say)
-export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true, ground = true, arch = true }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean; ground?: boolean; arch?: boolean }) {
+// (`ground={false}`: the world draws its own land. The way on: `gate` says how it is drawn: "arch" the lancet of
+// light (default), "veil" only its sheet of light, sized by `gateSize` [half-width, rise], for a world that builds
+// its own opening, "none" nothing at all; `arch={false}` is the same as gate="none". See LightGate.)
+export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true, ground = true, arch = true, gate = "arch", gateSize }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean; ground?: boolean; arch?: boolean; gate?: GateLook; gateSize?: [number, number] }) {
   return (
     <>
       {ground && def.terrain && <Ground def={def} pal={pal} mobile={props.mobile} size={groundSize} />}
       {grass && def.terrain && <WorldGrass def={def} pal={pal} tip={tip} mobile={props.mobile} density={props.grass} wind={props.reduced ? 0.25 : 1} mask={mask} tall={tall} />}
       <LightPath id={id} def={def} tint={pathTint} gain={pathGain} effects={props.effects} angels={angels} marks={marks} />
-      {arch && def.gate && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} />}
+      {arch && def.gate && gate !== "none" && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} look={gate} half={gateSize?.[0]} rise={gateSize?.[1]} />}
       <Gallery def={def} />
     </>
   );

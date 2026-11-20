@@ -58,21 +58,54 @@ export function ridge2(x: number, y: number, oct = 4) {
 // far things melt into the sky's own colour, and the feet of things stand in
 // more air than their heads. uFogD is density per metre, uFogH how fast it
 // thins with height. Shared by every material here; set once per world.
+//
+// Two more things a world can ask of its air:
+// - The far dissolve. `fog: [density, falloff, from, to]` in a world's entry (voyage.ts) makes everything between
+//   `from` and `to` metres from the eye melt completely into the sky's own colour, whatever the density: the far
+//   world is gone into the air before its geometry ends, so no edge of ground or cut-off hill is ever seen.
+//   A world that gives no distances gets FAR_DISSOLVE (5.2 to 9.5 km: one sees for kilometres, and the horizon
+//   still melts). (Kept as start and 1 / span, so a material that never heard of it reads zeros and is left alone.)
+// - mistBelow(wpos, top, depth): how much of a low mist lies over a point (none above `top`, thickening down
+//   through `depth` metres, thin close to the eye). Mix toward airCol by it for hollows and water's edges.
 export const WORLD_U = {
   uFogD: { value: 0.001 },
   uFogH: { value: 0.012 },
+  uDissolve: { value: new THREE.Vector2(0, 0) },
 };
+// Where the plane is in the world (uPlane) and where it was a moment ago (uPlaneTrail), kept by worlds/play.tsx:
+// for whatever should notice its passing (birds part round both).
+export const PLAY_U = {
+  uPlane: { value: new THREE.Vector3(0, -1e4, 0) },
+  uPlaneTrail: { value: new THREE.Vector3(0, -1e4, 0) },
+};
+export const FAR_DISSOLVE: [number, number] = [5200, 9500];
+export function setWorldAir(fog: readonly (number | undefined)[]) {
+  WORLD_U.uFogD.value = fog[0] ?? 0.001;
+  WORLD_U.uFogH.value = fog[1] ?? 0.012;
+  // (a world that names no distances still melts into its sky far out, well inside the lens's own far plane, so
+  // nothing ever ends in a hard edge however clear its air)
+  const from = fog[2] ?? FAR_DISSOLVE[0];
+  const to = fog[3] ?? FAR_DISSOLVE[1];
+  WORLD_U.uDissolve.value.set(from, to > from ? 1 / (to - from) : 0);
+}
 export const GLSL_AIR = /* glsl */ `
-uniform float uFogD; uniform float uFogH;
+uniform float uFogD; uniform float uFogH; uniform vec2 uDissolve;
 vec3 airCol(vec3 d){ return skyBase(normalize(vec3(d.x, max(d.y, 0.0) * 0.5 + 0.012, d.z))); }
 float airAmt(vec3 wpos){
   vec3 dv = wpos - cameraPosition; float dist = length(dv);
   float a = exp(-max(cameraPosition.y, 0.0) * uFogH);
   float t = dv.y * uFogH;
   float integ = abs(t) > 0.001 ? (1.0 - exp(-t)) / t : 1.0;
-  return clamp(1.0 - exp(-dist * (uFogD * 0.3 + uFogD * 2.2 * a * integ + uMist)), 0.0, 1.0);
+  float air = clamp(1.0 - exp(-dist * (uFogD * 0.3 + uFogD * 2.2 * a * integ + uMist)), 0.0, 1.0);
+  // the far dissolve: beyond a world's own distance everything is the sky's colour
+  float far = clamp((dist - uDissolve.x) * uDissolve.y, 0.0, 1.0);
+  return max(air, far * far * (3.0 - 2.0 * far));
 }
 vec3 applyAir(vec3 col, vec3 wpos){ return mix(col, airCol(normalize(wpos - cameraPosition)), airAmt(wpos)); }
+float mistBelow(vec3 wpos, float top, float depth){
+  float h = clamp((top - wpos.y) / max(depth, 0.01), 0.0, 1.0);
+  return h * h * (1.0 - exp(-length(wpos - cameraPosition) * 0.012));
+}
 // the eye is wide open at night: lights are turned down so they glow instead of glaring
 float glowK(){ return mix(1.0, 0.36, uNight); }
 `;
@@ -160,6 +193,12 @@ export class Kit {
 //   gold   leaf laid in patches: metal, catching the key light and the sky's glow as the eye moves
 //   irid   a pearl sheen at grazing angles, the colour turning with the angle
 //   wrap   light that comes through the edges of a form lit from behind (a soft back light)
+// Earth banked up against a base (see "grounding" in common.tsx): a low flaring skirt, `r` metres across at its
+// top and half as wide again at its foot, `h` high, sunk a fifth of that into the ground at p (p[1] = the ground's
+// height there). `col` is the ground's colour at its foot, `top` (default col) where it meets the thing.
+export function bank(k: Kit, p: V3, r: number, h: number, col: V3, top?: V3) {
+  return k.add(new THREE.CylinderGeometry(r, r * 1.5, h * 1.2, 28, 2, true), [p[0], p[1] + h * 0.4, p[2]], col, { top: top ?? col });
+}
 export function makeTempera(o: { rim?: V3; rimPow?: number; amb?: number; key?: number; dab?: number; strata?: number; grain?: number; ao?: number; aoH?: number; gold?: number; goldCol?: V3; irid?: number; wrap?: number } = {}) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
@@ -709,8 +748,10 @@ export function makePuffMaterial() {
 // ---------- a painting ----------
 // Display-referred: into the lens' linear target it goes as linear light with
 // alpha 0, so the grade passes it through untouched.
-export function makeCanvasMaterial(map: THREE.Texture) {
+// `twoSided`: a picture hung in the open air reads the right way round from behind as well.
+export function makeCanvasMaterial(map: THREE.Texture, o: { twoSided?: boolean } = {}) {
   return new THREE.ShaderMaterial({
+    side: o.twoSided ? THREE.DoubleSide : THREE.FrontSide,
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -80,
@@ -721,7 +762,7 @@ export function makeCanvasMaterial(map: THREE.Texture) {
       varying vec2 vUv;
       void main(){
         // the texture is sRGB-decoded on sampling: encode back to what the file holds
-        vec3 lin = texture2D(uMap, vUv).rgb;
+        vec3 lin = texture2D(uMap, gl_FrontFacing ? vUv : vec2(1.0 - vUv.x, vUv.y)).rgb;
         // a soft wash of light from above, and the unlit ground of the canvas until the picture has arrived
         float wash = mix(0.9, 1.04, smoothstep(0.0, 1.0, vUv.y)) * uLit;
         lin = mix(vec3(0.12, 0.1, 0.085), lin * wash, uShow);
