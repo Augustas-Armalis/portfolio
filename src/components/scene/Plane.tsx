@@ -745,7 +745,7 @@ export function Plane({
         cam.updateProjectionMatrix();
       }
       // the mist: from a brisk pace up, more in a bank and a dive; none in the first moments off the desk or under cloud
-      const mist = smooth01((st.speed - 8) / 16) * (0.5 + 0.9 * Math.min(1, Math.abs(st.roll) / 0.6) + 1.1 * clamp01(-st.pitch / 0.45)) * smooth01((st.t - 1.6) / 2) * (1 - voyage.veil);
+      const mist = smooth01((st.speed - 8) / 16) * (0.75 + 0.75 * Math.min(1, Math.abs(st.roll) / 0.6) + 1.1 * clamp01(-st.pitch / 0.45)) * smooth01((st.t - 1.6) / 2) * (1 - voyage.veil);
       sync(dt, cam, Math.min(1.4, mist));
     },
     beginLand: (cam) => {
