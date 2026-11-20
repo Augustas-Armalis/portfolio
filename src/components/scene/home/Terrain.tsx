@@ -231,8 +231,10 @@ export function makeLandMaterial() {
           vec3 P = vec3(p.x, level, p.y);
           // how much of the wave pattern a pixel can still carry: beyond that it is averaged, never sampled (no sparkle of
           // aliasing, no crawling), so the water is still at any distance and from any height
-          float keep1 = 1.0 - smoothstep(0.6, 3.5, fw);   // ripples (metres)
-          float keep2 = 1.0 - smoothstep(4.0, 22.0, fw);  // chop and swell
+          // (and by distance: the wave sheet repeats every few metres, which from the sky is a pattern of tiles; far water is
+          // the sky's mirror, darkened in broad slow patches where the wind lies on it)
+          float keep1 = (1.0 - smoothstep(0.6, 3.5, fw)) * (1.0 - smoothstep(50.0, 260.0, dist));   // ripples (metres)
+          float keep2 = (1.0 - smoothstep(4.0, 22.0, fw)) * (1.0 - smoothstep(260.0, 1300.0, dist));  // chop and swell
           // two scales of travelling waves, and on the sea a long swell coming in to the beach
           vec2 w1 = p / 3.1 + vec2(uTime * 0.021, uTime * 0.013);
           vec2 w2 = p / 11.0 - vec2(uTime * 0.012, -uTime * 0.008);
@@ -285,6 +287,7 @@ export function makeLandMaterial() {
           // the bed shows through the first hand of water
           body = mix(body, col * mix(vec3(0.7), vec3(0.62, 0.86, 0.8), seaK), exp(-depth * mix(4.5, 1.6, seaK)) * 0.85);
           vec3 wcol = mix(body, mirror, clamp(fres * 0.94 + 0.05, 0.0, 1.0));
+          wcol *= 1.0 - 0.14 * seaK * smoothstep(0.35, 0.7, vnoise(p * 0.0037 + vec2(uTime * 0.004, 0.0))) * smoothstep(200.0, 900.0, dist);
           // the swell's backs are a little lighter, its troughs darker
           wcol *= 1.0 + swell * 0.07;
           if (seaK > 0.5) {
