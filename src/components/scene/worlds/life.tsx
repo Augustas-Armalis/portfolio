@@ -154,3 +154,90 @@ export function GreatSun({ size = 0.55, tint = [1, 0.78, 0.36], rays = 18, gain 
   }, [size, rays, gain]);
   return <mesh geometry={b.g} material={b.mat} frustumCulled={false} renderOrder={-4} />;
 }
+
+// ---------- painted clouds ----------
+// Clouds as he painted them in the Fairy Tale and Paradise: small rounded forms laid in rows, cream, each lobe
+// with a bright crescent stroke on its sunward side and a cool shade under it, softly outlined. Each is a quad
+// that faces the eye; the shape (a few overlapping round lobes on a flatter base) is drawn in its shader.
+export type PaintedCloud = { p: V3; w: number; seed?: number };
+export function PaintedClouds({ list, warm = [1.0, 0.93, 0.78], shade = [0.62, 0.74, 0.74], hi = [1.25, 1.1, 0.82], order = 2 }: { list: PaintedCloud[]; warm?: V3; shade?: V3; hi?: V3; order?: number }) {
+  const b = useDisposable(() => {
+    const g = new THREE.InstancedBufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    const pos = new Float32Array(list.length * 4);
+    const box = new THREE.Box3();
+    const v = new THREE.Vector3();
+    list.forEach((c, i) => {
+      pos.set([c.p[0], c.p[1], c.p[2], c.w], i * 4);
+      box.expandByPoint(v.set(...c.p));
+    });
+    // (each one's seed rides in the fractional part of its width)
+    list.forEach((c, i) => (pos[i * 4 + 3] = Math.floor(c.w) + ((c.seed ?? i * 0.618) % 1)));
+    g.setAttribute("aPos", new THREE.InstancedBufferAttribute(pos, 4));
+    g.instanceCount = list.length;
+    g.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+    g.boundingSphere.radius += 200;
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: { ...SKY_U, ...WORLD_U, uWarm: { value: new THREE.Color(...warm) }, uShade: { value: new THREE.Color(...shade) }, uHi: { value: new THREE.Color(...hi) } },
+      vertexShader: /* glsl */ `
+        attribute vec4 aPos;
+        uniform vec3 uSunDir; uniform float uTime;
+        varying vec2 vUv; varying vec2 vSun; varying float vSeed; varying vec3 vWorld; varying float vNear;
+        void main(){
+          float w = floor(aPos.w);
+          vSeed = fract(aPos.w);
+          vec3 c = aPos.xyz + vec3(sin(uTime * 0.01 + vSeed * 40.0) * w * 0.1, 0.0, 0.0);
+          vec4 mv = modelViewMatrix * vec4(c, 1.0);
+          mv.xy += position.xy * vec2(w, w * 0.62);
+          vUv = position.xy;
+          // where the sun is, seen on the screen: the side the crescents are painted on
+          vec3 sv = (viewMatrix * vec4(uSunDir, 0.0)).xyz;
+          vSun = normalize(sv.xy + vec2(1e-4));
+          vWorld = (modelMatrix * vec4(c, 1.0)).xyz;
+          vNear = smoothstep(w * 0.4, w * 1.4, -mv.z);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uWarm; uniform vec3 uShade; uniform vec3 uHi;
+        varying vec2 vUv; varying vec2 vSun; varying float vSeed; varying vec3 vWorld; varying float vNear;
+        ${GLSL_NOISE}
+        ${GLSL_SKY}
+        ${GLSL_AIR}
+        void main(){
+          vec2 p = vUv * vec2(1.0, 0.62);
+          float inside = 0.0; float hiK = 0.0; float rimK = 0.0; float shadeK = 0.0;
+          for (int i = 0; i < 5; i++) {
+            float fi = float(i);
+            float h = fract(sin((vSeed * 13.0 + fi) * 78.233) * 43758.5453);
+            vec2 c = vec2(-0.66 + fi * 0.33 + (h - 0.5) * 0.12, -0.04 + 0.16 * sin(fi * 1.7 + vSeed * 9.0) + (fi == 2.0 ? 0.1 : 0.0));
+            float r = 0.24 + 0.14 * h + (fi == 2.0 ? 0.06 : 0.0);
+            vec2 d = p - c; float l = length(d);
+            float a = 1.0 - smoothstep(r - 0.02, r + 0.01, l);
+            inside = max(inside, a);
+            // the crescent: a bright stroke just inside the rim on the side toward the sun
+            float side = dot(d / max(l, 1e-3), vSun);
+            hiK = max(hiK, a * smoothstep(0.15, 0.7, side) * smoothstep(r * 0.45, r * 0.85, l) * (1.0 - smoothstep(r * 0.92, r, l) * 0.5));
+            rimK = max(rimK, a * smoothstep(r * 0.8, r, l));
+            shadeK = max(shadeK, a * smoothstep(0.1, -0.7, side) * smoothstep(r * 0.2, r * 0.9, l));
+          }
+          // a flatter base
+          inside *= smoothstep(-0.3, -0.18, p.y);
+          if (inside < 0.01) discard;
+          float n = vnoise(vUv * 6.0 + vSeed * 30.0);
+          vec3 col = mix(uWarm, uShade, shadeK * 0.75) * (0.92 + 0.12 * n);
+          col = mix(col, uShade * 0.8, rimK * 0.25);
+          col = mix(col, uHi * (0.95 + 0.1 * n), hiK * 0.9);
+          col *= uSkyCol * 0.6 + uCloudLit * 0.55;
+          float f = airAmt(vWorld);
+          col = mix(col, airCol(normalize(vWorld - cameraPosition)), f * 0.85);
+          gl_FragColor = vec4(col, inside * vNear * (1.0 - f * 0.4));
+          ${END}
+        }`,
+    });
+    return { g, mat };
+  }, [list]);
+  return <mesh geometry={b.g} material={b.mat} frustumCulled={false} renderOrder={order} />;
+}

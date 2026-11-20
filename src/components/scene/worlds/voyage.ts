@@ -475,7 +475,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     water: null,
     centre: [0, -40],
     radius: 620,
-    ceil: 380,
+    ceil: 470,
     entry: { x: 0, z: 480, above: 30, yaw: 0 },
     gate: { x: -170, z: -460, above: 40, yaw: 0.3 },
     // in past the painting, then round the mountain the way its own road winds, climbing to the castle, and down again to the gate
@@ -497,11 +497,12 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [-170, -460, 40],
       [-161, -490, 40],
     ],
+    // (heights raised with the mountain: worlds/Fairy.tsx LIFT)
     obstacles: [
-      { x: 0, z: -80, r: 200, h: 90, bell: true },
-      { x: 0, z: -80, r: 150, h: 138, bell: true },
-      { x: 0, z: -72, r: 66, h: 205 },
-      { x: 6, z: -90, r: 48, h: 322 },
+      { x: 0, z: -80, r: 200, h: 119, bell: true },
+      { x: 0, z: -80, r: 150, h: 182, bell: true },
+      { x: 0, z: -72, r: 66, h: 271 },
+      { x: 6, z: -90, r: 48, h: 425 },
     ],
     canvases: [{ painting: "fairy-tale", x: 44, z: 372, yaw: -0.5 }],
   },

@@ -3,7 +3,8 @@
 import * as THREE from "three";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { Kit, cloudMesh, makeCloudMaterial, makeTempera, rng, type Cloud, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { Kit, angel, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { Birds, PaintedClouds, type Flock, type PaintedCloud } from "./life";
 import { WORLDS, groundAt } from "./voyage";
 
 // Fairy Tale (Castle Fairy Tale, 1909). A mountain wound round by a road:
@@ -19,6 +20,8 @@ export const FAIRY_PAL: GroundPalette = { a: [0.06, 0.125, 0.04], b: [0.095, 0.1
 // The mountain, measured from its own foot: the wall's rim climbs fifty metres
 // a turn while it draws in, so rim after rim lies on the side of a cone.
 export const MOUNT = { x: 0, z: -80, turns: 2.25, batter: 4.5, th0: 0 };
+// the whole mountain and its castle are raised to this much of their drawn height: it towers (voyage.ts obstacles follow)
+export const LIFT = 1.32;
 const WALL: V3 = [0.33, 0.11, 0.09];
 const WALL_LOW: V3 = [0.1, 0.04, 0.085];
 const RIM: V3 = [0.5, 0.26, 0.24];
@@ -212,7 +215,10 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const k = new Kit();
     const halos: Halo[] = [];
     const glows: Halo[] = [];
+    const windows: Halo[] = [];
     const P = (x: number, y: number, z: number): V3 => [MOUNT.x + x, y0 + y, MOUNT.z + z];
+    // (the same point once the mountain is raised: for things that are not part of it but stand by it)
+    const PL = (x: number, y: number, z: number): V3 => [MOUNT.x + x, y0 + y * LIFT, MOUNT.z + z];
 
     // buttresses between the arches: slim fins of lighter stone
     const spacing = props.mobile ? 15 : 9.5;
@@ -274,7 +280,11 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       const rows = Math.max(1, Math.floor(h / 7));
       for (let j = 0; j < 2; j++) {
         const a = 0.9 + j * 1.3 + x * 0.3;
-        for (let q = 0; q < rows; q++) k.box(0.26, 0.9, 0.2, P(x + Math.cos(a) * rad * 0.9, y + 3.4 + q * 6.2, z + Math.sin(a) * rad * 0.9), [1, 0.8, 0.42], { glow: 2.0, rot: [0, -a + Math.PI / 2, 0] });
+        for (let q = 0; q < rows; q++) {
+          k.box(0.34, 1.1, 0.2, P(x + Math.cos(a) * rad * 0.9, y + 3.4 + q * 6.2, z + Math.sin(a) * rad * 0.9), [1, 0.8, 0.42], { glow: 2.6, rot: [0, -a + Math.PI / 2, 0] });
+          // each lit window breathes a little warm light into the air before it
+          if ((q + j) % 2 === 0) windows.push({ p: P(x + Math.cos(a) * rad * 1.3, y + 3.4 + q * 6.2, z + Math.sin(a) * rad * 1.3), size: 3.2, col: [1, 0.72, 0.36], k: 0.55 });
+        }
       }
     };
     // the shelf it stands on, where the road arrives
@@ -335,7 +345,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     }
 
     // his sky: small round clouds laid out in rows, like a pattern on cloth
-    const clouds: Cloud[] = [];
+    const clouds: PaintedCloud[] = [];
     // near rows overhead, and row behind row going down to the horizon
     // how many rows go out toward the horizon follows the quality's draw distance
     const rows = Math.round((props.mobile ? 9 : 16) * Math.min(1.15, Math.max(0.6, props.far)));
@@ -344,14 +354,23 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       const gap = 110 + row * (props.mobile ? 34 : 15);
       z -= gap;
       const half = 760 + (520 - z) * 0.55;
-      const stepX = (props.mobile ? 190 : 120) + row * 9;
+      const stepX = (props.mobile ? 130 : 74) + row * 6;
       for (let x = -half + (row % 2) * stepX * 0.5; x < half; x += stepX) {
         const cx = x + (r() - 0.5) * stepX * 0.36;
         const cz = z + (r() - 0.5) * gap * 0.34;
         if (Math.hypot(cx - MOUNT.x, cz - MOUNT.z) < 170) continue; // the peaks stand clear
-        const w = (30 + r() * 24) * (1 + row * 0.05);
-        clouds.push({ p: [cx, 300 + (r() - 0.5) * 22 - row * 3, cz], s: [w, w * 0.42, w * 0.7], seed: r() * 9 });
+        const w = (22 + r() * 18) * (1 + row * 0.05);
+        clouds.push({ p: [cx, 380 + (r() - 0.5) * 40 - row * 4, cz], w, seed: r() });
+        // and a second, lower layer between the rows, as he set them, scale on scale
+        if (!props.mobile && r() < 0.6) clouds.push({ p: [cx + stepX * 0.5, 300 + (r() - 0.5) * 30 - row * 3, cz + gap * 0.5], w: w * 0.85, seed: r() });
       }
+    }
+    // the sea of cloud the mountain's rock stands up out of: row on row of the same rounded clouds, far below the
+    // headland and all round past the cliffs, to the horizon
+    for (let i = 0; i < (props.mobile ? 120 : 320); i++) {
+      const a = r() * Math.PI * 2;
+      const d = 940 + Math.pow(r(), 0.7) * 1400;
+      clouds.push({ p: [Math.cos(a) * d, -95 + r() * 30, -40 + Math.sin(a) * d], w: 50 + r() * 70 + d * 0.03, seed: r() });
     }
     // a few lying low about the mountain's foot, as if it stood above them
     const puffs: Puff[] = [];
@@ -366,30 +385,57 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const se = (air.sunEl * Math.PI) / 180;
     const sunP: V3 = [Math.sin(sa) * Math.cos(se) * 1500, Math.sin(se) * 1500, -Math.cos(sa) * Math.cos(se) * 1500];
 
-    const cloudMat = makeCloudMaterial({ lit: 1 });
+    // the two small figures standing on the cliff's edge, looking out, as in the picture's right-hand side
+    // (not raised with the mountain: they stand on the meadow)
+    const fk = new Kit();
+    for (const [dx, h] of [
+      [0, 1],
+      [3.2, 0.92],
+    ])
+      angel(fk, [262 + dx, g(262 + dx, 30) - 0.2, 30 + dx * 0.3], 2.4 * h, -1.2, [0.1, 0.07, 0.09], { glow: 0.02, wing: [0.12, 0.09, 0.1], open: 0.05 });
+    // and birds, wheeling about the peaks and over the valley
+    const flocks: Flock[] = [
+      { c: [MOUNT.x, 250 * LIFT, MOUNT.z], r: 230, n: props.mobile ? 8 : 16, size: 1.6, speed: 12 },
+      { c: [MOUNT.x + 40, 380 * LIFT, MOUNT.z - 30], r: 120, n: props.mobile ? 5 : 10, size: 2.2, speed: 10 },
+      { c: [-200, 120, 260], r: 110, n: props.mobile ? 6 : 12, size: 1.2, speed: 9 },
+      { c: [240, 90, 140], r: 80, n: props.mobile ? 5 : 9, size: 1.1, speed: 8 },
+    ];
     return {
+      figures: fk.build(),
+      windows,
+      flocks,
+      motes: pointsGeometry(props.mobile ? 200 : Math.round(900 * props.effects), (_, q) => [(q() - 0.5) * 900, 20 + q() * 320, -80 + (q() - 0.5) * 900, 0.5 + q() * 1.2], 9),
+      moteMat: makePoints({ a: [1, 0.86, 0.56], b: [1, 0.95, 0.8], scale: 220, drift: 2.6, gain: 0.7, max: 16 }),
       mount: spiral(props.mobile, (x, z) => g(MOUNT.x + x, MOUNT.z + z) - y0),
       set: k.build(),
-      tempera: makeTempera({ amb: 0.95, key: 0.34, dab: 1.2 }),
+      tempera: makeTempera({ amb: 0.72, key: 0.62, dab: 1.4, grain: 1.2, ao: 0.45, aoH: 40, wrap: 0.7, rim: [0.95, 0.48, 0.2], rimPow: 3 }),
       y0,
-      clouds: cloudMesh(clouds, cloudMat, props.mobile ? 1 : 3),
-      cloudMat,
+      clouds,
       puffs,
       halos,
       glows,
       suns: [{ p: sunP, size: 900, col: [1, 0.9, 0.62] as V3, k: 0.4 }],
     };
-  }, [props.mobile, props.trees, props.far]);
+  }, [props.mobile, props.trees, props.far, props.effects > 0.5]);
   return (
     <>
       <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={props} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} />
-      <mesh geometry={b.mount} material={b.tempera} position={[MOUNT.x, b.y0, MOUNT.z]} />
-      <mesh geometry={b.set} material={b.tempera} />
-      <primitive object={b.clouds} />
+      {/* the mountain and its castle, raised about the mountain's own foot */}
+      <group position={[0, b.y0, 0]} scale={[1, LIFT, 1]}>
+        <mesh geometry={b.mount} material={b.tempera} position={[MOUNT.x, 0, MOUNT.z]} />
+        <mesh geometry={b.set} material={b.tempera} position={[0, -b.y0, 0]} />
+        <group position={[0, -b.y0, 0]}>
+          <Halos list={b.windows} />
+          <Halos list={b.glows} kind={2} />
+          <Halos list={b.halos} />
+        </group>
+      </group>
+      <mesh geometry={b.figures} material={b.tempera} />
+      <PaintedClouds list={b.clouds} warm={[1.0, 0.92, 0.76]} shade={[0.56, 0.72, 0.72]} hi={[1.3, 1.12, 0.8]} />
+      <Birds flocks={b.flocks} tint={[0.16, 0.1, 0.08]} />
+      <points geometry={b.motes} material={b.moteMat} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
       <Halos list={b.suns} kind={3} />
-      <Halos list={b.glows} kind={2} />
-      <Halos list={b.halos} />
     </>
   );
 }
