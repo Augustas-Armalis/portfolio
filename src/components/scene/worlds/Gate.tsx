@@ -28,6 +28,30 @@ import { ORIGIN, WORLDS, gateOf, groundAt, pathOf, voyage } from "./voyage";
 const def = WORLDS.gate;
 const TERRACE = { x: -330, z: 330, w: 220, d: 290, h: 150 };
 const ALTAR = { x: 320, z: -40 };
+// The citadel's long walls, as lines on the map. Each goes on until it meets rock or is lost in the haze.
+const WALLS: { pts: [number, number][]; h: number; every: number; far?: boolean }[] = [
+  // out along the ridge to the west, over the hill and on toward the far heights
+  { pts: [[-440, 300], [-560, 330], [-690, 380], [-810, 450], [-920, 540], [-1040, 660], [-1180, 800], [-1340, 960], [-1520, 1110], [-1720, 1250], [-1940, 1370]], h: 44, every: 2 },
+  // a branch north from the ridge, down to the flank of the left mountain, where it runs into the rock
+  { pts: [[-690, 380], [-770, 220], [-810, 40], [-800, -150], [-750, -320], [-690, -430]], h: 40, every: 2 },
+  // the wing across the valley, along the eastern height
+  { pts: [[560, 120], [690, 270], [800, 450], [880, 660], [980, 880], [1120, 1090], [1300, 1270], [1520, 1420]], h: 40, every: 2 },
+  // and far off, on the heights that close the world: walls and towers that are only shapes in the haze
+  { pts: [[-2150, 300], [-2230, 0], [-2210, -320], [-2100, -640], [-1930, -930]], h: 60, every: 1, far: true },
+  { pts: [[1750, 900], [1980, 640], [2140, 340], [2220, 20], [2200, -320]], h: 60, every: 1, far: true },
+  { pts: [[-900, 2050], [-560, 2180], [-200, 2230], [180, 2220], [540, 2150]], h: 60, every: 1, far: true },
+];
+const nearWall = (x: number, z: number, d: number) =>
+  WALLS.some((w) =>
+    w.pts.some((p, i) => {
+      if (i === 0) return false;
+      const [x0, z0] = w.pts[i - 1];
+      const dx = p[0] - x0;
+      const dz = p[1] - z0;
+      const t = Math.min(1, Math.max(0, ((x - x0) * dx + (z - z0) * dz) / (dx * dx + dz * dz)));
+      return Math.hypot(x - x0 - dx * t, z - z0 - dz * t) < d;
+    }),
+  );
 export const GATE_PAL: GroundPalette = {
   a: [0.1, 0.135, 0.055],
   b: [0.2, 0.175, 0.07],
@@ -87,7 +111,7 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     const nearPath = (x: number, z: number, d: number) => pts.some((q, j) => j % 3 === 0 && Math.hypot(q.x - x, q.z - z) < d);
     // (where the citadel stands: the terrace, the wall behind it, the lower terraces, the ridge wall)
     const inCitadel = (x: number, z: number) =>
-      (x < -236 && x > -660 && z > -200 && z < 890) || (x < -220 && x > -450 && Math.abs(z - TERRACE.z) < TERRACE.d / 2 + 16) || (x < -640 && x > -960 && Math.abs(z - (300 + (-x - 440) * 0.5)) < 60) || (x > -300 && x < -186 && Math.abs(z - 128) < 40);
+      (x < -236 && x > -660 && z > -200 && z < 890) || (x < -220 && x > -450 && Math.abs(z - TERRACE.z) < TERRACE.d / 2 + 16) || nearWall(x, z, 44) || (x < -380 && x > -620 && z > 860 && z < 1110) || (x > -300 && x < -186 && Math.abs(z - 128) < 40);
     const GT = def.gate!;
     const k = new Kit();
     const wings = new Wings();
@@ -168,26 +192,40 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     slab(-470, 772, 270, 208, ty + 52);
     slab(-540, 772, 140, 170, ty + 78);
     ziggurat(-520, 560, 46, ty + 124, 96, 3);
-    // a wall out along the ridge to the west, towers at its turns
-    {
-      const ridge: [number, number][] = [
-        [-440, 300],
-        [-560, 330],
-        [-690, 380],
-        [-810, 450],
-        [-920, 540],
-      ];
-      for (let i = 0; i < ridge.length - 1; i++) {
-        const [x0, z0] = ridge[i];
-        const [x1, z1] = ridge[i + 1];
-        const mx = (x0 + x1) / 2;
-        const mz = (z0 + z1) / 2;
+    // the long walls: each follows its ridge, rising and falling with it, a stepped tower at every second turn,
+    // and ends in a tower or in the rock, never in a cut block
+    for (const w of WALLS) {
+      const thick = w.far ? 40 : 22;
+      for (let i = 0; i < w.pts.length - 1; i++) {
+        const [x0, z0] = w.pts[i];
+        const [x1, z1] = w.pts[i + 1];
         const len = Math.hypot(x1 - x0, z1 - z0);
-        slab(mx, mz, len + 10, 22, Math.max(g(x0, z0), g(x1, z1)) + 44, Math.atan2(-(z1 - z0), x1 - x0));
-        if (i > 0) ziggurat(x0, z0, 36, g(x0, z0) + 40, 70, 3);
+        // (in two lengths, so the wall's top steps with the ground instead of standing level over a hollow)
+        for (const [ta, tb] of [
+          [0, 0.5],
+          [0.5, 1],
+        ]) {
+          const ax = x0 + (x1 - x0) * ta;
+          const az = z0 + (z1 - z0) * ta;
+          const bx = x0 + (x1 - x0) * tb;
+          const bz = z0 + (z1 - z0) * tb;
+          slab((ax + bx) / 2, (az + bz) / 2, len / 2 + 8, thick, Math.max(g(ax, az), g(bx, bz)) + w.h, Math.atan2(-(z1 - z0), x1 - x0), !w.far);
+        }
+        // (a wall that does not spring from the citadel itself begins in a tower too)
+        if (i === 0 && (w.far || w === WALLS[2])) ziggurat(x0, z0, w.far ? 100 : 44, g(x0, z0) + w.h - 6, w.far ? 220 : 96, 4);
+        if (i > 0 && i % w.every === 0) ziggurat(x0, z0, w.far ? 90 : 36, g(x0, z0) + w.h - 6, w.far ? 190 : 72, 3);
       }
-      ziggurat(-920, 540, 44, g(-920, 540) + 30, 96, 3);
+      // its end: a greater tower, unless it ends in the mountain
+      const [ex, ez] = w.pts[w.pts.length - 1];
+      const inRock = Math.hypot((Math.abs(ex) - GATE.off) / GATE.rx, (ez - GATE.z) / GATE.rz) < 1.05;
+      if (!inRock) ziggurat(ex, ez, w.far ? 110 : 48, g(ex, ez) + w.h - 6, w.far ? 240 : 104, 4);
     }
+    // the lower terraces end by stepping down into the valley, a tower on each outer corner
+    slab(-500, 936, 230, 130, ty + 28);
+    slab(-520, 1050, 170, 110, ty + 10);
+    ziggurat(-338, 872, 40, ty + 52, 70, 3);
+    ziggurat(-388, 996, 34, ty + 28, 56, 3);
+    ziggurat(-252, 462, 40, ty + 95, 64, 3);
     // stairs: up the lower terrace's face from the valley floor, then along the platform's south side to its top
     {
       const g0 = g(-238, 690);
@@ -452,8 +490,17 @@ export default function GateWorld({ props }: { props: WorldProps }) {
       left: buildMassif(-1, SEEDS[0], props.mobile),
       right: buildMassif(1, SEEDS[1], props.mobile),
       rock: makeTempera({ amb: 0.74, key: 0.6, strata: 1.1, dab: 1.4, grain: 1.2, wrap: 0.5, rim: [0.3, 0.17, 0.07], rimPow: 4 }),
-      needles: needleGeo,
-      stones: boulderGeometry(stones),
+      // (the stones are one mesh with the needles: the same rock, one draw)
+      rocks: (() => {
+        const st = boulderGeometry(stones);
+        const flat = st.toNonIndexed();
+        st.dispose();
+        const all = mergeGeometries([needleGeo, flat])!;
+        needleGeo.dispose();
+        flat.dispose();
+        all.computeBoundingSphere();
+        return all;
+      })(),
       set: k.build(),
       tempera: makeTempera({ amb: 0.9, key: 0.4, strata: 0.5, grain: 1, wrap: 0.5, rim: [0.5, 0.36, 0.16], rimPow: 3 }),
       wings: wings.build(),
@@ -502,8 +549,7 @@ export default function GateWorld({ props }: { props: WorldProps }) {
         <mesh geometry={b.left} material={b.rock} />
         <mesh geometry={b.right} material={b.rock} />
       </group>
-      <mesh geometry={b.needles} material={b.rock} />
-      <mesh geometry={b.stones} material={b.rock} />
+      <mesh geometry={b.rocks} material={b.rock} />
       <mesh geometry={b.set} material={b.tempera} />
       <mesh geometry={b.wings} material={b.wingMat} />
       <primitive object={b.white} />

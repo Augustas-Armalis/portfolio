@@ -687,6 +687,12 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -330, z: -70, r: 70, h: 260 },
       { x: -410, z: 570, r: 175, h: 110 },
       { x: -480, z: 770, r: 150, h: 70 },
+      // towers of its long walls, west and east of the valley
+      { x: -690, z: 380, r: 34, h: 130 },
+      { x: -920, z: 540, r: 34, h: 130 },
+      { x: -810, z: 40, r: 34, h: 130 },
+      { x: 800, z: 450, r: 34, h: 130 },
+      { x: 980, z: 880, r: 34, h: 130 },
       { x: 320, z: -40, r: 56, h: 90 },
     ],
     canvases: [{ painting: "offering", x: -44, z: 1300, yaw: 0.42 }],
