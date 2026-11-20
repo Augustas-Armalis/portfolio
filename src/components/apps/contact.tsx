@@ -214,10 +214,10 @@ export function Contact() {
 }
 
 function QuickAction({ href, onClick, icon, label, sub }: { href?: string; onClick?: () => void; icon: React.ReactNode; label: string; sub: string }) {
-  const cls = "press lift sq flex flex-col items-start gap-2 rounded-[16px] bg-[var(--bg-elevated)] p-3 text-left shadow-[var(--shadow-1)]";
+  const cls = "press lift sq flex flex-col items-start gap-2 rounded-[20px] bg-[var(--bg-elevated)] p-3 text-left shadow-[var(--shadow-1)]";
   const inner = (
     <>
-      <span className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-[var(--accent-tint)] text-[var(--accent)]">{icon}</span>
+      <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[var(--accent-tint)] text-[var(--accent)]">{icon}</span>
       <span className="min-w-0">
         <span className="block text-[13px] font-medium text-ink">{label}</span>
         <span className="block truncate text-[11px] text-ink-3">{sub}</span>

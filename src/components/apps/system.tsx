@@ -523,7 +523,8 @@ export function SettingsApp() {
             </List>
           </>
         ) : (
-          <div className="flex items-center gap-2.5 px-2 pb-1">
+          // its picture starts on the same line as the rows' tiles below it
+          <div className="flex items-center gap-2.5 px-1 pb-1">
             <Monogram size={36} />
             <span className="min-w-0">
               <span className="m-headline block truncate text-ink">{owner.name}</span>

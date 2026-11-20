@@ -762,10 +762,10 @@ svg.lucide.bold {
 }
 /* dark windows: graphite, a light inner hairline, a deep soft shadow */
 .dark .win {
-  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.16), 0 0 0 0.5px rgb(0 0 0 / 0.7), 0 14px 40px -14px rgb(0 0 0 / 0.6);
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.7), 0 14px 40px -14px rgb(0 0 0 / 0.6);
 }
 .dark .win.is-focused {
-  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.2), 0 0 0 0.5px rgb(0 0 0 / 0.8), 0 36px 90px -20px rgb(0 0 0 / 0.85), 0 8px 20px rgb(0 0 0 / 0.3);
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.8), 0 36px 90px -20px rgb(0 0 0 / 0.85), 0 8px 20px rgb(0 0 0 / 0.3);
 }
 /* Tahoe sidebars: a floating, inset glass panel inside the window */
 .win aside[data-drag] {
@@ -778,10 +778,6 @@ svg.lucide.bold {
   backdrop-filter: blur(30px) saturate(1.8);
   box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.08), inset 0 0 0 1px rgb(255 255 255 / 0.5), 0 8px 24px -12px rgb(16 18 24 / 0.18);
   padding-top: 44px !important;
-}
-.dark .win aside[data-drag] {
-  background-color: rgb(58 58 62 / 0.6) !important;
-  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.5), inset 0 0 0 1px rgb(255 255 255 / 0.08), 0 8px 24px -12px rgb(0 0 0 / 0.5);
 }
 
 /* Tahoe toolbars: no hairline; each control is its own glass capsule floating over the content */
@@ -1166,10 +1162,12 @@ a.list-row:active {
   backdrop-filter: blur(18px) saturate(1.7);
   box-shadow: inset 0.5px 1px 0.5px -0.25px rgb(255 255 255 / 0.9), inset -0.5px -0.6px 0.5px -0.25px rgb(255 255 255 / 0.3), 0 10px 28px -14px rgb(16 18 24 / 0.22);
 }
+/* dark: the same graphite as the window, a step lighter (white over it, so no second hue), and one even
+   hairline. An offset rim of light here drew a second, lopsided curve beside the window's own edge. */
 .dark .win aside[data-drag],
 .dark .inspector {
-  background-color: rgb(52 52 58 / 0.5) !important;
-  box-shadow: inset 0.5px 1px 0.5px -0.25px rgb(255 255 255 / 0.3), inset -0.5px -0.6px 0.5px -0.25px rgb(255 255 255 / 0.08), 0 10px 28px -14px rgb(0 0 0 / 0.6);
+  background-color: rgb(255 255 255 / 0.055) !important;
+  box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.07), 0 10px 28px -14px rgb(0 0 0 / 0.55);
 }
 .toolbar .btn-bordered,
 .toolbar .btn-plain,
@@ -1418,4 +1416,22 @@ html.win-busy * {
     animation: none;
     width: 40%;
   }
+}
+
+/* ---------- Round 10 (engine review) ---------- */
+/* A window's ground is one colour: Settings' panes sit on the grouped grey, so its frame (the 8px round the
+   floating sidebar) is that grey too, not a second one */
+.win[data-win="settings"],
+.dark .win[data-win="settings"] {
+  background-color: var(--bg-grouped);
+}
+/* a sidebar row that leads with a coloured tile: the tile sits as far from the row's left edge as from its top
+   and bottom (4px), and the row's corner is the tile's plus that inset (4.8 + 4), so the two curves nest */
+.win .split-side button:has(> span > .icon-tile) {
+  padding-left: 4px;
+  border-radius: 9px;
+}
+.win .split-side button > span:has(> .icon-tile) {
+  width: auto;
+  height: auto;
 }
