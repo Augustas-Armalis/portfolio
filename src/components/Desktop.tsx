@@ -600,7 +600,15 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
     // the designed size, never more than 88% of the space; the first window sits dead centre (a touch above, like
     // macOS), later ones cascade down-right from it
     let w = Math.round(Math.min(size.w, (W - 24) * 0.88));
-    const h = Math.round(Math.min(size.h, (H - DOCK_SPACE - 16) * 0.94));
+    let h = Math.round(Math.min(size.h, (H - DOCK_SPACE - 16) * 0.94));
+    // a touch tablet (iPadOS): an app opens nearly full screen, as iPad apps do, and can still be resized into a
+    // window; the games and small tools keep their own size
+    const tablet = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) >= 700;
+    if (tablet && !(index === 0 && win.id === "records") && !["piano", "about", "terminal", "game", "trash", "doom"].includes(win.id)) {
+      w = Math.round(W - 32);
+      h = Math.round(H - DOCK_SPACE - 20);
+      return clampRect({ left: 16, top: 8, w, h }, W, H, min);
+    }
     const step = index % 6;
     // The window the desktop opens with sits beside the note, never over it: between the note and the column of
     // icons where there is room, between the note and the edge on a smaller screen (it gives up some width for
