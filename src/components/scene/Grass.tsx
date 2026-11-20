@@ -177,7 +177,7 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         float gy = landH(root);
         float lk = hLakeK(root);
         // no grass in water or on bare sand; under the trees it is shorter and thinner
-        float level = lk < 1.15 ? LAKE_Y : SEA;
+        float level = max(lk < 1.15 ? LAKE_Y : SEA, riverLevel(root));
         float woods = forestAt(root);
         lod *= smoothstep(level + 0.03, level + 0.3, gy) * smoothstep(38.0, 100.0, inland(root) + (vnoise(root * 0.035) - 0.5) * 46.0);
         lod *= smoothstep(0.6, 1.5, streamD(root));

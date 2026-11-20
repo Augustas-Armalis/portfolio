@@ -6,6 +6,7 @@ import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { GLSL_HOME_AIR, HOME_U, timed } from "./land";
 import { MIRROR_LAYER } from "./Forest";
+import { laneD } from "./journey";
 
 // The mountains to the north: three ranges one behind another, each higher
 // and paler than the one before, standing from the east round through the
@@ -77,7 +78,7 @@ const sstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-type Range = { r0: number; r1: number; height: number; freq: number; seed: number; haze: number; snow: number; pass: [number, number]; span: [number, number]; massif: number };
+type Range = { r0: number; r1: number; height: number; freq: number; seed: number; haze: number; snow: number; pass: [number, number]; span: [number, number]; massif: number; valley?: boolean };
 
 function rangeGeometry(rg: Range, segA: number, segR: number) {
   const pos: number[] = [];
@@ -104,7 +105,9 @@ function rangeGeometry(rg: Range, segA: number, segR: number) {
       const ends = 1 - sstep(rg.span[0], rg.span[1], Math.abs(th));
       // (where a range runs out low, toward the coasts and at its feet, it dives well under the land and the sea: two
       // surfaces a few metres apart, seen from kilometres off, flicker against each other)
-      const hm = rg.height * h * broad * env * pass * ends;
+      // (the foothills open into a long valley where the journey's forest runs north to the mountain: journey.ts)
+      const vl = rg.valley ? sstep(55, 230, laneD(x, z).d) : 1;
+      const hm = rg.height * h * broad * env * pass * ends * vl;
       pos.push(x, hm - 6 - 80 * (1 - sstep(0, 0.14 * rg.height + 14, hm)), z);
     }
   }
@@ -174,7 +177,7 @@ export function HomeMountains({ mobile }: { mobile: boolean }) {
   const layers = useMemo(() => {
     const ranges: Range[] = [
       // foothills, wooded and green, close enough to read as land you could walk to
-      { r0: 430, r1: 900, height: 120, freq: 0.0058, seed: 3.1, haze: 0.0, snow: 0, pass: [-1, -0.5], span: [1.5, 2.2], massif: 0.15 },
+      { r0: 430, r1: 900, height: 120, freq: 0.0058, seed: 3.1, haze: 0.0, snow: 0, pass: [-1, -0.5], span: [1.5, 2.2], massif: 0.15, valley: true },
       // the range itself: snow on its heads, standing full in the view
       { r0: 950, r1: 1900, height: 330, freq: 0.0027, seed: 11.7, haze: 0.0, snow: 0.9, pass: [-1, -0.5], span: [1.25, 1.95], massif: 0.45 },
       // and the giants behind it
