@@ -721,7 +721,7 @@ export function Post({ level }: { level: number }) {
     // far: at most a circle of about a pixel and a half at 700 lines; near: about three times that
     p.cocU.uFly.value.set(fly ? F.k : 0, 0.13, 0.4);
     // (at the desk the field behind the subject falls away softly, never to a smear; the photo mode's lens is the visitor's own)
-    p.cocU.uBack.value = postCtl.photo || out ? 1 : 0.55;
+    p.cocU.uBack.value = postCtl.photo || out ? 1 : 0.4;
     p.cocU.uCocK.value = cocK;
     p.cocU.uBand.value = band;
     p.toneU.uExposure.value = gl.toneMappingExposure * postCtl.exposure;
