@@ -2,6 +2,7 @@
 
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react";
 import { ChevronLeft, ChevronRight, PanelLeft, Search, X } from "lucide-react";
+import { Sym, type SymIcon } from "./symbols";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { apps, type AppId } from "@/content";
@@ -254,7 +255,7 @@ export function Toolbar({ title, sub, children, inset }: { title?: ReactNode; su
     >
       {inSplit && (
         // only while the sidebar is tucked away (the window is narrow): brings it back over the content
-        <Btn variant="plain" size="sm" iconOnly label={inSplit.open ? "Hide sidebar" : "Show sidebar"} icon={<PanelLeft size={15} />} onClick={inSplit.toggle} className="split-toggle -ml-1 !hidden @max-[619px]/split:!inline-flex" />
+        <Btn variant="plain" size="sm" iconOnly label={inSplit.open ? "Hide sidebar" : "Show sidebar"} icon={<Sym icon={PanelLeft} size={16} weight="medium" />} onClick={inSplit.toggle} className="split-toggle -ml-1 !hidden @max-[619px]/split:!inline-flex" />
       )}
       <div className="min-w-0 flex-1">
         {title && <div className="toolbar-title truncate text-ink">{title}</div>}
@@ -275,7 +276,7 @@ export function SearchField({ value, onChange, placeholder = "Search", id }: { v
         compact ? "h-9 w-full shrink-0 rounded-[12px] bg-[#767680]/[0.12] px-2" : "h-8 w-[190px] min-w-[88px] shrink rounded-full bg-black/[0.05] px-2.5 focus-within:ring-[3px] focus-within:ring-[var(--accent)]/30"
       }`}
     >
-      <Search size={compact ? 16 : 13} strokeWidth={2} className="shrink-0" />
+      <Sym icon={Search} size={compact ? 17 : 14} weight="medium" className="shrink-0" />
       <input
         id={id}
         value={value}
@@ -287,7 +288,7 @@ export function SearchField({ value, onChange, placeholder = "Search", id }: { v
       />
       {value && (
         <button type="button" aria-label="Clear search" onClick={() => onChange("")} className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-ink-3 text-white">
-          <X size={10} strokeWidth={3} />
+          <Sym icon={X} size={10} weight="bold" />
         </button>
       )}
     </label>
@@ -351,7 +352,7 @@ export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[
             transition={M.fade}
             className="fixed inset-0 z-[2400] flex flex-col bg-black"
           >
-            <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={onClose} icon={<X size={17} className="bold" />} className="absolute right-4 top-[calc(var(--phone-top)+4px)] z-10 !h-11 !w-11" />
+            <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={onClose} icon={<Sym icon={X} size={17} weight="semibold" />} className="absolute right-4 top-[calc(var(--phone-top)+4px)] z-10 !h-11 !w-11" />
             <motion.div
               drag={many && !zoomed ? "x" : false}
               dragConstraints={{ left: 0, right: 0 }}
@@ -599,8 +600,8 @@ function LookWindow({ it, index, count, onIndex, onClose }: { it: LookItem; inde
           {onIndex && (
             <span className="absolute right-2 flex items-center gap-0.5">
               <span className="m-sub mr-1 tabular-nums text-ink-3">{`${index + 1} of ${count}`}</span>
-              <Btn variant="plain" size="sm" iconOnly label="Previous" onClick={() => onIndex((index - 1 + count) % count)} icon={<ChevronLeft size={15} />} />
-              <Btn variant="plain" size="sm" iconOnly label="Next" onClick={() => onIndex((index + 1) % count)} icon={<ChevronRight size={15} />} />
+              <Btn variant="plain" size="sm" iconOnly label="Previous" onClick={() => onIndex((index - 1 + count) % count)} icon={<Sym icon={ChevronLeft} size={16} weight="semibold" />} />
+              <Btn variant="plain" size="sm" iconOnly label="Next" onClick={() => onIndex((index + 1) % count)} icon={<Sym icon={ChevronRight} size={16} weight="semibold" />} />
             </span>
           )}
         </div>
@@ -664,7 +665,7 @@ export function SplitView({
             >
               {!nav && (
                 <button type="button" onClick={() => setPushed(false)} className="press flex h-11 items-center gap-0.5 pl-2 pr-3 text-[17px] tracking-[-0.02em] text-[var(--accent-text)]">
-                  <ChevronLeft size={24} strokeWidth={2.2} className="-mr-0.5" /> Back
+                  <Sym icon={ChevronLeft} size={26} className="-mr-1" weight="semibold" /> Back
                 </button>
               )}
               {detail}
@@ -700,7 +701,7 @@ export function SplitView({
                             {it.sub && <span className="t-sub block truncate text-ink-2">{it.sub}</span>}
                           </span>
                           {it.meta}
-                          <ChevronRight size={17} strokeWidth={2.4} className="-mr-1 text-[#C4C4C7]" />
+                          <Sym icon={ChevronRight} size={20} className="-mr-1.5 text-[#C4C4C7]" weight="semibold" />
                         </span>
                       </button>
                     ))}
@@ -747,8 +748,10 @@ export function SplitView({
                 className="group/sec flex h-[22px] w-full items-center justify-between rounded-[6px] px-2 text-left text-[11px] font-semibold text-ink-3"
               >
                 {s.title}
-                <ChevronRight
-                  size={12}
+                <Sym
+                  icon={ChevronRight}
+                  size={11}
+                  weight="bold"
                   className={`opacity-0 transition-[transform,opacity] duration-200 hov:group-hover/sec:opacity-100 ${folded.includes(s.title) ? "" : "rotate-90"}`}
                 />
               </button>
@@ -770,7 +773,7 @@ export function SplitView({
                       on ? "bg-black/[0.08] text-ink" : "text-ink hov:hover:bg-black/[0.035]"
                     }`}
                   >
-                    {it.icon && <span className={`flex h-4 w-4 shrink-0 items-center justify-center ${on ? "text-ink" : "text-ink-2"}`}>{it.icon}</span>}
+                    {it.icon && <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center ${on ? "text-ink" : "text-ink-2"}`}>{it.icon}</span>}
                     <span className="min-w-0 flex-1">
                       <span className={`block truncate ${it.sub ? "font-semibold" : ""}`}>{it.label}</span>
                       {it.sub && <span className="m-sub block truncate text-ink-2">{it.sub}</span>}
@@ -1091,7 +1094,7 @@ export function Glass({ tone, className = "", children, ...rest }: { tone: Glass
 }
 
 // ---------- context menu (right-click), drawn in a portal so window transforms never clip or offset it ----------
-export type MenuAction = { label: string; run: () => void; hint?: string } | "sep";
+export type MenuAction = { label: string; run: () => void; hint?: string; icon?: SymIcon } | "sep";
 export function useContextMenu() {
   const [m, setM] = useState<{ x: number; y: number; items: MenuAction[] } | null>(null);
   useEffect(() => {
@@ -1111,7 +1114,7 @@ export function useContextMenu() {
     e.preventDefault();
     e.stopPropagation();
     const x = Math.min(e.clientX, window.innerWidth - 210);
-    const y = Math.min(e.clientY, window.innerHeight - (items.length * 22 + 20));
+    const y = Math.min(e.clientY, window.innerHeight - (items.length * 24 + 20));
     setM({ x, y, items });
   };
   const node =
@@ -1125,7 +1128,7 @@ export function useContextMenu() {
           >
             {m.items.map((it, i) =>
               it === "sep" ? (
-                <div key={i} className="mx-[9px] my-[5px] h-px bg-black/[0.1]" />
+                <div key={i} className="mx-[8px] my-[5px] h-px bg-black/[0.1]" />
               ) : (
                 <button
                   type="button"
@@ -1134,9 +1137,10 @@ export function useContextMenu() {
                     setM(null);
                     it.run();
                   }}
-                  className="flex h-[22px] w-full items-center justify-between gap-6 rounded-[6px] px-[9px] text-left text-[13px] leading-none tracking-[-0.003em] text-ink hov:hover:bg-[#0A84FF] hov:hover:text-white"
+                  className="flex h-[24px] w-full items-center gap-[7px] rounded-[7px] px-[8px] text-left text-[13px] leading-none tracking-[-0.003em] text-ink hov:hover:bg-[#0A84FF] hov:hover:text-white"
                 >
-                  <span>{it.label}</span>
+                  {m.items.some((x) => x !== "sep" && x.icon) && <span className="flex h-4 w-4 shrink-0 items-center justify-center">{it.icon && <Sym icon={it.icon} size={15} />}</span>}
+                  <span className="min-w-0 flex-1 truncate">{it.label}</span>
                   {it.hint && <span className="opacity-45">{it.hint}</span>}
                 </button>
               ),
@@ -1434,7 +1438,7 @@ export function ListRow({ icon, title, sub, detail, chevron, href, onClick, mac 
           {sub && <span className={`block truncate text-[var(--label-2)] ${mac ? "m-sub" : "t-foot"}`}>{sub}</span>}
         </span>
         {detail && <span className={`shrink-0 text-[var(--label-2)] ${mac ? "m-body" : "t-body"}`}>{detail}</span>}
-        {chevron && <ChevronRight size={mac ? 13 : 17} className="-mr-1 shrink-0 text-[var(--label-3)]" />}
+        {chevron && <Sym icon={ChevronRight} size={mac ? 14 : 20} className={`${mac ? "-mr-1" : "-mr-1.5"} shrink-0 text-[var(--label-3)]`} weight="semibold" />}
       </span>
     </>
   );

@@ -3,7 +3,8 @@
 // Records: Now Playing and the queue.
 
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, ChevronLeft, ListMusic, Pause, Play, SkipBack, SkipForward, Volume1, Volume2 } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ListMusic, Pause, Play, Rewind, FastForward } from "lucide-react";
+import { Sym } from "../symbols";
 import { useEffect, useState } from "react";
 import { art, novel, tracks } from "@/content";
 import { Bars } from "../Desktop";
@@ -57,13 +58,13 @@ function Transport({ size = 1 }: { size?: number }) {
   return (
     <div className="flex items-center justify-center gap-7 text-white">
       <button type="button" aria-label="Previous" onClick={() => go(-1)} className="press opacity-90 hov:hover:opacity-100">
-        <SkipBack size={26 * size} fill="currentColor" />
+        <Sym icon={Rewind} size={28 * size} fill />
       </button>
       <button type="button" aria-label={p.playing ? "Pause" : "Play"} onClick={() => player.toggle()} className="press">
-        {p.playing ? <Pause size={40 * size} fill="currentColor" /> : <Play size={40 * size} fill="currentColor" />}
+        {p.playing ? <Sym icon={Pause} size={40 * size} fill /> : <Sym icon={Play} size={40 * size} fill />}
       </button>
       <button type="button" aria-label="Next" onClick={() => go(1)} className="press opacity-90 hov:hover:opacity-100">
-        <SkipForward size={26 * size} fill="currentColor" />
+        <Sym icon={FastForward} size={28 * size} fill />
       </button>
     </div>
   );
@@ -133,7 +134,7 @@ function VolumeSlider() {
   const [v, setV] = useState(1);
   return (
     <div className="mt-5 flex items-center gap-2.5 text-white/70">
-      <Volume1 size={15} />
+      <Sym icon="speaker1" size={16} />
       <input
         type="range"
         aria-label="Volume"
@@ -148,7 +149,7 @@ function VolumeSlider() {
         className="scrub scrub-light min-w-0 flex-1"
         style={{ ["--p" as string]: `${v * 100}%` }}
       />
-      <Volume2 size={15} />
+      <Sym icon="speaker2" size={16} />
     </div>
   );
 }
@@ -193,7 +194,7 @@ function GlassQueue() {
       </p>
       {art.spotify.href && (
         <div className="mt-4">
-          <Btn variant="glass-dark" capsule href={art.spotify.href} icon={<ArrowUpRight size={14} />}>
+          <Btn variant="glass-dark" capsule href={art.spotify.href} icon={<Sym icon={ArrowUpRight} size={14} weight="medium" />}>
             Spotify
           </Btn>
         </div>
@@ -235,7 +236,7 @@ function Queue({ compact }: { compact: boolean }) {
       </List>
       {art.spotify.href && (
         <div className="mt-3 px-1">
-          <Btn size="sm" href={art.spotify.href} icon={<ArrowUpRight size={14} />}>
+          <Btn size="sm" href={art.spotify.href} icon={<Sym icon={ArrowUpRight} size={14} weight="medium" />}>
             Spotify
           </Btn>
         </div>
@@ -272,7 +273,7 @@ export function Records() {
             <GlassQueue />
           </div>
         </div>
-        <Btn variant="glass-dark" capsule iconOnly size="md" label={queue ? "Hide Up Next" : "Up Next"} icon={<ListMusic size={16} />} onClick={() => setQueue((v) => !v)} className="!absolute right-3 top-2.5 z-[11] !hidden @max-[659px]/rec:!inline-flex" />
+        <Btn variant="glass-dark" capsule iconOnly size="md" label={queue ? "Hide Up Next" : "Up Next"} icon={<Sym icon={ListMusic} size={16} weight="medium" />} onClick={() => setQueue((v) => !v)} className="!absolute right-3 top-2.5 z-[11] !hidden @max-[659px]/rec:!inline-flex" />
       </div>
     );
   return (
@@ -298,7 +299,7 @@ export function Records() {
           }}
           className="flex h-10 w-10 items-center justify-center text-ink"
         >
-          {p.playing ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
+          {p.playing ? <Sym icon={Pause} size={22} fill /> : <Sym icon={Play} size={22} fill />}
         </span>
       </motion.button>
       <AnimatePresence>
@@ -324,7 +325,7 @@ export function Records() {
               data-glass=""
               className={`${glass("btn-dark")} glass-press absolute bottom-[calc(var(--phone-bottom)+6px)] left-1/2 z-10 -ml-[22px] flex h-11 w-11 items-center justify-center rounded-full text-white/90`}
             >
-              <ChevronLeft size={22} strokeWidth={2.4} className="-rotate-90" />
+              <Sym icon={ChevronLeft} size={22} className="-rotate-90" weight="semibold" />
             </button>
           </motion.div>
         )}

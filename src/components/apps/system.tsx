@@ -3,7 +3,8 @@
 // Trash, About, Terminal, Catch and System Settings.
 
 import { motion } from "motion/react";
-import { Check, Gauge, Info, Power, Send, Trash2, Undo2, UserRound, Volume2, Wallpaper, Contrast } from "lucide-react";
+import { Check, Gauge, Info, Power, Send, Trash2, Undo2, UserRound, Wallpaper, Contrast } from "lucide-react";
+import { Sym } from "../symbols";
 import { useEffect, useRef, useState } from "react";
 import { about, apps, desktopItems, allApps, owner, projectApps, timeline, wallpapers, type AppId } from "@/content";
 import MusicShader from "../scene/MusicShader";
@@ -25,11 +26,11 @@ export function TrashApp() {
     <div className="flex h-full min-h-0 flex-col" onPointerDown={() => setSel(null)}>
       <Toolbar title="Trash" sub={items.length ? `${items.length} item${items.length > 1 ? "s" : ""}` : undefined}>
         {sel && (
-          <Button size="sm" icon={<Undo2 size={14} />} onClick={() => (putBack([sel]), setSel(null))}>
+          <Button size="sm" icon={<Sym icon={Undo2} size={14} weight="medium" />} onClick={() => (putBack([sel]), setSel(null))}>
             Put Back
           </Button>
         )}
-        <Button size="sm" icon={<Trash2 size={14} />} onClick={() => items.length && (emptyTrash())}>
+        <Button size="sm" icon={<Sym icon={Trash2} size={14} weight="medium" />} onClick={() => items.length && (emptyTrash())}>
           Empty
         </Button>
       </Toolbar>
@@ -43,7 +44,7 @@ export function TrashApp() {
               onDoubleClick={() => (putBack([it.id]))}
               onContextMenu={(e) => {
                 setSel(it.id);
-                ctx.open(e, [{ label: "Put Back", run: () => (putBack([it.id])) }, "sep", { label: "Empty Trash", run: () => (emptyTrash()) }]);
+                ctx.open(e, [{ label: "Put Back", icon: Undo2, run: () => (putBack([it.id])) }, "sep", { label: "Empty Trash", icon: Trash2, run: () => (emptyTrash()) }]);
               }}
               className="flex flex-col items-center gap-1 outline-none"
             >
@@ -55,7 +56,7 @@ export function TrashApp() {
           ))}
         </div>
       ) : (
-        <Empty icon={<Trash2 size={22} />} title="Trash is empty" body="Drag an item from the desktop onto the Trash in the Dock." />
+        <Empty icon={<Sym icon={Trash2} size={22} weight="medium" />} title="Trash is empty" body="Drag an item from the desktop onto the Trash in the Dock." />
       )}
       {ctx.node}
     </div>
@@ -89,10 +90,10 @@ export function About() {
       </dl>
       {compact ? (
         <div className="mt-8 flex w-full max-w-[320px] flex-col gap-2.5">
-          <Btn variant="prominent" size="lg" capsule onClick={moreInfo} icon={<Info size={17} />}>
+          <Btn variant="prominent" size="lg" capsule onClick={moreInfo} icon={<Sym icon={Info} size={17} weight="medium" />}>
             More Info
           </Btn>
-          <Btn variant="tinted" size="lg" capsule onClick={openContact} icon={<Send size={16} />}>
+          <Btn variant="tinted" size="lg" capsule onClick={openContact} icon={<Sym icon={Send} size={16} weight="medium" />}>
             Get in Touch
           </Btn>
         </div>
@@ -380,7 +381,7 @@ export function SettingsApp() {
       {icon}
     </IconTile>
   );
-  const sz = compact ? 17 : 12;
+  const sz = compact ? 18 : 13;
   const looks: { v: "light" | "dark" | "auto"; label: string }[] = [
     { v: "light", label: "Light" },
     { v: "dark", label: "Dark" },
@@ -427,7 +428,7 @@ export function SettingsApp() {
           </List>
         </div>
         <List mac={!compact}>
-          <ListRow mac={!compact} icon={tile("#8E8E93", <Contrast size={sz} />)} title="Reduce effects" sub="Solid surfaces instead of glass, gentler motion" detail={<Switch on={reduceEffects} onChange={setReduceEffects} label="Reduce effects" />} />
+          <ListRow mac={!compact} icon={tile("#8E8E93", <Sym icon={Contrast} size={sz} weight="medium" />)} title="Reduce effects" sub="Solid surfaces instead of glass, gentler motion" detail={<Switch on={reduceEffects} onChange={setReduceEffects} label="Reduce effects" />} />
         </List>
       </div>
     ) : sel === "wallpaper" ? (
@@ -460,7 +461,7 @@ export function SettingsApp() {
       </div>
     ) : sel === "sound" ? (
       <List mac={!compact}>
-        <ListRow mac={!compact} icon={tile("#FF2D55", <Volume2 size={sz} />)} title="Play sound" sub="The startup chime and music" detail={<Switch on={sound} onChange={setSound} label="Play sound" />} />
+        <ListRow mac={!compact} icon={tile("#FF2D55", <Sym icon="speaker2" size={sz} weight="medium" />)} title="Play sound" sub="The startup chime and music" detail={<Switch on={sound} onChange={setSound} label="Play sound" />} />
       </List>
     ) : (
       // Graphics: the quality of the 3D world the desk sits in (src/lib/quality.ts, shared with the scene)
@@ -474,7 +475,7 @@ export function SettingsApp() {
               onClick={() => setQualityChoice(c)}
               title={QUALITY_LABELS[c]}
               sub={c === "auto" ? `Follows this device, now ${QUALITY_LABELS[quality.preset]}` : undefined}
-              detail={choice === c ? <Check size={compact ? 18 : 14} className="bold text-[var(--accent-text)]" /> : undefined}
+              detail={choice === c ? <Sym icon={Check} size={compact ? 18 : 14} className="text-[var(--accent-text)]" weight="bold" /> : undefined}
             />
           ))}
         </List>
@@ -492,7 +493,7 @@ export function SettingsApp() {
         compact ? undefined : (
         <List className="mt-8">
           <ListRow
-            icon={tile("#FF3B30", <Power size={sz} />)}
+            icon={tile("#FF3B30", <Sym icon={Power} size={sz} weight="medium" />)}
             title="Shut Down"
             onClick={() => {
               sfx("shutdown");
@@ -512,7 +513,7 @@ export function SettingsApp() {
             {/* the phone's power control, where it is seen at once: back to the desk, with the screen off */}
             <List className="mt-5">
               <ListRow
-                icon={tile("#FF3B30", <Power size={sz} />)}
+                icon={tile("#FF3B30", <Sym icon={Power} size={sz} weight="medium" />)}
                 title="Power Off"
                 sub="Back to the desk in the field"
                 onClick={() => {
@@ -536,11 +537,11 @@ export function SettingsApp() {
       sections={[
         {
           items: [
-            { id: "about", label: "About", icon: tile("#8E8E93", <UserRound size={sz} />) },
-            { id: "appearance", label: "Appearance", icon: tile("#48484A", <Contrast size={sz} />) },
-            { id: "wallpaper", label: "Wallpaper", icon: tile("#32ADE6", <Wallpaper size={sz} />) },
-            { id: "sound", label: "Sound", icon: tile("#FF2D55", <Volume2 size={sz} />) },
-            { id: "graphics", label: "Graphics", icon: tile("#34C759", <Gauge size={sz} />) },
+            { id: "about", label: "About", icon: tile("#8E8E93", <Sym icon={UserRound} size={sz} weight="medium" />) },
+            { id: "appearance", label: "Appearance", icon: tile("#48484A", <Sym icon={Contrast} size={sz} weight="medium" />) },
+            { id: "wallpaper", label: "Wallpaper", icon: tile("#32ADE6", <Sym icon={Wallpaper} size={sz} weight="medium" />) },
+            { id: "sound", label: "Sound", icon: tile("#FF2D55", <Sym icon="speaker2" size={sz} weight="medium" />) },
+            { id: "graphics", label: "Graphics", icon: tile("#34C759", <Sym icon={Gauge} size={sz} weight="medium" />) },
           ],
         },
       ]}

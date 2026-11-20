@@ -6,6 +6,7 @@
 // refuses to be shown inside another page instead of leaving a blank window.
 
 import { ArrowUpRight, ChevronLeft, ChevronRight, Globe, RotateCw, Search, ShieldOff, X } from "lucide-react";
+import { Sym } from "../symbols";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { owner, projects } from "@/content";
 import { Btn, useChrome } from "../ui";
@@ -53,7 +54,7 @@ export const favicon = (url: string) => `https://icons.duckduckgo.com/ip3/${host
 function Favicon({ url, size = 16 }: { url: string; size?: number }) {
   const [bad, setBad] = useState(false);
   useEffect(() => setBad(false), [url]);
-  if (bad) return <Globe size={size - 2} className="shrink-0 text-ink-2" aria-hidden />;
+  if (bad) return <Sym icon={Globe} size={size - 2} className="shrink-0 text-ink-2" />;
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={favicon(url)} alt="" width={size} height={size} onError={() => setBad(true)} className="shrink-0 rounded-[3px]" style={{ width: size, height: size }} />;
 }
@@ -101,7 +102,7 @@ function Refused({ url, slow }: { url: string; slow: boolean }) {
     <div className="absolute inset-0 flex items-center justify-center overflow-auto bg-[var(--bg)] p-8" data-refused={host}>
       <div className="flex max-w-[360px] flex-col items-center text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-[16px] bg-[var(--surface-2)] text-ink-2 shadow-[0_0_0_0.5px_var(--separator)]">
-          <ShieldOff size={24} strokeWidth={1.8} />
+          <Sym icon={ShieldOff} size={24} weight="medium" />
         </span>
         <h2 className="m-title mt-5 text-ink">This site can&rsquo;t be shown here</h2>
         <p className="m-body mt-2 text-ink-2">
@@ -112,7 +113,7 @@ function Refused({ url, slow }: { url: string; slow: boolean }) {
           )}
         </p>
         <div className="mt-6">
-          <Btn variant="prominent" size="md" href={url} icon={<ArrowUpRight size={15} />}>
+          <Btn variant="prominent" size="md" href={url} icon={<Sym icon={ArrowUpRight} size={15} weight="medium" />}>
             Open in New Tab
           </Btn>
         </div>
@@ -184,15 +185,15 @@ export function Browser({ start = null, title, lead, end, side }: { start?: stri
   return (
     <div ref={root} className="@container/site flex h-full min-h-0 flex-col" data-browser="">
       <div data-drag className="toolbar relative flex h-[52px] shrink-0 items-center gap-1.5 border-b border-[var(--separator)] pl-[84px] pr-3">
-        <Btn variant="plain" size="sm" iconOnly label="Back" disabled={hist.at === 0} onClick={back} icon={<ChevronLeft size={17} />} />
-        <Btn variant="plain" size="sm" iconOnly label="Forward" disabled={hist.at >= hist.list.length - 1} onClick={forward} icon={<ChevronRight size={17} />} />
+        <Btn variant="plain" size="sm" iconOnly label="Back" disabled={hist.at === 0} onClick={back} icon={<Sym icon={ChevronLeft} size={17} weight="semibold" />} />
+        <Btn variant="plain" size="sm" iconOnly label="Forward" disabled={hist.at >= hist.list.length - 1} onClick={forward} icon={<Sym icon={ChevronRight} size={17} weight="semibold" />} />
         <form onSubmit={submit} data-no-drag="" className="search relative mx-auto flex h-[32px] min-w-0 w-[min(480px,100%)] items-center gap-1.5 pl-3 pr-1" role="search">
           {editing ? (
-            <Search size={13} className="shrink-0 text-ink-3" aria-hidden />
+            <Sym icon={Search} size={14} weight="medium" className="shrink-0 text-ink-3" />
           ) : url ? (
             first && lead ? lead : <Favicon url={url} size={15} />
           ) : (
-            <Search size={13} className="shrink-0 text-ink-3" aria-hidden />
+            <Sym icon={Search} size={14} weight="medium" className="shrink-0 text-ink-3" />
           )}
           <input
             ref={field}
@@ -219,12 +220,12 @@ export function Browser({ start = null, title, lead, end, side }: { start?: stri
           />
           {editing && text ? (
             <button type="button" aria-label="Clear" onMouseDown={(e) => e.preventDefault()} onClick={() => setText("")} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink-3 hov:hover:text-ink-2">
-              <X size={13} />
+              <Sym icon={X} size={13} weight="semibold" />
             </button>
           ) : (
             url && (
               <button type="button" aria-label="Reload" onClick={reload} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink-2 hov:hover:bg-[var(--hover)]">
-                {loading ? <X size={13} /> : <RotateCw size={12} />}
+                {loading ? <Sym icon={X} size={13} weight="semibold" /> : <Sym icon={RotateCw} size={13} weight="semibold" />}
               </button>
             )
           )}
@@ -233,7 +234,7 @@ export function Browser({ start = null, title, lead, end, side }: { start?: stri
             <span key={`${hist.at}-${nonce}`} className={`browser-progress block h-full rounded-full bg-[var(--accent)] ${loading ? "is-loading" : "is-done"}`} />
           </span>
         </form>
-        <Btn variant="plain" size="sm" iconOnly label="Open in New Tab" href={url || undefined} disabled={!url} icon={<ArrowUpRight size={15} />} />
+        <Btn variant="plain" size="sm" iconOnly label="Open in New Tab" href={url || undefined} disabled={!url} icon={<Sym icon={ArrowUpRight} size={15} weight="medium" />} />
         {end}
       </div>
       <div className="relative flex min-h-0 flex-1">
@@ -280,7 +281,7 @@ export function BrowserApp() {
               <Favicon url={f.url} size={22} />
               <span className={`flex min-h-[52px] flex-1 items-center justify-between pr-4 ${i ? "border-t-[0.5px] border-[var(--separator)]" : ""}`}>
                 <span className="text-[17px] text-ink">{f.name}</span>
-                <ArrowUpRight size={16} className="text-ink-3" />
+                <Sym icon={ArrowUpRight} size={16} weight="medium" className="text-ink-3" />
               </span>
             </a>
           ))}

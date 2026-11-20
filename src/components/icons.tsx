@@ -1,7 +1,9 @@
 "use client";
 
+import { AudioLines, Clapperboard, Film, GitBranch, Layers, MousePointerClick, Presentation, Zap, type LucideIcon } from "lucide-react";
 import { useId, type ReactNode } from "react";
 import type { AppId } from "@/content";
+import { Sym } from "./symbols";
 
 // App icons, three kinds:
 //  1. System apps show a file from public/icons/system: a licensed macOS-style set (WhiteSur, GPL-3.0; see
@@ -9,6 +11,8 @@ import type { AppId } from "@/content";
 //     and never recoloured (dark and tinted leave it alone). Folders and the Trash come from the same set.
 //  2. Projects wear their real logo (LOGOS below).
 //  3. Piano has no file in the set that reads as a piano, so it keeps one drawing on the same squircle.
+//  4. The Lab's repositories have no logo: each wears its own tile (a colour and a Lucide glyph for what it
+//     does) with a badge for the language it is written in (REPOS below).
 
 const SYS = "/icons/system/";
 export const SYSTEM_ICONS: Partial<Record<AppId, string>> = {
@@ -136,6 +140,52 @@ function LogoImg({ logo, size }: { logo: Logo; size: number | string }) {
   );
 }
 
+// ---------- badges and repositories ----------
+// A badge sits on an icon's bottom right corner, outside its squircle: a language on a repository, a film on
+// Filzy Movie (which shares Filzy's logo). Language colours are GitHub's.
+type BadgeSpec = { text?: string; glyph?: LucideIcon; bg: string; ink?: string };
+const LANG = {
+  swift: { text: "SW", bg: "#F05138" },
+  python: { text: "PY", bg: "#3572A5" },
+  ts: { text: "TS", bg: "#3178C6" },
+  js: { text: "JS", bg: "#F1E05A", ink: "#1f1f1f" },
+  git: { glyph: GitBranch, bg: "#57606A" },
+} satisfies Record<string, BadgeSpec>;
+type Repo = { glyph: LucideIcon; a: string; b: string; badge: BadgeSpec };
+export const REPOS: Partial<Record<AppId, Repo>> = {
+  rug: { glyph: Layers, a: "#F58A5B", b: "#C8431F", badge: LANG.swift },
+  slideskipper: { glyph: Presentation, a: "#3CCFC0", b: "#108C86", badge: LANG.git },
+  musicengine: { glyph: AudioLines, a: "#9A8CFF", b: "#5A3FD9", badge: LANG.python },
+  reel: { glyph: Film, a: "#FF6B63", b: "#C9252D", badge: LANG.ts },
+  openwhip: { glyph: Zap, a: "#FFC94A", b: "#E58A07", badge: LANG.js },
+  trackpad: { glyph: MousePointerClick, a: "#8E96A6", b: "#4B5262", badge: LANG.git },
+};
+export const BADGES: Partial<Record<AppId, BadgeSpec>> = {
+  filzymovie: { glyph: Clapperboard, bg: "#FF453A" },
+};
+// too small to read under 34 px: a list row or a menu shows the icon alone
+function IconBadge({ spec, size }: { spec: BadgeSpec; size: number }) {
+  if (size < 34) return null;
+  const h = Math.round(size * 0.34);
+  return (
+    <span
+      className="absolute z-[1] flex items-center justify-center font-bold leading-none shadow-[0_0_0_0.5px_rgb(0_0_0/0.18),0_1px_2.5px_rgb(0_0_0/0.32),inset_0_0.5px_0_rgb(255_255_255/0.35)]"
+      style={{ right: -size * 0.07, bottom: -size * 0.05, height: h, minWidth: h, padding: spec.text ? `0 ${h * 0.2}px` : 0, borderRadius: h * 0.32, background: spec.bg, color: spec.ink ?? "#fff", fontSize: h * 0.56, letterSpacing: "0.02em" }}
+    >
+      {spec.glyph ? <Sym icon={spec.glyph} size={h * 0.66} weight="semibold" /> : spec.text}
+    </span>
+  );
+}
+function RepoFace({ repo }: { repo: Repo }) {
+  return (
+    <div className="relative flex h-full w-full items-center justify-center" style={{ background: `linear-gradient(180deg, ${repo.a} 0%, ${repo.b} 100%)`, containerType: "size" }}>
+      <div className="icon-glow" />
+      {/* the glyph is half the tile, drawn at Lucide's own weight for that size */}
+      <repo.glyph className="relative text-white drop-shadow-[0_1px_1px_rgb(0_0_0/0.22)]" style={{ width: "52cqw", height: "52cqw", strokeWidth: 2.1 }} aria-hidden />
+    </div>
+  );
+}
+
 function ArtSvg({ art }: { art: Art }) {
   const u = `i${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   return (
@@ -156,6 +206,8 @@ export function IconFace({ id }: { id: AppId }) {
     );
   const art = ART[id];
   if (art) return <ArtSvg art={art} />;
+  const repo = REPOS[id];
+  if (repo) return <RepoFace repo={repo} />;
   return (
     <div className="flex h-full w-full items-center justify-center bg-[linear-gradient(180deg,#f6f7f9_0%,#e4e6eb_100%)]">
       <FileIcon file={SYSTEM_ICONS[id] ?? FOLDERS.plain} size="72%" flat />
@@ -166,11 +218,17 @@ export function IconFace({ id }: { id: AppId }) {
 export function AppIcon({ id, size = 52, flat = false }: { id: AppId; size?: number; flat?: boolean }) {
   const logo = LOGOS[id];
   const art = ART[id];
-  // anything without a logo, a file or a drawing is a plain folder (the Lab)
-  if (!logo && !art) return <FileIcon file={SYSTEM_ICONS[id] ?? FOLDERS.plain} size={size} flat={flat} />;
+  const repo = REPOS[id];
+  const badge = repo?.badge ?? BADGES[id];
+  if (!logo && !art && !repo) return <FileIcon file={SYSTEM_ICONS[id] ?? FOLDERS.plain} size={size} flat={flat} />;
   return (
-    <div className={flat ? "" : "icon-wrap"} style={{ width: size, height: size }} aria-hidden>
-      {logo ? (
+    <div className={`relative shrink-0 ${flat ? "" : "icon-wrap"}`} style={{ width: size, height: size }} aria-hidden>
+      {badge && <IconBadge spec={badge} size={size} />}
+      {repo ? (
+        <div className="icon-sq icon-logo">
+          <RepoFace repo={repo} />
+        </div>
+      ) : logo ? (
         <div className="icon-sq icon-logo flex items-center justify-center" style={{ background: logo.bg }}>
           <LogoImg logo={logo} size={size} />
           <div className="icon-spec opacity-40" />
