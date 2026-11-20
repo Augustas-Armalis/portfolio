@@ -328,7 +328,7 @@ function build() {
     meshDark: new THREE.MeshStandardMaterial({ color: "#3b3d42", roughness: 0.95 }),
     titanium: new THREE.MeshPhysicalMaterial({ color: "#bdbab3", metalness: 1, roughness: 0.34 }),
     steel: new THREE.MeshStandardMaterial({ color: "#d8dadd", metalness: 1, roughness: 0.14 }),
-    glass: new THREE.MeshStandardMaterial({ color: "#000000", roughness: 0.25, metalness: 0, envMapIntensity: 0.15 }),
+    glass: new THREE.MeshStandardMaterial({ color: "#000000", roughness: 0.25, metalness: 0, envMapIntensity: 0.15, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
     reflect: new THREE.MeshStandardMaterial({
       color: "#3c3d42",
       roughness: 0.05,
@@ -337,6 +337,9 @@ function build() {
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -6,
     }),
     knit: new THREE.MeshPhysicalMaterial({ map: knitTexture(), normalMap: load(TEX.knit.normal, 2, false), normalScale: new THREE.Vector2(1.2, 1.2), color: "#cfd0d3", roughness: 1, sheen: 0.6, sheenColor: new THREE.Color("#ffffff"), sheenRoughness: 0.6 }),
     canopy: keepAlpha(new THREE.MeshStandardMaterial({ map: latticeTexture(false), alphaMap: latticeTexture(true), color: "#c9cacd", roughness: 0.95, side: THREE.DoubleSide, transparent: true })),
@@ -416,6 +419,11 @@ export function makeScreenMaterial(size: [number, number]) {
   const f = (n: number) => n.toFixed(3);
   return new THREE.ShaderMaterial({
     toneMapped: false,
+    // the display's layers sit fractions of a millimetre apart: each is pulled toward the eye in the depth test
+    // by a fixed step more than the one under it, so they never fight however the camera stands (the PC glitch)
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -4,
     uniforms: {
       uSize: { value: new THREE.Vector2(...size) },
       uPx: { value: 1000 },

@@ -334,7 +334,9 @@ export function makeTerrainMaterial(def: WorldDef, pal: GroundPalette) {
         vec2 gdir = vec2(cos(ga), sin(ga));
         vec2 gq = vec2(dot(p, gdir), dot(p, vec2(-gdir.y, gdir.x)));
         float brush = vnoise(vec2(gq.x * 0.08, gq.y * 0.85)) * 0.6 + vnoise(vec2(gq.x * 0.28, gq.y * 2.4) + 7.0) * 0.4;
-        alb *= 1.0 + (brush - 0.5) * 0.34 * (1.0 - smoothstep(70.0, 340.0, gd));
+        // (the fine strokes fade out where a pixel covers more than they could show, before they could swirl)
+        float px = length(fwidth(p));
+        alb *= 1.0 + (brush - 0.5) * 0.34 * (1.0 - smoothstep(70.0, 340.0, gd)) * (1.0 - smoothstep(0.25, 0.9, px * 2.4));
         {
           float near = 1.0 - smoothstep(12.0, 64.0, gd);
           vec2 tc = p * 1.7; vec2 ti = floor(tc); vec2 tf = fract(tc) - 0.5; float th = hash12(ti);

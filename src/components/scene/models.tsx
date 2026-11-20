@@ -393,6 +393,9 @@ const glintMat =
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -8,
         uniforms: { uG: glint },
         vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
         fragmentShader: `uniform float uG; varying vec2 vUv;
@@ -462,12 +465,12 @@ export function Monitor({ screenMat, screenRef }: { screenMat: THREE.Material; s
         <mesh geometry={geo.body} material={m.anodised} castShadow receiveShadow />
         <mesh geometry={geo.ports} material={m.rubber} />
         <mesh geometry={geo.vents} material={m.vents} renderOrder={1} />
-        <mesh geometry={geo.glass} material={m.glass} position={[0, 0, fz + 0.0002]} />
-        <mesh ref={screenRef} material={screenMat} position={[0, 0, fz + 0.0005]}>
+        <mesh geometry={geo.glass} material={m.glass} position={[0, 0, fz + 0.0004]} renderOrder={1} />
+        <mesh ref={screenRef} material={screenMat} position={[0, 0, fz + 0.0009]} renderOrder={1}>
           <planeGeometry args={[MONITOR.aw, MONITOR.ah]} />
         </mesh>
-        <mesh geometry={geo.glass} material={m.reflect} position={[0, 0, fz + 0.0009]} renderOrder={2} />
-        {glintMat && <mesh geometry={geo.glass} material={glintMat} position={[0, 0, fz + 0.0012]} renderOrder={3} />}
+        <mesh geometry={geo.glass} material={m.reflect} position={[0, 0, fz + 0.0014]} renderOrder={2} />
+        {glintMat && <mesh geometry={geo.glass} material={glintMat} position={[0, 0, fz + 0.0018]} renderOrder={3} />}
       </group>
       <group position={[0, DESK.top, hz + geo.footZ]}>
         <Blob w={0.2} d={0.215} opacity={0.42} />
