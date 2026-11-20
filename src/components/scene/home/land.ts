@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { HOME_GATE_Z, roadX } from "../flightPath";
 import { pathW, pathX } from "../shared";
+import { CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
 
 // The land the desk stands in, written once and read by everything that
 // stands on it. The desk is at the origin and the visitor looks north (-z).
@@ -85,6 +86,8 @@ export function landH(x: number, z: number) {
   const beach = SEA + 1.5 * sstep(0, 30, c) + (2.4 * Math.exp(-((c - 50) * (c - 50)) / 420) + 1.5 * Math.exp(-((c - 84) * (c - 84)) / 300)) * (0.6 + 0.4 * Math.sin(x * 0.031 + 1.0));
   h = beach + (h - beach) * sstep(40, 118, c);
   h = h + (SEA - 8 - h) * (1 - sstep(-60, 4, c));
+  // the river out of the lake's west end, its valley and the town on its banks (journey.ts)
+  h = riverLand(h, x, z);
   // the lake's bed
   h += (HLAKE.y - 1.2 - h) * (1 - sstep(0.86, 1.1, lk));
   h -= 0.5 * (1 - sstep(0.3, 1.7, streamD(x, z)));
@@ -166,6 +169,9 @@ float streamD(vec2 p){
   if (p.x < -9.0 || p.x > 140.0) return 99.0;
   return abs(p.y - (-57.0 + 5.0 * sin(p.x * 0.07 + 0.5) - 0.12 * p.x)) + max(0.0, p.x - 110.0) * 0.05 + max(0.0, -5.0 - p.x) * 0.3;
 }
+${GLSL_RIVER}
+${GLSL_TRACK}
+${GLSL_CAVE}
 float landFree(vec2 p){
   float r = length(p);
   float f = smoothstep(70.0, 210.0, r);
@@ -197,6 +203,7 @@ float landH(vec2 p){
   float beach = SEA + 1.5 * smoothstep(0.0, 30.0, c) + (2.4 * exp(-((c - 50.0) * (c - 50.0)) / 420.0) + 1.5 * exp(-((c - 84.0) * (c - 84.0)) / 300.0)) * (0.6 + 0.4 * sin(p.x * 0.031 + 1.0));
   h = mix(beach, h, smoothstep(40.0, 118.0, c));
   h = mix(SEA - 8.0, h, smoothstep(-60.0, 4.0, c));
+  h = riverLand(h, p);
   h = mix(LAKE_Y - 1.2, h, smoothstep(0.86, 1.1, lk));
   h -= 0.5 * (1.0 - smoothstep(0.3, 1.7, streamD(p)));
   return h;
@@ -420,7 +427,13 @@ export function forestD(x: number, z: number) {
     // the avenue: a wood standing either side of the road, from a little way out
     d = Math.max(d, (1 - sstep(26, 70, rd)) * sstep(7.5, 10, rd) * sstep(-30, -70, z) * (0.55 + 0.45 * vnoise(x * 0.05, z * 0.03)));
   }
+  // the old forest of the journey, from the town's edge to the mountain (journey.ts)
+  d = Math.max(d, journeyWood(x, z) * (0.82 + 0.18 * mid));
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
+  // the town's ground and the river's banks are open
+  d *= sstep(TOWN.r - 18, TOWN.r + 26, Math.hypot(x - TOWN.x, z - TOWN.z)) * sstep(HILL.foot - 18, HILL.foot + 8, Math.hypot(x - HILL.x, z - HILL.z));
+  const rd = riverD(x, z);
+  if (rd < 40) d *= sstep(riverW(x) + 2, riverW(x) + 22, rd);
   d *= sstep(22, 44, Math.hypot(x - PLACES.farm.x, z - PLACES.farm.z)) * sstep(34, 70, Math.hypot(x - PLACES.village.x, z - PLACES.village.z)) * sstep(10, 26, Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z)) * sstep(1.5, 5, streamD(x, z));
   return Math.min(1, d);
 }
@@ -463,6 +476,25 @@ export function plantHome(amount: number): HomeTree[] {
   ];
   for (const [x, z, k, s] of hand) if (hLakeK(x, z) > 1.25 && inland(x, z) > 96) push(x, z, k, s, 0);
 
+  // 1b. the town's trees (journey.ts): birches and willow-like broad crowns along the river's banks, lindens round
+  // the church. (Kept off the mill, the footbridge and the quays the houses stand back from.)
+  for (let x = -92; x > -336; x -= 10 + r() * 7) {
+    const sl = riverSlope(x);
+    const nn = Math.sqrt(1 + sl * sl);
+    for (const side of [-1, 1]) {
+      const u = r();
+      const off = riverW(x) + 4.5 + r() * 4;
+      if (u < 0.3 || Math.abs(x + 128) < 16 || Math.abs(x + 262) < 12 || Math.abs(x + 214) < 7) continue;
+      const tx = x - (side * off * sl) / nn;
+      const tz = riverZ(x) + (side * off) / nn;
+      push(tx, tz, u < 0.62 ? "birch" : u < 0.9 ? "broad" : "bush", 0.78 + r() * 0.3, 1);
+    }
+  }
+  for (let i = 0; i < 5; i++) {
+    const a = 0.6 + i * 1.25 + r() * 0.3;
+    push(CHURCH.x + Math.cos(a) * 25, CHURCH.z + Math.sin(a) * 21, "broad", 1.15 + r() * 0.25, 1);
+  }
+
   // 2. whole trees out to 330 m: a jittered grid, kept where the wood is
   const cell = 5.2;
   for (let gx = -330; gx < 330; gx += cell)
@@ -495,6 +527,8 @@ export function plantHome(amount: number): HomeTree[] {
       const rr = Math.hypot(x, z);
       if (rr < 240 || rr > 1700) continue;
       if (z < 0 && Math.abs(x - roadX(z)) < 80 && z > HOME_GATE_Z - 90) continue;
+      // (the journey's own forest is planted whole, by its own hand: see JourneyWoods)
+      if (journeyWood(x, z) > 0.02 && laneD(x, z).d < 62) continue;
       const d = forestD(x, z);
       // (inside a wood the trees stand shoulder to shoulder: a mass, not a scatter)
       if (u > sstep(0.08, 0.5, d) * 0.97) {
