@@ -426,7 +426,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
   }, [props.mobile, props.trees, props.far, props.effects > 0.5, props.grass, props.reduced]);
   return (
     <>
-      <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={b.base} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} mask={GRASS_MASK} groundSize={6400} />
+      <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={b.base} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} mask={GRASS_MASK} groundSize={6400} angels={false} />
       <RayedSun />
       {/* the mountain, measured from its own foot */}
       <group position={[MT.x, b.y0, MT.z]}>

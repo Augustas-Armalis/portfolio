@@ -104,7 +104,7 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
     // ---- the company of the picture, where the plane first comes to the sand
     {
       // the one who bends to the flower: larger and nearer, the wings arched over like a shell
-      const [bx, bz] = polar(W + 0.2, 640);
+      const [bx, bz] = polar(W + 0.2, 612);
       const yaw = Math.atan2(-bx, -bz) + 2.2;
       const by = angelAt(bx, bz, 7.4, yaw, 4, { wing: [0.92, 0.8, 0.34], robe: [0.86, 0.8, 0.66], open: 0.5, glow: 0.09 });
       glows.push({ p: [bx, by + 6, bz], size: 26, col: [1, 0.94, 0.74], k: 0.16 });
@@ -113,7 +113,7 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       k.add(new THREE.SphereGeometry(0.4, 8, 6), [fx, g(fx, fz) + 0.75, fz], [1, 0.98, 0.9], { glow: 0.9, scale: [1, 0.6, 1] });
       k.add(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 4), [fx, g(fx, fz) + 0.35, fz], [0.2, 0.3, 0.08]);
       // a close group of four behind it, their wings blue, rose, green and rose again
-      const [gx, gz] = polar(W + 0.27, 598);
+      const [gx, gz] = polar(W + 0.29, 590);
       for (let i = 0; i < 4; i++) {
         const x = gx + Math.cos(i * 1.7 + 0.4) * 5.2;
         const z = gz + Math.sin(i * 1.7 + 0.4) * 5.2;
@@ -125,7 +125,7 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       angelAt(ax + 9, az - 12, 4.8, Math.atan2(-ax, -az) + 3.4, 1, { wing: WING_COLS[0] });
       // three small and far off at the meadow's edge, greenish
       for (let i = 0; i < 3; i++) {
-        const [x, z] = polar(W + 0.5 + i * 0.012, 640 - i * 6);
+        const [x, z] = polar(W + 0.5 + i * 0.012, 668 - i * 6);
         angelAt(x, z, 3.6, Math.atan2(-x, -z) + 3, 3, { wing: WING_COLS[2] });
       }
     }
@@ -133,7 +133,7 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
     const groups = props.mobile ? 12 : 26;
     for (let gi = 0; gi < groups; gi++) {
       const a = W + 0.62 + (gi / groups) * (Math.PI * 2 - 0.75) + (r() - 0.5) * 0.1;
-      const [cx, cz] = polar(a, 545 + r() * 110);
+      const [cx, cz] = polar(a, gi % 4 === 3 ? 664 + r() * 16 : 545 + r() * 70);
       // (the foot of the great flight is kept clear for the procession)
       if (Math.abs(cx) < 40 && cz < 0) continue;
       const m = 2 + (gi % 3 === 0 ? 2 : gi % 2);
@@ -297,8 +297,8 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
   }, [props.mobile, props.effects > 0.5, props.trees, props.far, props.grass, props.reduced]);
   return (
     <>
-      <WorldBase id="paradise" def={def} pal={PARADISE_PAL} props={b.base} tip={[0.44, 0.48, 0.14]} pathTint={[1, 0.95, 0.76]} tall={0.8} mask={GRASS_MASK} groundSize={2600} />
-      <RayedSun size={0.46} gain={0.6} />
+      <WorldBase id="paradise" def={def} pal={PARADISE_PAL} props={b.base} tip={[0.44, 0.48, 0.14]} pathTint={[1, 0.95, 0.76]} tall={0.8} mask={GRASS_MASK} groundSize={2600} angels={false} />
+      <RayedSun size={0.46} gain={0.45} />
       <CloudDeck />
       <mesh material={b.sea} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
         <planeGeometry args={[9000, 9000]} />
