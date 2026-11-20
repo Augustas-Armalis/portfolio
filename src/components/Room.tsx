@@ -19,7 +19,9 @@ import { getQuality, getQualityChoice, reportFrame, setQualityChoice, useQuality
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { DeskModel } from "./scene/glb";
 import { Flowers, Grass } from "./scene/Grass";
-import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone } from "./scene/models";
+import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone, setBlobStrength } from "./scene/models";
+import { ContactShadows } from "./scene/home/Contact";
+import { Clouds } from "./scene/home/Clouds";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
 import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
@@ -39,7 +41,6 @@ import {
   RIG,
   bootProgress,
   clamp01,
-  lakeK,
   easeInOutCubic,
   easeInOutQuint,
   easeOutExpo,
@@ -53,10 +54,14 @@ import {
 import { TRACK, geist, geistReady } from "./scene/font";
 import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
-import { Trees } from "./scene/Trees";
+import { Forest } from "./scene/home/Forest";
 import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
 import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
-import { Birds, Ground, Lake, MistBands, Mountains, Sky, makeSkyMaterial } from "./scene/World";
+import { Birds, Sky, makeSkyMaterial } from "./scene/World";
+import { HomeMountains } from "./scene/home/Mountains";
+import { Land } from "./scene/home/Terrain";
+import { LakeMirror, Reeds } from "./scene/home/Water";
+import { hLakeK, homeLand } from "./scene/home/land";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
 // Everything on the desk does something: the display boots the OS, the piano
@@ -432,6 +437,9 @@ function Scene({
   const lockOn = useRef(skipIntro ? 0 : 1);
   const offRef = useRef(skipIntro);
   const envSky = useMemo(() => makeSkyMaterial(true), []);
+  // the land's maps (where the woods are, the shade under each crown, the cloud field), made once before anything reads them
+  useMemo(() => homeLand(q.trees), [q.trees]);
+  useEffect(() => setBlobStrength(q.effects > 0.2 ? 0.3 : 1), [q.effects]);
   const screen = useRef<THREE.Mesh | null>(null);
   const introAt = useRef<number | null>(null);
   const instant = reduced || skipIntro;
@@ -521,7 +529,8 @@ function Scene({
   useEffect(() => {
     cam.fov = cfg.fov;
     cam.near = 0.01;
-    cam.far = 3000;
+    // (the sea runs out to its horizon)
+    cam.far = 12000;
     cam.updateProjectionMatrix();
   }, [cam, cfg]);
 
@@ -1226,7 +1235,7 @@ function Scene({
     // Auto quality listens to the real frame time while the scene is simply being looked at or flown through
     if (stage.current === "idle" || stage.current === "fly") reportFrame(rawDt, stage.current !== "fly");
     const flying = stage.current === "fly";
-    const lk = lakeK(cam.position.x, cam.position.z);
+    const lk = hLakeK(cam.position.x, cam.position.z);
     const wdef = WORLDS[voyage.cur];
     ambienceScene({
       night: SKY_U.uNight.value,
@@ -1537,11 +1546,12 @@ function Scene({
       <Sky />
       {/* the desk's own field: not drawn while the plane is away in another world */}
       <HomeWorld>
-        <Mountains mobile={mobile} />
-        <Trees mobile={mobile || q.trees < 0.7} fogDensity={FOG * 0.42} />
-        {q.effects > 0.2 && <MistBands mobile={mobile || q.effects < 0.7} />}
-        <Ground fogDensity={FOG * 0.55} />
-        <Lake fogDensity={FOG * 0.7} />
+        <HomeMountains mobile={mobile} />
+        <Clouds mobile={mobile} amount={q.effects < 0.5 ? 0.6 : 1} />
+        <Forest amount={q.trees} mobile={mobile} />
+        <Land mobile={mobile} />
+        <Reeds mobile={mobile} />
+        {!mobile && q.effects > 0.5 && <LakeMirror quality={q.effects} />}
         <Grass mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} density={q.grass} />
         <Flowers mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} />
         <Birds />
@@ -1622,6 +1632,7 @@ function Scene({
         <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => {}} hoverable={false} introAt={introAt} introDelay={SETTLE + 0.62} instant={instant || mobile} />
       </PlaneHover>
       <DeskDust apiRef={dust} />
+      {q.effects > 0.2 && <ContactShadows />}
       {idle && mode === "none" && <PlaneLabel spot={planeSpot} introAt={introAt} instant={instant} after={ARR + 2.2} />}
       <Post level={devPost ?? (mobile ? Math.min(1, q.post) : q.post)} />
     </>
@@ -2018,7 +2029,7 @@ export default function Room({
         frameloop={live && !hidden ? "always" : "never"}
         dpr={[Math.min(1, q.dpr), Math.min(q.dpr, isMobile ? 1.5 : 2)]}
         shadows={{ type: THREE.PCFSoftShadowMap }}
-        camera={{ fov: RIG[isMobile ? "mobile" : "desktop"].fov, near: 0.01, far: 3000, position: [0, 1.2, 2.2] }}
+        camera={{ fov: RIG[isMobile ? "mobile" : "desktop"].fov, near: 0.01, far: 12000, position: [0, 1.2, 2.2] }}
         gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
