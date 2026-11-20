@@ -4,6 +4,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { BookOpen, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Sym } from "../symbols";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { novel } from "@/content";
 import { Btn, glass, M, SplitFrame, Toolbar, useChrome } from "../ui";
@@ -75,7 +76,7 @@ export function Novel() {
     writePos(p);
     setSaved(p);
   };
-  if (failed) return <Empty icon={<BookOpen size={22} strokeWidth={1.5} />} title="The book couldn't load" body="Check the connection and open Novel again." />;
+  if (failed) return <Empty icon={<Sym icon={BookOpen} size={22} weight="medium" />} title="The book couldn't load" body="Check the connection and open Novel again." />;
   const total = book?.chapters.reduce((a, c) => a + c.words, 0) ?? 0;
   const doneWords = book && saved ? book.chapters.slice(0, saved.ch).reduce((a, c) => a + c.words, 0) + (book.chapters[saved.ch]?.words ?? 0) * saved.at : 0;
   const pct = total ? Math.round((doneWords / total) * 100) : 0;
@@ -90,7 +91,7 @@ export function Novel() {
           <p className="t-sub mt-2 text-ink-2">{novel.author}</p>
           <p className="t-foot text-ink-3">Iliustracijos: {novel.illustrator}</p>
           <div className={`mt-4 flex items-center gap-3 ${compact ? "justify-center" : "@max-[459px]:justify-center"}`}>
-            <Btn variant="prominent" capsule size="md" onClick={() => book && setCh(saved?.ch ?? 0)} icon={<BookOpen size={14} />} className="!px-4">
+            <Btn variant="prominent" capsule size="md" onClick={() => book && setCh(saved?.ch ?? 0)} icon={<Sym icon={BookOpen} size={14} weight="medium" />} className="!px-4">
               {saved ? "Continue" : "Read"}
             </Btn>
             {book && <span className="m-body tabular-nums text-ink-2">{saved ? `${pct}% read` : `${book.chapters.length} chapters, ${Math.round(total / 1000)}k words`}</span>}
@@ -146,7 +147,7 @@ export function Novel() {
           onClick={() => setCh(null)}
           className={`flex h-[28px] shrink-0 items-center gap-2 rounded-[8px] px-2 text-left text-[13px] text-ink ${ch === null ? "bg-black/[0.08]" : "hov:hover:bg-black/[0.035]"}`}
         >
-          <BookOpen size={15} className="text-ink-2" /> Library
+          <Sym icon={BookOpen} size={16} className="text-ink-2" /> Library
         </button>
         <div className="mt-3 flex h-[22px] shrink-0 items-center px-2 text-[11px] font-semibold text-ink-3">Contents</div>
         {book
@@ -236,8 +237,8 @@ function ScrollReader({ book, ch, setCh, start, onPos }: { book: Book; ch: numbe
   return (
     <div className="flex h-full flex-col">
       <Toolbar title={c.title} sub={`${ch + 1} of ${book.chapters.length}, ${minutes(c.words)}`}>
-        <Btn variant="plain" size="sm" iconOnly label="Previous chapter" disabled={ch === 0} onClick={() => setCh(ch - 1)} icon={<ChevronLeft size={16} />} />
-        <Btn variant="plain" size="sm" iconOnly label="Next chapter" disabled={ch === last} onClick={() => setCh(ch + 1)} icon={<ChevronRight size={16} />} />
+        <Btn variant="plain" size="sm" iconOnly label="Previous chapter" disabled={ch === 0} onClick={() => setCh(ch - 1)} icon={<Sym icon={ChevronLeft} size={16} weight="semibold" />} />
+        <Btn variant="plain" size="sm" iconOnly label="Next chapter" disabled={ch === last} onClick={() => setCh(ch + 1)} icon={<Sym icon={ChevronRight} size={16} weight="semibold" />} />
       </Toolbar>
       <div className="relative h-[2px] shrink-0 bg-black/[0.04]">
         <div ref={bar} className="absolute inset-0 origin-left bg-[#0A84FF]/70" style={{ transform: "scaleX(0)" }} />
@@ -247,7 +248,7 @@ function ScrollReader({ book, ch, setCh, start, onPos }: { book: Book; ch: numbe
           <ChapterBody c={c} />
           {ch < last && (
             <button type="button" onClick={() => setCh(ch + 1)} className="press mx-auto mt-12 flex h-9 items-center gap-1 rounded-full bg-[var(--accent-tint)] px-4 text-[13px] font-semibold text-[var(--accent-text)]">
-              {book.chapters[ch + 1].title} <ChevronRight size={15} />
+              {book.chapters[ch + 1].title} <Sym icon={ChevronRight} size={15} weight="semibold" />
             </button>
           )}
         </article>
@@ -301,7 +302,7 @@ function PagedReader({ book, ch, setCh, start, onPos, onClose }: { book: Book; c
       <div className="flex h-[calc(var(--phone-top)+52px)] shrink-0 items-center justify-between gap-3 px-4 pb-1 pt-[calc(var(--phone-top)+4px)]">
         <span className="min-w-0 truncate text-[13px] font-semibold text-ink-3">{c.title}</span>
         <button type="button" onClick={onClose} aria-label="Close book" data-glass="" className={`${glass("btn")} glass-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#3C3C43]/75`}>
-          <X size={20} className="bold" />
+          <Sym icon={X} size={20} weight="semibold" />
         </button>
       </div>
       <div

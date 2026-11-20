@@ -4,22 +4,23 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { Aperture, CalendarDays, Check, Copy, Github, Instagram, Linkedin, Mail, MessageCircle, Music2, Send } from "lucide-react";
+import { Sym } from "../symbols";
 import { useState } from "react";
 import { bookCall, CONTACT_EMAIL, CONTACTS, contactList, type Channel, owner } from "@/content";
 import { useOS } from "@/store";
 import { Btn, Button, M, Toolbar, useChrome } from "../ui";
-import { Monogram } from "../Login";
+import { Monogram } from "../shell";
 import { XMark, useCopied } from "./shared";
 
 const channelIcon: Record<Channel["id"], React.ReactNode> = {
-  email: <Mail size={15} strokeWidth={1.9} />,
+  email: <Sym icon={Mail} size={16} weight="medium" />,
   x: <XMark size={13} />,
-  linkedin: <Linkedin size={15} strokeWidth={1.9} />,
-  larpo: <Aperture size={15} strokeWidth={1.9} />,
-  instagram: <Instagram size={15} strokeWidth={1.9} />,
-  instagramStudio: <Instagram size={15} strokeWidth={1.9} />,
-  github: <Github size={15} strokeWidth={1.9} />,
-  spotify: <Music2 size={15} strokeWidth={1.9} />,
+  linkedin: <Sym icon={Linkedin} size={16} weight="medium" />,
+  larpo: <Sym icon={Aperture} size={16} weight="medium" />,
+  instagram: <Sym icon={Instagram} size={16} weight="medium" />,
+  instagramStudio: <Sym icon={Instagram} size={16} weight="medium" />,
+  github: <Sym icon={Github} size={16} weight="medium" />,
+  spotify: <Sym icon={Music2} size={16} weight="medium" />,
 };
 
 // a channel without its real link yet points at "#" so it still looks and behaves finished
@@ -53,7 +54,7 @@ export function Contact() {
           transition={M.fade}
           className={`flex items-center gap-2.5 rounded-[12px] bg-[#E9F6EE] px-3 py-2.5 text-[13px] text-[#1F7A45] ${compact ? "mx-4 mt-3" : ""}`}
         >
-          <Check size={15} strokeWidth={2.4} className="shrink-0" />
+          <Sym icon={Check} size={15} className="shrink-0" weight="bold" />
           <span className="min-w-0 flex-1">Message copied. Paste it into X or any channel below.</span>
         </motion.div>
       )}
@@ -62,9 +63,9 @@ export function Contact() {
 
   if (compact) {
     const actions = [
-      { k: "call", label: "Call", icon: <CalendarDays size={20} strokeWidth={1.9} />, href: bookCall.href },
+      { k: "call", label: "Call", icon: <Sym icon={CalendarDays} size={20} weight="medium" />, href: bookCall.href },
       { k: "x", label: "X", icon: <XMark size={17} />, href: hrefOf(contactList.find((c) => c.id === "x")!) },
-      { k: "mail", label: "Mail", icon: <Mail size={20} strokeWidth={1.9} />, href: hrefOf(email) },
+      { k: "mail", label: "Mail", icon: <Sym icon={Mail} size={20} weight="medium" />, href: hrefOf(email) },
     ];
     return (
       <div className="pb-10">
@@ -81,7 +82,7 @@ export function Contact() {
             </a>
           ))}
           <button type="button" onClick={() => copy("handle", owner.x.label)} className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[12px] bg-white text-[var(--accent-text)]">
-            {copied === "handle" ? <Check size={20} strokeWidth={2.2} /> : <Copy size={19} strokeWidth={1.9} />}
+            {copied === "handle" ? <Sym icon={Check} size={20} weight="bold" /> : <Sym icon={Copy} size={20} weight="medium" />}
             <span className="text-[11px] font-medium">{copied === "handle" ? "Copied" : "Copy"}</span>
           </button>
         </div>
@@ -128,7 +129,7 @@ export function Contact() {
   return (
     <div className="@container/contact flex h-full min-h-0 flex-col">
       <Toolbar title="New Message">
-        <Button size="sm" variant="primary" onClick={send} icon={copied === "send" ? <Check size={13} strokeWidth={2.4} /> : <Send size={13} />}>
+        <Button size="sm" variant="primary" onClick={send} icon={copied === "send" ? <Sym icon={Check} size={14} weight="bold" /> : <Sym icon={Send} size={14} weight="medium" />}>
           {copied === "send" ? "Copied" : "Send"}
         </Button>
       </Toolbar>
@@ -142,9 +143,9 @@ export function Contact() {
           </div>
           <div className="flex gap-3">
             {[
-              { label: "message", icon: <MessageCircle size={16} />, run: () => document.getElementById("contact-body")?.focus() },
-              { label: "call", icon: <CalendarDays size={16} />, href: bookCall.href },
-              { label: "mail", icon: <Mail size={16} />, href: hrefOf(email) },
+              { label: "message", icon: <Sym icon={MessageCircle} size={16} weight="medium" />, run: () => document.getElementById("contact-body")?.focus() },
+              { label: "call", icon: <Sym icon={CalendarDays} size={16} weight="medium" />, href: bookCall.href },
+              { label: "mail", icon: <Sym icon={Mail} size={16} weight="medium" />, href: hrefOf(email) },
               { label: "X", icon: <XMark size={13} />, href: owner.x.href },
             ].map((a) => (
               <div key={a.label} className="flex flex-col items-center gap-1">
@@ -178,17 +179,17 @@ export function Contact() {
         <div className="space-y-3 border-t border-black/[0.06] bg-[#F7F7F9] p-4">
           {sentNote}
           <div className="grid grid-cols-3 gap-2 @max-[559px]/contact:grid-cols-1">
-            <QuickAction href={bookCall.href} icon={<CalendarDays size={16} strokeWidth={1.9} />} label={bookCall.label} sub={bookCall.sub} />
+            <QuickAction href={bookCall.href} icon={<Sym icon={CalendarDays} size={16} weight="medium" />} label={bookCall.label} sub={bookCall.sub} />
             <QuickAction href={owner.x.href} icon={<XMark size={14} />} label="Message on X" sub={owner.x.label} />
             {CONTACT_EMAIL ? (
               <QuickAction
                 onClick={() => copy("email", CONTACT_EMAIL ?? "")}
-                icon={copied === "email" ? <Check size={16} strokeWidth={2.4} /> : <Copy size={15} strokeWidth={1.9} />}
+                icon={copied === "email" ? <Sym icon={Check} size={16} weight="bold" /> : <Sym icon={Copy} size={16} weight="medium" />}
                 label={copied === "email" ? "Copied" : "Copy email"}
                 sub={email.value}
               />
             ) : (
-              <QuickAction href={CONTACTS.linkedin.href ?? "#"} icon={<Linkedin size={15} strokeWidth={1.9} />} label="LinkedIn" sub={CONTACTS.linkedin.value} />
+              <QuickAction href={CONTACTS.linkedin.href ?? "#"} icon={<Sym icon={Linkedin} size={16} weight="medium" />} label="LinkedIn" sub={CONTACTS.linkedin.value} />
             )}
           </div>
           <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 @max-[459px]/contact:grid-cols-1">

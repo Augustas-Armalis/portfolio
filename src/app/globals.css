@@ -1538,3 +1538,11 @@ html:not(.dark) .win[data-win="settings"] aside[data-drag] {
     transform: scaleY(0.6);
   }
 }
+
+/* ---------- Round 12 ---------- */
+/* the window overview shows every window as a picture of itself: the windows themselves step out from under it,
+   so no blurred ghost of the front one hangs behind the pictures */
+#os-window-layer[data-overlay="mission"] > div:has([data-win]) {
+  opacity: 0 !important;
+  transition: opacity 0.16s ease-out;
+}

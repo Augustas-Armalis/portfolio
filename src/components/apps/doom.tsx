@@ -3,6 +3,7 @@
 // DOOM (shareware) in js-dos.
 
 import { ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { Sym } from "../symbols";
 import { useEffect, useRef, useState } from "react";
 import { AppIcon } from "../icons";
 import { Btn, glass, Toolbar, useChrome } from "../ui";
@@ -128,7 +129,7 @@ export function Doom() {
       <div className="mt-6 text-[44px] font-black leading-none tracking-[0.08em] text-white">DOOM</div>
       <div className="t-sub mt-2 text-white/60">Episode 1 · Knee-Deep in the Dead</div>
       <div className="mt-6">
-        <Btn variant="prominent" capsule size="lg" onClick={() => setStarted(true)} icon={<Play size={16} fill="currentColor" />} className="!h-11 !bg-[#c93224] !px-7 !text-[16px]">
+        <Btn variant="prominent" capsule size="lg" onClick={() => setStarted(true)} icon={<Sym icon={Play} size={16} weight="medium" fill />} className="!h-11 !bg-[#c93224] !px-7 !text-[16px]">
           Play
         </Btn>
       </div>
@@ -183,16 +184,16 @@ export function Doom() {
             <div className="flex items-end justify-between">
               <div className="grid grid-cols-3 grid-rows-3 gap-1" role="group" aria-label="Move">
                 <button type="button" aria-label="Forward" data-glass="" {...hold(DK.up)} className={`${pad} col-start-2 h-[54px] w-[54px]`}>
-                  <ChevronLeft size={26} className="rotate-90" />
+                  <Sym icon={ChevronLeft} size={26} className="rotate-90" weight="semibold" />
                 </button>
                 <button type="button" aria-label="Turn left" data-glass="" {...hold(DK.left)} className={`${pad} col-start-1 row-start-2 h-[54px] w-[54px]`}>
-                  <ChevronLeft size={26} />
+                  <Sym icon={ChevronLeft} size={26} weight="semibold" />
                 </button>
                 <button type="button" aria-label="Turn right" data-glass="" {...hold(DK.right)} className={`${pad} col-start-3 row-start-2 h-[54px] w-[54px]`}>
-                  <ChevronRight size={26} />
+                  <Sym icon={ChevronRight} size={26} weight="semibold" />
                 </button>
                 <button type="button" aria-label="Back" data-glass="" {...hold(DK.down)} className={`${pad} col-start-2 row-start-3 h-[54px] w-[54px]`}>
-                  <ChevronLeft size={26} className="-rotate-90" />
+                  <Sym icon={ChevronLeft} size={26} className="-rotate-90" weight="semibold" />
                 </button>
               </div>
               <div className="flex items-end gap-3">

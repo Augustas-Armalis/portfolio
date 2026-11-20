@@ -12,14 +12,15 @@ import {
   useTransform,
   type MotionValue,
 } from "motion/react";
-import { Lock, Search, SlidersHorizontal, Volume2, VolumeX } from "lucide-react";
+import { AppWindow, Eye, Info, LayoutGrid, List, Minus, Moon, Power, RotateCcw, Search, Settings, Settings2, Trash2, X } from "lucide-react";
+import { Sym, type SymIcon } from "./symbols";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { about, allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, deskSharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
 import { focusedApp, isUp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
-import { Monogram } from "./Login";
+import { Bars, DeskArt, Monogram, Resume } from "./shell";
 import { Btn, Chrome, EASE_OUT, FILE_MIME, M, QuickLook, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useMorph, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
 import { EDGES, EDGE_CURSOR, EDGE_ZONE, clampMove, pointerGesture, resizeRect, type Bounds, type Edge } from "./windowFrame";
@@ -70,11 +71,13 @@ function Pop({ open, align = "left", width = 220, panel = false, children }: { o
   );
 }
 
-function MenuItem({ children, onClick, hint, href }: { children: ReactNode; onClick?: () => void; hint?: string; href?: string }) {
-  const cls = "flex h-[22px] w-full items-center justify-between gap-6 rounded-[6px] px-[9px] text-left text-[13px] leading-none tracking-[-0.003em] text-ink hov:hover:bg-[#0A84FF] hov:hover:text-white";
+// A menu row, as Tahoe draws it: a symbol in its own column, the title, the shortcut at the far edge.
+function MenuItem({ children, onClick, hint, href, icon }: { children: ReactNode; onClick?: () => void; hint?: string; href?: string; icon?: ReactNode }) {
+  const cls = "flex h-[24px] w-full items-center gap-[7px] rounded-[7px] px-[8px] text-left text-[13px] leading-none tracking-[-0.003em] text-ink hov:hover:bg-[#0A84FF] hov:hover:text-white";
   const inner = (
     <>
-      <span>{children}</span>
+      {icon && <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>}
+      <span className="min-w-0 flex-1 truncate">{children}</span>
       {hint && <span className="text-[13px] tracking-[0.04em] opacity-45">{hint}</span>}
     </>
   );
@@ -91,7 +94,8 @@ function MenuItem({ children, onClick, hint, href }: { children: ReactNode; onCl
   );
 }
 
-const Sep = () => <div className="mx-[9px] my-[5px] h-px bg-black/[0.1]" />;
+const Sep = () => <div className="mx-[8px] my-[5px] h-px bg-black/[0.1]" />;
+const msym = (icon: SymIcon) => <Sym icon={icon} size={15} />;
 
 function ControlCenter({ close }: { close: () => void }) {
   const { sound, setSound, playing, lockScreen, appearance, setAppearance } = useOS();
@@ -117,7 +121,7 @@ function ControlCenter({ close }: { close: () => void }) {
           className="press flex h-[64px] flex-col justify-between rounded-[16px] bg-white/60 dark:bg-white/10 p-2.5 text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]"
         >
           <span className={`flex h-[26px] w-[26px] items-center justify-center rounded-full ${sound ? "bg-[#0A84FF] text-white" : "bg-black/[0.08] text-ink"}`}>
-            {sound ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            <Sym icon={sound ? "speaker2" : "speakerOff"} size={15} weight="medium" />
           </span>
           <span className="text-[12px] font-semibold leading-none text-ink">Sound</span>
         </button>
@@ -130,7 +134,7 @@ function ControlCenter({ close }: { close: () => void }) {
           className="press flex h-[64px] flex-col justify-between rounded-[16px] bg-white/60 dark:bg-white/10 p-2.5 text-left shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]"
         >
           <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-black/[0.08] text-ink">
-            <Lock size={13} />
+            <Sym icon="lock" size={14} weight="medium" />
           </span>
           <span className="text-[12px] font-semibold leading-none text-ink">Lock Screen</span>
         </button>
@@ -281,7 +285,7 @@ function AppsOverlay() {
         >
           <motion.div initial={{ scale: reducedMotion() ? 1 : 1.08 }} animate={{ scale: 1 }} exit={{ scale: reducedMotion() ? 1 : 1.04 }} transition={M.ui} className="flex w-full flex-col items-center" onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}>
             <label htmlFor="apps-search" className="flex h-9 w-[260px] items-center gap-2 rounded-full bg-white/15 px-3 text-white/70 shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.25)]">
-              <Search size={14} />
+              <Sym icon={Search} size={14} weight="medium" />
               <input id="apps-search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/55" />
             </label>
             <div className="mt-[7vh] flex w-[min(1000px,86vw)] flex-wrap justify-center gap-x-3 gap-y-9">
@@ -470,15 +474,15 @@ function MenuBar() {
             <SystemMenuMark className="text-ink" />
           </button>
           <Pop open={menu === "a"}>
-            <MenuItem onClick={run(() => open("about"))}>About Augustas</MenuItem>
+            <MenuItem icon={msym(Info)} onClick={run(() => open("about"))}>About Augustas</MenuItem>
             <Sep />
-            <MenuItem onClick={run(() => open("settings"))}>System Settings…</MenuItem>
+            <MenuItem icon={msym(Settings)} onClick={run(() => open("settings"))}>System Settings…</MenuItem>
             <Sep />
-            <MenuItem onClick={run(() => sleep(true))}>Sleep</MenuItem>
-            <MenuItem onClick={run(restart)}>Restart</MenuItem>
-            <MenuItem onClick={run(() => (sfx("shutdown"), shutdown()))}>Shut Down</MenuItem>
+            <MenuItem icon={msym(Moon)} onClick={run(() => sleep(true))}>Sleep</MenuItem>
+            <MenuItem icon={msym(RotateCcw)} onClick={run(restart)}>Restart</MenuItem>
+            <MenuItem icon={msym(Power)} onClick={run(() => (sfx("shutdown"), shutdown()))}>Shut Down</MenuItem>
             <Sep />
-            <MenuItem onClick={run(() => (lockScreen()))} hint="⌃⌘Q">
+            <MenuItem icon={msym("lock")} onClick={run(() => (lockScreen()))} hint="⌃⌘Q">
               Lock Screen
             </MenuItem>
           </Pop>
@@ -490,18 +494,18 @@ function MenuBar() {
           </button>
           <Pop open={menu === "go"} width={210}>
             {dockApps.map((id) => (
-              <MenuItem key={id} onClick={run(() => open(id))}>
+              <MenuItem key={id} icon={<AppIcon id={id} size={16} flat />} onClick={run(() => open(id))}>
                 {apps[id].title}
               </MenuItem>
             ))}
             <Sep />
             {deskSharedApps.map((id) => (
-              <MenuItem key={id} onClick={run(() => open(id))}>
+              <MenuItem key={id} icon={<AppIcon id={id} size={16} flat />} onClick={run(() => open(id))}>
                 {apps[id].title}
               </MenuItem>
             ))}
             <Sep />
-            <MenuItem href="/work">View as List</MenuItem>
+            <MenuItem icon={msym(List)} href="/work">View as List</MenuItem>
           </Pop>
         </div>
       </div>
@@ -527,11 +531,11 @@ function MenuBar() {
           }}
           className={btn(false)}
         >
-          <Search size={14} strokeWidth={2} />
+          <Sym icon={Search} size={15} weight="medium" />
         </button>
         <div className="relative">
           <button type="button" aria-label="Control Center" aria-haspopup="dialog" aria-expanded={menu === "cc"} className={btn(menu === "cc")} {...item("cc")}>
-            <SlidersHorizontal size={14} strokeWidth={2} />
+            <Sym icon={Settings2} size={16} weight="medium" />
           </button>
           <Pop open={menu === "cc"} align="right" width={300} panel>
             <ControlCenter close={close} />
@@ -550,17 +554,6 @@ function MenuBar() {
   );
 }
 
-// Now-playing bars. A CSS animation on transform only: it runs on the compositor for as long as music plays,
-// instead of a script laying three bars out again every frame.
-export function Bars({ light = false }: { light?: boolean }) {
-  return (
-    <span className="flex h-3 items-end gap-[2px]" aria-hidden>
-      {[0, 1, 2].map((i) => (
-        <span key={i} className={`eq-bar h-full w-[2px] rounded-full ${light ? "bg-white" : "bg-ink"}`} style={{ animationDelay: `${i * -0.37}s` }} />
-      ))}
-    </span>
-  );
-}
 
 // ---------- windows ----------
 
@@ -896,18 +889,19 @@ function DockIcon({ id, mouseX, running, front = false, dark, dragging }: { id: 
           const s = useOS.getState();
           const items: MenuAction[] =
             id === "trash"
-              ? [{ label: "Open", run: () => open(id) }, "sep", { label: "Empty Trash", run: () => (s.emptyTrash()) }]
+              ? [{ label: "Open", icon: AppWindow, run: () => open(id) }, "sep", { label: "Empty Trash", icon: Trash2, run: () => (s.emptyTrash()) }]
               : [
-                  { label: running ? "Show" : "Open", run: () => open(id) },
+                  { label: running ? "Show" : "Open", icon: AppWindow, run: () => open(id) },
                   ...(running
                     ? ([
                         "sep",
-                        { label: "Minimise", run: () => (s.toggleMin(id)) },
-                        { label: "Quit", hint: "⌘Q", run: () => (s.close(id)) },
+                        { label: "Minimise", icon: Minus, run: () => (s.toggleMin(id)) },
+                        { label: "Quit", icon: X, hint: "⌘Q", run: () => (s.close(id)) },
                       ] as MenuAction[])
                     : []),
                 ];
-          ctx.open(e, items);
+          // a Dock menu stands on its icon, like the Dock's own
+          ctx.open(e, items, e.currentTarget.getBoundingClientRect());
         }}
         data-trash={id === "trash" ? "" : undefined}
         className="dock-btn relative flex items-end justify-center"
@@ -1047,7 +1041,7 @@ function Spotlight() {
     <div className="absolute inset-0 z-[2500] flex justify-center pt-[22vh]" onPointerDown={() => setPalette(false)}>
       <div onPointerDown={(e) => e.stopPropagation()} data-glass="" className={`${glass("pop")} sq-panel h-fit w-[min(680px,92vw)] overflow-hidden rounded-[20px]`}>
         <div className="flex h-[54px] items-center gap-2.5 px-4">
-          <Search size={20} strokeWidth={2} className="shrink-0 text-ink-2" />
+          <Sym icon={Search} size={20} className="shrink-0 text-ink-2" weight="medium" />
           <input
             id="spotlight-input"
             autoFocus
@@ -1102,71 +1096,7 @@ const EDGE = 10;
 type Cell = { c: number; r: number };
 const cellKey = (p: Cell) => `${p.c}:${p.r}`;
 
-export function Resume() {
-  const founder = projectGroups[1].apps.filter((a) => projects[a]);
-  return (
-    <div className="flex justify-center bg-[#E9EAED] p-6">
-      <article className="w-full max-w-[560px] bg-white px-12 py-11 text-ink shadow-[0_1px_3px_rgb(0_0_0/0.12)]">
-        <h2 className="text-[26px] font-semibold tracking-[-0.022em]">{about.name}</h2>
-        <p className="mt-1 text-[13px] text-ink-2">
-          {owner.role}. {owner.city}.
-        </p>
-        <h2 className="mt-8 border-b border-black/[0.08] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">Work</h2>
-        {[mainWork, ...otherWork].map((p) => (
-          <div key={p.id} className="mt-3 flex gap-4 text-[13px]">
-            <span className="w-24 shrink-0 tabular-nums text-ink-3">{p.years}</span>
-            <span>
-              <span className="font-semibold">{p.name}</span>
-              {p.role && <span className="text-ink-2">, {p.role.toLowerCase()}</span>}
-              {p.what && <span className="block text-ink-2">{p.what}</span>}
-            </span>
-          </div>
-        ))}
-        <h2 className="mt-7 border-b border-black/[0.08] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">Founder</h2>
-        {founder.map((a) => {
-          const p = projects[a]!;
-          return (
-            <div key={a} className="mt-3 flex gap-4 text-[13px]">
-              <span className="w-24 shrink-0 tabular-nums text-ink-3">{p.years ?? p.status}</span>
-              <span>
-                <span className="font-semibold">{p.name}</span>
-                {p.what && <span className="block text-ink-2">{p.what}</span>}
-              </span>
-            </div>
-          );
-        })}
-        <h2 className="mt-7 border-b border-black/[0.08] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">Elsewhere</h2>
-        <p className="mt-3 text-[13px] text-ink-2">
-          {owner.studio.label}, {owner.x.label} on X
-        </p>
-      </article>
-    </div>
-  );
-}
 
-export function DeskArt({ item }: { item: DeskItem }) {
-  if (item.art)
-    return (
-      <span className="flex h-16 w-16 items-center justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.art} alt="" draggable={false} className="h-[58px] w-[58px] rounded-[8px] bg-white object-contain p-[3px] shadow-[0_1px_3px_rgb(0_0_0/0.3),0_0_0_0.5px_rgb(0_0_0/0.1)]" />
-      </span>
-    );
-  if (item.kind === "folder") return <FolderArt size={64} glyph={item.id === "projects" || item.id === "games" || item.id === "documents" ? item.id : undefined} />;
-  if (item.kind === "doc") return <DocArt size={64} />;
-  if (item.kind === "image" && "src" in item.open)
-    return (
-      <span className="flex h-16 w-16 items-center justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.open.src} alt="" draggable={false} className="max-h-[60px] max-w-[52px] border-[2px] border-white shadow-[0_1px_3px_rgb(0_0_0/0.35)]" />
-      </span>
-    );
-  return "app" in item.open ? (
-    <span className="flex h-16 w-16 items-center justify-center">
-      <AppIcon id={item.open.app} size={56} />
-    </span>
-  ) : null;
-}
 
 function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
   const trash = useOS((s) => s.trash);
@@ -1415,7 +1345,8 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
               e.preventDefault();
               if (!on) setSel([it.id]);
               const b = layer.current!.getBoundingClientRect();
-              setMenu({ x: e.clientX - b.left, y: e.clientY - b.top, id: it.id });
+              // kept on the screen: a menu opened beside the right edge or over the Dock opens back from it
+              setMenu({ x: Math.min(e.clientX - b.left, b.width - 208), y: Math.min(e.clientY - b.top, b.height - 190), id: it.id });
             }}
             style={{ right: EDGE + cell.c * CELL_W, top: EDGE + cell.r * CELL_H, x: on ? dx : 0, y: on ? dy : 0 }}
             className="absolute flex w-[108px] flex-col items-center gap-[3px] pt-1 outline-none"
@@ -1425,7 +1356,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
             </span>
             <span
               className={`line-clamp-2 max-w-[104px] rounded-[6px] px-[5px] py-px text-center text-[12px] font-medium leading-[15px] [text-wrap:balance] ${
-                on ? "bg-[#0A84FF] text-white" : dark ? "text-white [text-shadow:0_1px_1px_rgb(0_0_0/0.75)]" : "text-[#1a1b1e] [text-shadow:0_0_3px_rgb(255_255_255/0.95)] dark:text-white dark:[text-shadow:0_1px_1px_rgb(0_0_0/0.75)]"
+                on ? "bg-[#0A84FF] text-white" : dark ? "text-white [text-shadow:0_1px_2px_rgb(0_0_0/0.85),0_0_7px_rgb(0_0_0/0.5)]" : "text-[#1a1b1e] [text-shadow:0_0_3px_rgb(255_255_255/0.95)] dark:text-white dark:[text-shadow:0_1px_2px_rgb(0_0_0/0.85),0_0_7px_rgb(0_0_0/0.5)]"
               }`}
             >
               {it.name}
@@ -1446,6 +1377,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
             className={`${glass("pop")} absolute z-[3000] w-[200px] rounded-[8px] p-[5px]`}
           >
             <MenuItem
+              icon={msym(AppWindow)}
               onClick={() => {
                 setMenu(null);
                 run(menuItem);
@@ -1455,6 +1387,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
             </MenuItem>
             {!("app" in menuItem.open) && (
               <MenuItem
+                icon={msym(Eye)}
                 hint="Space"
                 onClick={() => {
                   setMenu(null);
@@ -1466,6 +1399,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
             )}
             <Sep />
             <MenuItem
+              icon={msym(LayoutGrid)}
               onClick={() => {
                 setMenu(null);
                 setPos(Object.fromEntries(items.map((x, i) => [x.id, { c: 0, r: i }])));
@@ -1559,6 +1493,7 @@ export default function Desktop(_: { user?: UserId }) {
   useGlassScope();
   const windows = useOS((s) => s.windows);
   const topZ = useOS((s) => s.topZ);
+  const overlay = useOS((s) => s.overlay);
   const area = useRef<HTMLDivElement>(null);
   const wp = useWallpaper();
 
@@ -1604,7 +1539,7 @@ export default function Desktop(_: { user?: UserId }) {
       {wp.src.startsWith("live:") && <LiveWallpaper />}
       <MenuBar />
       {/* isolate: windows stack among themselves, always under the menu bar and the dock */}
-      <div ref={area} id="os-window-layer" className="absolute inset-x-0 bottom-0 top-[24px] isolate">
+      <div ref={area} id="os-window-layer" data-overlay={overlay ?? undefined} className="absolute inset-x-0 bottom-0 top-[24px] isolate">
         <Welcome />
         <DesktopIcons area={area} />
         <AnimatePresence>

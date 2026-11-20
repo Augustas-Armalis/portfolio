@@ -5,9 +5,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { UserId } from "@/content";
 import { useOS } from "@/store";
-import Desktop from "./Desktop";
-import Login from "./Login";
-import PhoneOS from "./PhoneOS";
+import { MacShell, PhoneShell, warmShell } from "./Shells";
 import { BootVeil, Preloader, loader } from "./scene/Overlays";
 
 // The loader is part of this component's own markup (it is in the static HTML
@@ -65,6 +63,12 @@ export default function Experience() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, reduced]);
 
+  // the OS is its own download (Shells.tsx): fetched for this device while the intro plays, at once if the OS is
+  // already what is on screen (reduced motion goes straight to it)
+  useEffect(() => {
+    if (isMobile !== null) warmShell(isMobile, phase !== "room");
+  }, [isMobile, phase]);
+
   const handoff = useCallback(
     (t?: UserId) => {
       if (!reduced) setVeil(true);
@@ -98,7 +102,7 @@ export default function Experience() {
             transition={{ duration: veil ? 0 : 0.45 }}
           >
             {isMobile ? (
-              <PhoneOS />
+              <PhoneShell />
             ) : (
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
@@ -109,7 +113,7 @@ export default function Experience() {
                   exit={{ opacity: 0, scale: 0.99 }}
                   transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  {phase === "os" && user ? <Desktop user={user} /> : <Login />}
+                  <MacShell />
                 </motion.div>
               </AnimatePresence>
             )}

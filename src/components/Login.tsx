@@ -7,22 +7,10 @@ import { createPortal } from "react-dom";
 import { mainWork, owner } from "@/content";
 import { isUp, useOS, useWallpaper } from "@/store";
 import Desktop from "./Desktop";
+import { Monogram, PowerOverlay } from "./shell";
 import { EASE_OUT, glass, reducedMotion, sfx, useGlassScope } from "./ui";
 import { useClock, useDate } from "./useClock";
 
-// His mark: a soft glass sphere with the initial (to be swapped for his photo later).
-export function Monogram({ size = 88 }: { size?: number }) {
-  return (
-    <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-[radial-gradient(120%_120%_at_30%_15%,#ffffff_0%,#e9eaee_45%,#c9ccd3_100%)] font-semibold tracking-[-0.03em] text-[#17181b] shadow-[0_10px_26px_-12px_rgb(16_18_24/0.5),inset_0_-2px_6px_rgb(0_0_0/0.06),0_0_0_0.5px_rgb(0_0_0/0.08)]"
-      style={{ width: size, height: size, fontSize: size * 0.42 }}
-      role="img"
-      aria-label={owner.name}
-    >
-      <MarkDeep size={Math.round(size * 0.62)} />
-    </div>
-  );
-}
 
 // The lock screen's face: the date over a large light clock, two glass widgets, his mark and one way in.
 // It comes ("in") and goes ("out") leaf by leaf: every piece fades by itself and only the groups move. Nothing
@@ -130,73 +118,8 @@ export function LockBackdrop({ wake }: { wake: boolean }) {
   );
 }
 
-// The boot frame, like a Mac starting up: pure black, the logo dead centre, and 60pt under it a thin bar.
-// These numbers are the whole layout; the 3D display's boot frame is meant to be drawn from the same ones.
-export const BOOT_UI = { logo: 84, gap: 60, barW: 200, barH: 3 };
 
-// The logo and the bar on black. `at` is when the boot began (ms): every part is placed on that clock with a
-// negative animation delay, so if this is mounted again part-way through (the desktop hands over to the lock
-// screen underneath a restart) it carries on from the same frame instead of starting over.
-export function BootScreen({ at }: { at: number }) {
-  const [t0] = useState(() => Math.max(0, (Date.now() - at) / 1000));
-  const { logo, gap, barW, barH } = BOOT_UI;
-  return (
-    <div className="absolute inset-0 text-white" aria-hidden>
-      <div className="boot-in absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center" style={{ height: logo, animationDelay: `${0.5 - t0}s` }}>
-        <SystemBootMark size={logo} />
-      </div>
-      <div
-        className="boot-in absolute left-1/2 top-1/2 overflow-hidden rounded-full bg-white/[0.22]"
-        style={{ width: barW, height: barH, marginLeft: -barW / 2, marginTop: logo / 2 + gap, animationDelay: `${0.9 - t0}s` }}
-      >
-        <div className="boot-fill h-full w-full rounded-full bg-white" style={{ animationDelay: `${1.0 - t0}s` }} />
-      </div>
-    </div>
-  );
-}
 
-// Sleep (black until a click) and Restart (the boot frame, then the lock screen).
-// It is drawn on <body>, outside whichever screen asked for it: the desktop and the lock screen each render one,
-// and the screen under it is swapped (and cross-faded) while it is up, which must not show through or restart it.
-export function PowerOverlay() {
-  const sleeping = useOS((s) => s.sleeping);
-  const restarting = useOS((s) => s.restarting);
-  const restartAt = useOS((s) => s.restartAt);
-  const sleep = useOS((s) => s.sleep);
-  const [host, setHost] = useState<HTMLElement | null>(null);
-  useEffect(() => setHost(document.body), []);
-  // the chime lands as the logo appears, once per restart however many screens mount under it
-  useEffect(() => {
-    if (!restarting) return;
-    const wait = restartAt + 500 - Date.now();
-    if (wait < 0) return;
-    const t = window.setTimeout(() => sfx("boot"), wait);
-    return () => window.clearTimeout(t);
-  }, [restarting, restartAt]);
-  // already black when this copy mounts under a restart in progress: no second fade
-  const [late] = useState(() => restarting && Date.now() - restartAt > 200);
-  if (!host) return null;
-  return createPortal(
-    <AnimatePresence>
-      {(sleeping || restarting) && (
-        <motion.div
-          key={sleeping ? "sleep" : "restart"}
-          initial={late ? false : { opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.6, ease: EASE_OUT } }}
-          transition={{ duration: sleeping ? 0.6 : 0.25, ease: EASE_OUT }}
-          onClick={() => sleeping && sleep(false)}
-          role={sleeping ? "button" : undefined}
-          aria-label={sleeping ? "Wake" : undefined}
-          className="fixed inset-0 z-[6000] bg-black"
-        >
-          {restarting && <BootScreen at={restartAt} />}
-        </motion.div>
-      )}
-    </AnimatePresence>,
-    host,
-  );
-}
 // The Mac's screen. There is one desktop and it stays up for the whole session: the lock screen is a face over
 // it, not another page. Unlocking mounts the desktop (the first time) and lets the face go, leaf by leaf, over
 // the very picture it was standing on; locking brings the picture and the face back over the windows, which keep

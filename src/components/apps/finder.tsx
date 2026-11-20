@@ -2,22 +2,18 @@
 
 // Finder: Projects, Games, Music, Photos, Documents.
 
-import { ArrowDownToLine, ArrowDownUp, ChevronRight, FileText, Folder, Gamepad2, Image as ImageIcon, Music2 } from "lucide-react";
+import { ArrowDownToLine, ArrowDownUp, ChevronRight } from "lucide-react";
+import { Sym, type PartName } from "../symbols";
 import { useState } from "react";
 import { owner, places, type AppId, type FinderItem, type PlaceId } from "@/content";
-import { Resume } from "../Desktop";
+import { Resume } from "../shell";
 import { useOS } from "@/store";
 import { AppIcon, DocArt, FolderArt } from "../icons";
 import { Btn, GlassMenu, TabBar, List, ListRow, SectionHeader, QuickLook, SearchField, Segmented, SplitView, Toolbar, useChrome, type LookItem } from "../ui";
 import { player } from "./player";
 
-const PLACE_ICON: Record<PlaceId, React.ReactNode> = {
-  projects: <Folder size={15} />,
-  games: <Gamepad2 size={15} />,
-  music: <Music2 size={15} />,
-  photos: <ImageIcon size={15} />,
-  documents: <FileText size={15} />,
-};
+// SF's sidebar symbols, from Lucide: folder, gamecontroller, music.note, photo, doc.text
+const PLACE_SYM: Record<PlaceId, PartName> = { projects: "folder", games: "gamepad", music: "note", photos: "photo", documents: "doc" };
 
 function FinderIcon({ it, size }: { it: FinderItem; size: number }) {
   if (it.look?.type === "resume") return <DocArt size={size} />;
@@ -71,7 +67,7 @@ export function Finder({ start }: { start: PlaceId }) {
     } else if (it.app) openAny(it.app);
     else if (it.look) setLook(it.look.type === "resume" ? { title: it.name, node: <Resume /> } : { title: it.name, src: it.look.src });
   };
-  const sections = [{ title: "Favourites", items: places.map((p) => ({ id: p.id, label: p.title, icon: <span className="text-[var(--accent-text)]">{PLACE_ICON[p.id]}</span> })) }];
+  const sections = [{ title: "Favourites", items: places.map((p) => ({ id: p.id, label: p.title, icon: <Sym icon={PLACE_SYM[p.id]} size={16} className="text-[var(--accent-text)]" /> })) }];
   const empty = <div className="t-sub py-16 text-center text-ink-3">{`Nothing here matches “${q.trim()}”.`}</div>;
 
   // the phone: Files. One tap opens.
@@ -85,7 +81,7 @@ export function Finder({ start }: { start: PlaceId }) {
           {g.title && <SectionHeader>{g.title}</SectionHeader>}
           <List>
             {g.items.map((it) => (
-              <ListRow key={it.id} onClick={() => run(it)} icon={<span className="my-1.5 flex h-11 w-11 shrink-0 items-center justify-center"><FinderIcon it={it} size={44} /></span>} title={it.name} sub={it.kind} chevron={!it.download} detail={it.download ? <ArrowDownToLine size={18} className="text-[var(--accent-text)]" /> : undefined} />
+              <ListRow key={it.id} onClick={() => run(it)} icon={<span className="my-1.5 flex h-11 w-11 shrink-0 items-center justify-center"><FinderIcon it={it} size={44} /></span>} title={it.name} sub={it.kind} chevron={!it.download} detail={it.download ? <Sym icon={ArrowDownToLine} size={20} weight="medium" className="text-[var(--accent-text)]" /> : undefined} />
             ))}
           </List>
         </div>
@@ -108,7 +104,7 @@ export function Finder({ start }: { start: PlaceId }) {
         />
         <GlassMenu
           label="Sort by"
-          icon={<ArrowDownUp size={13} />}
+          icon={<Sym icon={ArrowDownUp} size={14} weight="medium" />}
           value={sort}
           onChange={setSort}
           options={[
@@ -175,12 +171,12 @@ export function Finder({ start }: { start: PlaceId }) {
       {/* the path bar: where you are, what's picked, and a plain way to open it */}
       <div className="flex h-9 shrink-0 items-center gap-1.5 px-4 text-ink-2 shadow-[inset_0_0.5px_0_var(--separator-opaque)]" onPointerDown={(e) => e.stopPropagation()}>
         <span className="m-sub">{owner.name}</span>
-        <ChevronRight size={11} className="text-ink-3" />
+        <Sym icon={ChevronRight} size={11} className="text-ink-3" weight="semibold" />
         <FolderArt size={16} glyph={cur.id} />
         <span className="m-sub">{cur.title}</span>
         {picked && (
           <>
-            <ChevronRight size={11} className="text-ink-3" />
+            <Sym icon={ChevronRight} size={11} className="text-ink-3" weight="semibold" />
             <span className="m-sub truncate font-medium text-ink">{picked.name}</span>
           </>
         )}
@@ -208,7 +204,7 @@ export function Finder({ start }: { start: PlaceId }) {
             setPlace(id);
             setQ("");
           }}
-          items={places.map((p) => ({ value: p.id, label: p.title, icon: <span className="[&>svg]:h-[22px] [&>svg]:w-[22px]">{PLACE_ICON[p.id]}</span> }))}
+          items={places.map((p) => ({ value: p.id, label: p.title, icon: <Sym icon={PLACE_SYM[p.id]} size={23} weight="medium" fill={place === p.id} /> }))}
         />
         <QuickLook items={look ? [look] : []} index={look ? 0 : null} onClose={() => setLook(null)} />
       </>

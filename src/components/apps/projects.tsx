@@ -3,7 +3,8 @@
 // Projects: story pages, the repository view and the live site with its inspector.
 
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, Download, FileText, Folder, Github, Info, Lock, RotateCw } from "lucide-react";
+import { ArrowUpRight, Download, FileText, Github, Info } from "lucide-react";
+import { Sym } from "../symbols";
 import { useEffect, useRef, useState } from "react";
 import { bookCall, projectGroups, projects, type AppId } from "@/content";
 import { AppIcon } from "../icons";
@@ -23,9 +24,9 @@ function CardFace({ it, big, open }: { it: StoryItem; big?: boolean; open?: bool
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={shot ? SHOT_BG[it.key] ?? "/wallpapers/engineer-pawel-structure.webp" : storyImage(it)} alt="" draggable={false} className="h-full w-full object-cover" />
       </motion.div>
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.42)_0%,rgb(0_0_0/0.08)_38%,rgb(0_0_0/0)_55%,rgb(0_0_0/0.5)_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.56)_0%,rgb(0_0_0/0.3)_24%,rgb(0_0_0/0.06)_44%,rgb(0_0_0/0)_58%,rgb(0_0_0/0.5)_100%)]" />
       {shot && (
-        <div className={`absolute inset-x-0 bottom-0 flex justify-center ${CROP[storyImage(it)] ? "items-center pb-[6%]" : "items-start"} ${open ? (compact ? "top-[calc(var(--phone-top)+172px)]" : "top-[190px]") : "top-[38%]"}`}>
+        <div className={`absolute inset-x-0 bottom-0 flex justify-center ${CROP[storyImage(it)] && !open ? "items-center pb-[6%]" : "items-start"} ${open ? (compact ? "top-[calc(var(--phone-top)+204px)]" : "top-[190px]") : "top-[38%]"}`}>
           <Squircle radius={16} className="w-[84%] overflow-hidden shadow-[0_24px_60px_-20px_rgb(0_0_0/0.7),0_0_0_0.5px_rgb(255_255_255/0.2)]">
             <ShotImg src={storyImage(it)} alt="" draggable={false} />
           </Squircle>
@@ -38,12 +39,12 @@ function CardFace({ it, big, open }: { it: StoryItem; big?: boolean; open?: bool
         <div className={`mt-1 max-w-[18ch] font-bold leading-[1.05] tracking-[-0.025em] text-white [text-wrap:balance] ${open ? (compact ? "text-[34px]" : "text-[40px]") : big ? "text-[34px]" : "text-[26px]"}`}>
           {it.p.name}
         </div>
-        {it.p.what && (shot || open) && <p className={`mt-1.5 text-white/85 [text-wrap:pretty] ${open && !compact ? "t-body max-w-[56ch]" : "t-sub max-w-[34ch]"}`}>{it.p.what}</p>}
+        {it.p.what && (shot || open) && <p className={`mt-1.5 text-white/90 [text-shadow:0_1px_10px_rgb(0_0_0/0.35)] [text-wrap:pretty] ${open && !compact ? "t-body max-w-[56ch]" : "t-sub max-w-[34ch]"}`}>{it.p.what}</p>}
       </motion.div>
       {/* photo stories: the app icon, then the one-liner, stacked from the bottom edge so neither can collide */}
       {!shot && (
         <div className={`absolute inset-x-0 bottom-0 flex flex-col items-start gap-3 ${pad}`}>
-          {it.app && <AppIcon id={it.app} size={big || open ? 64 : 52} />}
+          {it.app && !open && <AppIcon id={it.app} size={big ? 64 : 52} />}
           {it.p.what && !open && (
             <motion.p layoutId={`sub-${it.key}`} className={`max-w-[46ch] text-white/90 [text-wrap:pretty] ${big ? "t-body" : "t-sub"}`}>
               {it.p.what}
@@ -249,10 +250,10 @@ function RepoView({ it }: { it: StoryItem }) {
   const slug = p.repo ? p.repo.replace(/^https?:\/\/github\.com\//, "") : p.name.toLowerCase().replace(/\s+/g, "-");
   const actions = p.repo ? (
     <>
-      <Btn size={compact ? "md" : "sm"} href={`${p.repo}/archive/refs/heads/main.zip`} icon={<Download size={14} />}>
+      <Btn size={compact ? "md" : "sm"} href={`${p.repo}/archive/refs/heads/main.zip`} icon={<Sym icon={Download} size={14} weight="medium" />}>
         Download
       </Btn>
-      <Btn size={compact ? "md" : "sm"} variant="prominent" href={p.repo} icon={<Github size={14} />}>
+      <Btn size={compact ? "md" : "sm"} variant="prominent" href={p.repo} icon={<Sym icon={Github} size={14} weight="medium" />}>
         View on GitHub
       </Btn>
     </>
@@ -287,7 +288,7 @@ function RepoView({ it }: { it: StoryItem }) {
                         key={f.name}
                         mac={!compact}
                         href={`${p.repo}/${f.dir ? "tree" : "blob"}/HEAD/${f.name}`}
-                        icon={<span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--accent-text)]">{f.dir ? <Folder size={16} fill="currentColor" fillOpacity={0.18} /> : <FileText size={15} className="text-ink-2" />}</span>}
+                        icon={<span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--accent-text)]">{f.dir ? <Sym icon="folder" size={16} fill /> : <Sym icon={FileText} size={16} className="text-ink-2" />}</span>}
                         title={<span className="font-mono text-[12.5px]">{f.name}</span>}
                         chevron={compact}
                       />
@@ -374,7 +375,7 @@ function Inspector({ it }: { it: StoryItem }) {
       {p.what && <p className="t-sub text-ink-2">{p.what}</p>}
       <InfoGrid rows={rows} cols={1} />
       {p.link && (
-        <Btn variant="tinted" capsule href={p.link.href} icon={<ArrowUpRight size={14} />} className="w-full">
+        <Btn variant="tinted" capsule href={p.link.href} icon={<Sym icon={ArrowUpRight} size={14} weight="medium" />} className="w-full">
           {p.link.href.replace(/^https?:\/\//, "").replace(/\/$/, "")}
         </Btn>
       )}
@@ -451,9 +452,9 @@ function LiveSite({ it }: { it: StoryItem }) {
         <div className="t-headline absolute inset-x-[68px] -top-12 flex h-11 items-center justify-center truncate text-ink">{it.p.name}</div>
         {frame}
         <div data-glass="" className={`${glass("pop")} absolute inset-x-3 bottom-[calc(var(--phone-bottom)+2px)] flex h-12 items-center gap-1 rounded-[20px] px-1.5`}>
-          <Btn variant="plain" size="md" iconOnly label="Info" onClick={() => setInfo(true)} icon={<Info size={18} />} />
+          <Btn variant="plain" size="md" iconOnly label="Info" onClick={() => setInfo(true)} icon={<Sym icon={Info} size={18} weight="medium" />} />
           <span className="t-sub min-w-0 flex-1 truncate text-center font-medium text-ink">{domain}</span>
-          <Btn variant="plain" size="md" iconOnly label="Open in Safari" href={href} icon={<ArrowUpRight size={18} />} />
+          <Btn variant="plain" size="md" iconOnly label="Open in Safari" href={href} icon={<Sym icon={ArrowUpRight} size={18} weight="medium" />} />
         </div>
         <AnimatePresence>
           {info && (
@@ -486,7 +487,7 @@ function LiveSite({ it }: { it: StoryItem }) {
         start={href}
         title={it.p.name}
         lead={it.app ? <AppIcon id={it.app} size={16} flat /> : undefined}
-        end={<Btn variant={info ? "tinted" : "plain"} size="sm" iconOnly label="Info" onClick={() => setInfo((v) => !v)} icon={<Info size={15} />} />}
+        end={<Btn variant={info ? "tinted" : "plain"} size="sm" iconOnly label="Info" onClick={() => setInfo((v) => !v)} icon={<Sym icon={Info} size={16} weight="medium" />} />}
         side={
           <AnimatePresence initial={false}>
             {info && (

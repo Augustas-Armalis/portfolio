@@ -3,6 +3,7 @@
 // Taste and Kit.
 
 import { ListOrdered, Star } from "lucide-react";
+import { Sym } from "../symbols";
 import { useState } from "react";
 import { taste } from "@/content";
 import { Button, Group, List, ListRow, Row, Segmented, SplitView, Switch, Toolbar } from "../ui";
@@ -45,8 +46,8 @@ export function Taste() {
         {
           title: "Taste",
           items: [
-            { id: "rules", label: "Rules", icon: <ListOrdered size={15} />, meta: <span className="text-[11px] tabular-nums text-ink-2">{taste.rules.length}</span> },
-            { id: "rated", label: "Designers I rate", icon: <Star size={15} />, meta: <span className="text-[11px] tabular-nums text-ink-2">{taste.rated.length}</span> },
+            { id: "rules", label: "Rules", icon: <Sym icon={ListOrdered} size={16} />, meta: <span className="text-[11px] tabular-nums text-ink-2">{taste.rules.length}</span> },
+            { id: "rated", label: "Designers I rate", icon: <Sym icon={Star} size={16} />, meta: <span className="text-[11px] tabular-nums text-ink-2">{taste.rated.length}</span> },
           ],
         },
       ]}
