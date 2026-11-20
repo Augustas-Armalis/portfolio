@@ -1694,7 +1694,11 @@ export default function Room({
         onDown(e);
       }}
       onPointerMove={onMove}
-      onPointerUp={onUp}
+      onPointerUp={(e) => {
+        // on a phone it is the finger lifting that the browser takes for a gesture
+        startAmbience();
+        onUp(e);
+      }}
       onPointerCancel={onUp}
       onPointerLeave={() => {
         // a pointer that has left the window is not holding the plane's stick

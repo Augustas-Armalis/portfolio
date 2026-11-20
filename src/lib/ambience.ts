@@ -604,7 +604,12 @@ type AmbWindow = Window & { __ambDispose?: () => boolean; __amb?: unknown };
 
 // Call from the first user gesture. Safe to call again.
 export function startAmbience() {
-  if (typeof window === "undefined" || typeof AudioContext === "undefined" || running) return;
+  if (typeof window === "undefined" || typeof AudioContext === "undefined") return;
+  if (running) {
+    // called again from a later gesture: a context the browser would not wake on the first touch is woken now
+    resumeAudio();
+    return;
+  }
   try {
     resumeAudio();
     if (!rig) {

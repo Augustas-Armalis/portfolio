@@ -63,6 +63,7 @@ export type Voice = {
   want: boolean; // meant to be playing
   timer: number; // pending pause after a fade
   resume: boolean; // paused by a hidden tab: play again when it returns
+  stopAt?: number; // performance.now() at which the fade-out in progress ends
 };
 
 type Tracked = { label: string; node: AudioNode };
@@ -339,7 +340,8 @@ export function resumeAudio() {
   if (!hasAudio()) return;
   const s = state();
   // a hidden tab stays asleep: it wakes when it is looked at again
-  if (s.ctx.state === "suspended" && !s.suspended) void s.ctx.resume().catch(() => {});
+  // (a phone that took a call or went to its lock screen leaves the context "interrupted", not "suspended")
+  if (s.ctx.state !== "running" && s.ctx.state !== "closed" && !s.suspended) void s.ctx.resume().catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -495,13 +497,24 @@ function claim(owner: Owner) {
 // One retry on the next gesture when the browser refuses to start a voice
 // without one (Safari).
 function retryOnGesture(v: Voice) {
+  // (on a phone a touch only counts as a gesture when the finger lifts: pointerup, touchend and click are listened
+  // for as well, and it is the first of them that the browser accepts that starts the voice)
+  const EVENTS = ["pointerdown", "pointerup", "touchend", "click", "keydown"] as const;
+  let tries = 0;
+  const done = () => EVENTS.forEach((e) => window.removeEventListener(e, go, true));
   const go = () => {
-    window.removeEventListener("pointerdown", go, true);
-    window.removeEventListener("keydown", go, true);
-    if (v.want && v.el.paused) void v.el.play().catch(() => (v.want = false));
+    if (!v.want || !v.el.paused) return done();
+    resumeAudio();
+    const last = ++tries >= 6;
+    if (last) done();
+    void v.el
+      .play()
+      .then(done)
+      .catch(() => {
+        if (last) v.want = false;
+      });
   };
-  window.addEventListener("pointerdown", go, true);
-  window.addEventListener("keydown", go, true);
+  EVENTS.forEach((e) => window.addEventListener(e, go, true));
 }
 
 // Start (or carry on) a voice and fade it to `level`. Playing a voice that is
@@ -547,8 +560,10 @@ export function voicePlayUrl(v: Voice | null, url: string, o: { fade?: number; l
 // Fade a voice out, then pause it. `release` also lets go of the file.
 export function voiceStop(v: Voice | null, fade = 0.6, release = false) {
   if (!v) return;
-  // already on its way out: the first fade stands
-  if (!release && !v.want && v.level === 0 && v.timer) return;
+  // already on its way out: the first fade stands (unless this one is the quicker)
+  const ends = performance.now() + fade * 1000;
+  if (!release && !v.want && v.level === 0 && v.timer && (v.stopAt ?? 0) <= ends + 50) return;
+  v.stopAt = ends;
   window.clearTimeout(v.timer);
   v.want = false;
   v.resume = false;

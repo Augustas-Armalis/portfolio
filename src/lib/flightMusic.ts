@@ -1,4 +1,4 @@
-import { channel, musicOwner, stopOwner, voice, voicePlay, voiceStop, type Voice } from "@/lib/audio";
+import { channel, musicOwner, resumeAudio, stopOwner, voice, voicePlay, voiceStop, type Voice } from "@/lib/audio";
 
 // Music for the flight: one recording per world, cross-faded as the plane
 // passes from one painting's world into the next ("road" is the stretch
@@ -107,6 +107,17 @@ function load(v: Voice, idx: number, track: FlightTrack) {
   voicePlay(v, { fade: FADE, level: track.gain ?? 1 });
 }
 
+// Called from a tap that will lead to a flight a moment later (the phone's Fly shortcut): the output is woken and
+// both decks play their moment of silence inside the tap, so the music may start on its own when the plane leaves.
+export function flightMusicPrime() {
+  if (typeof window === "undefined") return;
+  resumeAudio();
+  const d = decks();
+  if (!d) return;
+  S.primed = true;
+  d.forEach((v) => v.el.paused && !v.want && (!v.el.getAttribute("src") || v.el.src.startsWith("blob:")) && prime(v));
+}
+
 // Cross-fade to the recording of a world (a station id, "road" or "sea").
 export function flightMusicTo(key: string) {
   if (typeof window === "undefined") return;
@@ -117,6 +128,8 @@ export function flightMusicTo(key: string) {
   const other = d[1 - S.live];
   const next = (1 - S.live) as 0 | 1;
   S.key = key;
+  // (take-off is a tap: the output is woken inside it, before anything is asked to play)
+  resumeAudio();
   if (!S.primed) {
     S.primed = true;
     prime(cur);
@@ -154,6 +167,9 @@ export function flightMusicTo(key: string) {
   } else if (owner && owner !== "flight") {
     // the headphones are playing: they leave first, then the flight comes in
     // (two recordings are never heard on top of each other)
+    // (the deck that will play is given its moment of silence now, inside the tap, so that it may start on its
+    // own in a moment: a phone refuses a first play() that comes from a timer)
+    if (other.el.paused && !other.el.getAttribute("src")) prime(other);
     stopOwner(owner, 0.7);
     later(600);
   } else load(other, next, track);
