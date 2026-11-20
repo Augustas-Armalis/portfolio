@@ -45,6 +45,10 @@ import { playPiano } from "@/lib/piano";
 // - Hidden tab: the sink fades, playing elements are paused and the context
 //   is suspended; coming back resumes exactly the ones that were playing.
 //
+// - Music may also be a stream in a frame of its own (an embedded player the
+//   graph cannot hold): see "music that is not a voice" below. It obeys the
+//   same one-owner rule through three small hooks.
+//
 // Development: window.__audio (see devHook at the bottom of this file).
 
 export type Channel = "music" | "flight" | "ambience" | "piano" | "sfx";
@@ -375,6 +379,54 @@ export function fadeParam(p: AudioParam, to: number, seconds: number) {
 }
 
 // ---------------------------------------------------------------------------
+// music that is not a voice of this graph (a streamed player in its own frame)
+//
+// The music director (lib/musicDirector.ts) may play a stream the graph cannot
+// hold: an embedded player, levelled through its own API. Three small hooks
+// keep the rules above true for it as well:
+//   - externalMusic(owner, on): the stream is (or is no longer) the audible
+//     music of that owner. It claims the music like any voice (whoever else
+//     was playing fades out), and `music.playing` is true while it sounds, so
+//     the ambience ducks under it.
+//   - onMusicClaim(f) / onOwnerStop(f): told when somebody claims the music,
+//     and when an owner is told to stop, so the stream leaves as a voice would.
+//   - setDeskMusic(f): the desk's own background music is asked for and sent
+//     away by the ambience through the "desk-music" voice; with a handler set
+//     that voice is never played, and the handler decides what is heard.
+type Ext = { owner: Owner | null; on: boolean; claims: Set<(o: Owner) => void>; stops: Set<(o: Owner, fade: number) => void>; desk: ((on: boolean, fade: number) => void) | null; deskPrime: (() => void) | null };
+function ext(): Ext {
+  const g = globalThis as G & { __aosExt?: Ext };
+  return (g.__aosExt ??= { owner: null, on: false, claims: new Set(), stops: new Set(), desk: null, deskPrime: null });
+}
+export function externalMusic(owner: Owner | null, on: boolean) {
+  if (typeof window === "undefined") return;
+  const e = ext();
+  e.owner = on ? owner : null;
+  e.on = on && owner !== null;
+  if (e.on && owner && hasAudio()) claim(owner);
+}
+export function onMusicClaim(f: (owner: Owner) => void) {
+  const e = ext();
+  e.claims.add(f);
+  return () => {
+    e.claims.delete(f);
+  };
+}
+export function onOwnerStop(f: (owner: Owner, fade: number) => void) {
+  const e = ext();
+  e.stops.add(f);
+  return () => {
+    e.stops.delete(f);
+  };
+}
+export function setDeskMusic(handler: ((on: boolean, fade: number) => void) | null, prime: (() => void) | null = null) {
+  const e = ext();
+  e.desk = handler;
+  e.deskPrime = prime;
+}
+const DESK_VOICE = "desk-music";
+
+// ---------------------------------------------------------------------------
 // voices: media elements in the graph
 
 function gateOf(v: Voice) {
@@ -496,6 +548,7 @@ function claim(owner: Owner) {
   s.voices.forEach((v) => {
     if (v.owner && v.owner !== owner && (!v.el.paused || v.want)) voiceStop(v, 0.8);
   });
+  ext().claims.forEach((f) => f(owner));
 }
 
 // One retry on the next gesture when the browser refuses to start a voice
@@ -526,6 +579,7 @@ function retryOnGesture(v: Voice) {
 // the voice, so that later it may start its recording on its own.
 let silence = "";
 export function voicePrime(v: Voice | null) {
+  if (v?.id === DESK_VOICE && ext().desk) return void ext().deskPrime?.();
   if (!v || !v.el.paused || v.want) return;
   const cur = v.el.getAttribute("src");
   if (cur && !cur.startsWith("blob:")) return;
@@ -559,6 +613,7 @@ export function voicePrime(v: Voice | null) {
 // already playing never restarts it.
 export function voicePlay(v: Voice | null, { fade = 0.4, level = 1 }: { fade?: number; level?: number } = {}) {
   if (!v) return;
+  if (v.id === DESK_VOICE && ext().desk) return void ext().desk?.(true, fade);
   const s = state();
   window.clearTimeout(v.timer);
   v.timer = 0;
@@ -598,6 +653,7 @@ export function voicePlayUrl(v: Voice | null, url: string, o: { fade?: number; l
 // Fade a voice out, then pause it. `release` also lets go of the file.
 export function voiceStop(v: Voice | null, fade = 0.6, release = false) {
   if (!v) return;
+  if (v.id === DESK_VOICE && ext().desk) return void ext().desk?.(false, fade);
   // already on its way out: the first fade stands (unless this one is the quicker)
   const ends = performance.now() + fade * 1000;
   if (!release && !v.want && v.level === 0 && v.timer && (v.stopAt ?? 0) <= ends + 50) return;
@@ -639,6 +695,8 @@ export function voiceLevel(v: Voice | null, level: number, seconds: number) {
 
 // Who has the music right now, if anyone is audible.
 export function musicOwner(): Owner | null {
+  const e = ext();
+  if (e.on && e.owner) return e.owner;
   if (!hasAudio() || !(globalThis as G).__aosAudio) return null;
   return audible() ? state().owner : null;
 }
@@ -648,6 +706,7 @@ export function stopOwner(owner: Owner, fade: number, release = false) {
   const s = state();
   s.voices.forEach((v) => v.owner === owner && voiceStop(v, fade, release));
   if (s.owner === owner) s.owner = null;
+  ext().stops.forEach((f) => f(owner, fade));
 }
 
 // ---------------------------------------------------------------------------
@@ -763,6 +822,9 @@ if (typeof window !== "undefined") {
 // is audible; `level` and `bass` (0..1) are smoothed in sampleMusic, once a
 // frame, from the shared analyser.
 function audible() {
+  // (a stream in its own frame counts while it sounds, unless the world is muted)
+  const e = ext();
+  if (e.on && !(prefs().muted || !soundOn())) return true;
   if (!hasAudio() || !(globalThis as G).__aosAudio) return false;
   const s = state();
   for (const v of s.voices.values()) {

@@ -7,6 +7,7 @@ import { gyroAvailable, gyroCentre, gyroStart, gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { play } from "@/lib/sfx";
+import { setMusicOpen, useMusic } from "@/lib/musicDirector";
 import { WORLDS, WORLD_ORDER, setFlight, setGuide, travelStep, travelTo, useFlightFlags, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
 import { photoCtl, postCtl, type Capture } from "./Post";
@@ -984,16 +985,16 @@ function WorldsList({ current, onPick, mobile }: { current: WorldId; onPick: (id
   );
 }
 
-// (stubs until the music layer lands)
-function FlightMusicButton({ className, size, open, onToggle }: { className: string; size: number; open: boolean; onToggle: () => void }) {
+// The flight's music button: it opens the mini-player (scene/music/MusicDock), where what plays is named and
+// anything else can be chosen. A small bead on it shows that something is playing.
+function FlightMusicButton({ className, size }: { className: (on: boolean) => string; size: number }) {
+  const m = useMusic();
   return (
-    <button type="button" aria-pressed={open} aria-label="Music" data-tip="Music" data-flight="music" className={className} onClick={onToggle}>
+    <button type="button" aria-pressed={m.open} aria-label={`Music${m.playing ? `: ${m.playing.title}` : ""}`} data-tip={m.playing && !m.muted ? m.playing.title : "Music"} data-flight="music" className={className(m.open)} onClick={() => setMusicOpen(!m.open)}>
       <Music2 size={size} strokeWidth={2} />
+      <span className={`absolute right-[5px] top-[5px] h-[5px] w-[5px] rounded-full transition-opacity duration-500 ${m.open ? "bg-black/60" : "bg-white"} ${m.playing && !m.muted ? "opacity-90" : "opacity-0"}`} />
     </button>
   );
-}
-function FlightMusicPanel({ mobile }: { mobile: boolean }) {
-  return <Glass radius={22} className={`pointer-events-auto p-3 text-[12.5px] ${mobile ? "w-[260px]" : "w-[250px]"}`} initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING}>Music</Glass>;
 }
 
 // The chrome over the flight comes and goes on its own. Left alone for a few seconds it fades to almost nothing;
@@ -1096,7 +1097,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const gyro = (flags & 16) > 0;
   const chrome = useChrome(flying);
   // the Worlds list, and [ / ] to step through the worlds with a keyboard
-  const [panel, setPanel] = useState<"worlds" | "music" | null>(null);
+  const [panel, setPanel] = useState<"worlds" | null>(null);
   const pick = (id: WorldId) => {
     travelTo(id);
     setPanel(null);
@@ -1195,7 +1196,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
 
   const bar = (
     <Glass layout className={`pointer-events-auto flex items-center p-1 ${mobile ? "" : "gap-0.5"}`} initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={{ ...GLASS_SPRING, delay: 0.06 }} data-flight="bar" {...stop}>
-      <FlightMusicButton className={ib(panel === "music")} size={isz} open={panel === "music"} onToggle={() => setPanel(panel === "music" ? null : "music")} />
+      <FlightMusicButton className={ib} size={isz} />
       <button type="button" aria-pressed={panel === "worlds"} aria-label="Worlds" data-tip={mobile ? undefined : "Worlds  [ ]"} className={ib(panel === "worlds")} onClick={() => setPanel(panel === "worlds" ? null : "worlds")}>
         <LayoutGrid size={isz} strokeWidth={sw} />
       </button>
@@ -1239,7 +1240,6 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const panels = (
     <AnimatePresence>
       {panel === "worlds" && <WorldsList key="worlds" current={world} onPick={pick} mobile={mobile} />}
-      {panel === "music" && <FlightMusicPanel key="music" mobile={mobile} />}
     </AnimatePresence>
   );
   // faint when left alone; whole again under the pointer
