@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useMemo, useRef, type MutableRefObject } from "react";
+import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { DESK, clamp01, easeInOutCubic, nowS, spring } from "./shared";
 import { arriveGolden } from "./sky";
@@ -71,6 +71,9 @@ const smooth01 = (t: number) => {
 export const SPEED = { min: 3.2, cruise: 28, max: 84 };
 // how far the chase camera stands back (1 = as designed), kept for the rest of the visit
 export const zoomMem = { v: 1, min: 0.55, max: 3.4 };
+// The bank keys (A / D and the arrows), held by the plane itself while it flies with a keyboard.
+const bank = { l: false, r: false };
+const bankKeys = () => (bank.r ? 1 : 0) - (bank.l ? 1 : 0);
 const NO_INPUT: FlightInput = { sx: 0, sy: 0 };
 const handsIn: FlightInput = { sx: 0, sy: 0, climb: 0 };
 const OPT_NONE = {};
@@ -187,6 +190,28 @@ export function Plane({
     [],
   );
   const rest = useMemo(() => new THREE.Vector3(spot.pos[0], DESK.top + 0.013, spot.pos[2]), [spot]);
+  useEffect(() => {
+    if (!flying) return;
+    const set = (e: KeyboardEvent, on: boolean) => {
+      const k = e.key.toLowerCase();
+      // (a chord with Cmd, Alt or Ctrl is the browser's; an arrow pressed on a slider is the slider's)
+      if (on && (e.metaKey || e.altKey || e.ctrlKey || (k.startsWith("arrow") && (e.target as HTMLElement | null)?.tagName === "INPUT"))) return;
+      if (k === "a" || k === "arrowleft") bank.l = on;
+      else if (k === "d" || k === "arrowright") bank.r = on;
+    };
+    const kd = (e: KeyboardEvent) => set(e, true);
+    const ku = (e: KeyboardEvent) => set(e, false);
+    const drop = () => (bank.l = bank.r = false);
+    window.addEventListener("keydown", kd);
+    window.addEventListener("keyup", ku);
+    window.addEventListener("blur", drop);
+    return () => {
+      window.removeEventListener("keydown", kd);
+      window.removeEventListener("keyup", ku);
+      window.removeEventListener("blur", drop);
+      drop();
+    };
+  }, [flying]);
 
   // The paper itself is moved in the same breath as the camera that follows it
   // (fly and land are called from the scene's frame; this component's own
@@ -354,12 +379,16 @@ export function Plane({
     // With a mouse the keyboard flies the plane and the mouse only looks: the pointer never steers. (The keys' bank
     // arrives as a full stick, -1 or 1; anything in between is the pointer, and is ignored.) A thumb on the glass
     // stick (soft) still steers.
+    // (The bank keys are read here, by the plane itself: what arrives as `sx` with a mouse may be the pointer's
+    // own place on the screen, which at the very edge of the window is a full stick and used to turn the plane.)
     const kbOnly = !input.soft;
-    const inSx = stale ? 0 : kbOnly && Math.abs(input.sx) !== 1 ? 0 : input.sx;
+    const inSx = kbOnly ? bankKeys() : stale ? 0 : input.sx;
     const inSy = stale || kbOnly ? 0 : input.sy;
-    st.sx = damp(st.sx, inSx, inSx === 0 ? 2.2 : input.soft ? 5 : 6, dt);
-    st.sy = damp(st.sy, inSy, inSy === 0 ? 2.2 : input.soft ? 5 : 6, dt);
-    st.climbF = damp(st.climbF, input.climb ?? 0, 4, dt);
+    // A key is a step, and the springs below already turn a step into an eased arrival: the keys are only
+    // rounded off here (so the plane answers within a tenth of a second), a thumb a little more.
+    st.sx = damp(st.sx, inSx, inSx === 0 ? (input.soft ? 4 : 9) : input.soft ? 7 : 14, dt);
+    st.sy = damp(st.sy, inSy, inSy === 0 ? 4 : 7, dt);
+    st.climbF = damp(st.climbF, input.climb ?? 0, 9, dt);
     let sx = shape(st.sx);
     let sy = shape(st.sy);
     const climb = st.climbF;
@@ -467,11 +496,13 @@ export function Plane({
 
     // bank and pitch are critically damped springs: they arrive, they never snap or ring
     const rollT = THREE.MathUtils.clamp(sx, -1, 1) * 0.8;
-    spring2(st, "roll", "rollV", rollT, 3.6, dt);
-    spring2(st, "pitch", "pitchV", pitchT, 3.2, dt);
-    // the bank is the turn (slow flight turns a little tighter); the rate of turn itself is sprung as well, so the
-    // heading swings in and out of a turn instead of starting and stopping
-    spring2(st, "yawR", "yawRV", st.roll * (0.62 + 1.5 / Math.max(st.speed, 3)), 4.5, dt);
+    // (rolling into a turn is a little quicker than levelling out of it: it answers at once and lets go gently)
+    spring2(st, "roll", "rollV", rollT, Math.abs(rollT) > Math.abs(st.roll) ? 4.8 : 4.0, dt);
+    spring2(st, "pitch", "pitchV", pitchT, 4.2, dt);
+    // The bank is the turn (slow flight turns a little tighter). The bank is already a spring, so the rate of turn
+    // has no corner in it and the heading swings in and out of a turn; a second spring on top of it only made
+    // the plane wait half a second before it answered and carry on turning long after the key was let go.
+    st.yawR = st.roll * (0.62 + 1.5 / Math.max(st.speed, 3));
     st.yaw -= st.yawR * dt;
     // speed follows the throttle; diving gathers a little, climbing spends a little
     // the kings' wood is gone through slowly
