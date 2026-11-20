@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronsUp, Download, Grid3x3, LocateFixed, Lock, LockOpen, Pause, PlaneLanding, Play, SkipBack, SkipForward, SlidersHorizontal, Smartphone, X } from "lucide-react";
+import { Check, ChevronsUp, Download, Ellipsis, Grid3x3, LocateFixed, Lock, LockOpen, Pause, PlaneLanding, Play, SkipBack, SkipForward, Smartphone, X } from "lucide-react";
 import { gyroAvailable, gyroCentre, gyroStart, gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
@@ -1118,7 +1118,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const chip = (on: boolean) => `lg-btn pointer-events-auto flex h-7 items-center gap-1.5 whitespace-nowrap px-3 text-[12.5px] font-medium ${on ? "lg-on" : "lg-chip text-white/90"}`;
   return (
     <>
-      <TopBar title="Paper plane" hint={guide ? "Following the path · A D to nudge · drag to look · scroll to zoom · W S for speed" : "Mouse steers · drag to look · scroll to zoom · W S for speed"} exitLabel="Land" onExit={onLand} />
+      <TopBar title="Paper plane" hint={guide ? "Following the path · A D to nudge · W S climb and dive · Shift faster, Ctrl slower · drag to look" : "Mouse steers · W S climb and dive · Shift faster, Ctrl slower · drag to look · scroll to zoom"} exitLabel="Land" onExit={onLand} />
       <Bottom>
         <Glass className="pointer-events-auto flex items-center gap-1.5 p-1 pl-4" {...stop}>
           <label className="mr-1 flex items-center gap-2.5">
@@ -1170,9 +1170,11 @@ const fmtH = (h: number) => {
 };
 
 // The desk's few controls: Orbit / Explore, Back to desk, and the graphics level. (The sky here always follows
-// the visitor's own clock; the hour can be set only inside the camera's photo mode.) With a mouse it is a small
-// bar, bottom left. On a phone it is one round glass button in the top corner that opens into the same bar.
-export function NavBar({ nav, onNav, onBack, label, mobile = false }: { nav: "orbit" | "explore"; onNav: (n: "orbit" | "explore") => void; onBack: () => void; label: string; mobile?: boolean }) {
+// the visitor's own clock; the hour can be set only inside the camera's photo mode.) The desk itself shows no
+// chrome: only a small round glass button with three dots, bottom left (top left on a phone), faint until the
+// pointer or focus comes to it, that opens into the controls. While exploring, a "Back to desk" pill stands
+// beside it.
+export function NavBar({ nav, onNav, onBack, mobile = false }: { nav: "orbit" | "explore"; onNav: (n: "orbit" | "explore") => void; onBack: () => void; label?: string; mobile?: boolean }) {
   const seg = (on: boolean) => `lg-btn pointer-events-auto px-3 font-medium ${mobile ? "h-10 text-[14px]" : "h-7 text-[12.5px]"} ${on ? "lg-on" : "text-white/90"}`;
   const [gfx, setGfx] = useState(false);
   const [open, setOpen] = useState(false);
@@ -1204,13 +1206,22 @@ export function NavBar({ nav, onNav, onBack, label, mobile = false }: { nav: "or
             </motion.button>
           )}
         </AnimatePresence>
+        {!mobile && (
+          <button type="button" className="lg-btn pointer-events-auto ml-1 h-7 whitespace-nowrap px-2.5 text-[12px] font-medium text-white/85" aria-expanded={gfx} onClick={() => setGfx((g) => !g)}>
+            Graphics · {QUALITY_LABELS[choice]}
+          </button>
+        )}
       </div>
-      <div className={`flex items-center justify-between gap-3 px-2 pb-0.5 text-white/65 ${mobile ? "text-[12.5px]" : "text-[11px]"}`}>
-        <span className={mobile ? "whitespace-nowrap" : undefined}>{nav === "explore" ? (mobile ? "Drag to look · pinch to move" : "Drag to look · W A S D to move · scroll to fly forward") : label}</span>
-        <button type="button" className={`lg-btn pointer-events-auto -mr-1 whitespace-nowrap font-medium text-white/85 ${mobile ? "h-9 px-2.5 text-[12.5px]" : "px-1.5 py-0.5 text-[11px]"}`} aria-expanded={gfx} onClick={() => setGfx((g) => !g)}>
-          Graphics · {QUALITY_LABELS[choice]}
-        </button>
-      </div>
+      {mobile ? (
+        <div className="flex items-center justify-between gap-3 px-2 pb-0.5 text-[12.5px] text-white/65">
+          <span className="whitespace-nowrap">{nav === "explore" ? "Drag to look · pinch to move" : ""}</span>
+          <button type="button" className="lg-btn pointer-events-auto -mr-1 h-9 whitespace-nowrap px-2.5 text-[12.5px] font-medium text-white/85" aria-expanded={gfx} onClick={() => setGfx((g) => !g)}>
+            Graphics · {QUALITY_LABELS[choice]}
+          </button>
+        </div>
+      ) : (
+        nav === "explore" && <div className="px-2 pb-0.5 text-[11px] text-white/65">Drag to look · W A S D to move</div>
+      )}
       <AnimatePresence initial={false}>
         {gfx && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
@@ -1256,9 +1267,9 @@ export function NavBar({ nav, onNav, onBack, label, mobile = false }: { nav: "or
   if (mobile)
     return (
       <div className="pointer-events-none absolute z-30" style={{ top: SAFE.t, left: SAFE.l }} data-desk="nav">
-        <Glass radius={open ? 24 : 22} lens={false} className="pointer-events-auto overflow-hidden" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING} {...stop}>
+        <Glass radius={open ? 24 : 22} lens={false} className="pointer-events-auto overflow-hidden" style={{ filter: open ? undefined : "opacity(0.62)" }} initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING} {...stop}>
           <button type="button" aria-label={open ? "Close the controls" : "Controls: look around, graphics"} aria-expanded={open} className="lg-btn grid h-11 w-11 place-items-center text-white" onClick={() => setOpen((o) => !o)}>
-            {open ? <X size={18} strokeWidth={2.1} /> : <SlidersHorizontal size={18} strokeWidth={2} />}
+            {open ? <X size={18} strokeWidth={2.1} /> : <Ellipsis size={19} strokeWidth={2.2} />}
           </button>
           <AnimatePresence initial={false}>
             {open && (
@@ -1272,10 +1283,43 @@ export function NavBar({ nav, onNav, onBack, label, mobile = false }: { nav: "or
       </div>
     );
   return (
-    <div className="pointer-events-none absolute bottom-5 left-4 z-30">
-      <Glass radius={22} className="pointer-events-auto flex flex-col gap-1.5 p-1.5" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING} {...stop}>
-        {body}
+    <div className="pointer-events-none absolute bottom-5 left-4 z-30 flex items-end gap-2">
+      {/* (the faintness is on a wrapper: the glass's own entrance animates its opacity) */}
+      <div className={`pointer-events-auto transition-opacity duration-300 ${open ? "opacity-100" : "opacity-45 hover:opacity-100 focus-within:opacity-100"}`}>
+      <Glass
+        radius={open ? 22 : 18}
+        lens={false}
+        className="pointer-events-auto overflow-hidden"
+        initial={GLASS_IN}
+        animate={GLASS_ON}
+        exit={GLASS_IN}
+        transition={GLASS_SPRING}
+        {...stop}
+      >
+        <div className="flex items-end">
+          <button type="button" aria-label={open ? "Close the controls" : "Controls: orbit, explore, graphics"} aria-expanded={open} className="lg-btn grid h-9 w-9 shrink-0 place-items-center text-white" onClick={() => setOpen((o) => !o)}>
+            {open ? <X size={15} strokeWidth={2.1} /> : <Ellipsis size={17} strokeWidth={2.2} />}
+          </button>
+          <AnimatePresence initial={false}>
+            {open && (
+              // it opens outward from the button, along the bottom edge
+              <motion.div key="body" initial={{ width: 0, opacity: 0 }} animate={{ width: "auto", opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
+                <div className="flex flex-col-reverse gap-1.5 py-1 pr-1">{body}</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </Glass>
+      </div>
+      <AnimatePresence>
+        {nav === "explore" && !open && (
+          <Glass key="back" radius={18} className="pointer-events-auto" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING} {...stop}>
+            <button type="button" className="lg-btn h-9 whitespace-nowrap px-3.5 text-[12.5px] font-medium text-white/92" onClick={onBack}>
+              Back to desk
+            </button>
+          </Glass>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
