@@ -701,7 +701,7 @@ function build(level: number) {
   };
   const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ao, ao2, ldr, ...hist, pick];
   // (hist: which of the two holds the frame before, whether it holds one at all, and how the camera saw the world then)
-  const past = { i: 0, ok: false, vp: new THREE.Matrix4(), eye: new THREE.Vector3() };
+  const past = { i: 0, ok: false, vp: new THREE.Matrix4(), eye: new THREE.Vector3(), q: new THREE.Quaternion() };
   return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, hist, past, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, steady, tail, w: 0, h: 0 };
 }
 
@@ -896,13 +896,23 @@ export function Post({ level }: { level: number }) {
     if (p.tail) {
       run(p.m.comp, p.ldr);
       let src = p.ldr;
-      if (p.steady && !out) {
+      // While the eye itself is travelling fast (the descent out of the sky, a turn of the head, the top of the
+      // throttle) nothing can be seen to flicker and the pass would only cost: it is left out for those frames,
+      // and taken up again from a clean start when the eye slows. (More than about six pixels of turning a frame,
+      // or a metre and a half of travel.)
+      const turned = 2 * Math.acos(Math.min(1, Math.abs(p.past.q.dot(camera.quaternion))));
+      const fast = turned * (h / THREE.MathUtils.degToRad(pc.fov ?? 40)) > 6 || p.past.eye.distanceToSquared(camera.position) > 2.25;
+      p.past.q.copy(camera.quaternion);
+      if (fast || postCtl.steady <= 0) {
+        p.past.ok = false;
+        p.past.eye.copy(camera.position);
+      } else if (p.steady && !out) {
         // where every point of this frame was in the last one: last frame's view of the world, undone by this one's
         VP.multiplyMatrices(pc.projectionMatrix, pc.matrixWorldInverse);
         const u = p.m.steady.uniforms;
         (u.uReproj.value as THREE.Matrix4).copy(VP).invert().premultiply(p.past.vp);
-        // (a cut, a jump between worlds, the first frame: there is no past to lay under it)
-        const cut = !p.past.ok || p.past.eye.distanceToSquared(camera.position) > 400;
+        // (the first frame, or the first after a rush: there is no past to lay under it)
+        const cut = !p.past.ok;
         u.uKeep.value = cut ? 0 : postCtl.steady;
         u.uClip.value = postCtl.steadyClip;
         u.tHist.value = p.hist[p.past.i].texture;
