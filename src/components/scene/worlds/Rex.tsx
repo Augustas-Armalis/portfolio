@@ -12,6 +12,7 @@ import { makeCloudPaint, paintedCloudGeometry, type PCloud } from "./stars/forms
 import { ORIGIN, WORLDS, pathOf } from "./voyage";
 import { Kindling, useDeepLens, type Lamp } from "./fairy/shared";
 import { Comet } from "./stars/comet";
+import { buildWisps, makeWispMaterial } from "./sea/water";
 
 // Rex (1909). Umber dusk, almost one colour. On a still sea a globe lies half
 // in the water, dark, with paler lands drifting on it; before it a blade of
@@ -539,6 +540,17 @@ export default function RexWorld({ props }: { props: WorldProps }) {
       globeMat: makeGlobeMaterial(),
       shells,
       shellMats: [makeShellMaterial(0), makeShellMaterial(1), makeShellMaterial(2)],
+      // mist on the water in long level bands: before the globe at his feet, to either hand of the way in, and far
+      // out under the first shell, so he stands in air with the water's edge lost
+      wisps: buildWisps([
+        { x: REX.x, z: REX.z + 420, w: 1500, d: 420, y: 5, a: 0.5 },
+        { x: REX.x - 600, z: REX.z + 200, w: 1300, d: 420, y: 7, a: 0.4 },
+        { x: REX.x + 600, z: REX.z + 240, w: 1300, d: 420, y: 6, a: 0.4 },
+        { x: -300, z: 700, w: 1200, d: 360, y: 4, a: 0.35 },
+        { x: 380, z: 500, w: 1200, d: 360, y: 5, a: 0.35 },
+        { x: REX.x, z: REX.z - 700, w: 2400, d: 600, y: 8, a: 0.4 },
+      ]),
+      wispMat: makeWispMaterial(),
       comets: ck.build(),
       cometHalos: haloGeometry(cometHalos),
       cometHaloMat: makeHaloMaterial(0),
@@ -615,6 +627,7 @@ export default function RexWorld({ props }: { props: WorldProps }) {
         <mesh key={i} geometry={b.shells[i]} material={b.shellMats[i]} position={[REX.x, -DROP, REX.z]} renderOrder={-3 + (2 - i)} />
       ))}
       <mesh geometry={b.set} material={b.tempera} />
+      <mesh geometry={b.wisps} material={b.wispMat} renderOrder={3} />
       <mesh geometry={b.king} material={b.kingMat} position={[REX.x, 0, REX.z]} />
       <mesh geometry={b.globe} material={b.globeMat} position={[REX.x, 0, REX.z]} />
       <group ref={comets} position={[REX.x, -DROP, REX.z]}>

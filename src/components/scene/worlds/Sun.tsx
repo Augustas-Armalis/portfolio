@@ -12,6 +12,7 @@ import { SUN_GRASS_MASK, SUN_PAL, groveMap, sunPlotJS } from "./sun/ground";
 import { SUN_LIFE_U, bannersGeometry, greatSunMaterial, hungBellGeometry, makeBannerMaterial, makeHungBellMaterial, makeSkeinMaterial, makeSunsMaterial, makeWalkerMaterial, skeinGeometry, sunsGeometry, walkersGeometry, type Banner, type Hung, type KSun, type Skein, type Walker } from "./sun/life";
 import { SUN_BELLS, SUN_BRIDGES, SUN_GARDEN, SUN_GATEHOUSES, SUN_ROAD_Z, SUN_SKY, sunRoadX, type SunBridge } from "./sun/shape";
 import { ORIGIN, WORLDS, gateOf, groundAt, pathOf, voyage } from "./voyage";
+import { buildWisps, makeWispMaterial } from "./sea/water";
 import { useDeepLens } from "./fairy/shared";
 
 // Sonata of the Sun (Allegro, 1907), built as a place to cross: a vast open plain under an amber air, and far
@@ -718,7 +719,19 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       { c: [600, 110, -1700], r: 90, n: props.mobile ? 5 : 10, size: 1.2, speed: 8 },
     ];
 
+    // low mist, in long level bands only seen along the ground: round the feet of the bells, along the foot of each
+    // aqueduct, and lying in the plain's hollows; every view has something near, the subject, and air behind it
+    const wisps: Parameters<typeof buildWisps>[0] = [];
+    BELLS.forEach(([x, z, R]) => wisps.push({ x, z: z + R * 1.6, w: R * 9, d: R * 4, y: g(x, z) + 6 + r() * 6, a: 0.5 }));
+    for (const br of SUN_BRIDGES) wisps.push({ x: br.c[0], z: br.c[1] + 60, w: br.n * br.w * 0.9, d: 260, y: g(br.c[0], br.c[1]) + 7, a: 0.45 });
+    for (let i = 0; i < 8; i++) {
+      const x = (r() - 0.5) * 2600;
+      const z = 1500 - r() * 3000;
+      wisps.push({ x, z, w: 700 + r() * 700, d: 200 + r() * 160, y: g(x, z) + 5 + r() * 8, a: 0.35 });
+    }
     return {
+      wisps: buildWisps(wisps),
+      wispMat: makeWispMaterial(),
       city: k.build(),
       far: far.build(),
       props: props3.build(),
@@ -818,6 +831,7 @@ export default function SunWorld({ props }: { props: WorldProps }) {
         </mesh>
       ))}
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
+      <mesh geometry={b.wisps} material={b.wispMat} renderOrder={3} />
       <Birds flocks={b.flocks} tint={[0.1, 0.11, 0.16]} />
       <mesh geometry={b.skeins} material={b.skeinMat} frustumCulled={false} renderOrder={4} />
       <Halos list={b.glows} kind={2} />

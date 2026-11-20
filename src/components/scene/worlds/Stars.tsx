@@ -12,6 +12,7 @@ import { FIG_KINDS, constellation, heroAngel, makeGlobeGlass, makePyramidVeil, m
 import { ORIGIN, WORLDS, groundAt, pathOf } from "./voyage";
 import { useDeepLens } from "./fairy/shared";
 import { Comet } from "./stars/comet";
+import { buildWisps, makeWispMaterial } from "./sea/water";
 
 // Sonata of the Stars (Allegro and Andante, 1908), built as a cosmos to fly through.
 //
@@ -275,6 +276,17 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     ];
 
     return {
+      // mist lying on the sea in long level bands: before the pyramid's foot, round the globe, and far out
+      wisps: buildWisps([
+        { x: PYR.x, z: PYR.z + 420, w: 1500, d: 420, y: 12, a: 0.5 },
+        { x: PYR.x - 500, z: PYR.z + 120, w: 1100, d: 360, y: 16, a: 0.4 },
+        { x: PYR.x + 520, z: PYR.z + 200, w: 1100, d: 360, y: 14, a: 0.4 },
+        { x: GLOBE.x, z: GLOBE.z + 200, w: 800, d: 300, y: 10, a: 0.45 },
+        { x: 0, z: 520, w: 1400, d: 380, y: 9, a: 0.35 },
+        { x: -700, z: -700, w: 1600, d: 500, y: 18, a: 0.4 },
+        { x: 700, z: -800, w: 1600, d: 500, y: 18, a: 0.4 },
+      ]),
+      wispMat: makeWispMaterial(),
       sea: terrainGeometry(def.terrain!, 4200, props.mobile ? 130 : 220),
       seaMat: makeWaveSea([PYR.x, 520, PYR.z]),
       veils: [0.5, 0.76, 1].map((s, i) => ({ geo: cone(s, 40), mat: makePyramidVeil({ h: PYR.h * s, half: PYR.half * s, alpha: [0.34, 0.34, 0.46][i], seed: i * 2.3 + 1, freq: [0.022, 0.017, 0.013][i], edge: i === 2 ? 1 : 0.12 }) })),
@@ -362,6 +374,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       <mesh geometry={b.giants} material={b.giantMat} frustumCulled={false} />
       <mesh geometry={b.set} material={b.tempera} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
+      <mesh geometry={b.wisps} material={b.wispMat} renderOrder={3} />
       {/* the pyramids: veils, innermost first */}
       {b.veils.map((v, i) => (
         <mesh key={i} geometry={v.geo} material={v.mat} position={[PYR.x, b.py0, PYR.z]} renderOrder={2 + i * 0.1} />
