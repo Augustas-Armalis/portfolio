@@ -5,6 +5,7 @@ import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { GLSL_AIR, Kit, WORLD_U, angel, makePoints, makeTempera, makeWater, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { Birds, LightShafts, type Flock, type Shaft } from "./life";
 import { WORLDS, groundAt, heightAt } from "./voyage";
 
 // Paradise (Angels, 1909). A yellow-green noon under rows of cloud. On the
@@ -18,7 +19,8 @@ const def = WORLDS.paradise;
 export const PARADISE_PAL: GroundPalette = { a: [0.08, 0.125, 0.034], b: [0.13, 0.15, 0.042], c: [0.058, 0.1, 0.038], shore: [0.5, 0.42, 0.2], shoreAt: [0.1, 0.62] };
 
 // the steps curve round the meadow: arcs struck from the middle of the lake, like its shore
-export const STEPS = { x: -200, z: 100, r0: 392, tread: 9.5, rise: 2.3, n: 13, y0: 4.8, a0: -0.94, a1: 0.56 };
+// (a great flight: twenty-four steps of four and a half metres, climbing a hundred metres away round the lake)
+export const STEPS = { x: -200, z: 100, r0: 392, tread: 12, rise: 4.4, n: 24, y0: 4.8, a0: -0.94, a1: 0.56 };
 const STEP_TOP: V3 = [0.86, 0.76, 0.42];
 const STEP_EDGE: V3 = [0.98, 0.9, 0.58];
 const STEP_FACE: V3 = [0.6, 0.5, 0.26];
@@ -102,7 +104,8 @@ function steps(mobile: boolean) {
   const P = (r: number, a: number, y: number) => new THREE.Vector3(STEPS.x + Math.cos(a) * r, y, STEPS.z + Math.sin(a) * r);
   const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3, ca: V3, cb: V3) => {
     pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, b.x, b.y, b.z, d.x, d.y, d.z, c.x, c.y, c.z);
-    col.push(...ca, 0, ...cb, 0, ...ca, 0, ...cb, 0, ...cb, 0, ...ca, 0);
+    // (the stone keeps a little of the noon in it: pale and warm even in the shade, as he painted it)
+    col.push(...ca, 0.14, ...cb, 0.14, ...ca, 0.14, ...cb, 0.14, ...cb, 0.14, ...ca, 0.14);
   };
   const green: V3 = [0.2, 0.28, 0.08];
   for (let i = 0; i <= STEPS.n; i++) {
@@ -191,18 +194,37 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
     k.add(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 4), [fx, g(fx, fz) + 0.3, fz], [0.2, 0.3, 0.08]);
     glows.push({ p: [bx, by + 6, bz], size: 26, col: [1, 0.94, 0.74], k: 0.14 });
 
-    // white birds over the water
-    for (let i = 0; i < (props.mobile ? 4 : 7); i++) {
-      const p: V3 = [-330 + r() * 330, 60 + r() * 60, 330 - r() * 380];
-      const s = 3 + r() * 2;
-      const yaw = r() * 6.28;
-      for (const w of [-1, 1]) {
-        const wing = new THREE.BufferGeometry();
-        wing.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, -0.5 * s, w * 2.6 * s, 0.9 * s, 0.1 * s, 0, 0, 0.6 * s, 0, 0, -0.5 * s, 0, 0, 0.6 * s, w * 2.6 * s, 0.9 * s, 0.1 * s], 3));
-        wing.computeVertexNormals();
-        k.add(wing, p, [1, 1, 0.97], { glow: 0.5, rot: [0, yaw, 0] });
-      }
+    // the guardians: colossal angels standing along the top of the steps, facing the lake, and across the water on
+    // the far shore, so the meadow's small company is seen against figures that tower over it
+    const top = STEPS.y0 + STEPS.n * STEPS.rise;
+    const rTop = STEPS.r0 + STEPS.n * STEPS.tread + 22;
+    const nG = props.mobile ? 5 : 9;
+    for (let i = 0; i < nG; i++) {
+      const a = STEPS.a0 + 0.12 + (i / (nG - 1)) * (STEPS.a1 - STEPS.a0 - 0.24);
+      const [x, z] = M(a, rTop);
+      const s = 34 + r() * 10;
+      angel(k, [x, top - 0.5, z], s, Math.atan2(STEPS.x - x, STEPS.z - z), robes[i % robes.length], { glow: 0.16, open: 0.2 + r() * 0.1, wing: wings[i % wings.length] });
+      glows.push({ p: [x, top + s * 1.7, z], size: s * 1.4, col: [1, 0.95, 0.75], k: 0.16 });
     }
+    for (let i = 0; i < (props.mobile ? 3 : 5); i++) {
+      const a = 2.3 + i * 0.32;
+      const [x, z] = M(a, 318);
+      const s = 26 + r() * 8;
+      angel(k, [x, g(x, z) - 0.5, z], s, Math.atan2(STEPS.x - x, STEPS.z - z), robes[(i + 2) % robes.length], { glow: 0.14, open: 0.3, wing: wings[(i + 3) % wings.length] });
+    }
+    // light pouring down through the gaps in the cloud: onto the meadow, the steps and the water
+    const shafts: Shaft[] = [];
+    for (let i = 0; i < (props.mobile ? 5 : 10); i++) {
+      const a = STEPS.a0 - 0.3 + r() * (STEPS.a1 - STEPS.a0 + 1.6);
+      const [x, z] = M(a, 200 + r() * 420);
+      shafts.push({ x, z, y0: -2, y1: 280, r: 14 + r() * 20, k: 0.5 + r() * 0.4 });
+    }
+    // white birds over the water, wheeling
+    const flocks: Flock[] = [
+      { c: [-200, 90, 120], r: 160, n: props.mobile ? 6 : 12, size: 2.6, speed: 11 },
+      { c: [-60, 140, -120], r: 110, n: props.mobile ? 4 : 8, size: 3.2, speed: 10 },
+      { c: [-380, 70, 300], r: 90, n: props.mobile ? 4 : 7, size: 2.2, speed: 9 },
+    ];
 
     // flowers: thick in the meadow between the sand and the steps, thinning up the way in
     const spot = (q: () => number): [number, number] => {
@@ -244,7 +266,9 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
     return {
       set: k.build(),
       steps: steps(props.mobile),
-      tempera: makeTempera({ amb: 0.95, key: 0.34, dab: 0.8 }),
+      tempera: makeTempera({ amb: 0.92, key: 0.4, dab: 0.8, grain: 1, ao: 0.3, aoH: 30, wrap: 0.5, irid: 0.2, rim: [0.5, 0.45, 0.25], rimPow: 3 }),
+      shafts,
+      flocks,
       glows,
       puffs,
       bars: makeBars(),
@@ -273,6 +297,8 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       <points geometry={b.butterflies} material={b.butterfly} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
       <Halos list={b.glows} kind={2} />
+      <LightShafts list={b.shafts} tint={[1, 0.95, 0.7]} />
+      <Birds flocks={b.flocks} tint={[1, 1, 0.97]} lit />
     </>
   );
 }

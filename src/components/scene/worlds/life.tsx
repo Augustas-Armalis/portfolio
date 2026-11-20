@@ -1,6 +1,7 @@
 "use client";
 
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { useDisposable } from "./common";
@@ -16,7 +17,8 @@ const END = /* glsl */ `
 // Flocks wheeling slowly round a point, each bird two thin wings beating at its own pace, gliding now and
 // then. Drawn as dark strokes that the air takes into itself with distance, as he drew them: a small "v".
 export type Flock = { c: V3; r: number; n: number; size?: number; speed?: number; spread?: number; climb?: number };
-export function Birds({ flocks, tint = [0.12, 0.1, 0.08], seed = 5 }: { flocks: Flock[]; tint?: V3; seed?: number }) {
+// `lit`: pale birds that catch the light (the white birds of Paradise) instead of dark strokes
+export function Birds({ flocks, tint = [0.12, 0.1, 0.08], seed = 5, lit = false }: { flocks: Flock[]; tint?: V3; seed?: number; lit?: boolean }) {
   const b = useDisposable(() => {
     const r = rng(seed);
     const g = new THREE.InstancedBufferGeometry();
@@ -49,7 +51,7 @@ export function Birds({ flocks, tint = [0.12, 0.1, 0.08], seed = 5 }: { flocks: 
       side: THREE.DoubleSide,
       transparent: true,
       depthWrite: false,
-      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) } },
+      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) }, uLit: { value: lit ? 1 : 0 } },
       vertexShader: /* glsl */ `
         attribute vec4 aOrbit; attribute vec4 aPh;
         uniform float uTime;
@@ -75,19 +77,19 @@ export function Birds({ flocks, tint = [0.12, 0.1, 0.08], seed = 5 }: { flocks: 
           gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
         }`,
       fragmentShader: /* glsl */ `
-        uniform vec3 uTint;
+        uniform vec3 uTint; uniform float uLit;
         varying vec3 vWorld; varying float vSide;
         ${GLSL_SKY}
         ${GLSL_AIR}
         void main(){
-          vec3 col = uTint * (uSkyCol * 0.6 + 0.08);
+          vec3 col = uTint * mix(uSkyCol * 0.6 + 0.08, uSkyCol * 0.9 + uKeyCol * 0.45, uLit);
           float f = airAmt(vWorld);
           gl_FragColor = vec4(mix(col, airCol(normalize(vWorld - cameraPosition)), f), (1.0 - f * 0.92) * (1.0 - vSide * 0.35));
           ${END}
         }`,
     });
     return { g, mat };
-  }, [flocks, seed]);
+  }, [flocks, seed, lit]);
   return <mesh geometry={b.g} material={b.mat} frustumCulled={false} renderOrder={4} />;
 }
 
@@ -240,4 +242,59 @@ export function PaintedClouds({ list, warm = [1.0, 0.93, 0.78], shade = [0.62, 0
     return { g, mat };
   }, [list]);
   return <mesh geometry={b.g} material={b.mat} frustumCulled={false} renderOrder={order} />;
+}
+
+// ---------- shafts of light ----------
+// Light pouring down through gaps in the cloud: tall soft columns, brightest where they face the eye, streaked
+// along their length, fading out at the cloud and before the ground, drifting a little.
+export type Shaft = { x: number; z: number; y0: number; y1: number; r: number; k?: number };
+export function LightShafts({ list, tint = [1, 0.9, 0.62] }: { list: Shaft[]; tint?: V3 }) {
+  const b = useDisposable(() => {
+    const parts: THREE.BufferGeometry[] = [];
+    for (const sh of list) {
+      const g = new THREE.CylinderGeometry(sh.r * 0.7, sh.r, sh.y1 - sh.y0, 20, 1, true);
+      g.translate(sh.x, (sh.y0 + sh.y1) / 2, sh.z);
+      const n = g.attributes.position.count;
+      const meta = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) meta.set([sh.y0, sh.y1, sh.k ?? 1, (sh.x * 0.013 + sh.z * 0.007) % 1], i * 4);
+      g.setAttribute("aMeta", new THREE.BufferAttribute(meta, 4));
+      parts.push(g);
+    }
+    const g = mergeGeometries(parts)!;
+    parts.forEach((p) => p.dispose());
+    g.computeBoundingSphere();
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) } },
+      vertexShader: /* glsl */ `
+        attribute vec4 aMeta;
+        varying vec3 vWorld; varying vec3 vN; varying vec4 vMeta; varying vec2 vUv;
+        void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vN = normalize(mat3(modelMatrix) * normal); vMeta = aMeta; vUv = uv; gl_Position = projectionMatrix * viewMatrix * wp; }`,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uTint;
+        varying vec3 vWorld; varying vec3 vN; varying vec4 vMeta; varying vec2 vUv;
+        ${GLSL_NOISE}
+        ${GLSL_SKY}
+        ${GLSL_AIR}
+        void main(){
+          vec3 V = normalize(cameraPosition - vWorld);
+          vec3 n = normalize(vN);
+          // a column of light has no surface: brightest through its middle as seen, nothing at its edges
+          float face = pow(abs(dot(n, V)), 2.5);
+          float h = clamp((vWorld.y - vMeta.x) / max(vMeta.y - vMeta.x, 1.0), 0.0, 1.0);
+          float fade = smoothstep(0.0, 0.25, h) * smoothstep(1.0, 0.7, h);
+          float streak = vnoise(vec2(vUv.x * 24.0 + vMeta.w * 50.0, h * 1.5 - uTime * 0.03)) * 0.6 + vnoise(vec2(vUv.x * 61.0, h * 3.0 + uTime * 0.02)) * 0.4;
+          float breath = 0.8 + 0.2 * sin(uTime * 0.25 + vMeta.w * 30.0);
+          float dist = length(vWorld - cameraPosition);
+          float a = face * fade * (0.35 + 0.65 * streak) * breath * vMeta.z * smoothstep(10.0, 80.0, dist) * glowK();
+          gl_FragColor = vec4(uTint * mix(vec3(1.0), uGlow, 0.4) * a * 0.22, 1.0);
+          ${END}
+        }`,
+    });
+    return { g, mat };
+  }, [list]);
+  return <mesh geometry={b.g} material={b.mat} renderOrder={7} />;
 }

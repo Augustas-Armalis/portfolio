@@ -562,7 +562,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "gate",
     place: "forest",
     air: AIR.gate,
-    fog: [0.00022, 0.02],
+    fog: [0.00012, 0.016],
     terrain: {
       base: 0,
       sines: [
@@ -582,7 +582,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     water: null,
     centre: [0, 0],
     radius: 520,
-    ceil: 300,
+    ceil: 340,
     entry: { x: 0, z: 430, above: 20, yaw: 0 },
     gate: { x: 0, z: -330, above: 40, yaw: 0 },
     path: [
@@ -597,9 +597,11 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [0, -372, 40],
     ],
     obstacles: [
-      { x: -188, z: -330, r: 112, h: 300, bell: true },
-      { x: 188, z: -330, r: 112, h: 280, bell: true },
-      { x: -100, z: -152, r: 44, h: 66 },
+      // the two leaning mountains (Gate.tsx PEAKS): the plane meets only their feet
+      { x: -250, z: -330, r: 165, h: 300, bell: true },
+      { x: 250, z: -330, r: 165, h: 280, bell: true },
+      // the terrace and its colossal angel
+      { x: -100, z: -152, r: 44, h: 140 },
       { x: 74, z: -236, r: 14, h: 24 },
     ],
     canvases: [{ painting: "offering", x: -30, z: 268, yaw: 0.42 }],
