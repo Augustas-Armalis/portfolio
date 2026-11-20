@@ -834,7 +834,7 @@ export const places: { id: PlaceId; title: string; groups: { title?: string; ite
     id: "music",
     title: "Music",
     groups: [
-      { title: "Recordings", items: tracks.map((t) => ({ id: t.id, name: t.title, kind: `Audio, ${t.durationLabel}`, track: t.id, art: t.cover })) },
+      { title: "Recordings", items: tracks.map((t) => (t.file ? { id: t.id, name: t.title, kind: `Audio, ${t.durationLabel}`, track: t.id, art: t.cover } : { id: t.id, name: t.title, kind: `Video, ${t.durationLabel}`, app: "records" as AppId, art: t.cover })) },
       { title: "Apps", items: [appItem("records"), appItem("piano")] },
     ],
   },

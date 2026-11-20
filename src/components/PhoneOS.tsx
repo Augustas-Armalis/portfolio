@@ -2,7 +2,7 @@
 
 import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransform, type AnimationPlaybackControls } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { apps, bookCall, dockApps, gameApps, mainWork, owner, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
+import { apps, bookCall, dockApps, gameApps, mainWork, owner, playableTracks, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
 import { flightMusicPrime } from "@/lib/flightMusic";
 import { handoff } from "@/lib/handoff";
 import { isUp, useOS, useWallpaper } from "@/store";
@@ -125,10 +125,11 @@ function StatusBar({ light }: { light?: boolean }) {
   const c = light ? "text-white" : "text-ink";
   return (
     <div className={`pointer-events-none absolute inset-x-0 top-0 z-[80] flex h-[var(--phone-top)] items-center pt-1 text-[17px] font-semibold tracking-[-0.02em] tabular-nums ${c}`}>
-      {/* the time and the icons are each centred in the "ears" either side of the Dynamic Island */}
-      <span className="flex flex-1 justify-center pl-3">{time}</span>
-      <span className="w-[126px]" />
-      <span className="flex flex-1 items-center justify-center gap-[5px] pr-3">
+      {/* the time at the far left and the signal, Wi-Fi and battery at the far right, at every width: the island
+          stays in the middle and only the space between them grows */}
+      <span className="flex flex-1 justify-start pl-[max(24px,env(safe-area-inset-left))]">{time}</span>
+      <span className="w-[126px] shrink-0" />
+      <span className="flex flex-1 items-center justify-end gap-[5px] pr-[max(20px,env(safe-area-inset-right))]">
         <span className="flex h-[10px] items-end gap-[2px]">
           {[4, 6, 8, 10].map((h) => (
             <span key={h} className={`w-[3px] rounded-[1px] ${light ? "bg-white" : "bg-ink"}`} style={{ height: h }} />
@@ -336,7 +337,7 @@ function Widget({ app, onOpen, className = "", children, label }: { app: AppId; 
 // Now playing: the artwork, what it is, and a play button that works without opening Music.
 function PlayingWidget({ onOpen }: { onOpen: Open }) {
   const p = usePlayer();
-  const track = tracks.find((t) => t.id === p.id) ?? tracks[0];
+  const track = tracks.find((t) => t.id === p.id) ?? playableTracks[0];
   if (!track) return null;
   const on = p.playing && p.id === track.id;
   return (
