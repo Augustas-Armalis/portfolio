@@ -1,17 +1,20 @@
 "use client";
 
+import { useFrame, useThree } from "@react-three/fiber";
+import { useRef } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { SKY_U } from "../sky";
 import { buildGrove, type Kind, type Tree } from "../Trees";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
-import { Procession, RayedSun, SunShafts, Walkers, heapBlobs, heapMesh, makeHeapMaterial, useDeepLens, type Beam, type Heap } from "./fairy/shared";
+import { GLSL_GROUND_LIFE, Kindling, Procession, RayedSun, RisingFlock, SunShafts, Walkers, boulderGeometry, heapBlobs, heapMesh, makeHeapMaterial, useDeepLens, type Beam, type Heap, type Lamp } from "./fairy/shared";
 import { GATE, buildMassif, massifPoint, needleGeometry } from "./offering/rock";
 import { GoldStars, type Star } from "./offering/stars";
 import { Wings, seraph } from "./paradise/isle";
 import { CloudDeck, makeWingMaterial } from "./paradise/life";
-import { WORLDS, groundAt, pathOf } from "./voyage";
+import { ORIGIN, WORLDS, groundAt, pathOf, voyage } from "./voyage";
 
 // The Offering (Auka, 1909), and the gate of mountains. A long valley of pines climbs to a pass between two
 // mountains that lean together until their crests cross a kilometre up, a gate as tall as the sky, the last
@@ -23,6 +26,8 @@ import { WORLDS, groundAt, pathOf } from "./voyage";
 // the leaning walls, stars in the rock, and the way on at its far end.
 
 const def = WORLDS.gate;
+const TERRACE = { x: -330, z: 330, w: 220, d: 290, h: 150 };
+const ALTAR = { x: 320, z: -40 };
 export const GATE_PAL: GroundPalette = {
   a: [0.1, 0.135, 0.055],
   b: [0.2, 0.175, 0.07],
@@ -32,6 +37,7 @@ export const GATE_PAL: GroundPalette = {
   highAt: [70, 130],
   hook: {
     decl: /* glsl */ `
+      ${GLSL_GROUND_LIFE}
       float gateRoad(float z){ float t = clamp((z - 950.0) / (20.0 - 950.0), 0.0, 1.0); t = t * t * (3.0 - 2.0 * t); return 60.0 + 245.0 * pow(t, 1.4) + 14.0 * sin(z * 0.011); }
     `,
     lit: /* glsl */ `
@@ -49,19 +55,22 @@ export const GATE_PAL: GroundPalette = {
         // the pale road of those who come up to the altar
         float way = (1.0 - smoothstep(2.6, 4.4, abs(p.x - gateRoad(p.y)))) * step(20.0, p.y) * step(p.y, 1460.0);
         col = mix(col, vec3(0.5, 0.42, 0.27) * light, way * 0.85);
+        // heather and yellow flowers in drifts, stones, strokes of turf: the open valley is never one lawn
+        col = groundLife(col, p, gd, px, light, (1.0 - scree) * (1.0 - wood * 0.8) * (1.0 - way), vec3(0.62, 0.4, 0.7), vec3(0.95, 0.72, 0.24));
+        // what stands on the ground shades it: the terrace, the altar
+        { vec2 q = abs(p - vec2(${TERRACE.x.toFixed(1)}, ${TERRACE.z.toFixed(1)})) - vec2(${(TERRACE.w / 2).toFixed(1)}, ${(TERRACE.d / 2).toFixed(1)}); col *= mix(0.45, 1.0, smoothstep(0.0, 34.0, length(max(q, 0.0)))); }
+        { vec2 q = abs(p - vec2(${ALTAR.x.toFixed(1)}, ${ALTAR.z.toFixed(1)})) - vec2(43.0); col *= mix(0.5, 1.0, smoothstep(0.0, 18.0, length(max(q, 0.0)))); }
       }
     `,
   },
 };
 
-const TERRACE = { x: -330, z: 330, w: 220, d: 290, h: 150 };
 // the road of those who bring the offering: up the valley and across to the altar's foot
 const sm = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
 const roadX = (z: number) => 60 + 245 * Math.pow(sm(950, 20, z), 1.4) + 14 * Math.sin(z * 0.011);
-const ALTAR = { x: 320, z: -40 };
 const SEEDS = [1.3, 4.1];
 // (grass in the open valley only: not on the scree, thin under the pines)
 const GRASS_MASK = `float md = length(vec2((abs(p.x) - ${GATE.off.toFixed(1)}) / ${GATE.rx.toFixed(1)}, (p.y - (${GATE.z.toFixed(1)})) / ${GATE.rz.toFixed(1)})); float scree = max(1.0 - smoothstep(0.92, 1.5, md), (1.0 - smoothstep(150.0, 240.0, abs(p.x))) * smoothstep(-120.0, -260.0, p.y) * smoothstep(-1240.0, -1120.0, p.y)); float wood = smoothstep(0.42, 0.62, vnoise(p * 0.0042 + 3.0) * 0.65 + vnoise(p * 0.013) * 0.35) * smoothstep(40.0, 110.0, abs(p.x)); return (1.0 - scree) * (1.0 - wood * 0.85);`;
@@ -140,7 +149,11 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     }
     const fireY = sy;
     k.box(18, 2.4, 18, [ALTAR.x, fireY + 1.2, ALTAR.z], [1, 0.58, 0.2], { glow: 1.7 });
-    halos.push({ p: [ALTAR.x, fireY + 6, ALTAR.z], size: 34, col: [1, 0.6, 0.24], k: 1.2 });
+    const fire: Lamp[] = [
+      { p: [ALTAR.x, fireY + 6, ALTAR.z], size: 34, col: [1, 0.6, 0.24], k: 1.2, at: 1e5 },
+      { p: [ALTAR.x - 4, fireY + 11, ALTAR.z + 3], size: 20, col: [1, 0.74, 0.34], k: 0.9, at: 1e5 },
+      { p: [ALTAR.x + 5, fireY + 9, ALTAR.z - 4], size: 16, col: [1, 0.5, 0.18], k: 0.9, at: 1e5 },
+    ];
     glows.push({ p: [ALTAR.x, fireY + 20, ALTAR.z], size: 170, col: [1, 0.62, 0.28], k: 0.5 });
 
     // ---- the two smokes
@@ -168,13 +181,26 @@ export default function GateWorld({ props }: { props: WorldProps }) {
       lobes(darkS, p[0] + (r() - 0.5) * 8, p[1], p[2] + (r() - 0.5) * 8, 40 + t * 130 + r() * 22, 1.1, 1);
     }
     const dEnd = darkAt(1);
+    const HEAD: V3 = [dEnd[0] - 110, dEnd[1] + 40, dEnd[2] + 30];
+    // the great dark cloud behind the angel: its back stays; its face, toward whoever comes up the valley, will part
+    const darkFace: Heap[] = [];
     for (let i = 0; i < (props.mobile ? 22 : 46); i++) {
       const a = r() * Math.PI * 2;
       const d = Math.sqrt(r()) * 380;
-      lobes(darkS, dEnd[0] - 110 + Math.cos(a) * d * 1.1, dEnd[1] + 40 + (r() - 0.5) * 130, dEnd[2] + 30 + Math.sin(a) * d * 0.6, 150 + r() * 170 - d * 0.15, 0.75, 4);
+      const front = i % 2 === 0;
+      lobes(front ? darkFace : darkS, HEAD[0] + Math.cos(a) * d * 1.1, HEAD[1] + (r() - 0.5) * 130, HEAD[2] + (front ? 70 : -110) + Math.sin(a) * d * 0.3, 150 + r() * 170 - d * 0.15, 0.75, 4);
+    }
+    // and in the heart of it, between the two, stars: seen when the cloud's face draws apart
+    const heart: Star[] = [];
+    for (let i = 0; i < (props.mobile ? 30 : 70); i++) {
+      const a = r() * Math.PI * 2;
+      const d = Math.sqrt(r()) * 210;
+      heart.push({ p: [HEAD[0] + Math.cos(a) * d, HEAD[1] + Math.sin(a) * d * 0.5, HEAD[2] - 20 + (r() - 0.5) * 30], size: 3 + r() * r() * 11 });
     }
     const smokeW = makeHeapMaterial({ lit: [1.18, 1.3, 1.7], shade: [2.6, 2.8, 2.7], rim: 0.8, drift: 0.15, rise: 1 });
     const smokeD = makeHeapMaterial({ lit: [0.2, 0.2, 0.34], shade: [0.2, 0.22, 0.34], rim: 0.55, drift: 0.15, rise: 1 });
+    const smokeF = makeHeapMaterial({ lit: [0.2, 0.2, 0.34], shade: [0.2, 0.22, 0.34], rim: 0.55, drift: 0.15, rise: 1 });
+    (smokeF.uniforms.uPart.value as THREE.Vector4).set(HEAD[0], HEAD[2], 0, 0);
 
     // ---- needles of rock in ranks: under the terrace's starry face, at the mountains' feet, by the altar
     const needles: THREE.BufferGeometry[] = [];
@@ -218,6 +244,21 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     const needleGeo = mergeGeometries(needles)!;
     needles.forEach((q) => q.dispose());
     needleGeo.computeBoundingSphere();
+
+    // ---- stones: fallen from the mountains, lying about their feet and all through the gorge, a few far down the valley
+    const stones: { p: V3; r: number; seed: number; col?: V3 }[] = [];
+    for (let i = 0, guard = 0; i < (props.mobile ? 90 : 260) && guard < 3000; guard++) {
+      const inGorge = r() < 0.45;
+      const x = inGorge ? (r() - 0.5) * 260 : (r() - 0.5) * 1500;
+      const z = inGorge ? GATE.z + 560 - r() * 1150 : 1300 - r() * 1500;
+      if (nearPath(x, z, inGorge ? 14 : 24) || Math.abs(x - roadX(z)) < 8) continue;
+      const md = Math.hypot((Math.abs(x) - GATE.off) / GATE.rx, (z - GATE.z) / GATE.rz);
+      if (md < 0.9) continue;
+      if (!inGorge && md > 1.7 && r() < 0.75) continue;
+      const rad = 1.2 + r() * r() * (inGorge ? 9 : 6);
+      stones.push({ p: [x, g(x, z), z], r: rad, seed: r(), col: r() < 0.5 ? [0.2, 0.15, 0.17] : [0.3, 0.2, 0.13] });
+      i++;
+    }
 
     // ---- stars in the rock of the gorge itself, on the faces that look in
     for (let i = 0; i < (props.mobile ? 60 : 170); i++) {
@@ -285,16 +326,21 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     for (let z = 1440; z > 24; z -= 4) road.push(new THREE.Vector3(roadX(z), g(roadX(z), z), z));
     return {
       base: { ...props, grass: props.grass * 0.6 },
+      flockY: g(150, -150) + 40,
       left: buildMassif(-1, SEEDS[0], props.mobile),
       right: buildMassif(1, SEEDS[1], props.mobile),
       rock: makeTempera({ amb: 0.74, key: 0.6, strata: 1.1, dab: 1.4, grain: 1.2, wrap: 0.5, rim: [0.3, 0.17, 0.07], rimPow: 4 }),
       needles: needleGeo,
+      stones: boulderGeometry(stones),
       set: k.build(),
       tempera: makeTempera({ amb: 0.9, key: 0.4, strata: 0.5, grain: 1, wrap: 0.5, rim: [0.5, 0.36, 0.16], rimPow: 3 }),
       wings: wings.build(),
       wingMat: makeWingMaterial(),
       white: heapMesh(heapBlobs(white, 3), smokeW, 2),
       dark: heapMesh(heapBlobs(darkS, 7), smokeD, 2),
+      face: heapMesh(heapBlobs(darkFace, 17), smokeF, 2),
+      smokeF,
+      heart,
       far: heapMesh(heapBlobs(far, 11), makeHeapMaterial({}), 1),
       smokeW,
       smokeD,
@@ -303,6 +349,7 @@ export default function GateWorld({ props }: { props: WorldProps }) {
       beams,
       flocks,
       stars,
+      fire,
       halos,
       glows,
       road,
@@ -310,6 +357,20 @@ export default function GateWorld({ props }: { props: WorldProps }) {
       sparkMat: makePoints({ a: [1, 0.6, 0.2], b: [1, 0.86, 0.5], scale: 260, drift: 5, gain: 1.2, max: 14 }),
     };
   }, [props.mobile, props.trees, props.far, props.grass, props.reduced, props.effects > 0.5]);
+  // The dark cloud's face draws apart as the plane comes up the valley under it, and the stars in its heart are seen.
+  const camera = useThree((st) => st.camera);
+  const clock = useRef(0);
+  useFrame(() => {
+    // (the world's own clock, so that it keeps time with everything else that moves here)
+    const now = SKY_U.uTime.value;
+    const dt = Math.min(0.2, Math.max(0, now - clock.current));
+    clock.current = now;
+    if (voyage.cur !== "gate") return;
+    const z = camera.position.z - ORIGIN.z;
+    const want = 250 * Math.min(1, Math.max(0, (1150 - z) / 520));
+    const u = b.smokeF.uniforms.uPart.value as THREE.Vector4;
+    u.z += (want - u.z) * Math.min(1, dt * 0.5);
+  });
   return (
     <>
       <WorldBase id="gate" def={def} pal={GATE_PAL} props={b.base} tip={[0.4, 0.36, 0.14]} pathTint={[1, 0.86, 0.6]} groundSize={5600} angels={false} mask={GRASS_MASK} />
@@ -320,10 +381,12 @@ export default function GateWorld({ props }: { props: WorldProps }) {
         <mesh geometry={b.right} material={b.rock} />
       </group>
       <mesh geometry={b.needles} material={b.rock} />
+      <mesh geometry={b.stones} material={b.rock} />
       <mesh geometry={b.set} material={b.tempera} />
       <mesh geometry={b.wings} material={b.wingMat} />
       <primitive object={b.white} />
       <primitive object={b.dark} />
+      <primitive object={b.face} />
       <primitive object={b.far} />
       {b.grove.sets.map((s, i) => (
         <primitive key={i} object={s} />
@@ -332,6 +395,10 @@ export default function GateWorld({ props }: { props: WorldProps }) {
       <Walkers road={b.road} n={props.mobile ? 30 : 80} speed={1.2} size={1.0} seed={12} lift={4.4} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
       <GoldStars list={b.stars} />
+      <GoldStars list={b.heart} tint={[1, 0.86, 0.5]} />
+      <Kindling list={b.fire} centre={[ALTAR.x, 60, ALTAR.z]} />
+      {/* dark birds burst from the needles at the mouth of the gorge as the plane comes to it */}
+      <RisingFlock origin={[150, b.flockY, -150]} n={props.mobile ? 24 : 64} reach={230} size={2.0} tint={[0.1, 0.08, 0.08]} away={[-0.3, 0.95]} seed={9} />
       <Halos list={b.glows} kind={2} />
       <Halos list={b.halos} />
       <points geometry={b.sparks} material={b.sparkMat} />

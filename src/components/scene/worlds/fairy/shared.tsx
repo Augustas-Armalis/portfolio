@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
@@ -217,10 +217,10 @@ function lobeGeometry(detail: number) {
 }
 export function makeHeapMaterial(o: { lit?: V3; shade?: V3; rim?: number; drift?: number; rise?: number } = {}) {
   return new THREE.ShaderMaterial({
-    uniforms: { ...SKY_U, ...WORLD_U, uLitK: { value: new THREE.Color(...(o.lit ?? [1, 1, 1])) }, uShadeK: { value: new THREE.Color(...(o.shade ?? [1, 1, 1])) }, uRimK: { value: o.rim ?? 1 }, uDrift: { value: o.drift ?? 1 }, uRise: { value: o.rise ?? 0 } },
+    uniforms: { ...SKY_U, ...WORLD_U, uLitK: { value: new THREE.Color(...(o.lit ?? [1, 1, 1])) }, uShadeK: { value: new THREE.Color(...(o.shade ?? [1, 1, 1])) }, uRimK: { value: o.rim ?? 1 }, uDrift: { value: o.drift ?? 1 }, uRise: { value: o.rise ?? 0 }, uPart: { value: new THREE.Vector4(0, 0, 0, 0) } },
     vertexShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vN; varying vec3 vObj; varying float vSeed;
-      uniform float uTime; uniform float uDrift; uniform float uRise;
+      uniform float uTime; uniform float uDrift; uniform float uRise; uniform vec4 uPart;
       void main(){
         float ph = instanceMatrix[3].x * 0.011 + instanceMatrix[3].z * 0.007;
         // smoke: swellings travel up through every lobe, so the whole column is seen to climb
@@ -228,6 +228,8 @@ export function makeHeapMaterial(o: { lit?: V3; shade?: V3; rim?: number; drift?
         vec4 lp = instanceMatrix * vec4(pp, 1.0);
         // cloud is never quite still: the whole sky drifts a little, each heap breathing in its place
         lp.xyz += vec3(sin(uTime * 0.05 + ph) * 6.0 + uTime * 0.6, sin(uTime * 0.07 + ph * 1.7) * 1.5, cos(uTime * 0.045 + ph * 1.3) * 4.0) * uDrift;
+        // a cloud that parts: its lobes draw away to either side of a line through (uPart.x, uPart.y), by uPart.z metres
+        if (uPart.z > 0.0) { vec2 d = instanceMatrix[3].xz - uPart.xy; lp.xz += normalize(d + vec2(1e-3)) * uPart.z * (0.6 + 0.4 * fract(ph * 7.1)); lp.y += uPart.z * 0.12 * (fract(ph * 3.3) - 0.3); }
         vec4 wp = modelMatrix * lp;
         vWorld = wp.xyz; vObj = position; vSeed = fract(ph * 3.7);
         vec3 sc = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
@@ -674,3 +676,204 @@ export function Procession({ road, n, speed = 1.3, scale = 2, robe = [0.8, 0.76,
   }, [road, n, speed, scale, seed]);
   return <mesh geometry={b.g} material={b.mat} />;
 }
+
+// ---------- the ground, never one colour ----------
+// GLSL for a world's ground hook: drifts of flower colour seen from far off, flower by flower nearer, and
+// small pale stones; all of it fading before it could shimmer. `amount` is where it grows (0..1).
+export const GLSL_GROUND_LIFE = /* glsl */ `
+vec3 groundLife(vec3 col, vec2 p, float gd, float px, vec3 light, float amount, vec3 tintA, vec3 tintB){
+  float drift = vnoise(p * 0.021 + 5.0) * 0.6 + vnoise(p * 0.067) * 0.4;
+  vec3 dcol = mix(tintA, tintB, vnoise(p * 0.013 + 9.0));
+  col = mix(col, dcol * light * 0.8, smoothstep(0.52, 0.8, drift) * 0.26 * amount);
+  // broad strokes of darker and lighter turf, laid along a slowly turning hand
+  float turf = vnoise(p * vec2(0.05, 0.016) + vnoise(p * 0.004) * 4.0);
+  col *= 1.0 + (turf - 0.5) * 0.3 * amount;
+  float nearF = (1.0 - smoothstep(90.0, 320.0, gd)) * amount * (1.0 - smoothstep(0.3, 1.1, px * 2.4));
+  if (nearF > 0.0) {
+    vec2 fc = p * 0.42; vec2 fi = floor(fc); float fh = hash12(fi + 17.0);
+    vec2 fo = vec2(hash12(fi + 3.1), hash12(fi + 7.7));
+    float fd = length(fract(fc) - 0.2 - 0.6 * fo);
+    float speck = (1.0 - smoothstep(0.09, 0.16, fd)) * step(0.5, fh);
+    vec3 fcol = fh < 0.72 ? vec3(1.0, 0.97, 0.88) : fh < 0.88 ? tintA : tintB;
+    col = mix(col, fcol * light * 1.1, speck * nearF);
+    // stones: a few pale ones with a dark side
+    vec2 sc = p * 0.13; vec2 si = floor(sc); float shh = hash12(si + 41.0);
+    vec2 so = vec2(hash12(si + 5.3), hash12(si + 9.1));
+    vec2 sd = fract(sc) - 0.25 - 0.5 * so;
+    float stone = (1.0 - smoothstep(0.05, 0.08, length(sd * vec2(1.0, 1.5)))) * step(0.72, shh);
+    col = mix(col, vec3(0.42, 0.4, 0.36) * light * (0.7 + 0.5 * smoothstep(-0.05, 0.05, sd.y)), stone * nearF);
+  }
+  return col;
+}`;
+
+// boulders: rounded stones lying in the ground, each sunk a third into it
+export function boulderGeometry(list: { p: V3; r: number; seed: number; col?: V3 }[]) {
+  const parts: THREE.BufferGeometry[] = [];
+  const v = new THREE.Vector3();
+  for (const b of list) {
+    const g = mergeVertices(new THREE.IcosahedronGeometry(1, 1).deleteAttribute("uv").deleteAttribute("normal"));
+    const p = g.attributes.position;
+    const c = new Float32Array(p.count * 4);
+    const base = b.col ?? [0.2, 0.17, 0.17];
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i).normalize();
+      const lump = 1 + 0.22 * Math.sin(v.x * 3.1 + b.seed * 9) * Math.sin(v.z * 2.7 + b.seed * 5) + 0.14 * Math.sin(v.y * 4.3 + v.x * 2.0 + b.seed * 3);
+      p.setXYZ(i, b.p[0] + v.x * b.r * lump * 1.2, b.p[1] + (v.y * 0.62 - 0.2) * b.r * lump, b.p[2] + v.z * b.r * lump);
+      // moss and light on top, dark where it meets the earth
+      const t = v.y * 0.5 + 0.5;
+      c.set([base[0] * (0.45 + 0.9 * t), base[1] * (0.45 + 0.95 * t), base[2] * (0.45 + 0.8 * t), 0], i * 4);
+    }
+    g.setAttribute("aCol", new THREE.BufferAttribute(c, 4));
+    g.computeVertexNormals();
+    parts.push(g);
+  }
+  const out = mergeGeometries(parts)!;
+  parts.forEach((q) => q.dispose());
+  out.computeBoundingSphere();
+  return out;
+}
+
+// ---------- lights that kindle as the plane comes near ----------
+// Lamps that are dark from far off and come alight one after another as the eye approaches `centre`: each has
+// its own distance (`at`) at which it wakes, so a castle lights window by window, ward by ward.
+export type Lamp = { p: V3; size: number; col: V3; k?: number; at: number };
+export function Kindling({ list, centre }: { list: Lamp[]; centre: V3 }) {
+  const b = useDisposable(() => {
+    const g = new THREE.InstancedBufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    const pos = new Float32Array(list.length * 4);
+    const col = new Float32Array(list.length * 4);
+    const at = new Float32Array(list.length);
+    const box = new THREE.Box3();
+    list.forEach((h, i) => {
+      pos.set([...h.p, h.size], i * 4);
+      col.set([...h.col, h.k ?? 1], i * 4);
+      at[i] = h.at;
+      box.expandByPoint(new THREE.Vector3(...h.p));
+    });
+    g.setAttribute("aPos", new THREE.InstancedBufferAttribute(pos, 4));
+    g.setAttribute("aCol", new THREE.InstancedBufferAttribute(col, 4));
+    g.setAttribute("aAt", new THREE.InstancedBufferAttribute(at, 1));
+    g.instanceCount = list.length;
+    g.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+    g.boundingSphere.radius += 60;
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { ...SKY_U, ...WORLD_U, uCentre: { value: new THREE.Vector3(...centre) } },
+      vertexShader: /* glsl */ `
+        attribute vec4 aPos; attribute vec4 aCol; attribute float aAt;
+        uniform float uTime; uniform float uMist; uniform vec3 uCentre;
+        varying vec2 vUv; varying vec4 vCol; varying float vOn; varying float vSeed;
+        void main(){
+          vec4 mv = modelViewMatrix * vec4(aPos.xyz, 1.0);
+          float d = -mv.z;
+          vSeed = fract(aPos.x * 0.137 + aPos.z * 0.291 + aPos.y * 0.071);
+          // how near the eye has come to the place these lamps belong to
+          float near = distance(cameraPosition, (modelMatrix * vec4(uCentre, 1.0)).xyz);
+          float on = smoothstep(aAt + 26.0, aAt - 26.0, near);
+          // a lamp newly lit flares, then settles and breathes
+          float flare = 1.0 + 1.4 * smoothstep(aAt + 26.0, aAt, near) * smoothstep(aAt - 90.0, aAt - 10.0, near);
+          float flick = 0.86 + 0.14 * sin(uTime * (2.0 + vSeed * 5.0) + vSeed * 40.0) * sin(uTime * 0.7 + vSeed * 9.0);
+          vOn = on * flare * flick * smoothstep(2.0 + aPos.w * 0.2, 12.0 + aPos.w * 1.1, d) * exp(-d * uMist * 1.5);
+          mv.xy += position.xy * aPos.w * (0.7 + 0.3 * on);
+          vUv = position.xy; vCol = aCol;
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform float uNight; uniform float uPulse;
+        varying vec2 vUv; varying vec4 vCol; varying float vOn; varying float vSeed;
+        void main(){
+          float r = length(vUv);
+          if (r > 1.0 || vOn < 0.003) discard;
+          float edge = 1.0 - smoothstep(0.7, 1.0, r);
+          float a = (exp(-r * r * 26.0) * 2.6 + exp(-r * r * 5.0) * 0.5 + exp(-r * 2.6) * 0.1) * edge;
+          vec3 c = mix(vCol.rgb, vec3(1.0, 0.97, 0.9), exp(-r * r * 60.0) * 0.7) * a;
+          gl_FragColor = vec4(c * vCol.a * vOn * mix(1.0, 0.36, uNight) * (1.0 + uPulse * 0.5), 1.0);
+          ${END}
+        }`,
+    });
+    return { g, mat };
+  }, [list, centre]);
+  return <mesh geometry={b.g} material={b.mat} renderOrder={6} />;
+}
+
+// ---------- a flock that rises as the plane passes ----------
+// Birds sitting unseen in a wood (or on a shore) until the eye comes within `reach` of them; then they go up
+// all together in a widening spiral, wheel once overhead and stream away.
+export function RisingFlock({ origin, n = 40, reach = 170, size = 1.6, tint = [0.12, 0.1, 0.08], lit = false, seed = 3, away = [-0.6, 0.8] }: { origin: V3; n?: number; reach?: number; size?: number; tint?: V3; lit?: boolean; seed?: number; away?: [number, number] }) {
+  const camera = useThree((s) => s.camera);
+  const b = useDisposable(() => {
+    const r = rng(seed);
+    const g = new THREE.InstancedBufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, -0.35, 0, 0, 0.25, -1, 0, 0.12, 1, 0, 0.12], 3));
+    g.setIndex([0, 1, 2, 0, 3, 1]);
+    const ph = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) ph.set([r() * 6.283, r(), r(), 0.75 + r() * 0.5], i * 4);
+    g.setAttribute("aPh", new THREE.InstancedBufferAttribute(ph, 4));
+    g.instanceCount = n;
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(...origin), 900);
+    const mat = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide,
+      transparent: true,
+      depthWrite: false,
+      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) }, uLit: { value: lit ? 1 : 0 }, uOrigin: { value: new THREE.Vector3(...origin) }, uT0: { value: -1 }, uSize: { value: size }, uAway: { value: new THREE.Vector2(...away).normalize() } },
+      vertexShader: /* glsl */ `
+        attribute vec4 aPh;
+        uniform float uTime; uniform float uT0; uniform vec3 uOrigin; uniform float uSize; uniform vec2 uAway;
+        varying vec3 vWorld; varying float vSide; varying float vShow;
+        vec3 at(float t){
+          // each leaves a moment after the first, climbs fast, then levels and streams away
+          float up = 70.0 * (1.0 - exp(-t * 0.35)) * (0.6 + 0.8 * aPh.z);
+          float ang = aPh.x + t * (0.5 + 0.3 * aPh.y);
+          float rad = (8.0 + 30.0 * aPh.y) * (1.0 - exp(-t * 0.5)) + 6.0;
+          float go = max(t - 7.0, 0.0);
+          return uOrigin + vec3(cos(ang) * rad, up + sin(t * 0.7 + aPh.x) * 3.0, sin(ang) * rad) + vec3(uAway.x, 0.12, uAway.y) * go * go * 0.5 * (0.7 + 0.6 * aPh.z);
+        }
+        void main(){
+          float t = uT0 < 0.0 ? -1.0 : uTime - uT0 - aPh.y * 1.6;
+          vShow = step(0.0, t) * (1.0 - smoothstep(34.0, 44.0, t));
+          vec3 c = at(max(t, 0.0));
+          vec3 fwd = normalize(at(max(t, 0.0) + 0.2) - c + vec3(1e-4));
+          vec3 side = normalize(cross(vec3(0.0, 1.0, 0.0), fwd) + vec3(1e-4));
+          float beat = sin(uTime * (9.0 - 3.0 * smoothstep(3.0, 10.0, t)) + aPh.x * 17.0);
+          float s = aPh.w * uSize * 1.6;
+          vec3 p = position;
+          vec3 w = c + side * p.x * s + fwd * -p.z * s + vec3(0.0, abs(p.x) * beat * 0.8 * s, 0.0);
+          vWorld = (modelMatrix * vec4(w, 1.0)).xyz;
+          vSide = abs(p.x);
+          gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uTint; uniform float uLit;
+        varying vec3 vWorld; varying float vSide; varying float vShow;
+        ${GLSL_SKY}
+        ${GLSL_AIR}
+        void main(){
+          if (vShow < 0.01) discard;
+          vec3 col = uTint * mix(uSkyCol * 0.6 + 0.08, uSkyCol * 0.9 + uKeyCol * 0.45, uLit);
+          float f = airAmt(vWorld);
+          gl_FragColor = vec4(mix(col, airCol(normalize(vWorld - cameraPosition)), f), (1.0 - f * 0.92) * (1.0 - vSide * 0.35) * vShow);
+          ${END}
+        }`,
+    });
+    return { g, mat };
+  }, [origin, n, seed, size, lit]);
+  const o = new THREE.Vector3();
+  useFrame(() => {
+    const u = b.mat.uniforms;
+    // (the flock's place is in its world's own coordinates: the mesh's parent carries the world's origin)
+    if (u.uT0.value < 0 && mesh.current) {
+      o.set(...origin).applyMatrix4(mesh.current.matrixWorld);
+      if (o.distanceTo(camera.position) < reach && mesh.current.parent && isShown(mesh.current)) u.uT0.value = SKY_U.uTime.value;
+    }
+  });
+  const mesh = useRef<THREE.Mesh>(null);
+  return <mesh ref={mesh} geometry={b.g} material={b.mat} frustumCulled={false} renderOrder={4} />;
+}
+const isShown = (o: THREE.Object3D) => {
+  for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false;
+  return true;
+};

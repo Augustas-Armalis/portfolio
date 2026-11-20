@@ -7,7 +7,7 @@ import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, 
 import { Birds, type Flock } from "./life";
 import { buildCastle } from "./fairy/castle";
 import { MT, PEAKS, WARDS, buildMountain, buildPeaks, buildRamp, mountainCrowns, peakRadius, rampLine, roadLine } from "./fairy/mountain";
-import { RayedSun, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap } from "./fairy/shared";
+import { GLSL_GROUND_LIFE, Kindling, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp } from "./fairy/shared";
 import { WORLDS, groundAt, pathOf } from "./voyage";
 
 // Fairy Tale (Castle Fairy Tale, 1909), after the painting and after the way the film "Angelų takais" built it
@@ -70,6 +70,7 @@ export const FAIRY_PAL: GroundPalette = {
   hook: {
     decl: /* glsl */ `
       ${GLSL_WOOD}
+      ${GLSL_GROUND_LIFE}
       float fairyWay(float z){ return ${f4(WAY0.x0)} + (z - ${f4(WAY0.z0)}) * ${f4(WAY0.k)} + 46.0 * sin(z * 0.011 + 0.4) * sin((z - ${f4(WAY0.z0)}) / ${f4(WAY0.z1 - WAY0.z0)} * 3.14159265); }
     `,
     lit: /* glsl */ `
@@ -103,6 +104,8 @@ export const FAIRY_PAL: GroundPalette = {
         float wd = abs(p.x - fairyWay(p.y));
         float way = (1.0 - smoothstep(3.2, 5.0, wd)) * step(${f4(WAY0.z0)}, p.y) * step(p.y, ${f4(WAY0.z1)});
         col = mix(col, vec3(0.74, 0.66, 0.5) * light, way * 0.9);
+        // the meadows between: flowers in drifts and one by one, stones, strokes of turf
+        col = groundLife(col, p, gd, px, light, (1.0 - wood) * (1.0 - fld) * (1.0 - way), vec3(1.0, 0.84, 0.25), vec3(0.86, 0.3, 0.42));
       }
     `,
   },
@@ -229,6 +232,22 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       const s = 4.5 + r() * 5;
       plain.push({ p: [x, g(x, z) - s * 0.1, z], r: s, h: 1 + r() * 0.5, seed: r() });
     }
+
+    // low bushes scattered through the meadows, so no stretch of ground is bare
+    for (let i = 0; i < Math.round(1500 * few); i++) {
+      const a = r() * Math.PI * 2;
+      const d = 380 + Math.sqrt(r()) * 1250;
+      const x = Math.cos(a) * d;
+      const z = 100 + Math.sin(a) * d;
+      const F = woodF(x, z);
+      if (F > -0.04 || F < -0.6) continue;
+      if (z > WAY0.z0 && z < WAY0.z1 && Math.abs(x - wayX(z)) < 8) continue;
+      const s = 1.5 + r() * 2.2;
+      plain.push({ p: [x, g(x, z) - s * 0.2, z], r: s, h: 0.8 + r() * 0.4, seed: r() });
+    }
+    // (none stands in the way on)
+    const gate = def.gate!;
+    for (const list of [plain, close]) for (let i = list.length - 1; i >= 0; i--) if (Math.hypot(list[i].p[0] - gate.x, list[i].p[2] - gate.z) < 40) list.splice(i, 1);
 
     // ---- hamlets in their fields: a tower, a huddle of roofs, lit windows, cypresses standing by
     const k = new Kit();
@@ -389,8 +408,11 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const way: THREE.Vector3[] = [];
     for (let z = WAY0.z1 - 20; z > WAY0.z0 + 10; z -= 7) way.push(new THREE.Vector3(wayX(z), g(wayX(z), z), z));
     const nM = props.mobile ? 260 : Math.round(1300 * props.effects);
+    // the castle's lamps: dark from far off, they kindle ward by ward as the plane comes on, the summit last
+    const lamps2: Lamp[] = castle.windows.map((w) => ({ p: w.p, size: w.size * 1.25, col: w.col, k: (w.k ?? 0.5) * 1.5, at: 1560 - ((w.p[1] - 400) / 380) * 1050 + (r() - 0.5) * 150 }));
     return {
       y0,
+      flockY: g(36, 1040) + 6,
       // (the plane is high over woods for most of this world: the meadows' grass can be thinner)
       base: { ...props, grass: props.grass * 0.5 },
       soil: mount.soil,
@@ -399,7 +421,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       wall: mount.wall,
       peaks,
       castle: castle.geo,
-      windows: castle.windows,
+      windows: lamps2,
       castleHalos: castle.halos,
       castleGlows: castle.glows,
       tips: castle.tips.filter((_, i) => i % (props.mobile ? 5 : 2) === 0),
@@ -439,7 +461,8 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
         <mesh geometry={b.castle} material={b.stone} />
         <primitive object={b.slopes} />
         <Pennants tips={b.tips} />
-        <Halos list={b.windows} />
+        <Kindling list={b.windows} centre={[0, 520, 60]} />
+        <Procession road={b.road} n={props.mobile ? 30 : 90} speed={1.3} scale={2.6} robe={[0.5, 0.36, 0.3]} wing={[0.36, 0.26, 0.3]} glow={0.04} seed={5} />
         <Halos list={b.castleGlows} kind={2} />
         <Halos list={b.castleHalos} />
         <Walkers road={b.road} n={props.mobile ? 60 : 150} speed={1.5} size={1.1} />
@@ -450,6 +473,8 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       <mesh geometry={b.set} material={b.stone} />
       <Halos list={b.lamps} />
       <Walkers road={b.way} n={props.mobile ? 20 : 46} speed={1.4} size={0.9} seed={8} />
+      <Procession road={b.way} n={props.mobile ? 20 : 46} speed={1.4} scale={2.6} robe={[0.5, 0.36, 0.3]} wing={[0.36, 0.26, 0.3]} glow={0.04} seed={8} />
+      <RisingFlock origin={[36, b.flockY, 1040]} n={props.mobile ? 24 : 60} reach={210} size={1.5} tint={[0.14, 0.09, 0.1]} away={[0.5, -0.86]} />
       <primitive object={b.heaps} />
       <primitive object={b.far} />
       <primitive object={b.belt} />

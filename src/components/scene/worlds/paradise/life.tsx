@@ -1,10 +1,12 @@
 "use client";
 
+import { useFrame, useThree } from "@react-three/fiber";
+import { useRef } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
 import { useDisposable } from "../common";
-import { GLSL_AIR, WORLD_U, type V3 } from "../kit";
+import { GLSL_AIR, Kit, WORLD_U, makeTempera, type V3 } from "../kit";
 
 const END = /* glsl */ `
   #include <tonemapping_fragment>
@@ -261,4 +263,71 @@ export function CloudDeck({ y = 1250, size = 9000 }: { y?: number; size?: number
     return { g, mat };
   }, [size]);
   return <mesh geometry={b.g} material={b.mat} position={[0, y, 0]} renderOrder={-3} frustumCulled={false} />;
+}
+
+// ---------- a ship setting out ----------
+// A small boat with one tall pale sail, lying off the sand until the plane comes near; then it puts out, slowly,
+// along the sun's road toward the horizon, rocking a little, its sail filling. `far` boats are already out there.
+export function Ship({ from, heading, reach = 420, scale = 1, sailing = false }: { from: V3; heading: number; reach?: number; scale?: number; sailing?: boolean }) {
+  const camera = useThree((s) => s.camera);
+  const ref = useRef<THREE.Group>(null);
+  const st = useRef({ t0: sailing ? 0 : -1, out: sailing ? 1 : 0 });
+  const b = useDisposable(() => {
+    const k = new Kit();
+    const wood: V3 = [0.36, 0.24, 0.12];
+    // the hull: a long shallow shell, high at stem and stern
+    const hull = new THREE.SphereGeometry(1, 14, 8, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5);
+    const hp = hull.attributes.position;
+    for (let i = 0; i < hp.count; i++) {
+      const z = hp.getZ(i);
+      hp.setXYZ(i, hp.getX(i) * 2.1 * (1 - 0.55 * z * z), hp.getY(i) * 1.5 + Math.pow(Math.abs(z), 2.4) * 1.5, z * 7.5);
+    }
+    hull.computeVertexNormals();
+    k.add(hull, [0, 0.9, 0], wood, { top: [0.62, 0.44, 0.2] });
+    k.box(3.6, 0.2, 12, [0, 0.75, 0], [0.5, 0.36, 0.18]);
+    k.add(new THREE.CylinderGeometry(0.1, 0.16, 15, 6), [0, 8, 0.6], wood, { top: [0.7, 0.5, 0.24] });
+    k.add(new THREE.CylinderGeometry(0.07, 0.07, 7.4, 5), [0, 2.6, -2.6], wood, { rot: [Math.PI / 2, 0, 0] });
+    // the sail: a tall triangle, bellied by the wind
+    const sail = new THREE.PlaneGeometry(1, 1, 8, 10);
+    const sp = sail.attributes.position;
+    for (let i = 0; i < sp.count; i++) {
+      const u = sp.getX(i) + 0.5;
+      const v = sp.getY(i) + 0.5;
+      const w = (1 - v) * 7.2;
+      sp.setXYZ(i, Math.sin(u * Math.PI) * Math.sin((1 - v * 0.6) * Math.PI * 0.5) * 1.5, 2.6 + v * 12, 0.5 - u * w);
+    }
+    sail.computeVertexNormals();
+    k.add(sail, [0, 0, 0], [0.86, 0.8, 0.66], { top: [1, 0.97, 0.86], glow: 0.14 });
+    // a figure at the steering oar, and a lamp at the masthead
+    k.add(new THREE.ConeGeometry(0.42, 1.9, 7), [0, 1.9, -5.2], [0.8, 0.76, 0.66], { top: [0.95, 0.9, 0.8], glow: 0.06 });
+    k.add(new THREE.SphereGeometry(0.2, 6, 5), [0, 3.0, -5.2], [0.94, 0.8, 0.68], { glow: 0.08 });
+    k.add(new THREE.SphereGeometry(0.22, 6, 5), [0, 15.7, 0.6], [1, 0.84, 0.5], { glow: 1.6 });
+    return { geo: k.build(), mat: makeTempera({ amb: 0.9, key: 0.5, wrap: 0.7 }) };
+  }, []);
+  const v = new THREE.Vector3();
+  const last = useRef(0);
+  useFrame(() => {
+    const g = ref.current;
+    if (!g || !g.parent) return;
+    const s = st.current;
+    const t = SKY_U.uTime.value;
+    const dt = Math.min(0.2, Math.max(0, t - last.current));
+    last.current = t;
+    if (s.t0 < 0) {
+      v.set(...from).applyMatrix4(g.parent.matrixWorld);
+      let shown = true;
+      for (let p: THREE.Object3D | null = g; p; p = p.parent) if (!p.visible) shown = false;
+      if (shown && v.distanceTo(camera.position) < reach) s.t0 = t;
+    }
+    // under way: slowly at first, then a steady four knots
+    if (s.t0 >= 0) s.out += Math.min(dt, 0.1) * (sailing ? 1.2 : 3.4 * Math.min(1, (t - s.t0) / 8));
+    const d = sailing ? (s.out % 900) : s.out;
+    g.position.set(from[0] + Math.sin(heading) * d, from[1] + Math.sin(t * 0.7 + from[0]) * 0.12, from[2] + Math.cos(heading) * d);
+    g.rotation.set(Math.sin(t * 0.5 + from[2]) * 0.03, heading, Math.sin(t * 0.63 + from[0]) * 0.05 + (s.t0 >= 0 ? 0.06 : 0));
+  });
+  return (
+    <group ref={ref} position={from} scale={scale}>
+      <mesh geometry={b.geo} material={b.mat} />
+    </group>
+  );
 }

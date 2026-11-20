@@ -78,14 +78,14 @@ export function buildCastle(mobile: boolean, r: () => number) {
         const rr = (R - (R * 0.1 * yy) / (H * 0.84)) * apo - 0.22;
         const w = Math.max(0.5, R * 0.17);
         const h = Math.max(1.6, R * 0.62);
-        k.box(w, h, 1.0, [x + Math.sin(phi) * rr, y + yy, z + Math.cos(phi) * rr], LAMP, { glow: 1.7, rot: [0, phi, 0] });
-        if (nWin++ % (mobile ? 9 : 4) === 0) L.windows.push({ p: [x + Math.sin(phi) * (rr + 1.2), y + yy, z + Math.cos(phi) * (rr + 1.2)], size: Math.max(2.6, R * 0.8), col: [1, 0.7, 0.34], k: 0.5 });
+        k.box(w, h, 1.0, [x + Math.sin(phi) * rr, y + yy, z + Math.cos(phi) * rr], LAMP, { glow: 0.9, rot: [0, phi, 0] });
+        if (nWin++ % (mobile ? 6 : 2) === 0) L.windows.push({ p: [x + Math.sin(phi) * (rr + 1.2), y + yy, z + Math.cos(phi) * (rr + 1.2)], size: Math.max(2.6, R * 0.8), col: [1, 0.7, 0.34], k: 0.5 });
       }
     }
     // the gallery's own row of small lights
     for (let f = 0; f < seg; f++) {
       const phi = ((f + 0.5) / seg) * Math.PI * 2;
-      k.box(R * 0.13, R * 0.2, 0.8, [x + Math.sin(phi) * (R * 1.14 * apo - 0.2), y + H * 0.968, z + Math.cos(phi) * (R * 1.14 * apo - 0.2)], LAMP, { glow: 1.4, rot: [0, phi, 0] });
+      k.box(R * 0.13, R * 0.2, 0.8, [x + Math.sin(phi) * (R * 1.14 * apo - 0.2), y + H * 0.968, z + Math.cos(phi) * (R * 1.14 * apo - 0.2)], LAMP, { glow: 0.8, rot: [0, phi, 0] });
     }
     if (o.turrets) {
       // four small turrets hung on its corners under the roof
@@ -129,7 +129,7 @@ export function buildCastle(mobile: boolean, r: () => number) {
       const a = -A * 0.92 + ((i + 0.5) / nb) * A * 1.84;
       const h = w.body * 0.5;
       k.box(3.2, h, 1.6, [w.x + Math.sin(a) * (w.R + 1.1), w.y - h / 2 - 12, w.z + Math.cos(a) * (w.R + 1.1)], [0.07, 0.05, 0.14], { top: [0.1, 0.2, 0.26], rot: [0, a, 0] });
-      k.box(1.6, 4.2, 1.9, [w.x + Math.sin(a) * (w.R + 1.2), w.y - h - 6, w.z + Math.cos(a) * (w.R + 1.2)], LAMP, { glow: 1.6, rot: [0, a, 0] });
+      k.box(1.6, 4.2, 1.9, [w.x + Math.sin(a) * (w.R + 1.2), w.y - h - 6, w.z + Math.cos(a) * (w.R + 1.2)], LAMP, { glow: 0.85, rot: [0, a, 0] });
     }
     // the curtain wall and its battlements
     const wh = wi === 0 ? 17 : 13;
@@ -142,7 +142,7 @@ export function buildCastle(mobile: boolean, r: () => number) {
     // a row of lit loops along the wall
     for (let i = 1; i < nm; i += 3) {
       const a = -A + ((i + 0.5) / nm) * A * 2;
-      k.box(0.9, 3.4, 1.2, [w.x + Math.sin(a) * (w.R + 0.2), w.y + wh * 0.5, w.z + Math.cos(a) * (w.R + 0.2)], LAMP, { glow: 1.6, rot: [0, a, 0] });
+      k.box(0.9, 3.4, 1.2, [w.x + Math.sin(a) * (w.R + 0.2), w.y + wh * 0.5, w.z + Math.cos(a) * (w.R + 0.2)], LAMP, { glow: 0.85, rot: [0, a, 0] });
     }
     // towers along it, tall and short by turns, the roofs red, violet and green
     const nt = wi === 0 ? 12 : wi === 1 ? 10 : 8;
@@ -164,10 +164,10 @@ export function buildCastle(mobile: boolean, r: () => number) {
     k.box(42, 64, 18, [w.x, w.y + 22, gz], STONE, { top: STONE_LIT, glow: 0.1 });
     for (const sx of [-1, 1]) tower(w.x + sx * 24.5, w.y - 14, gz + 1, 12.5, 108, { roof: 0, rh: 60, turrets: true });
     // the portal: a tall pointed arch of light, and a rose over it
-    k.box(15, 23, 1.4, [w.x, w.y + 3.5, gz + 8.6], LAMP, { glow: 1.6 });
-    k.add(new THREE.ConeGeometry(10.6, 16, 4), [w.x, w.y + 23, gz + 8.6], LAMP, { glow: 1.6, scale: [1, 1, 0.1], rot: [0, Math.PI / 4, 0] });
-    k.add(new THREE.CylinderGeometry(5.8, 5.8, 1.2, 24), [w.x, w.y + 43, gz + 8.7], [1, 0.82, 0.5], { glow: 1.5, rot: [Math.PI / 2, 0, 0] });
-    for (const sx of [-1, 1]) for (let q = 0; q < 3; q++) k.box(1.5, 8, 1.2, [w.x + sx * (9 + q * 3.6), w.y + 30 - q * 2, gz + 8.6], LAMP, { glow: 1.6 });
+    k.box(15, 23, 1.4, [w.x, w.y + 3.5, gz + 8.6], LAMP, { glow: 0.85 });
+    k.add(new THREE.ConeGeometry(10.6, 16, 4), [w.x, w.y + 23, gz + 8.6], LAMP, { glow: 0.85, scale: [1, 1, 0.1], rot: [0, Math.PI / 4, 0] });
+    k.add(new THREE.CylinderGeometry(5.8, 5.8, 1.2, 24), [w.x, w.y + 43, gz + 8.7], [1, 0.82, 0.5], { glow: 0.85, rot: [Math.PI / 2, 0, 0] });
+    for (const sx of [-1, 1]) for (let q = 0; q < 3; q++) k.box(1.5, 8, 1.2, [w.x + sx * (9 + q * 3.6), w.y + 30 - q * 2, gz + 8.6], LAMP, { glow: 0.85 });
     k.add(new THREE.CylinderGeometry(0.001, 1, 1, 4, 1), [w.x, w.y + 54 + 11, gz], ROOFS[1][0], { top: ROOFS[1][1], glow: 0.1, scale: [31, 22, 14], rot: [0, Math.PI / 4, 0] });
     L.glows.push({ p: [w.x, w.y + 16, gz + 18], size: 64, col: [1, 0.7, 0.34], k: 0.5 });
     L.halos.push({ p: [w.x, w.y + 43, gz + 11], size: 12, col: [1, 0.84, 0.52], k: 0.7 });
@@ -175,7 +175,7 @@ export function buildCastle(mobile: boolean, r: () => number) {
     for (let i = 0; i < 16; i++) k.box(19 - i * 0.3, 3.2, 5.4, [w.x, w.y - 10 - i * 3, gz + 9 + i * 3.4], mixc(STONE, STONE_LIT, 0.5), { top: STONE_LIT, glow: 0.03 });
     // where the road arrives: a lesser gate in the drum's left flank
     const a = -1.92;
-    k.box(11, 20, 1.6, [w.x + Math.sin(a) * (w.R + 3.4), w.y - 14, w.z + Math.cos(a) * (w.R + 3.4)], LAMP, { glow: 1.5, rot: [0, a, 0] });
+    k.box(11, 20, 1.6, [w.x + Math.sin(a) * (w.R + 3.4), w.y - 14, w.z + Math.cos(a) * (w.R + 3.4)], LAMP, { glow: 0.85, rot: [0, a, 0] });
     L.glows.push({ p: [w.x + Math.sin(a) * (w.R + 10), w.y - 14, w.z + Math.cos(a) * (w.R + 10)], size: 30, col: [1, 0.72, 0.36], k: 0.45 });
   }
   // the hall on the middle ward: a long roof, a row of tall windows, a flèche
@@ -184,8 +184,8 @@ export function buildCastle(mobile: boolean, r: () => number) {
     k.box(66, 36, 28, [w.x, w.y + 18, w.z - 4], STONE, { top: STONE_LIT, glow: 0.1 });
     k.add(new THREE.CylinderGeometry(0.001, 1, 1, 4, 1), [w.x, w.y + 36 + 14, w.z - 4], ROOFS[0][0], { top: ROOFS[0][1], glow: 0.1, scale: [48, 28, 21], rot: [0, Math.PI / 4, 0] });
     for (let i = -4; i <= 4; i++) {
-      k.box(3.0, 20, 1.2, [w.x + i * 6.8, w.y + 17, w.z + 10.3], LAMP, { glow: 1.7 });
-      k.add(new THREE.ConeGeometry(2.1, 4, 4), [w.x + i * 6.8, w.y + 28.6, w.z + 10.3], LAMP, { glow: 1.7, scale: [1, 1, 0.2], rot: [0, Math.PI / 4, 0] });
+      k.box(3.0, 20, 1.2, [w.x + i * 6.8, w.y + 17, w.z + 10.3], LAMP, { glow: 0.9 });
+      k.add(new THREE.ConeGeometry(2.1, 4, 4), [w.x + i * 6.8, w.y + 28.6, w.z + 10.3], LAMP, { glow: 0.9, scale: [1, 1, 0.2], rot: [0, Math.PI / 4, 0] });
       if (i % 2 === 0) L.windows.push({ p: [w.x + i * 6.8, w.y + 17, w.z + 13], size: 9, col: [1, 0.72, 0.36], k: 0.5 });
     }
     tower(w.x, w.y + 46, w.z - 4, 3.6, 16, { roof: 2, rh: 42 });
@@ -196,8 +196,8 @@ export function buildCastle(mobile: boolean, r: () => number) {
     const w = WARDS[2];
     k.box(32, 34, 20, [w.x, w.y + 17, w.z - 6], STONE, { top: STONE_LIT, glow: 0.1 });
     k.add(new THREE.CylinderGeometry(0.001, 1, 1, 4, 1), [w.x, w.y + 34 + 13, w.z - 6], ROOFS[1][0], { top: ROOFS[1][1], glow: 0.1, scale: [24, 26, 15.5], rot: [0, Math.PI / 4, 0] });
-    k.add(new THREE.CylinderGeometry(4.8, 4.8, 1.2, 22), [w.x, w.y + 23, w.z + 4.3], [1, 0.8, 0.5], { glow: 1.6, rot: [Math.PI / 2, 0, 0] });
-    for (const sx of [-1, 1]) k.box(2.5, 13, 1.2, [w.x + sx * 9.2, w.y + 11, w.z + 4.3], LAMP, { glow: 1.6 });
+    k.add(new THREE.CylinderGeometry(4.8, 4.8, 1.2, 22), [w.x, w.y + 23, w.z + 4.3], [1, 0.8, 0.5], { glow: 0.85, rot: [Math.PI / 2, 0, 0] });
+    for (const sx of [-1, 1]) k.box(2.5, 13, 1.2, [w.x + sx * 9.2, w.y + 11, w.z + 4.3], LAMP, { glow: 0.85 });
     L.halos.push({ p: [w.x, w.y + 23, w.z + 7], size: 11, col: [1, 0.86, 0.56], k: 0.7 });
   }
   // the keep, standing in the rock above the wards
@@ -276,7 +276,7 @@ export function buildCastle(mobile: boolean, r: () => number) {
       // its windows, toward the valley
       const rows = Math.max(1, Math.floor(h / 5));
       for (let q = 0; q < rows; q++)
-        for (const sx of [-1, 1]) k.box(1.0, 2.0, 0.8, [p.x + Math.sin(yaw) * (dp / 2) + Math.cos(yaw) * sx * w * 0.24, p.y + 3 + q * 4.6, p.z + Math.cos(yaw) * (dp / 2) - Math.sin(yaw) * sx * w * 0.24], LAMP, { glow: 1.6, rot: [0, yaw, 0] });
+        for (const sx of [-1, 1]) k.box(1.0, 2.0, 0.8, [p.x + Math.sin(yaw) * (dp / 2) + Math.cos(yaw) * sx * w * 0.24, p.y + 3 + q * 4.6, p.z + Math.cos(yaw) * (dp / 2) - Math.sin(yaw) * sx * w * 0.24], LAMP, { glow: 0.85, rot: [0, yaw, 0] });
       if (i % 3 === 0) L.windows.push({ p: [p.x + Math.sin(yaw) * (dp / 2 + 1.5), p.y + 5, p.z + Math.cos(yaw) * (dp / 2 + 1.5)], size: 5, col: [1, 0.7, 0.34], k: 0.45 });
     }
   }

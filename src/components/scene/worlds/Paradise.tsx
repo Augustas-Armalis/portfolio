@@ -4,9 +4,9 @@ import * as THREE from "three";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, makeWater, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
-import { Procession, RayedSun, SunShafts, heapBlobs, heapMesh, makeHeapMaterial, useDeepLens, type Beam, type Heap } from "./fairy/shared";
+import { Procession, RayedSun, RisingFlock, SunShafts, heapBlobs, heapMesh, makeHeapMaterial, useDeepLens, type Beam, type Heap } from "./fairy/shared";
 import { COLONNADE, ISLE, POOL_R, TOP_R, TOP_Y, Wings, buildColonnade, buildSteps, seraph, stoneAt } from "./paradise/isle";
-import { Blooms, Butterflies, CloudDeck, makeWingMaterial, type Bloom, type Flutter } from "./paradise/life";
+import { Blooms, Butterflies, CloudDeck, Ship, makeWingMaterial, type Bloom, type Flutter } from "./paradise/life";
 import { makeSea } from "./paradise/sea";
 import { WORLDS, groundAt } from "./voyage";
 
@@ -51,6 +51,8 @@ export const PARADISE_PAL: GroundPalette = {
           vec3 fcol = fh < 0.58 ? vec3(1.0, 0.98, 0.9) : fh < 0.8 ? vec3(1.0, 0.84, 0.2) : fh < 0.9 ? vec3(0.92, 0.18, 0.12) : vec3(0.32, 0.44, 0.98);
           col = mix(col, fcol * fl, speck * nearF);
         }
+        // the foot of the great flight stands in its own shade
+        col *= mix(0.62, 1.0, smoothstep(525.0, 536.0, length(p)));
         // the sand: clean and pale, faintly ribbed by the water, wet where it has just been
         vec3 light = uSkyCol * 0.7 + uKeyCol * (0.22 + 0.5 * max(uKeyDir.y, 0.0)) * sunUp;
         vec3 sandC = vec3(${SAND.map((x) => x.toFixed(3)).join(", ")}) * (0.94 + 0.12 * vnoise(vec2(length(p) * 0.35 + vnoise(p * 0.03) * 3.0, atan(p.y, p.x) * 40.0))) * light;
@@ -297,7 +299,13 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       </mesh>
       <mesh geometry={b.set} material={b.tempera} />
       <mesh geometry={b.wings} material={b.wingMat} />
-      <Blooms list={b.blooms} />
+{/* a boat puts out from the sand as the plane comes to the shore; two more are far out already */}
+      <Ship from={[-742, 0.2, 40]} heading={-1.9} reach={380} />
+      <Ship from={[-1500, 0.2, -700]} heading={-2.3} sailing scale={1.3} />
+      <Ship from={[-900, 0.2, -1500]} heading={-2.6} sailing scale={1.3} />
+      {/* white birds go up from the sand as it passes */}
+      <RisingFlock origin={[-700, 2, -150]} n={props.mobile ? 20 : 46} reach={170} size={1.7} tint={[1, 1, 0.97]} lit away={[-0.9, -0.4]} seed={7} />
+            <Blooms list={b.blooms} />
       <Butterflies list={b.flutter} />
       {b.files.map((f, i) => (
         <Procession key={i} road={f} n={props.mobile ? 14 : 34} speed={1.1} scale={2.7} seed={4 + i} robe={[0.86, 0.82, 0.7]} wing={i ? [0.62, 0.7, 0.9] : [0.92, 0.7, 0.72]} glow={0.12} />

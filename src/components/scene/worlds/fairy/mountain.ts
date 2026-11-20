@@ -222,7 +222,8 @@ export function mountainCrowns(n: number, r: () => number, ground: (x: number, z
       const e = terraceEnds(u);
       const width = Math.hypot(e.r1 - e.r0, e.y1 - e.y0);
       if (width < 14) continue;
-      const t = 0.06 + r() * 0.9;
+      // (clear of the parapet below and of the wall above)
+      const t = 0.1 + r() * 0.8;
       const dRoad = Math.abs(t - roadT(u)) * width;
       if (u > ROAD.u0 && u < ROAD.u1 && dRoad < ROAD.half + 5) continue;
       p = terraceAt(u, t);
