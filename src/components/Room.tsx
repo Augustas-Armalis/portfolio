@@ -109,6 +109,12 @@ type Settle = { at: number; lift: number; slide?: [number, number]; yaw: number;
 type Impact = (weight: number, x: number, y: number, z: number) => void;
 const SLAM_FALL = 0.26;
 
+// What takes the pointer for a thing on the desk: boxes that stand still (in the piece's own frame, at rest),
+// a little larger than the thing. The thing itself lifts a few millimetres under the pointer, and if it were
+// its own hit volume it would lift out from under a pointer resting on its edge, fall back, and lift again,
+// every frame. So the hit volume never moves and only the inner group does.
+export type Hit = { pos: [number, number, number]; size: [number, number, number]; rot?: [number, number, number] };
+
 function Piece({
   p,
   settle,
@@ -121,6 +127,8 @@ function Piece({
   hidden,
   float,
   onImpact,
+  hits,
+  hoverLift = 0.006,
   children,
 }: {
   p: { pos: [number, number, number]; rot: number };
@@ -135,19 +143,28 @@ function Piece({
   onPick?: () => void;
   hidden?: boolean;
   float?: MutableRefObject<{ on: boolean; pos: THREE.Vector3; q: THREE.Quaternion } | null>;
+  hits?: Hit[];
+  hoverLift?: number;
   children: ReactNode;
 }) {
   const g = useRef<THREE.Group>(null);
+  const vis = useRef<THREE.Group>(null);
   const lift = useRef(0);
+  const liftV = useRef(0);
   const blend = useRef(0);
   const [hover, setHover] = useState(false);
   const base = useMemo(() => new THREE.Vector3(), []);
   const q0 = useMemo(() => new THREE.Quaternion(), []);
   const eul = useMemo(() => new THREE.Euler(), []);
   const landed = useRef(false);
-  useFrame((_, dt) => {
+  // a thing that stops being pickable while the pointer is on it (it was picked, a mode opened) lets go of its hover
+  useEffect(() => {
+    if (!hoverable) setHover(false);
+  }, [hoverable]);
+  useFrame((_, rawDt) => {
     const o = g.current;
     if (!o) return;
+    const dt = Math.min(rawDt, 0.05);
     // how far from rest: 1 while it waits above the desk, 0 once it has landed
     let r = 0;
     let rr = 0;
@@ -174,12 +191,22 @@ function Piece({
       }
     }
     o.visible = !hidden && !away;
-    lift.current += ((hover && hoverable ? 0.007 : 0) - lift.current) * Math.min(1, dt * 14);
+    // the lift under the pointer: a critically damped spring on the inner group alone (no overshoot, no step,
+    // and the hit volume it is judged by stays where it is)
+    const want = hover && hoverable ? hoverLift : 0;
+    const w = 17;
+    liftV.current += (w * w * (want - lift.current) - 2 * w * liftV.current) * dt;
+    lift.current += liftV.current * dt;
+    if (Math.abs(want - lift.current) < 1e-5 && Math.abs(liftV.current) < 1e-4) {
+      lift.current = want;
+      liftV.current = 0;
+    }
+    if (vis.current) vis.current.position.y = lift.current;
     if (settle) {
-      base.set(p.pos[0] + (settle.slide?.[0] ?? 0) * r, p.pos[1] + settle.lift * r + fall + lift.current, p.pos[2] + (settle.slide?.[1] ?? 0) * r);
+      base.set(p.pos[0] + (settle.slide?.[0] ?? 0) * r, p.pos[1] + settle.lift * r + fall, p.pos[2] + (settle.slide?.[1] ?? 0) * r);
       q0.setFromEuler(eul.set((settle.tilt?.[0] ?? 0) * rr, p.rot + settle.yaw * rr, (settle.tilt?.[1] ?? 0) * rr));
     } else {
-      base.set(p.pos[0], p.pos[1] + lift.current, p.pos[2]);
+      base.set(p.pos[0], p.pos[1], p.pos[2]);
       q0.setFromEuler(eul.set(0, p.rot, 0));
     }
     // music mode: the headphones float up beside the camera
@@ -194,35 +221,116 @@ function Piece({
       o.quaternion.copy(q0);
     }
   });
+  const over = (e: ThreeEvent<PointerEvent>) => {
+    if (!hoverable || !onPick) return;
+    e.stopPropagation();
+    setHover(true);
+    document.body.style.cursor = "pointer";
+  };
   return (
-    <group
-      ref={g}
-      onPointerOver={(e: ThreeEvent<PointerEvent>) => {
-        if (!hoverable || !onPick) return;
-        e.stopPropagation();
-        setHover(true);
-        document.body.style.cursor = "pointer";
-      }}
-      onPointerOut={() => {
-        if (!onPick) return;
-        setHover(false);
-        document.body.style.cursor = "";
-      }}
-      onClick={(e: ThreeEvent<MouseEvent>) => {
-        if (!hoverable || !onPick || e.delta > 6) return;
-        e.stopPropagation();
-        setHover(false);
-        document.body.style.cursor = "";
-        onPick();
-      }}
-    >
-      {children}
+    <group ref={g}>
+      <group ref={vis} name={label ? `lift-${label}` : undefined}>{children}</group>
+      {onPick && hits && (
+        <group
+          onPointerOver={over}
+          onPointerMove={over}
+          onPointerOut={() => {
+            setHover(false);
+            document.body.style.cursor = "";
+          }}
+          onClick={(e: ThreeEvent<MouseEvent>) => {
+            if (!hoverable || e.delta > 6) return;
+            e.stopPropagation();
+            setHover(false);
+            document.body.style.cursor = "";
+            onPick();
+          }}
+        >
+          {hits.map((h, i) => (
+            <mesh key={i} visible={false} position={h.pos} rotation={h.rot}>
+              <boxGeometry args={h.size} />
+            </mesh>
+          ))}
+        </group>
+      )}
       {hoverable && label && (
         <Html position={labelAt} center style={{ pointerEvents: "none" }} zIndexRange={[20, 0]}>
           <GlassTag label={label} show={hover} />
         </Html>
       )}
     </group>
+  );
+}
+
+// The fixed hit volumes of the things on the desk (metres, in each piece's own frame).
+const HITS: Record<ObjKind, Hit[]> = {
+  keys: [{ pos: [0, 0.019, 0], size: [0.358, 0.042, 0.148] }],
+  book: [{ pos: [0, 0.015, 0], size: [0.148, 0.036, 0.218] }],
+  sketchbook: [{ pos: [0, 0.015, 0], size: [0.226, 0.036, 0.166] }],
+  // (the band is thin and mostly air: the whole silhouette takes the click)
+  headphones: [{ pos: [0, 0.1, 0.02], size: [0.2, 0.205, 0.1] }],
+  camera: [{ pos: [0.002, 0.041, 0.012], size: [0.142, 0.086, 0.07] }],
+};
+const HITS_DISPLAY: Hit[] = [
+  { pos: [0, MONITOR.y, MONITOR.z], size: [0.635, 0.374, 0.034], rot: [MONITOR.tilt, 0, 0] },
+  { pos: [0, DESK.top + 0.1, MONITOR.z - 0.035], size: [0.16, 0.2, 0.17] },
+];
+// (a phone on a stand is a small thing to hit with a finger: the whole of it and a margin take the tap)
+const HITS_PHONE: Hit[] = [{ pos: [0, DESK.top + 0.085, 0], size: [0.13, 0.19, 0.1] }];
+
+// The paper plane's hover, from outside the plane itself: a hit volume fixed at its resting place and a small
+// sprung lift of everything inside. (The plane's own hover stepped it 8 mm up in one frame, hit box and all,
+// so a pointer at its edge switched it on and off every frame.)
+function PlaneHover({ spot, hoverable, onPick, children }: { spot: { pos: [number, number, number]; rot: number }; hoverable: boolean; onPick: () => void; children: ReactNode }) {
+  const g = useRef<THREE.Group>(null);
+  const hover = useRef(false);
+  const y = useRef(0);
+  const vy = useRef(0);
+  useEffect(() => {
+    if (!hoverable) hover.current = false;
+  }, [hoverable]);
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.05);
+    const want = hover.current && hoverable ? 0.007 : 0;
+    const w = 15;
+    vy.current += (w * w * (want - y.current) - 2 * w * vy.current) * dt;
+    y.current += vy.current * dt;
+    if (Math.abs(want - y.current) < 1e-5 && Math.abs(vy.current) < 1e-4) {
+      y.current = want;
+      vy.current = 0;
+    }
+    if (g.current) g.current.position.y = y.current;
+  });
+  const over = (e: ThreeEvent<PointerEvent>) => {
+    if (!hoverable) return;
+    e.stopPropagation();
+    hover.current = true;
+    document.body.style.cursor = "pointer";
+  };
+  return (
+    <>
+      <group ref={g} name="lift-Fly">{children}</group>
+      <mesh
+        visible={false}
+        position={[spot.pos[0], DESK.top + 0.034, spot.pos[2]]}
+        rotation={[0, spot.rot, 0]}
+        onPointerOver={over}
+        onPointerMove={over}
+        onPointerOut={() => {
+          hover.current = false;
+          document.body.style.cursor = "";
+        }}
+        onClick={(e: ThreeEvent<MouseEvent>) => {
+          if (!hoverable || e.delta > 6) return;
+          e.stopPropagation();
+          hover.current = false;
+          document.body.style.cursor = "";
+          onPick();
+        }}
+      >
+        <boxGeometry args={[0.185, 0.07, 0.265]} />
+      </mesh>
+    </>
   );
 }
 
@@ -425,7 +533,7 @@ function Scene({
   }, [scene, fog]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.(), __worlds: { defs: WORLDS, origin: ORIGIN, WORLDS, ORIGIN, gateOf, groundAt }, __q: { get: getQuality, choice: getQualityChoice, set: setQualityChoice, report: reportFrame } });
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { __three: scene, __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.(), __worlds: { defs: WORLDS, origin: ORIGIN, WORLDS, ORIGIN, gateOf, groundAt }, __q: { get: getQuality, choice: getQualityChoice, set: setQualityChoice, report: reportFrame } });
     if (process.env.NODE_ENV === "production") return;
     // window.__scene: scrub the world deterministically and save stills.
     //   step(seconds, dt)  run the simulation forward in fixed steps (the pane itself only paints ~2 fps)
@@ -473,7 +581,7 @@ function Scene({
           advance(performance.now());
           const url = gl.domElement.toDataURL("image/jpeg", 0.9);
           const blob = await (await fetch(url)).blob();
-          await fetch(`http://127.0.0.1:3998/?name=${encodeURIComponent(name)}.jpg`, { method: "POST", mode: "no-cors", body: blob });
+          await fetch(`http://127.0.0.1:${(window as unknown as { __shotPort?: number }).__shotPort ?? 3998}/?name=${encodeURIComponent(name)}.jpg`, { method: "POST", mode: "no-cors", body: blob });
           return `${name}.jpg ${blob.size}`;
         },
       },
@@ -1413,10 +1521,6 @@ function Scene({
             <Headphones />
           </DeskModel>
           {mode !== "music" && <HeadphonesBlob />}
-          {/* the band is thin and mostly air: the whole silhouette takes the click */}
-          <mesh visible={false} position={[0, 0.1, 0]}>
-            <boxGeometry args={[0.19, 0.2, 0.085]} />
-          </mesh>
         </>
       );
     return (
@@ -1482,15 +1586,11 @@ function Scene({
         label={LABELS.display}
         labelAt={mobile ? [0, DESK.top + 0.215, 0] : [0, MONITOR.y + MONITOR.h / 2 + 0.06, MONITOR.z]}
         onPick={() => startRef.current?.()}
+        hits={mobile ? HITS_PHONE : HITS_DISPLAY}
+        hoverLift={0}
       >
         {mobile ? (
-          <>
-            <Phone screenMat={screenMat} screenRef={screen} />
-            {/* a phone on a stand is a small thing to hit with a finger: the whole of it and a margin take the tap */}
-            <mesh visible={false} position={[0, DESK.top + 0.085, 0]}>
-              <boxGeometry args={[0.13, 0.19, 0.1]} />
-            </mesh>
-          </>
+          <Phone screenMat={screenMat} screenRef={screen} />
         ) : (
           <DeskModel name="display">
             <Monitor screenMat={screenMat} screenRef={screen} />
@@ -1511,13 +1611,16 @@ function Scene({
             label={LABELS[kind]}
             labelAt={[0, TAG_Y[kind], 0]}
             onPick={() => enter(MODE_OF[kind])}
+            hits={HITS[kind]}
             float={kind === "headphones" ? floatRef : undefined}
           >
             {objEl(o)}
           </Piece>
         );
       })}
-      <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => enter("plane")} hoverable={idle && mode === "none"} introAt={introAt} introDelay={SETTLE + 0.62} instant={instant || mobile} />
+      <PlaneHover spot={planeSpot} hoverable={idle && mode === "none"} onPick={() => enter("plane")}>
+        <Plane spot={planeSpot} apiRef={planeApi} flying={mode === "plane"} onPick={() => {}} hoverable={false} introAt={introAt} introDelay={SETTLE + 0.62} instant={instant || mobile} />
+      </PlaneHover>
       <DeskDust apiRef={dust} />
       {idle && mode === "none" && <PlaneLabel spot={planeSpot} introAt={introAt} instant={instant} after={ARR + 2.2} />}
       <Post level={devPost ?? (mobile ? Math.min(1, q.post) : q.post)} />
