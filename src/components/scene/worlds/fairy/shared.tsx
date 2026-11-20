@@ -174,13 +174,13 @@ export function cypressMesh(list: Crown[], mat: THREE.Material) {
 // Clouds as the film sculpts them out of his rows of painted ones: each a heap of round lobes on a flat base,
 // gold where the sun finds it, lavender in its own shade, with a line of light along every edge that stands
 // against the sun. Receding in ranks to the horizon, where the air takes them.
-export type Heap = { p: V3; w: number; seed: number; tall?: number };
+export type Heap = { p: V3; w: number; seed: number; tall?: number; lobes?: number };
 export function heapBlobs(list: Heap[], seed = 7) {
   const r = rng(seed);
   const out: { p: V3; s: V3; seed: number }[] = [];
   for (const c of list) {
     const q = rng(Math.floor(c.seed * 9973) + 11);
-    const n = 4 + Math.floor(q() * 4);
+    const n = c.lobes ?? 4 + Math.floor(q() * 4);
     const tall = c.tall ?? 1;
     for (let i = 0; i < n; i++) {
       // a long low heap: the biggest lobes in the middle, small ones out at the ends
@@ -194,7 +194,7 @@ export function heapBlobs(list: Heap[], seed = 7) {
       });
     }
     // and a small one riding on top
-    if (q() < 0.7) {
+    if (!c.lobes && q() < 0.7) {
       const w = c.w * 0.26;
       out.push({ p: [c.p[0] + (q() - 0.5) * c.w * 0.4, c.p[1] + c.w * 0.3 * tall, c.p[2] + (q() - 0.5) * c.w * 0.2], s: [w * 1.2, w * tall, w], seed: r() * 10 });
     }
@@ -215,15 +215,17 @@ function lobeGeometry(detail: number) {
   g.computeVertexNormals();
   return g;
 }
-export function makeHeapMaterial(o: { lit?: V3; shade?: V3; rim?: number; drift?: number } = {}) {
+export function makeHeapMaterial(o: { lit?: V3; shade?: V3; rim?: number; drift?: number; rise?: number } = {}) {
   return new THREE.ShaderMaterial({
-    uniforms: { ...SKY_U, ...WORLD_U, uLitK: { value: new THREE.Color(...(o.lit ?? [1, 1, 1])) }, uShadeK: { value: new THREE.Color(...(o.shade ?? [1, 1, 1])) }, uRimK: { value: o.rim ?? 1 }, uDrift: { value: o.drift ?? 1 } },
+    uniforms: { ...SKY_U, ...WORLD_U, uLitK: { value: new THREE.Color(...(o.lit ?? [1, 1, 1])) }, uShadeK: { value: new THREE.Color(...(o.shade ?? [1, 1, 1])) }, uRimK: { value: o.rim ?? 1 }, uDrift: { value: o.drift ?? 1 }, uRise: { value: o.rise ?? 0 } },
     vertexShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vN; varying vec3 vObj; varying float vSeed;
-      uniform float uTime; uniform float uDrift;
+      uniform float uTime; uniform float uDrift; uniform float uRise;
       void main(){
-        vec4 lp = instanceMatrix * vec4(position, 1.0);
         float ph = instanceMatrix[3].x * 0.011 + instanceMatrix[3].z * 0.007;
+        // smoke: swellings travel up through every lobe, so the whole column is seen to climb
+        vec3 pp = position * (1.0 + uRise * (0.1 * sin(position.y * 4.2 - uTime * 0.7 + instanceMatrix[3].y * 0.05 + ph * 9.0) + 0.05 * sin(position.x * 5.0 + position.y * 7.0 - uTime * 1.1)));
+        vec4 lp = instanceMatrix * vec4(pp, 1.0);
         // cloud is never quite still: the whole sky drifts a little, each heap breathing in its place
         lp.xyz += vec3(sin(uTime * 0.05 + ph) * 6.0 + uTime * 0.6, sin(uTime * 0.07 + ph * 1.7) * 1.5, cos(uTime * 0.045 + ph * 1.3) * 4.0) * uDrift;
         vec4 wp = modelMatrix * lp;

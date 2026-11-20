@@ -98,7 +98,7 @@ export class Wings {
   piv: number[] = [];
   idx: number[] = [];
   // one wing: a tall narrow blade, fullest two thirds of the way up, bowed outward and back, standing well above the head
-  add(m: THREE.Matrix4, side: number, open: number, col: V3, tip: V3, glow: number, phase: number) {
+  add(m: THREE.Matrix4, side: number, open: number, col: V3, tip: V3, glow: number, phase: number, wide = 1) {
     const nu = 9;
     const nv = 3;
     const base = this.pos.length / 3;
@@ -109,7 +109,7 @@ export class Wings {
     for (let iu = 0; iu <= nu; iu++) {
       const u = iu / nu;
       const y = 0.22 + 2.2 * u;
-      const half = 0.125 * Math.pow(Math.sin(Math.PI * Math.pow(u, 1.35)), 0.7) + 0.01;
+      const half = (0.125 * Math.pow(Math.sin(Math.PI * Math.pow(u, 1.35)), 0.7) + 0.01) * wide;
       for (let iv = 0; iv <= nv; iv++) {
         const w = iv / nv;
         const out = w * half * 2;
@@ -144,8 +144,8 @@ export class Wings {
 
 // An angel as he painted them here: slight, long-robed, a small bowed head, and two tall narrow wings of one
 // soft colour standing up behind it well above the head and falling almost to the ground.
-//   pose 0 hands folded   1 holding out a flower   2 a hand raised, a butterfly on it   3 arms at rest   4 bending to a flower
-export function seraph(k: Kit, wings: Wings, p: V3, s: number, yaw: number, o: { robe: V3; wing: V3; pose?: number; glow?: number; open?: number; phase?: number }) {
+//   pose 0 hands folded   1 holding out a flower   2 a hand raised, a butterfly on it   3 arms at rest   4 bending to a flower   5 an arm held out
+export function seraph(k: Kit, wings: Wings, p: V3, s: number, yaw: number, o: { robe: V3; wing: V3; pose?: number; glow?: number; open?: number; phase?: number; wide?: number }) {
   const glow = o.glow ?? 0.1;
   const pose = o.pose ?? 0;
   const bend = pose === 4 ? 1.1 : 0;
@@ -217,12 +217,16 @@ export function seraph(k: Kit, wings: Wings, p: V3, s: number, yaw: number, o: {
   } else if (pose === 4) {
     arm(1, new THREE.Vector3(0.12, 0.72, 0.42));
     arm(-1, new THREE.Vector3(-0.2, 1.0, 0.16));
+  } else if (pose === 5) {
+    // one arm held straight out before it
+    arm(1, new THREE.Vector3(0.13, 1.5, 0.52));
+    arm(-1, new THREE.Vector3(-0.19, 0.95, 0.06));
   } else for (const sd of [-1, 1]) arm(sd, new THREE.Vector3(sd * 0.22, 0.9, 0.04));
   const open = o.open ?? 0.3;
   const tip: V3 = [Math.min(1, o.wing[0] * 0.55 + 0.42), Math.min(1, o.wing[1] * 0.55 + 0.42), Math.min(1, o.wing[2] * 0.55 + 0.42)];
   // bent over, the wings come forward with the back and arch over the figure like a shell
   const wm = pose === 4 ? upper.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0.05, 0.05)).multiply(new THREE.Matrix4().makeScale(1.25, 0.95, 1.25)) : fig;
-  for (const sd of [-1, 1]) wings.add(wm, sd, open, o.wing, tip, glow, o.phase ?? (p[0] * 0.37 + p[2] * 0.61) % 6.28);
+  for (const sd of [-1, 1]) wings.add(wm, sd, open, o.wing, tip, glow, o.phase ?? (p[0] * 0.37 + p[2] * 0.61) % 6.28, o.wide ?? 1);
 }
 
 // the pale columns of the court and the ring they carry
