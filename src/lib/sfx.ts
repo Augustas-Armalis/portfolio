@@ -34,7 +34,7 @@ export type Sfx =
 // camera shutter and the paper plane. Every other name is a silent no-op so
 // OS calls stay harmless.
 const SILENT = new Set<Sfx>(["click", "pop", "open", "close", "minimize", "zoom", "error", "notify", "lock", "unlock", "type", "trash"]);
-const FILES: Record<Sfx, { files: string[]; vol?: number; random?: boolean; slice?: number; trim?: boolean; pitch?: number }> = {
+const FILES: Record<Sfx, { files: string[]; vol?: number; random?: boolean; slice?: number; trim?: boolean; pitch?: number; len?: number }> = {
   boot: { files: [] }, // sampled piano chord (lib/piano.ts)
   shutdown: { files: [] }, // sampled piano, falling
   click: { files: [] },
@@ -52,7 +52,8 @@ const FILES: Record<Sfx, { files: string[]; vol?: number; random?: boolean; slic
   page: { files: ["/assets/sfx/pages.ogg"], vol: 0.6, slice: 0.7 },
   whoosh: { files: [] }, // a soft filtered-air sweep, generated below
   plane: { files: [] },
-  shutter: { files: ["/assets/sfx/shutter.ogg"], vol: 0.55, trim: true },
+  // (the recording holds two releases, the second 2.2 s after the first: only the first is ever played)
+  shutter: { files: ["/assets/sfx/shutter.ogg"], vol: 0.55, trim: true, len: 0.95 },
 };
 
 const KEY = "aos.sound";
@@ -251,13 +252,14 @@ export function play(name: Sfx, opts?: { volume?: number }) {
       } else {
         // short fade in and out on every file: no clicks at the edges
         const off = spec.trim ? leadingSilence(buf) : 0;
-        const len = (buf.duration - off) / src.playbackRate.value;
+        const len = Math.min(buf.duration - off, spec.len ?? 1e9) / src.playbackRate.value;
         g.gain.setValueAtTime(0, t);
         g.gain.linearRampToValueAtTime(v, t + 0.006);
         g.gain.setValueAtTime(v, t + Math.max(0.01, len - 0.03));
         g.gain.linearRampToValueAtTime(0, t + len);
         src.connect(g).connect(out);
         src.start(t, off);
+        if (spec.len) src.stop(t + len + 0.01);
         track("sfx", src, name);
       }
     });
