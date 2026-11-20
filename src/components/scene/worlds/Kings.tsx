@@ -190,8 +190,8 @@ function makeEmberLit(pattern: "pale" | "dark" | "plain") {
                alb *= 1.0 + 0.22 * fold * robe;
                vec2 fc = vec2(s, c) * 0.1; vec2 fi = floor(fc);
                vec2 ff = fract(fc) - 0.5 - (vec2(hash12(fi + 1.3), hash12(fi + 4.1)) - 0.5) * 0.46;
-               float pick = step(0.56, hash12(fi));
-               float petal = 0.17 + 0.055 * cos(atan(ff.y, ff.x) * 5.0 + hash12(fi) * 6.0);
+               float pick = step(0.42, hash12(fi));
+               float petal = 0.2 + 0.06 * cos(atan(ff.y, ff.x) * 5.0 + hash12(fi) * 6.0);
                float flower = (1.0 - smoothstep(petal - 0.05, petal, length(ff))) * pick;
                alb = mix(alb, vec3(0.022, 0.04, 0.11), flower * 0.8 * robe);
                alb = mix(alb, vec3(0.26, 0.2, 0.1), (1.0 - smoothstep(0.025, 0.055, length(ff))) * pick * robe * 0.8);`
@@ -269,8 +269,8 @@ function makeNight() {
         float az = atan(d.x, -d.z);
         vec3 col = mix(vec3(0.012, 0.03, 0.042), vec3(0.003, 0.008, 0.014), smoothstep(0.1, 0.9, e));
         // strokes: long along the horizon, a few brush-widths high
-        float st = vnoise(vec2(az * 3.4, e * 92.0)) * 0.5 + vnoise(vec2(az * 9.0 + 3.0, e * 210.0 + 7.0)) * 0.32 + vnoise(vec2(az * 24.0, e * 520.0)) * 0.18;
-        float low = smoothstep(-0.03, 0.04, e) * (1.0 - smoothstep(0.3, 0.95, e));
+        float st = vnoise(vec2(az * 2.2, e * 110.0)) * 0.5 + vnoise(vec2(az * 7.0 + 3.0, e * 240.0 + 7.0)) * 0.32 + vnoise(vec2(az * 20.0, e * 560.0)) * 0.18;
+        float low = smoothstep(-0.03, 0.04, e) * (1.0 - smoothstep(0.2, 0.62, e));
         vec3 blue = mix(vec3(0.013, 0.032, 0.052), vec3(0.026, 0.058, 0.088), smoothstep(0.52, 0.76, st));
         col = mix(col, blue, smoothstep(0.44, 0.6, st) * low * 0.9);
         col = mix(col, vec3(0.004, 0.008, 0.01), smoothstep(0.0, -0.06, e));
@@ -393,7 +393,7 @@ function makeRays() {
         float a = across * across * pow(1.0 - vUv.y, 1.5) * (0.22 + 0.78 * dash) * smoothstep(0.0, 0.03, vUv.y);
         float tw = 0.78 + 0.22 * sin(uTime * (0.4 + vRay.x) + vRay.x * 40.0);
         float dist = length(vWorld - cameraPosition);
-        vec3 col = mix(vec3(1.0, 0.3, 0.1), vec3(1.0, 0.84, 0.56), pow(1.0 - vUv.y, 2.2));
+        vec3 col = mix(vec3(1.0, 0.24, 0.07), vec3(1.0, 0.84, 0.56), pow(1.0 - vUv.y, 3.2));
         gl_FragColor = vec4(col * a * tw * 1.7 * (1.0 + uPulse * 0.5) * smoothstep(3.0, 26.0, dist) * exp(-dist * uMist * 1.5), 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -666,7 +666,7 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
           const fh = (3.4 + r() * 1.6) * sc;
           towns.add(new THREE.CylinderGeometry(0.32 * sc, 0.62 * sc, fh, 6), [px, py + fh / 2, pz], DARK);
           towns.add(new THREE.SphereGeometry(0.52 * sc, 8, 6), [px, py + fh + 0.4 * sc, pz], DARK);
-          if (r() < 0.6) for (const sx of [-1, 1]) towns.box(0.22 * sc, 2.0 * sc, 0.22 * sc, [px + along[0] * sx * 0.8 * sc, py + fh * 0.98, pz + along[2] * sx * 0.8 * sc], DARK, { rot: [Math.sin(a) * sx * 0.55, 0, -Math.cos(a) * sx * 0.55] });
+          if (r() < 0.6) for (const sx of [-1, 1]) towns.box(0.2 * sc, 1.9 * sc, 0.2 * sc, [px + along[0] * sx * 0.62 * sc, py + fh * 1.02, pz + along[2] * sx * 0.62 * sc], DARK);
           continue;
         }
         const tall = kind > 0.72;
@@ -753,7 +753,6 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       town([mid[0], mid[1] + rad * 0.8, mid[2]], ang, n, sc);
     };
     const KZ = KINGS.z;
-    span([-76, by + 2.5 * R, KZ - 112], [82, by + 2.9 * R, KZ - 124], 12, 5, 11, 1.25);
     span([-168, by + 4.6 * R, KZ - 104], [-76, by + 5.3 * R, KZ - 112], 14, 5.5, 8, 1.3);
     span([82, by + 5.0 * R, KZ - 124], [176, by + 4.4 * R, KZ - 116], 12, 5.5, 8, 1.3);
     span([-262, by + 2.2 * R, KZ - 40], [-168, by + 2.9 * R, KZ - 104], 8, 5, 9, 1.4);
@@ -879,7 +878,7 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
     if (m) {
       // every half minute or so it crosses above the two crowns
       const t = (SKY_U.uTime.value * 0.03 + 0.3) % 1;
-      m.position.set(-300 + t * 600, DOME_AT.y + R * 4.5 + Math.sin(t * 9) * 6, KINGS.z + 30 - t * 70);
+      m.position.set(-300 + t * 600, DOME_AT.y + R * 4.0 + Math.sin(t * 9) * 6, KINGS.z + 70 - t * 60);
       m.rotation.set(0, -Math.PI / 2 + 0.14, Math.sin(SKY_U.uTime.value * 2.2) * 0.1);
       m.scale.setScalar(1.7);
     }

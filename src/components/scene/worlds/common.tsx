@@ -466,6 +466,11 @@ const HANG: Record<WorldId, { wall: V3; ink: "dark" | "light"; plain?: boolean }
 };
 
 const CANVAS_H = 18;
+// a picture hung in the dark is given more of its lamp
+const lit = (m: THREE.ShaderMaterial, k: number) => {
+  m.uniforms.uLit.value = k;
+  return m;
+};
 function CanvasStand({ p, x, z, y, yaw, world, lift }: { p: PaintingInfo; x: number; z: number; y: number; yaw: number; world: WorldId; lift: number }) {
   const aspect = p.width / p.height;
   const H = aspect > 1.25 ? CANVAS_H * 0.84 : CANVAS_H;
@@ -486,11 +491,11 @@ function CanvasStand({ p, x, z, y, yaw, world, lift }: { p: PaintingInfo; x: num
     // In the kings' wood there is no wall: the picture stands in a plain dark frame on two posts, a slim lamp
     // over it, its name beneath in one line.
     if (hang.plain) {
-      const dk: V3 = [0.034, 0.028, 0.025];
+      const dk: V3 = [0.075, 0.058, 0.048];
       const B = 0.62;
       const cy = lift + H / 2;
-      for (const sy of [-1, 1]) k.box(W + B * 2, B, 0.7, [0, cy + sy * (H / 2 + B / 2), 0.1], dk, { top: [0.06, 0.048, 0.04] });
-      for (const sx of [-1, 1]) k.box(B, H, 0.7, [sx * (W / 2 + B / 2), cy, 0.1], dk);
+      for (const sy of [-1, 1]) k.box(W + B * 2, B, 0.7, [0, cy + sy * (H / 2 + B / 2), 0.1], dk, { glow: 0.12 });
+      for (const sx of [-1, 1]) k.box(B, H, 0.7, [sx * (W / 2 + B / 2), cy, 0.1], dk, { glow: 0.12 });
       // a hair of dull gold against the canvas, so the dark picture has an edge in the dark
       for (const sy of [-1, 1]) k.box(W + 0.12, 0.06, 0.1, [0, cy + sy * (H / 2 + 0.03), 0.42], [0.5, 0.34, 0.14], { glow: 0.1 });
       for (const sx of [-1, 1]) k.box(0.06, H + 0.12, 0.1, [sx * (W / 2 + 0.03), cy, 0.42], [0.5, 0.34, 0.14], { glow: 0.1 });
@@ -503,7 +508,7 @@ function CanvasStand({ p, x, z, y, yaw, world, lift }: { p: PaintingInfo; x: num
       return {
         map,
         state,
-        canvas: makeCanvasMaterial(map),
+        canvas: lit(makeCanvasMaterial(map), 1.7),
         cap: captionTexture(title, year, hang.ink, true),
         stand: k.build(),
         tempera: makeTempera({ amb: 1, key: 0.3, dab: 0.5 }),

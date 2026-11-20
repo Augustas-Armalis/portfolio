@@ -685,7 +685,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -114, z: KINGS.z, r: 60, h: 190 },
       { x: 114, z: KINGS.z, r: 60, h: 190 },
     ],
-    canvases: [{ painting: "kings", x: -34, z: 404, yaw: 0.52 }],
+    canvases: [{ painting: "kings", x: -30, z: 372, yaw: 0.46 }],
   },
 };
 
