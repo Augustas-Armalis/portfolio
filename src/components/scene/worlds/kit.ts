@@ -72,6 +72,14 @@ export const WORLD_U = {
   uFogH: { value: 0.012 },
   uDissolve: { value: new THREE.Vector2(0, 0) },
 };
+// What the plane's passing does to a world (worlds/play.tsx keeps these): uPathLift 0..1 rises when a lantern is
+// flown through and falls away over a few seconds (the path of light brightens by it); uPlane is where the plane
+// is in the world and uPlaneTrail where it was a moment ago (birds part round both).
+export const PLAY_U = {
+  uPathLift: { value: 0 },
+  uPlane: { value: new THREE.Vector3(0, -1e4, 0) },
+  uPlaneTrail: { value: new THREE.Vector3(0, -1e4, 0) },
+};
 export function setWorldAir(fog: readonly (number | undefined)[]) {
   WORLD_U.uFogD.value = fog[0] ?? 0.001;
   WORLD_U.uFogH.value = fog[1] ?? 0.012;

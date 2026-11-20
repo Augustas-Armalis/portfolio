@@ -10,6 +10,7 @@ import { play } from "@/lib/sfx";
 import { setMusicOpen, useMusic } from "@/lib/musicDirector";
 import { WORLDS, WORLD_ORDER, setFlight, setGuide, travelStep, travelTo, useFlightFlags, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
+import { useLight } from "./worlds/play";
 import { photoCtl, postCtl, type Capture } from "./Post";
 
 // DOM controls for the focused desk modes. Quiet, glassy, dark-on-light pills
@@ -997,6 +998,38 @@ function FlightMusicButton({ className, size }: { className: (on: boolean) => st
   );
 }
 
+// The light gathered in this world (worlds/play.tsx): a very small ring that fills as the lanterns on the path are
+// flown through, and breathes once when the last is gathered. Only there in a world that has lanterns.
+function LightMark({ size }: { size: number }) {
+  const l = useLight();
+  const C = 2 * Math.PI * 6;
+  return (
+    <AnimatePresence initial={false}>
+      {l.of > 0 && (
+        <motion.span
+          key="light"
+          role="img"
+          aria-label={`Light gathered: ${l.got} of ${l.of}`}
+          data-flight="light"
+          data-tip={l.done ? "All the light gathered" : "Light gathered"}
+          className="lg-tip grid shrink-0 place-items-center overflow-visible"
+          style={{ height: size, width: size }}
+          initial={{ width: 0, opacity: 0, scale: 0.6 }}
+          animate={{ width: size, opacity: 1, scale: l.done ? [1, 1.35, 1] : 1 }}
+          exit={{ width: 0, opacity: 0, scale: 0.6 }}
+          transition={{ ...GLASS_SPRING, scale: l.done ? { duration: 0.9, ease: "easeInOut", times: [0, 0.4, 1] } : GLASS_SPRING }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+            <circle cx="8" cy="8" r="6" fill="none" stroke="rgb(255 255 255 / 0.28)" strokeWidth="1.5" />
+            <circle cx="8" cy="8" r="6" fill="none" stroke={l.done ? "#ffd98a" : "#fff"} strokeWidth="1.5" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - (l.of ? l.got / l.of : 0))} transform="rotate(-90 8 8)" style={{ transition: "stroke-dashoffset .9s cubic-bezier(.22,1,.36,1), stroke .6s ease" }} />
+            <circle cx="8" cy="8" r="1.6" fill={l.done ? "#ffd98a" : "rgb(255 255 255 / 0.85)"} style={{ transition: "fill .6s ease" }} />
+          </svg>
+        </motion.span>
+      )}
+    </AnimatePresence>
+  );
+}
+
 // The chrome over the flight comes and goes on its own. Left alone for a few seconds it fades to almost nothing;
 // the pointer (or a touch) brings it back. H, or the eye, hides every piece of glass for a view with nothing on it;
 // it comes back on H, Esc, any key that does not fly the plane, or a click (a drag still only looks). On a phone
@@ -1231,6 +1264,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
       <button type="button" aria-label="Hide the controls" data-tip="Hide  H" data-flight="hide" className={ib(false)} onClick={() => (setPanel(null), chrome.hide())}>
         <EyeOff size={isz} strokeWidth={sw} />
       </button>
+      <LightMark size={mobile ? 32 : 30} />
       <span className="mx-0.5 h-4 w-px shrink-0 bg-white/25" />
       <button type="button" data-mode-exit="" data-flight="land" aria-label="Land (Esc)" data-tip="Land  Esc" className={ib(false)} onClick={(e) => (e.stopPropagation(), onLand())}>
         <PlaneLanding size={isz + 1} strokeWidth={sw} />

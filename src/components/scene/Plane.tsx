@@ -226,6 +226,8 @@ export function Plane({
     g.rotation.y = st.yaw;
     g.rotation.x = st.pitch;
     g.rotation.z = -st.roll;
+    voyage.planePos.copy(st.pos);
+    voyage.planeSpeed = st.speed;
   };
   const updateNose = () => st.nose.set(-Math.sin(st.yaw) * Math.cos(st.pitch), Math.sin(st.pitch), -Math.cos(st.yaw) * Math.cos(st.pitch));
 
@@ -772,6 +774,8 @@ export function Plane({
         st.landPhase = 0;
         postCtl.far.k = 0;
         postCtl.far.subject = null;
+        voyage.planePos.set(0, -1e4, 0);
+        voyage.planeSpeed = 0;
       }
       return done;
     },

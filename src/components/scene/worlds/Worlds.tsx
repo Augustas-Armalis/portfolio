@@ -7,6 +7,8 @@ import { postCtl } from "../Post";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { LightGate, LightPath, type WorldProps } from "./common";
+import { Birds, type Flock } from "./life";
+import { PathLanterns, PlayFrame } from "./play";
 import { setWorldAir } from "./kit";
 import FairyWorld from "./Fairy";
 import FuneralWorld from "./Funeral";
@@ -81,6 +83,12 @@ function Veil() {
   });
   return <mesh ref={ref} geometry={geo} material={mat} frustumCulled={false} renderOrder={1000} visible={false} />;
 }
+
+// (a loose skein over the avenue, about where the wood closes in, and a few further on by the gate)
+const HOME_FLOCKS: Flock[] = [
+  { c: [1.4, 8.5, -78], r: 13, n: 9, size: 0.34, speed: 5.5, spread: 5 },
+  { c: [-3, 12, -150], r: 20, n: 7, size: 0.38, speed: 6.5, spread: 6 },
+];
 
 const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld, funeral: FuneralWorld, kings: KingsWorld };
 
@@ -232,6 +240,10 @@ export function Worlds(props: WorldProps) {
         <>
           <LightPath id="home" def={WORLDS.home} angels effects={props.effects} from={10} />
           <LightGate id="home" def={WORLDS.home} />
+          {/* the avenue is the example of the interaction layer (worlds/play.tsx): a few rings of light on the way
+              to the gate, and a small flock over the road that parts round the plane */}
+          <PathLanterns id="home" every={44} from={46} to={pathOf("home").len - 36} radius={3.1} gain={0.9} />
+          {props.effects > 0.25 && <Birds flocks={HOME_FLOCKS} scatter={15} seed={11} />}
         </>
       )}
       {ids.map((w) => {
@@ -242,6 +254,7 @@ export function Worlds(props: WorldProps) {
           </group>
         );
       })}
+      <PlayFrame />
       <Veil />
     </>
   );

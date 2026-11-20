@@ -884,6 +884,10 @@ export const voyage = {
   skyMod: null as ((s: SkyState) => SkyState) | null,
   warm: 0, // 0..1 the closing cloud is that world's light instead of the air's colour
   onHome: null as (() => void) | null,
+  // where the plane is (world space) and how fast, written by Plane.tsx every frame of the flight: for whatever in a
+  // world answers to its passing (worlds/play.tsx: lanterns, birds that part)
+  planePos: new THREE.Vector3(0, -1e4, 0),
+  planeSpeed: 0,
 };
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
