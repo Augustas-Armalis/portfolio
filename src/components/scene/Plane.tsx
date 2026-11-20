@@ -363,7 +363,8 @@ export function Plane({
       const ex = lx - def.centre[0];
       const ez = lz - def.centre[1];
       const r = Math.hypot(ex, ez);
-      edge = smooth01((r - def.radius * 0.86) / (def.radius * 0.2));
+      // (the painted worlds are wide: the plane may wander right out to where their far hills begin)
+      edge = id === "home" ? smooth01((r - def.radius * 0.86) / (def.radius * 0.2)) : smooth01((r - def.radius * 1.04) / (def.radius * 0.24));
       if (edge > 0) {
         const outward = (-Math.sin(st.yaw) * ex - Math.cos(st.yaw) * ez) / Math.max(r, 1);
         const err = wrap(Math.atan2(ex, ez) - st.yaw);
@@ -411,7 +412,8 @@ export function Plane({
     const low3 = low * low * low;
     let pitchT = sy * 0.5 + climb * 0.34;
     if (low > 0) pitchT = Math.max(pitchT, pitchT * (1 - low) + low3 * 0.6);
-    const high = clamp01((st.pos.y - (def.ceil - 24)) / 24);
+    const ceil = id === "home" ? def.ceil : def.ceil * 1.3;
+    const high = clamp01((st.pos.y - (ceil - 24)) / 24);
     if (high > 0) pitchT = Math.min(pitchT, pitchT * (1 - high) - high * 0.3);
 
     // bank and pitch are sprung, a touch under critical: they arrive, they don't snap

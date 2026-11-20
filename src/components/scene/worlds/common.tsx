@@ -76,41 +76,84 @@ function ribbonGeometry(pts: THREE.Vector3[], width: number) {
   return { geo: g, len: run };
 }
 
+// Each world's way is drawn for that world, all of them light and none of them a hard line:
+//   0  a ribbon of light with a slow pulse walking along it (the wood, the suns, the mountain gate, the kings)
+//   1  a river of small stars, drifting toward the gate and twinkling (Sonata of the Stars)
+//   2  a path of flowers: soft petals of light strewn along it, in the colours of the meadow (Fairy Tale, Paradise)
+//   3  a causeway of light on the water: broken glints that travel like the sun's road on a sea (Rex, Tranquility)
+const PATH_STYLE: Partial<Record<WorldId, 0 | 1 | 2 | 3>> = { stars: 1, fairy: 2, paradise: 2, rex: 3, sea: 3 };
+const PATH_WIDTH = [0.9, 1.7, 1.5, 1.3];
+
 export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = true, marks = true, effects = 1, from = 0 }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; angels?: boolean; marks?: boolean; effects?: number; from?: number }) {
   const b = useDisposable(() => {
     const path = pathOf(id);
     const pts = path.pts.slice(Math.round(from / 4));
-    const { geo, len } = ribbonGeometry(pts, 0.9);
+    const style = PATH_STYLE[id] ?? 0;
+    const { geo, len } = ribbonGeometry(pts, PATH_WIDTH[style]);
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
-      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) }, uGain: { value: gain }, uLen: { value: len } },
+      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) }, uGain: { value: gain }, uLen: { value: len }, uStyle: { value: style }, uWide: { value: PATH_WIDTH[style] / 0.9 } },
       vertexShader: /* glsl */ `
         varying vec2 vUv; varying vec3 vWorld;
         void main(){ vUv = uv; vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform vec3 uTint; uniform float uGain; uniform float uLen;
+        uniform vec3 uTint; uniform float uGain; uniform float uLen; uniform float uStyle; uniform float uWide;
         varying vec2 vUv; varying vec3 vWorld;
         ${GLSL_NOISE}
         ${GLSL_SKY}
         ${GLSL_AIR}
         void main(){
+          // (a wider way keeps the same fine thread down its middle)
+          float y = vUv.y * uWide;
           float across = exp(-vUv.y * vUv.y * 3.4);
-          float core = exp(-vUv.y * vUv.y * 40.0);
+          float core = exp(-y * y * 40.0);
           // a slow pulse walking toward the gate, and a fine grain of sparks
           float wave = 0.5 + 0.5 * sin(vUv.x * 0.21 - uTime * 1.35);
           wave = wave * wave;
           float grain = vnoise(vec2(vUv.x * 2.3 - uTime * 0.8, vUv.y * 3.0));
           float a = across * (0.05 + 0.13 * wave) + core * (0.11 + 0.3 * wave) * (0.5 + 0.9 * grain);
+          vec3 extra = vec3(0.0);
+          float edge = 1.0 - smoothstep(0.6, 1.0, abs(vUv.y));
+          if (uStyle > 0.5 && uStyle < 1.5) {
+            // a river of stars: one to a cell, each with its own place, size and twinkle, all drifting on
+            vec2 g = vec2(vUv.x * 1.25 - uTime * 0.45, vUv.y * 4.0);
+            vec2 c = floor(g);
+            float h = hash12(c);
+            vec2 o = (vec2(hash12(c + 3.1), hash12(c + 7.7)) - 0.5) * 0.62;
+            float d = length(fract(g) - 0.5 - o);
+            float tw = 0.45 + 0.55 * sin(uTime * (1.2 + 2.6 * h) + h * 40.0);
+            float star = step(0.42, h) * smoothstep(0.05 + 0.13 * h, 0.0, d) * tw;
+            extra = mix(vec3(0.82, 0.9, 1.0), uTint, h) * star * edge * 1.5;
+            a *= 0.6;
+          } else if (uStyle > 1.5 && uStyle < 2.5) {
+            // a path of flowers: petals of light, still, a few colours, thinning toward the edges
+            vec2 g = vec2(vUv.x * 0.8, vUv.y * 3.0);
+            vec2 c = floor(g);
+            float h = hash12(c);
+            vec2 o = (vec2(hash12(c + 1.7), hash12(c + 5.3)) - 0.5) * 0.6;
+            float d = length((fract(g) - 0.5 - o) * vec2(1.0, 1.25));
+            float petal = step(0.36, h) * smoothstep(0.2 + 0.1 * h, 0.03, d) * (0.75 + 0.25 * sin(uTime * 0.7 + h * 30.0));
+            vec3 pc = h < 0.58 ? vec3(1.0, 0.95, 0.82) : h < 0.8 ? vec3(1.0, 0.72, 0.78) : vec3(1.0, 0.86, 0.42);
+            extra = pc * petal * edge * 0.42;
+            a *= 0.75;
+          } else if (uStyle > 2.5) {
+            // a causeway on the water: broken glints that travel, brightest down the middle
+            float run = vUv.x * 1.1 - uTime * 0.55 + sin(vUv.y * 2.6 + vUv.x * 0.13) * 0.9;
+            float glint = smoothstep(0.55, 1.0, sin(run)) * (0.5 + 0.5 * vnoise(vec2(vUv.x * 0.6, vUv.y * 4.0 + uTime * 0.3)));
+            extra = uTint * glint * exp(-vUv.y * vUv.y * 2.4) * 0.5;
+          }
           float dist = length(vWorld - cameraPosition);
-          a *= smoothstep(2.0, 16.0, dist) * (1.0 - smoothstep(240.0, 520.0, dist));
+          float fade = smoothstep(2.0, 16.0, dist) * (1.0 - smoothstep(240.0, 520.0, dist));
           // far off it is a thread; let it keep its light there
-          a *= 1.0 + smoothstep(30.0, 160.0, dist) * 0.8;
-          a *= smoothstep(0.0, 14.0, vUv.x) * smoothstep(uLen, uLen - 14.0, vUv.x);
-          a *= (1.0 - airAmt(vWorld) * 0.7) * exp(-dist * uMist * 1.5);
-          gl_FragColor = vec4(uTint * a * uGain * glowK() * (1.0 + uPulse * 0.6), 1.0);
+          fade *= 1.0 + smoothstep(30.0, 160.0, dist) * 0.8;
+          fade *= smoothstep(0.0, 14.0, vUv.x) * smoothstep(uLen, uLen - 14.0, vUv.x);
+          fade *= (1.0 - airAmt(vWorld) * 0.7) * exp(-dist * uMist * 1.5);
+          // (the fine things on it are for the near and middle distance: far off only the thread is left)
+          extra *= 1.0 - smoothstep(110.0, 260.0, dist);
+          gl_FragColor = vec4((uTint * a + extra) * fade * uGain * glowK() * (1.0 + uPulse * 0.6), 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,
