@@ -4,7 +4,7 @@
 
 import { ArrowUpRight, Eye } from "lucide-react";
 import { useState } from "react";
-import { novel, shots } from "@/content";
+import { shots } from "@/content";
 import { Btn, dragFile, useContextMenu, QuickLook, SearchField, Segmented, Toolbar, useChrome, type LookItem } from "../ui";
 import { type Photo, XMark } from "./shared";
 
@@ -106,11 +106,4 @@ export function Shots() {
       }
     />
   );
-}
-
-// The Art persona's Gallery: the novel's chapter illustrations, credited to their illustrator.
-const illustrations: Photo[] = Array.from({ length: 20 }, (_, i) => ({ title: `${i + 1} Skyrius`, src: `/content/novel/ch${String(i + 1).padStart(2, "0")}.png` }));
-
-export function Gallery() {
-  return <PhotosApp title="Gallery" sub="Illustrations for the novel" photos={illustrations} credit={`Iliustracijos: ${novel.illustrator}`} />;
 }
