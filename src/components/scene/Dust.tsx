@@ -46,8 +46,8 @@ export function DeskDust({ apiRef }: { apiRef: MutableRefObject<DustApi | null> 
           float w = clamp(fract(P.w * 0.0) + 1.0, 0.0, 1.0);
           if (age < 0.0 || age > 1.4) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; vA = 0.0; return; }
           // thrown out fast, slowed by the air, drifting up a little and settling
-          float out = (1.0 - exp(-age * 7.0)) * (0.07 + 0.08 * aSeed);
-          vec3 p = P.xyz + vec3(aDir.x, 0.0, aDir.z) * out + vec3(0.0, aDir.y * out * 0.6 + age * 0.012 - age * age * 0.01, 0.0);
+          float reach = (1.0 - exp(-age * 7.0)) * (0.07 + 0.08 * aSeed);
+          vec3 p = P.xyz + vec3(aDir.x, 0.0, aDir.z) * reach + vec3(0.0, aDir.y * reach * 0.6 + age * 0.012 - age * age * 0.01, 0.0);
           vec4 mv = modelViewMatrix * vec4(p, 1.0);
           gl_PointSize = clamp((0.004 + 0.006 * aSeed) * (1.0 + age * 2.0) * 900.0 / -mv.z, 1.0, 14.0);
           vA = smoothstep(0.0, 0.05, age) * exp(-age * 2.6) * 0.55;
