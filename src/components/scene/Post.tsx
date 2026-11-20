@@ -500,7 +500,9 @@ void main(){
   vec3 bloom = texture2D(tBloom, vUv).rgb * uBloom;
   vec3 lit = hdr + bloom / (1.0 + 0.55 * max(bloom.r, max(bloom.g, bloom.b)));
   #ifdef USE_RAYS
-    lit += texture2D(tRays, vUv).rgb * uRayCol * uRays;
+    // (light in the AIR: it is seen against what is far, and thins to nothing over the ground at one's feet, where
+    // a streak drawn in the frame would slide across the grass with every turn of the eye)
+    lit += texture2D(tRays, vUv).rgb * uRayCol * uRays * smoothstep(10.0, 160.0, viewZ(vUv));
   #endif
   // Highlights keep their colour: past a certain brightness the light is compressed toward a ceiling without
   // changing its hue, so a sun, a lamp or the kings' dome is a bright coloured thing with form in it and never a
@@ -701,7 +703,7 @@ function build(level: number) {
   };
   const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ao, ao2, ldr, ...hist, pick];
   // (hist: which of the two holds the frame before, whether it holds one at all, and how the camera saw the world then)
-  const past = { i: 0, ok: false, vp: new THREE.Matrix4(), eye: new THREE.Vector3(), q: new THREE.Quaternion() };
+  const past = { i: 0, ok: false, vp: new THREE.Matrix4(), eye: new THREE.Vector3(), q: new THREE.Quaternion(), at: 0, ray: 0 };
   return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, hist, past, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, steady, tail, w: 0, h: 0 };
 }
 
@@ -867,9 +869,9 @@ export function Post({ level }: { level: number }) {
     }
 
     // god rays from the sun (or, faintly, the moon) when it is low and in front of us
-    // (at Medium too: the mask and the march are at a quarter of the frame, a small cost for the light they give)
+    // (only where the composite lays them in, from High up: at Medium the two passes were being drawn and thrown away)
     let rayK = 0;
-    if (lv >= 1) {
+    if (lv >= 2) {
       const sunUp = SKY_U.uSunDir.value.y > -0.06;
       const dir = sunUp ? SKY_U.uSunDir.value : SKY_U.uMoonDir.value;
       sunV.copy(dir).multiplyScalar(1000).add(camera.position).project(camera);
@@ -877,6 +879,16 @@ export function Post({ level }: { level: number }) {
       const low2 = sunUp ? 1 - THREE.MathUtils.smoothstep(dir.y, 0.16, 0.62) : 0.35 * SKY_U.uNight.value;
       const inView = 1 - THREE.MathUtils.smoothstep(Math.max(Math.abs(sunV.x), Math.abs(sunV.y)), 1.0, 1.7);
       rayK = fwd > 0.05 ? low2 * inView * THREE.MathUtils.smoothstep(fwd, 0.05, 0.4) : 0;
+      // The rays are drawn in the frame, from where the sun stands in it: while the eye is turning quickly (the
+      // descent out of the sky, a drag) they would sweep across the picture, so they are let go then, and they
+      // come and go over a second or so, never at a stroke.
+      const nowMs = performance.now();
+      const dtR = Math.min(0.1, Math.max(0, (nowMs - (p.past.at || nowMs)) / 1000));
+      p.past.at = nowMs;
+      const turnPx = 2 * Math.acos(Math.min(1, Math.abs(p.past.q.dot(camera.quaternion)))) * (h / THREE.MathUtils.degToRad(pc.fov ?? 40));
+      const rayT = out ? rayK : rayK * (1 - THREE.MathUtils.smoothstep(turnPx, 1.5, 8));
+      p.past.ray = out ? rayK : p.past.ray + (rayT - p.past.ray) * (1 - Math.exp(-dtR * (rayT < p.past.ray ? 6 : 1.2)));
+      rayK = p.past.ray;
       if (rayK > 0.004) {
         run(p.m.mask, p.mask);
         p.m.rays.uniforms.uSun.value.set(sunV.x * 0.5 + 0.5, sunV.y * 0.5 + 0.5);
@@ -887,7 +899,7 @@ export function Post({ level }: { level: number }) {
 
     const c = p.m.comp.uniforms;
     c.uBloom.value = 0.1 * (1 + SKY_U.uPulse.value * 0.35) * postCtl.bloom;
-    c.uRays.value = rayK * 0.55 * postCtl.rays;
+    c.uRays.value = rayK * 0.42 * postCtl.rays;
     (c.uRayCol.value as THREE.Color).copy(SKY_U.uGlow.value).lerp(WHITE, 0.35);
     if (SKY_U.uSunDir.value.y <= -0.06) (c.uRayCol.value as THREE.Color).set(0.6, 0.7, 1.0);
     c.uPx.value.set(1 / w, 1 / h);
