@@ -25,6 +25,8 @@ export const FINALE_U = {
   uCrash: { value: 0 },
   // how far the storm has come (0 gentle weather .. 1 the height of it)
   uStorm: { value: 0 },
+  // lightning: how brightly the whole scene is lit by it this instant (0..1, brief)
+  uFlash: { value: 0 },
 };
 
 const WAVE_GLSL = /* glsl */ `
@@ -60,24 +62,32 @@ const LACE_GLSL = /* glsl */ `
     float w = length(fwidth(p)) * 46.0;
     return smoothstep(0.8, 0.96, wall) * mix(1.0 - smoothstep(0.2, 0.34 + w, length(c)), 0.22, smoothstep(0.3, 0.9, w));
   }
+  uniform float uStorm; uniform float uFlash;
   const vec3 W_DEEP = vec3(0.03, 0.03, 0.012);
   const vec3 W_GREEN = vec3(0.1, 0.17, 0.03);
   const vec3 W_LIME = vec3(0.4, 0.42, 0.07);
   const vec3 W_GOLD = vec3(0.86, 0.62, 0.14);
   const vec3 W_FOAM = vec3(0.98, 0.9, 0.7);
-  // the water's own colour by how thin it is between the eye and the light: umber-green, green, yellow-green, gold
+  // the water's own colour by how thin it is between the eye and the light: umber-green, green, yellow-green, gold;
+  // and as the storm comes up the whole of it goes over to slate and dark teal, a cold pale green where it is thinnest
   vec3 waterCol(float thin){
     vec3 c = mix(W_DEEP, W_GREEN, smoothstep(0.0, 0.4, thin));
     c = mix(c, W_LIME, smoothstep(0.3, 0.75, thin));
-    return mix(c, W_GOLD, smoothstep(0.7, 1.0, thin));
+    c = mix(c, W_GOLD, smoothstep(0.7, 1.0, thin));
+    vec3 st = mix(vec3(0.008, 0.02, 0.036), vec3(0.02, 0.085, 0.11), smoothstep(0.0, 0.4, thin));
+    st = mix(st, vec3(0.045, 0.16, 0.19), smoothstep(0.3, 0.75, thin));
+    st = mix(st, vec3(0.2, 0.4, 0.42), smoothstep(0.72, 1.0, thin));
+    return mix(c, st, uStorm);
   }
+  // what lightning adds to a surface for the instant it lasts
+  vec3 flashOn(float k){ return vec3(0.5, 0.63, 0.82) * uFlash * k; }
 `;
 
 // ---------- the sea, and the wave's face ----------
 export function buildSea(mobile: boolean) {
   const SEG = mobile ? 200 : 330;
-  const INNER = 1560;
-  const OUTER = 4600;
+  const INNER = 2900;
+  const OUTER = 7800;
   const warp = (u: number) => {
     const a = Math.abs(u);
     const k = 0.76;
@@ -174,7 +184,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         float toSun = pow(max(dot(-V, Lh), 0.0), 2.0);
         vec3 water = waterCol(thin * (0.72 + 0.28 * toSun));
         // (the troughs of the swell are umber, as his foreground waves are)
-        water = mix(water, vec3(0.04, 0.024, 0.01), (1.0 - onWave) * smoothstep(1.5, -3.5, sw) * 0.42);
+        water = mix(water, mix(vec3(0.04, 0.024, 0.01), vec3(0.008, 0.016, 0.03), uStorm), (1.0 - onWave) * smoothstep(1.5, -3.5, sw) * 0.42);
         // lit from within: the low sun behind the water
         vec3 col = water * (uSkyCol * 0.95 + uKeyCol * (0.12 + thin * (0.5 + 0.9 * toSun)));
         // the long fine lines of the water drawn up the face, lighter and darker, always moving up
@@ -182,7 +192,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         col *= 1.0 + (line - 0.5) * 1.2 * onWave * front;
         // under the overhanging crest the face stands in the wave's own shade: umber, as he painted the hollow
         float hollow = smoothstep(0.5, 0.72, up + (line - 0.5) * 0.16) * (1.0 - smoothstep(0.88, 0.99, up)) * onWave * front * smoothstep(${(900 * WK).toFixed(1)}, ${(700 * WK).toFixed(1)}, abs(s));
-        col = mix(col, vec3(0.062, 0.036, 0.015) * (0.45 + 1.1 * line) * (uSkyCol * 1.05 + uKeyCol * 0.1), hollow * 0.93);
+        col = mix(col, mix(vec3(0.062, 0.036, 0.015), vec3(0.012, 0.028, 0.045), uStorm) * (0.45 + 1.1 * line) * (uSkyCol * 1.05 + uKeyCol * 0.1), hollow * 0.93);
         // the sky in it: strongly at a grazing eye on the open sea, hardly at all on the lit face
         vec3 r = reflect(-V, n); r.y = abs(r.y) + 0.002; r = normalize(r);
         float fres = 0.03 + 0.97 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
@@ -233,10 +243,11 @@ export function makeSeaMaterial(sign: THREE.Texture) {
           vec2 bc = fract(sg * vec2(56.0, 24.0)) - 0.5;
           sign = m * (1.0 - smoothstep(0.22, 0.36, length(bc))) * onWave * front;
         }
-        vec3 foamCol = W_FOAM * (uSkyCol * 0.85 + uKeyCol * (0.3 + 0.25 * toSun));
+        vec3 foamCol = mix(W_FOAM, vec3(0.8, 0.9, 0.95), uStorm * 0.8) * (uSkyCol * 0.85 + uKeyCol * (0.3 + 0.25 * toSun));
         col = mix(col, foamCol, clamp(foam, 0.0, 1.0) * 0.8);
         col = mix(col, vec3(0.95, 0.52, 0.1) * (uSkyCol * 0.8 + uKeyCol * (0.35 + 0.6 * toSun)), clamp(bead, 0.0, 1.0) * 0.75);
         col = mix(col, foamCol * 1.1, sign);
+        col += flashOn(0.07 + 0.3 * clamp(foam, 0.0, 1.0) + 0.16 * thin);
         col = applyAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         ${END}
@@ -295,7 +306,7 @@ export const LIP_FINGERS = TIP_ROW / (LIP.length - 1);
 const fingerLen = (s: number) => 0.75 + 0.45 * noise2(s * 0.012, 3.3) + 0.9 * Math.exp(-(((s + 635 * WK) / (70 * WK)) ** 2));
 
 export function buildCrest(mobile: boolean) {
-  const STEP = mobile ? 20 : 10;
+  const STEP = mobile ? 34 : 17;
   const ROWS = mobile ? 26 : 40;
   const pos: number[] = [];
   const uv: number[] = [];
@@ -309,7 +320,7 @@ export function buildCrest(mobile: boolean) {
     const hc = bodyAt(rx, rz);
     // where the face is at the shoulder's height: the crest springs from there
     let d = 0;
-    while (d < 900 && bodyAt(rx + n[0] * d, rz + n[1] * d) > 0.82 * hc) d += 2;
+    while (d < 1900 && bodyAt(rx + n[0] * d, rz + n[1] * d) > 0.82 * hc) d += 2;
     const rho = d / 0.445;
     const end = Math.min(1, Math.max(0, (880 * WK - Math.abs(s)) / (200 * WK)));
     const k = end * end * (3 - 2 * end);
@@ -410,7 +421,7 @@ export function makeCrestMaterial() {
         vec3 col = water * (uSkyCol * 0.95 + uKeyCol * (0.2 + (0.5 + 1.3 * pow(toSun, 2.0)) * (0.3 + 0.7 * thin)));
         // seen from under, in the hollow, it is the wave's own shade with the light coming through in lines
         // (umber, as he painted the hollow: the lace hangs pale over the dark)
-        col = mix(col, col * vec3(0.3, 0.2, 0.11), under * (1.0 - 0.45 * pow(toSun, 3.0)) * 0.9);
+        col = mix(col, col * mix(vec3(0.3, 0.2, 0.11), vec3(0.14, 0.2, 0.26), uStorm), under * (1.0 - 0.45 * pow(toSun, 3.0)) * 0.9);
         // the sun itself, seen through the sheet
         col += uKeyCol * vec3(0.95, 1.0, 0.55) * pow(toSun, 46.0) * (0.25 + 0.75 * thin) * 1.2;
         // falling water: long lines down the sheet
@@ -426,8 +437,9 @@ export function makeCrestMaterial() {
         foam = max(foam, 1.0 - smoothstep(0.5, 2.6, edgeD));
         foam += beads(vec2(s * 0.06, v * 20.0 - uTime * 0.05), l1.x) * 0.6 * smoothstep(0.3, 0.6, v);
         foam = mix(foam, smoothstep(0.55, 1.0, v) * 0.6, smoothstep(300.0, 1000.0, dist));
-        vec3 foamCol = W_FOAM * (uSkyCol * 0.85 + uKeyCol * (0.3 + 0.5 * toSun));
+        vec3 foamCol = mix(W_FOAM, vec3(0.8, 0.9, 0.95), uStorm * 0.8) * (uSkyCol * 0.85 + uKeyCol * (0.3 + 0.5 * toSun));
         col = mix(col, foamCol, clamp(foam, 0.0, 1.0) * 0.9);
+        col += flashOn(0.1 + 0.3 * clamp(foam, 0.0, 1.0));
         col = applyAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         ${END}
@@ -507,33 +519,75 @@ export function makeSprayMaterial() {
 }
 
 // ---------- the storm's rain ----------
-// Rain as he would have drawn it: long soft slanting strokes, never dots. One open cylinder that goes with the
-// eye; the strokes are noise drawn out long down the sheet and carried down it, faded where a pixel could not
-// hold one, so nothing crawls. How much of it there is follows the storm (FINALE_U.uStorm).
+// Rain as weather, not as lines: soft, wide, half-seen sheets falling at a slant, at three depths round the eye.
+// The nearest are faint and broad; the middle ones are curtains; the furthest are veils of grey-blue haze that
+// close the distance. Each drifts down the wind slowly and breaks along its height, so the air is never still and
+// nothing crawls from one frame to the next. In the nearest sheet only, a few fine soft strokes, given up wherever
+// a pixel could not hold one. How much of it there is follows the storm (FINALE_U.uStorm).
+export function rainGeometry() {
+  const parts: THREE.BufferGeometry[] = [];
+  const layers: [number, number][] = [
+    [60, 150],
+    [230, 520],
+    [760, 1500],
+  ];
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const lay: number[] = [];
+  const idx: number[] = [];
+  layers.forEach(([R, H], li) => {
+    const g = new THREE.CylinderGeometry(R, R, H, 48, 1, true);
+    g.translate(0, H * 0.32, 0);
+    const o = pos.length / 3;
+    pos.push(...(g.attributes.position.array as Float32Array));
+    uv.push(...(g.attributes.uv.array as Float32Array));
+    for (let i = 0; i < g.attributes.position.count; i++) lay.push(li);
+    for (const i of g.index!.array as Uint16Array) idx.push(o + i);
+    parts.push(g);
+  });
+  parts.forEach((g) => g.dispose());
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute("aLayer", new THREE.Float32BufferAttribute(lay, 1));
+  g.setIndex(idx);
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 2000);
+  return g;
+}
 export function makeRainMaterial() {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     side: THREE.BackSide,
     uniforms: { ...SKY_U, ...FINALE_U },
-    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    vertexShader: /* glsl */ `attribute float aLayer; varying vec2 vUv; varying float vL; void main(){ vUv = uv; vL = aLayer; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
-      uniform float uStorm;
-      varying vec2 vUv;
+      uniform float uStorm; uniform float uFlash;
+      varying vec2 vUv; varying float vL;
       ${GLSL_NOISE}
       ${GLSL_SKY}
       void main(){
-        float k = smoothstep(0.45, 0.95, uStorm);
+        float k = smoothstep(0.3, 0.9, uStorm);
         if (k < 0.004) discard;
-        // metres round the sheet and up it; the strokes lean with the wind
-        float x = vUv.x * 440.0 + vUv.y * 46.0; float y = vUv.y * 170.0;
-        float w = fwidth(x);
-        float keep = 1.0 - smoothstep(0.25, 0.8, w * 1.4);
-        float a1 = smoothstep(0.6, 0.92, vnoise(vec2(x * 1.4, y * 0.045 + uTime * 1.25)));
-        float a2 = smoothstep(0.66, 0.95, vnoise(vec2(x * 0.5 + 9.0, y * 0.02 + uTime * 0.8)));
-        float a = (a1 * 0.5 * keep + a2 * 0.5) * smoothstep(0.0, 0.2, vUv.y) * (1.0 - smoothstep(0.75, 1.0, vUv.y));
-        vec3 col = uHorizon * 1.15 + uSkyCol * 0.5 + 0.03;
-        gl_FragColor = vec4(col, a * k * 0.3);
+        float R = vL < 0.5 ? 60.0 : vL < 1.5 ? 230.0 : 760.0;
+        float H = vL < 0.5 ? 150.0 : vL < 1.5 ? 520.0 : 1500.0;
+        // metres round the sheet and up it; everything leans with the wind
+        float y = vUv.y * H;
+        float sl = vUv.x * 6.2832 * R + y * 0.42;
+        float wide = vL < 0.5 ? 10.0 : vL < 1.5 ? 36.0 : 130.0;
+        float b1 = vnoise(vec2(sl / wide + uTime * 0.04 * (1.0 + vL), y / (wide * 9.0) + uTime * (0.3 - 0.09 * vL)));
+        float b2 = vnoise(vec2(sl / (wide * 2.7) - uTime * 0.025 + 7.0, y / (wide * 22.0) + uTime * 0.1 + vL * 3.0));
+        float sheet = smoothstep(0.36, 0.86, b1 * 0.6 + b2 * 0.5);
+        float fine = 0.0;
+        if (vL < 0.5) {
+          float fx = sl * 0.8;
+          fine = smoothstep(0.6, 0.96, vnoise(vec2(fx, y * 0.028 + uTime * 0.55))) * (1.0 - smoothstep(0.18, 0.55, fwidth(fx)));
+        }
+        float vfade = smoothstep(0.0, 0.25, vUv.y) * (1.0 - smoothstep(0.7, 1.0, vUv.y));
+        float a = (sheet * (vL < 0.5 ? 0.07 : vL < 1.5 ? 0.11 : 0.16) + fine * sheet * 0.05) * vfade * k;
+        // (a little lighter than the air it falls through, never a white-out)
+        vec3 col = uHorizon * 0.95 + uSkyCol * 0.45 + 0.015 + vec3(0.4, 0.5, 0.65) * uFlash * 0.6;
+        gl_FragColor = vec4(col, a);
         ${END}
       }`,
   });
@@ -561,13 +615,80 @@ export function makeCrashMaterial() {
         vec3 d = normalize(vDir);
         // it comes from above and ahead: the top of the view goes first
         float front = smoothstep(-0.9, 0.7, d.y + (uCrash * 2.2 - 1.2));
-        vec2 q = vec2(atan(d.x, -d.z) * 3.0, d.y * 3.0 + uTime * 0.5 + uCrash * 2.0);
-        vec3 l1 = lace(q * 1.6, uTime * 0.2);
-        float fall = vnoise(vec2(q.x * 5.0, q.y * 0.6 + uTime * 1.2));
-        vec3 foam = W_FOAM * (uSkyCol * 0.8 + uKeyCol * 0.45 + 0.25) * (0.8 + 0.2 * l1.x) * (0.9 + 0.2 * fall);
+        vec2 q = vec2(atan(d.x, -d.z) * 3.0, d.y * 3.0 + uTime * 0.22 + uCrash * 1.6);
+        vec3 l1 = lace(q * 1.3, uTime * 0.06);
+        float fall = vnoise(vec2(q.x * 3.0, q.y * 0.5 + uTime * 0.5));
+        // (soft: the lace only just shows in it, so the white comes down as one body and does not flicker)
+        vec3 foam = W_FOAM * (uSkyCol * 0.8 + uKeyCol * 0.45 + 0.25) * (0.93 + 0.07 * l1.x) * (0.94 + 0.1 * fall);
         float a = clamp(front * uCrash * 1.3 + uCrash * uCrash * uCrash, 0.0, 1.0);
         gl_FragColor = vec4(foam, a);
         ${END}
+      }`,
+  });
+}
+
+// ---------- lightning ----------
+// A forked stroke of light in the cloud, as a hand would draw it: a main channel that wanders down, two or three
+// thinner branches leaving it, a breath of light round all of it. It lasts a quarter of a second (two quick
+// pulses) and leaves a glow that fades. One quad that faces the eye; where it stands, its shape (uBolt.x, a new
+// one each time) and its age (uBolt.y, seconds) are given by the world.
+export function makeBoltMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    uniforms: { uBolt: { value: new THREE.Vector2(0, 99) }, uAt: { value: new THREE.Vector3() }, uSize: { value: new THREE.Vector2(700, 1100) } },
+    vertexShader: /* glsl */ `
+      uniform vec3 uAt; uniform vec2 uSize;
+      varying vec2 vUv;
+      void main(){
+        vUv = uv;
+        vec3 c = (modelMatrix * vec4(uAt, 1.0)).xyz;
+        vec3 toEye = normalize(cameraPosition - c);
+        vec3 side = normalize(cross(vec3(0.0, 1.0, 0.0), toEye));
+        vec3 w = c + side * (uv.x - 0.5) * uSize.x + vec3(0.0, (uv.y - 0.5) * uSize.y, 0.0);
+        gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec2 uBolt;
+      varying vec2 vUv;
+      ${GLSL_NOISE}
+      float chan(float y, float sd){ return (vnoise(vec2(y * 5.0 + sd, sd * 1.7)) - 0.5) * 0.34 + (vnoise(vec2(y * 17.0 + sd * 3.0, 2.3)) - 0.5) * 0.1 + (vnoise(vec2(y * 53.0, sd)) - 0.5) * 0.03; }
+      void main(){
+        float age = uBolt.y;
+        if (age > 1.4) discard;
+        float sd = uBolt.x;
+        float x = vUv.x - 0.5; float y = 1.0 - vUv.y;
+        float aa = fwidth(x) * 1.2;
+        // the main channel, top to bottom, thinning toward its foot
+        float d = abs(x - chan(y, sd));
+        float w = (0.0035 + aa) * (1.0 - 0.5 * y);
+        float core = exp(-d * d / (w * w)) * (1.0 - smoothstep(0.86, 0.98, y));
+        float glow = exp(-d * 14.0) * 0.22 * (1.0 - smoothstep(0.7, 1.0, y));
+        // branches: each leaves the channel at its own height and goes off to one side, thinner, shorter
+        for (int i = 0; i < 3; i++) {
+          float fi = float(i);
+          float y0 = 0.18 + 0.2 * fi + 0.1 * fract(sd * (1.3 + fi));
+          float len = 0.16 + 0.14 * fract(sd * 2.7 + fi * 0.37);
+          float dir = fract(sd * 3.1 + fi * 0.61) > 0.5 ? 1.0 : -1.0;
+          float u = (y - y0) / len;
+          if (u > 0.0 && u < 1.0) {
+            float bx = chan(y0, sd) + dir * (y - y0) * (0.7 + 0.5 * fract(sd * 5.0 + fi)) + (vnoise(vec2(y * 31.0 + fi * 7.0, sd)) - 0.5) * 0.05 * u;
+            float db = abs(x - bx);
+            float wb = (0.002 + aa) * (1.0 - 0.7 * u);
+            core += exp(-db * db / (wb * wb)) * 0.6 * (1.0 - u);
+            glow += exp(-db * 22.0) * 0.08 * (1.0 - u);
+          }
+        }
+        // two quick pulses, then only the glow, fading
+        float pulse = exp(-age * 16.0) + 0.7 * exp(-pow((age - 0.13) * 22.0, 2.0));
+        float after = exp(-age * 4.5);
+        float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
+        vec3 col = vec3(0.78, 0.86, 1.0) * (core * pulse * 1.5 + glow * (0.5 * pulse + 0.5 * after)) * edge;
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
       }`,
   });
 }
