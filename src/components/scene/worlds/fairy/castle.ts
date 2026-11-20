@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Kit, type Halo, type V3 } from "../kit";
-import { MT, PEAKS, ROAD, WARDS, footOf, peakRadius, rhoOf, rimOf, roadT, terraceAt, thOf, wallOf } from "./mountain";
+import { MT, PEAKS, ROAD, WARDS, footOf, peakRadius, rhoOf, roadT, surfaceY, terraceAt, thOf, wallOf } from "./mountain";
 
 // The castle of the Fairy Tale. It climbs the front of the great peak in three wards, each a drum of pale
 // stone standing out of the rock with its ring of slim towers; a hall and a chapel stand on them, a keep above,
@@ -78,14 +78,12 @@ export function buildCastle(mobile: boolean, r: () => number) {
         const rr = (R - (R * 0.1 * yy) / (H * 0.84)) * apo - 0.22;
         const w = Math.max(0.5, R * 0.17);
         const h = Math.max(1.6, R * 0.62);
-        k.box(w, h, 1.0, [x + Math.sin(phi) * rr, y + yy, z + Math.cos(phi) * rr], LAMP, { glow: 0.9, rot: [0, phi, 0] });
-        if (nWin++ % (mobile ? 6 : 2) === 0) L.windows.push({ p: [x + Math.sin(phi) * (rr + 1.2), y + yy, z + Math.cos(phi) * (rr + 1.2)], size: Math.max(2.6, R * 0.8), col: [1, 0.7, 0.34], k: 0.5 });
+        // a lancet: its glass set in the wall, a pointed hood over it and a sill under it
+        k.box(w, h, 0.7, [x + Math.sin(phi) * rr, y + yy, z + Math.cos(phi) * rr], [1.0, 0.5, 0.14], { top: [0.5, 0.2, 0.08], glow: 0.8, rot: [0, phi, 0] });
+        k.add(new THREE.ConeGeometry(w * 0.95, w * 1.5, 4), [x + Math.sin(phi) * (rr + 0.2), y + yy + h / 2 + w * 0.6, z + Math.cos(phi) * (rr + 0.2)], STONE, { top: STONE_LIT, rot: [0, phi + Math.PI / 4, 0], glow: 0.05 });
+        k.box(w * 1.7, w * 0.3, 1.1, [x + Math.sin(phi) * (rr + 0.1), y + yy - h / 2 - w * 0.15, z + Math.cos(phi) * (rr + 0.1)], STONE_LIT, { rot: [0, phi, 0], glow: 0.05 });
+        if (nWin++ % (mobile ? 6 : 2) === 0) L.windows.push({ p: [x + Math.sin(phi) * (rr + 1.2), y + yy, z + Math.cos(phi) * (rr + 1.2)], size: Math.min(5, Math.max(2.4, R * 0.5)), col: [1, 0.7, 0.34], k: 0.5 });
       }
-    }
-    // the gallery's own row of small lights
-    for (let f = 0; f < seg; f++) {
-      const phi = ((f + 0.5) / seg) * Math.PI * 2;
-      k.box(R * 0.13, R * 0.2, 0.8, [x + Math.sin(phi) * (R * 1.14 * apo - 0.2), y + H * 0.968, z + Math.cos(phi) * (R * 1.14 * apo - 0.2)], LAMP, { glow: 0.8, rot: [0, phi, 0] });
     }
     if (o.turrets) {
       // four small turrets hung on its corners under the roof
@@ -111,9 +109,65 @@ export function buildCastle(mobile: boolean, r: () => number) {
     }
   };
 
+  // What a tower stands on: a round bastion of the same stone carried down into the ground under it, a corbel
+  // ring where the two meet. No tower hangs.
+  const seated = (x: number, top: number, z: number, R: number) => {
+    const foot = surfaceY(x, z) - 8;
+    if (top - foot < 3) return;
+    k.lathe(
+      [
+        [R * 1.3, 0],
+        [R * 1.16, (top - foot) * 0.12],
+        [R * 1.1, top - foot - R * 0.5],
+        [R * 1.24, top - foot - R * 0.2],
+        [R * 1.24, top - foot],
+      ],
+      [x, foot, z],
+      DARK,
+      { top: STONE, seg: R > 7 ? 14 : 10, glow: 0.02 },
+    );
+  };
+  // A pointed arch as a shape: w wide, h high, springing where its sides end.
+  const archShape = (w: number, h: number, x0 = 0) => {
+    const half = w / 2;
+    const spring = Math.max(h * 0.3, h - half * 1.5);
+    const sh = new THREE.Shape();
+    sh.moveTo(x0 - half, 0);
+    sh.lineTo(x0 - half, spring);
+    sh.quadraticCurveTo(x0 - half, h * 0.94, x0, h);
+    sh.quadraticCurveTo(x0 + half, h * 0.94, x0 + half, spring);
+    sh.lineTo(x0 + half, 0);
+    sh.lineTo(x0 - half, 0);
+    return sh;
+  };
+  // A real opening: a surround standing proud of the wall with a second order set back in it, and behind them the
+  // lit depth of the passage (or, for a window, the glass), deep amber low down and dark at its head. (x, y, z) is
+  // the middle of its sill on the wall's face; it looks out along yaw.
+  const archway = (x: number, y: number, z: number, yaw: number, w: number, h: number, depth: number, light = 1) => {
+    const t = Math.max(0.6, w * 0.2);
+    const put = (g: THREE.BufferGeometry, back: number, col: V3, top: V3, glow: number) =>
+      k.add(g, [x - Math.sin(yaw) * back, y, z - Math.cos(yaw) * back], col, { top, rot: [0, yaw, 0], glow });
+    const outer = archShape(w + t * 2, h + t);
+    outer.holes.push(archShape(w, h));
+    put(new THREE.ExtrudeGeometry(outer, { depth, bevelEnabled: false, curveSegments: 7 }), 0, STONE, STONE_LIT, 0.08);
+    const inner = archShape(w, h);
+    inner.holes.push(archShape(w * 0.76, h * 0.9));
+    put(new THREE.ExtrudeGeometry(inner, { depth: depth * 0.5, bevelEnabled: false, curveSegments: 7 }), 0, DARK, STONE, 0.04);
+    // the light within: seen past both orders, so it lies deep
+    put(new THREE.ShapeGeometry(archShape(w * 0.78, h * 0.91), 7), -0.25, [1.0, 0.52, 0.15], [0.16, 0.06, 0.07], 0.75 * light);
+    // a sill, so it stands on something
+    k.box(w + t * 2.6, t * 0.8, depth + t, [x + Math.sin(yaw) * depth * 0.5, y - t * 0.4, z + Math.cos(yaw) * depth * 0.5], STONE, { top: STONE_LIT, rot: [0, yaw, 0], glow: 0.05 });
+  };
+
   // a ward: a drum of stone standing out of the rock, buttressed, with its curtain wall and towers on the open side
-  WARDS.forEach((w, wi) => {
-    k.add(new THREE.CylinderGeometry(w.R, w.R + 6, w.body, 56, 1), [w.x, w.y - w.body / 2, w.z], DARK, { top: STONE, glow: 0.01 });
+  WARDS.forEach((w0, wi) => {
+    // (the drum is carried down to below the lowest ground its rim stands over: no part of it hangs)
+    let low = w0.y;
+    for (let i = 0; i < 24; i++) low = Math.min(low, surfaceY(w0.x + Math.sin((i / 24) * Math.PI * 2) * (w0.R + 8), w0.z + Math.cos((i / 24) * Math.PI * 2) * (w0.R + 8)));
+    const w = { ...w0, body: w0.y - low + 14 };
+    k.add(new THREE.CylinderGeometry(w.R, w.R + 9, w.body, 56, 1), [w.x, w.y - w.body / 2, w.z], DARK, { top: STONE, glow: 0.01 });
+    // a coping round its head, under the wall
+    for (const dy of [-1.2]) k.add(new THREE.TorusGeometry(w.R + 0.6 - (dy * 9) / w.body, dy > -2 ? 1.4 : 1.0, 5, 72), [w.x, w.y + dy, w.z], STONE, { top: STONE_LIT, rot: [Math.PI / 2, 0, 0], glow: 0.05 });
     // the court: paved, a little green
     k.add(new THREE.CylinderGeometry(w.R - 2, w.R - 2, 0.6, 48, 1), [w.x, w.y + 0.1, w.z], [0.36, 0.3, 0.28], { glow: 0.02 });
     const A = wi === 0 ? 2.2 : 2.05;
@@ -124,13 +178,6 @@ export function buildCastle(mobile: boolean, r: () => number) {
       const h = w.body * 0.92;
       k.add(new THREE.CylinderGeometry(2.4, 5.2, h, 5), [w.x + Math.sin(a) * (w.R + 2.6), w.y - h / 2 - 3, w.z + Math.cos(a) * (w.R + 2.6)], mixc(DARK, STONE, 0.3), { top: mixc(STONE, STONE_LIT, 0.4), rot: [0, a, 0], glow: 0.02 });
     }
-    // tall blind lancets let into the drum between them, each with a light low in it
-    for (let i = 0; i < nb; i++) {
-      const a = -A * 0.92 + ((i + 0.5) / nb) * A * 1.84;
-      const h = w.body * 0.5;
-      k.box(3.2, h, 1.6, [w.x + Math.sin(a) * (w.R + 1.1), w.y - h / 2 - 12, w.z + Math.cos(a) * (w.R + 1.1)], [0.07, 0.05, 0.14], { top: [0.1, 0.2, 0.26], rot: [0, a, 0] });
-      k.box(1.6, 4.2, 1.9, [w.x + Math.sin(a) * (w.R + 1.2), w.y - h - 6, w.z + Math.cos(a) * (w.R + 1.2)], LAMP, { glow: 0.85, rot: [0, a, 0] });
-    }
     // the curtain wall and its battlements
     const wh = wi === 0 ? 17 : 13;
     k.add(new THREE.CylinderGeometry(w.R - 0.5, w.R + 0.5, wh, 64, 1, true, -A, A * 2), [w.x, w.y + wh / 2, w.z], mixc(STONE, STONE_LIT, 0.4), { top: STONE_LIT, glow: 0.1 });
@@ -138,11 +185,6 @@ export function buildCastle(mobile: boolean, r: () => number) {
     for (let i = 0; i < nm; i += 2) {
       const a = -A + ((i + 0.5) / nm) * A * 2;
       k.box(2.8, 2.6, 1.7, [w.x + Math.sin(a) * w.R, w.y + wh + 1.2, w.z + Math.cos(a) * w.R], STONE_LIT, { glow: 0.05, rot: [0, a, 0] });
-    }
-    // a row of lit loops along the wall
-    for (let i = 1; i < nm; i += 3) {
-      const a = -A + ((i + 0.5) / nm) * A * 2;
-      k.box(0.9, 3.4, 1.2, [w.x + Math.sin(a) * (w.R + 0.2), w.y + wh * 0.5, w.z + Math.cos(a) * (w.R + 0.2)], LAMP, { glow: 0.85, rot: [0, a, 0] });
     }
     // towers along it, tall and short by turns, the roofs red, violet and green
     const nt = wi === 0 ? 12 : wi === 1 ? 10 : 8;
@@ -154,6 +196,7 @@ export function buildCastle(mobile: boolean, r: () => number) {
       const R = (wi === 0 ? 8.6 : wi === 1 ? 7.2 : 5.8) * (0.85 + r() * 0.35) * (mid ? 1.15 : 1);
       const H = (wi === 0 ? 66 : wi === 1 ? 60 : 52) * (0.78 + r() * 0.5) + (i % 2 ? 13 : 0) + (mid ? 16 : 0);
       tower(w.x + Math.sin(a) * w.R, w.y - 10, w.z + Math.cos(a) * w.R, R, H, { roof: (i + wi) % 3 === 2 ? 1 : (i + wi) % 5 === 3 ? 2 : 0, turrets: i % 4 === 1 });
+      seated(w.x + Math.sin(a) * w.R, w.y - 9, w.z + Math.cos(a) * w.R, R);
     }
   });
 
@@ -162,21 +205,43 @@ export function buildCastle(mobile: boolean, r: () => number) {
     const w = WARDS[0];
     const gz = w.z + w.R - 1;
     k.box(42, 64, 18, [w.x, w.y + 22, gz], STONE, { top: STONE_LIT, glow: 0.1 });
-    for (const sx of [-1, 1]) tower(w.x + sx * 24.5, w.y - 14, gz + 1, 12.5, 108, { roof: 0, rh: 60, turrets: true });
-    // the portal: a tall pointed arch of light, and a rose over it
-    k.box(15, 23, 1.4, [w.x, w.y + 3.5, gz + 8.6], LAMP, { glow: 0.85 });
-    k.add(new THREE.ConeGeometry(10.6, 16, 4), [w.x, w.y + 23, gz + 8.6], LAMP, { glow: 0.85, scale: [1, 1, 0.1], rot: [0, Math.PI / 4, 0] });
-    k.add(new THREE.CylinderGeometry(5.8, 5.8, 1.2, 24), [w.x, w.y + 43, gz + 8.7], [1, 0.82, 0.5], { glow: 0.85, rot: [Math.PI / 2, 0, 0] });
-    for (const sx of [-1, 1]) for (let q = 0; q < 3; q++) k.box(1.5, 8, 1.2, [w.x + sx * (9 + q * 3.6), w.y + 30 - q * 2, gz + 8.6], LAMP, { glow: 0.85 });
+    // (the block stands on a pier of its own, down into the slope)
+    const under = surfaceY(w.x, gz + 10) - 12;
+    k.box(46, w.y - 9 - under, 22, [w.x, (w.y - 9 + under) / 2, gz], DARK, { top: STONE, glow: 0.01 });
+    for (const sx of [-1, 1]) {
+      tower(w.x + sx * 24.5, w.y - 14, gz + 1, 12.5, 108, { roof: 0, rh: 60, turrets: true });
+      seated(w.x + sx * 24.5, w.y - 13, gz + 1, 12.5);
+    }
+    // the great door: a deep pointed arch opening on a round balcony carried on a corbel, a rose over it
+    archway(w.x, w.y - 4, gz + 9, 0, 15, 30, 7);
+    k.lathe(
+      [
+        [1.5, 0],
+        [6, 9],
+        [15, 17],
+        [15, 20],
+        [16, 20.01],
+        [16, 23],
+      ],
+      [w.x, w.y - 27, gz + 9],
+      DARK,
+      { top: STONE_LIT, seg: 20, glow: 0.04 },
+    );
+    k.add(new THREE.CylinderGeometry(5.8, 5.8, 1.2, 24), [w.x, w.y + 43, gz + 8.9], [1, 0.62, 0.22], { top: [1, 0.82, 0.5], glow: 0.8, rot: [Math.PI / 2, 0, 0] });
+    k.add(new THREE.TorusGeometry(6.3, 1.1, 6, 28), [w.x, w.y + 43, gz + 9.2], STONE, { top: STONE_LIT, glow: 0.06 });
     k.add(new THREE.CylinderGeometry(0.001, 1, 1, 4, 1), [w.x, w.y + 54 + 11, gz], ROOFS[1][0], { top: ROOFS[1][1], glow: 0.1, scale: [31, 22, 14], rot: [0, Math.PI / 4, 0] });
-    L.glows.push({ p: [w.x, w.y + 16, gz + 18], size: 64, col: [1, 0.7, 0.34], k: 0.5 });
-    L.halos.push({ p: [w.x, w.y + 43, gz + 11], size: 12, col: [1, 0.84, 0.52], k: 0.7 });
-    // a great stair falling from the portal to the terrace
-    for (let i = 0; i < 16; i++) k.box(19 - i * 0.3, 3.2, 5.4, [w.x, w.y - 10 - i * 3, gz + 9 + i * 3.4], mixc(STONE, STONE_LIT, 0.5), { top: STONE_LIT, glow: 0.03 });
-    // where the road arrives: a lesser gate in the drum's left flank
-    const a = -1.92;
-    k.box(11, 20, 1.6, [w.x + Math.sin(a) * (w.R + 3.4), w.y - 14, w.z + Math.cos(a) * (w.R + 3.4)], LAMP, { glow: 0.85, rot: [0, a, 0] });
-    L.glows.push({ p: [w.x + Math.sin(a) * (w.R + 10), w.y - 14, w.z + Math.cos(a) * (w.R + 10)], size: 30, col: [1, 0.72, 0.36], k: 0.45 });
+    L.glows.push({ p: [w.x, w.y + 12, gz + 20], size: 54, col: [1, 0.7, 0.34], k: 0.4 });
+    L.halos.push({ p: [w.x, w.y + 43, gz + 11], size: 10, col: [1, 0.84, 0.52], k: 0.6 });
+    // where the road arrives: its own door, in the drum's flank, exactly where the road meets the stone
+    let u = 1.6;
+    let door = terraceAt(u, roadT(u));
+    for (; u < ROAD.u1; u += 0.004) {
+      door = terraceAt(u, roadT(u));
+      if (Math.hypot(door.x - w.x, door.z - w.z) < w.R + 2) break;
+    }
+    const a = Math.atan2(door.x - w.x, door.z - w.z);
+    archway(w.x + Math.sin(a) * (w.R + 1.5), door.y - 0.5, w.z + Math.cos(a) * (w.R + 1.5), a, 11, 20, 5);
+    L.glows.push({ p: [w.x + Math.sin(a) * (w.R + 10), door.y + 8, w.z + Math.cos(a) * (w.R + 10)], size: 26, col: [1, 0.72, 0.36], k: 0.4 });
   }
   // the hall on the middle ward: a long roof, a row of tall windows, a flèche
   {
@@ -184,8 +249,7 @@ export function buildCastle(mobile: boolean, r: () => number) {
     k.box(66, 36, 28, [w.x, w.y + 18, w.z - 4], STONE, { top: STONE_LIT, glow: 0.1 });
     k.add(new THREE.CylinderGeometry(0.001, 1, 1, 4, 1), [w.x, w.y + 36 + 14, w.z - 4], ROOFS[0][0], { top: ROOFS[0][1], glow: 0.1, scale: [48, 28, 21], rot: [0, Math.PI / 4, 0] });
     for (let i = -4; i <= 4; i++) {
-      k.box(3.0, 20, 1.2, [w.x + i * 6.8, w.y + 17, w.z + 10.3], LAMP, { glow: 0.9 });
-      k.add(new THREE.ConeGeometry(2.1, 4, 4), [w.x + i * 6.8, w.y + 28.6, w.z + 10.3], LAMP, { glow: 0.9, scale: [1, 1, 0.2], rot: [0, Math.PI / 4, 0] });
+      archway(w.x + i * 6.8, w.y + 6, w.z + 10, 0, 3.0, 23, 1.6);
       if (i % 2 === 0) L.windows.push({ p: [w.x + i * 6.8, w.y + 17, w.z + 13], size: 9, col: [1, 0.72, 0.36], k: 0.5 });
     }
     tower(w.x, w.y + 46, w.z - 4, 3.6, 16, { roof: 2, rh: 42 });
@@ -196,12 +260,15 @@ export function buildCastle(mobile: boolean, r: () => number) {
     const w = WARDS[2];
     k.box(32, 34, 20, [w.x, w.y + 17, w.z - 6], STONE, { top: STONE_LIT, glow: 0.1 });
     k.add(new THREE.CylinderGeometry(0.001, 1, 1, 4, 1), [w.x, w.y + 34 + 13, w.z - 6], ROOFS[1][0], { top: ROOFS[1][1], glow: 0.1, scale: [24, 26, 15.5], rot: [0, Math.PI / 4, 0] });
-    k.add(new THREE.CylinderGeometry(4.8, 4.8, 1.2, 22), [w.x, w.y + 23, w.z + 4.3], [1, 0.8, 0.5], { glow: 0.85, rot: [Math.PI / 2, 0, 0] });
-    for (const sx of [-1, 1]) k.box(2.5, 13, 1.2, [w.x + sx * 9.2, w.y + 11, w.z + 4.3], LAMP, { glow: 0.85 });
+    k.add(new THREE.CylinderGeometry(4.8, 4.8, 1.2, 22), [w.x, w.y + 23, w.z + 4.1], [1, 0.62, 0.22], { top: [1, 0.8, 0.5], glow: 0.8, rot: [Math.PI / 2, 0, 0] });
+    k.add(new THREE.TorusGeometry(5.2, 0.9, 6, 24), [w.x, w.y + 23, w.z + 4.3], STONE, { top: STONE_LIT, glow: 0.06 });
+    for (const sx of [-1, 1]) archway(w.x + sx * 9.2, w.y + 4, w.z + 4, 0, 2.6, 14, 1.4);
+    archway(w.x, w.y, w.z + 4, 0, 5, 11, 2.2);
     L.halos.push({ p: [w.x, w.y + 23, w.z + 7], size: 11, col: [1, 0.86, 0.56], k: 0.7 });
   }
   // the keep, standing in the rock above the wards
-  tower(3, 596, 26, 15, 112, { roof: 0, rh: 70, turrets: true });
+  // (its foot is in the rock of the great peak behind the upper ward; it comes out of the stone as it climbs)
+  tower(WARDS[2].x + 1, WARDS[2].y - 3, 6, 15, 153, { roof: 0, rh: 70, turrets: true });
   L.glows.push({ p: [3, 660, 44], size: 120, col: [1, 0.7, 0.36], k: 0.32 });
   // towers on up the two front ridges of the great peak, and one on its very point
   const P = PEAKS[0];
@@ -215,15 +282,18 @@ export function buildCastle(mobile: boolean, r: () => number) {
     [1.57, 692, 4.6, 20],
   ] as const) {
     const rr = peakRadius(P, y) * 0.86;
-    tower(P.x + Math.cos(a) * rr, y - 8, P.z + Math.sin(a) * rr, R, H, { roof: (Math.round(y) % 3) as 0 | 1 | 2 });
+    tower(P.x + Math.cos(a) * rr, y - 24, P.z + Math.sin(a) * rr, R, H + 16, { roof: (Math.round(y) % 3) as 0 | 1 | 2 });
   }
-  tower(P.x, P.y1 - 14, P.z, 7, 44, { roof: 0, rh: 48, turrets: true });
+  // (each tower on a peak starts where the rock is as wide as itself, so its foot is in the stone)
+  const seatOn = (pk: (typeof PEAKS)[number], R: number) => pk.y1 - (pk.y1 - pk.y0) * Math.pow((R * 1.25) / pk.R, 1 / (pk.pow ?? 1.12));
+  tower(P.x, seatOn(P, 7) - 3, P.z, 7, 44 + (P.y1 - 14 - seatOn(P, 7)) + 3, { roof: 0, rh: 48, turrets: true });
   L.halos.push({ p: [P.x, P.y1 + 86, P.z], size: 14, col: [1, 0.88, 0.6], k: 0.8 });
   // a watchtower on each of the lesser peaks
   PEAKS.slice(1).forEach((p, i) => {
-    const lx = p.x + (p.lean?.[0] ?? 0);
-    const lz = p.z + (p.lean?.[1] ?? 0);
-    tower(lx, p.y1 - 10, lz, 5.4 - i * 0.2, 30, { roof: i % 3 });
+    const R = 5.4 - i * 0.2;
+    const ys = seatOn(p, R);
+    const kk = (ys - p.y0) / (p.y1 - p.y0);
+    tower(p.x + (p.lean?.[0] ?? 0) * kk * kk, ys - 3, p.z + (p.lean?.[1] ?? 0) * kk * kk, R, 30 + (p.y1 - 10 - ys) + 3, { roof: i % 3 });
   });
   // a bridge thrown from the middle ward to the slim peak on the right: a deck on two round arches
   {
@@ -249,7 +319,8 @@ export function buildCastle(mobile: boolean, r: () => number) {
   for (let i = 0; i < 7; i++) {
     const a = Math.PI + 0.4 + (i / 6) * (Math.PI - 0.8);
     const rr = 96 + (i % 2) * 10;
-    tower(Math.cos(a) * rr, 428 - (i % 2) * 10, Math.sin(a) * rr, 6 + r() * 2, 46 + r() * 26, { roof: i % 3 });
+    const sy = surfaceY(Math.cos(a) * (rr + 8), Math.sin(a) * (rr + 8)) - 8;
+    tower(Math.cos(a) * rr, sy, Math.sin(a) * rr, 6 + r() * 2, 46 + r() * 26 + Math.max(0, 428 - sy), { roof: i % 3 });
   }
   // the town under the castle: tall narrow houses and small towers crowding the highest terrace, every window lit
   {
@@ -264,7 +335,7 @@ export function buildCastle(mobile: boolean, r: () => number) {
       i++;
       const yaw = Math.atan2(p.x, p.z);
       if (i % 6 === 0) {
-        tower(p.x, p.y - 8, p.z, 3.4 + r() * 1.6, 28 + r() * 18, { roof: i % 3 });
+        tower(p.x, p.y - 14, p.z, 3.4 + r() * 1.6, 34 + r() * 18, { roof: i % 3 });
         continue;
       }
       const w = 7 + r() * 5;
@@ -288,11 +359,10 @@ export function buildCastle(mobile: boolean, r: () => number) {
       const th = thOf(u);
       const R = 5 + (n % 3 === 0 ? 1.6 : 0);
       const rr = rhoOf(u) + 2.5;
-      tower(Math.cos(th) * rr, footOf(u) - 6, Math.sin(th) * rr, R, wallOf(u) + 20 + (n % 3 === 0 ? 14 : 0), { roof: n % 3 });
+      tower(Math.cos(th) * rr, footOf(u) - 18, Math.sin(th) * rr, R, wallOf(u) + 32 + (n % 3 === 0 ? 14 : 0), { roof: n % 3 });
       u += (u > 1.3 ? 70 : 104) / (Math.PI * 2 * rhoOf(u));
       n++;
     }
-    void rimOf;
   }
   L.glows.push({ p: [0, 560, 70], size: 380, col: [1, 0.66, 0.3], k: 0.3 });
   return { geo: k.build(), ...L, tips };

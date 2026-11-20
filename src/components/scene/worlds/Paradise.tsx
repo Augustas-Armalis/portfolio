@@ -168,7 +168,8 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
     // ---- the court: colossal angels round its rim, facing out over the sea; lesser ones about the pool
     const nG = props.mobile ? 6 : 10;
     for (let i = 0; i < nG; i++) {
-      const a = (i / nG) * Math.PI * 2 + 0.31;
+      // (none stands before the way in or behind the way on)
+      const a = (i / nG) * Math.PI * 2;
       const [x, z] = polar(a, TOP_R - 22);
       const s = 25 + (i % 2) * 5;
       angelAt(x, z, s, Math.atan2(x, z), i % 2 ? 0 : 3, { open: 0.62, glow: 0.16 });
@@ -287,7 +288,7 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
   }, [props.mobile, props.effects > 0.5, props.trees, props.far, props.grass, props.reduced]);
   return (
     <>
-      <WorldBase id="paradise" def={def} pal={PARADISE_PAL} props={b.base} tip={[0.44, 0.48, 0.14]} pathTint={[1, 0.95, 0.76]} tall={0.8} mask={GRASS_MASK} groundSize={2600} angels={false} />
+      <WorldBase id="paradise" def={def} pal={PARADISE_PAL} props={b.base} tip={[0.44, 0.48, 0.14]} pathTint={[1, 0.95, 0.76]} tall={0.8} mask={GRASS_MASK} groundSize={2600} angels={false} gate="veil" gateSize={[13.5, 21]} />
       <RayedSun size={0.46} gain={0.45} />
       <CloudDeck size={20000} />
       <mesh material={b.sea} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>

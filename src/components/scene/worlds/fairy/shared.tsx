@@ -861,3 +861,32 @@ const isShown = (o: THREE.Object3D) => {
   for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false;
   return true;
 };
+
+// ---------- a threshold of stone ----------
+// A pointed arch standing free: an opening `w` wide whose point is `h` above its foot, in a wall `t` thick all
+// round and `depth` through. It lies in the XY plane, its foot on y = 0, centred through its depth: turn it to
+// the gate's yaw and a sheet of light can hang in it.
+export function archGeometry(w: number, h: number, t: number, depth: number) {
+  const shape = (ww: number, hh: number, flat = false) => {
+    const half = ww / 2;
+    const spring = Math.max(hh * 0.35, hh - half * 1.6);
+    const sh = new THREE.Shape();
+    sh.moveTo(-half, -4);
+    sh.lineTo(-half, spring);
+    if (flat) {
+      sh.lineTo(-half, hh);
+      sh.lineTo(half, hh);
+    } else {
+      sh.quadraticCurveTo(-half, hh * 0.95, 0, hh);
+      sh.quadraticCurveTo(half, hh * 0.95, half, spring);
+    }
+    sh.lineTo(half, -4);
+    sh.lineTo(-half, -4);
+    return sh;
+  };
+  const outer = shape(w + t * 2, h + t * 1.3);
+  outer.holes.push(shape(w, h));
+  const g = new THREE.ExtrudeGeometry(outer, { depth, bevelEnabled: false, curveSegments: 12 });
+  g.translate(0, 0, -depth / 2);
+  return g;
+}

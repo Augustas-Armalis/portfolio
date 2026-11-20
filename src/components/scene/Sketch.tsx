@@ -27,8 +27,10 @@ const PAGE_W = W - 0.008;
 const PAGE_D = D - 0.006;
 // The cover swings a little past flat: its far edge comes down to the desk (half a millimetre off it).
 const COVER_REST = Math.PI + Math.asin((0.0143 - 0.0026 - 0.0005) / W);
-// Opened, the book slides this far to its right (its own +x): the cover, as wide again as the book, then lies on
-// the desk instead of over its left edge. (Room's sketch view centres on the spine and allows for the same.)
+// Opened on the wide desk, the book slides this far to its right (its own +x): the cover, as wide again as the
+// book, then lies on the desk instead of over its left edge. (Room hands it in as `shift`, and its sketch view,
+// centred on the spine, allows for the same. The phone's desk has the room already, and the phone itself stands
+// just to the right: there the book stays where it is.)
 export const SKETCH_OPEN_SHIFT = 0.045;
 const sstep = (a: number, b: number, x: number) => {
   const t = clamp01((x - a) / (b - a));
@@ -58,22 +60,35 @@ function paperCanvas() {
 
 export type SketchApi = { clear: () => void; save: () => void };
 
-export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: MutableRefObject<SketchApi | null> }) {
+// The page (and whether it has been drawn on) outlives the book's own mounting: the scene is built afresh when
+// the layout changes between the wide desk and the phone's (a window dragged narrow, a tablet turned), and the
+// drawing must still be there. It lasts as long as the page in the browser does: a reload starts clean.
+let PAGE: { canvas: HTMLCanvasElement; base: HTMLCanvasElement; kept: boolean } | null = null;
+
+export function SketchbookLive({ open, shift = 0, apiRef }: { open: boolean; shift?: number; apiRef: MutableRefObject<SketchApi | null> }) {
   const m = getMats();
   const body = useRef<THREE.Group>(null);
   const cover = useRef<THREE.Group>(null);
   const pencil = useRef<THREE.Group>(null);
-  const k = useRef(0);
-  const lamp = useRef(0);
   // the page has been drawn on: the book stays open when it is put down
-  const [kept, setKept] = useState(false);
+  const [kept, keep] = useState(() => !!PAGE?.kept);
+  const setKept = (v: boolean) => {
+    if (PAGE) PAGE.kept = v;
+    keep(v);
+  };
+  const k = useRef(kept ? 1 : 0);
+  const lamp = useRef(0);
   const lying = open || kept;
   const { canvas, base, tex, mat } = useMemo(() => {
-    const canvas = paperCanvas();
-    const base = document.createElement("canvas");
-    base.width = CW;
-    base.height = CH;
-    base.getContext("2d")!.drawImage(canvas, 0, 0);
+    if (!PAGE) {
+      const canvas = paperCanvas();
+      const base = document.createElement("canvas");
+      base.width = CW;
+      base.height = CH;
+      base.getContext("2d")!.drawImage(canvas, 0, 0);
+      PAGE = { canvas, base, kept: false };
+    }
+    const { canvas, base } = PAGE;
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
@@ -138,7 +153,7 @@ export function SketchbookLive({ open, apiRef }: { open: boolean; apiRef: Mutabl
     lamp.current += ((open ? 1 : 0) - lamp.current) * (1 - Math.exp(-dt * 4));
     mat.emissiveIntensity = 0.3 * SKY_U.uNight.value * clamp01(lamp.current);
     const e = easeInOutCubic(clamp01(k.current));
-    if (body.current) body.current.position.x = e * SKETCH_OPEN_SHIFT;
+    if (body.current) body.current.position.x = e * shift;
     if (cover.current) cover.current.rotation.z = e * COVER_REST;
     if (pencil.current) {
       // the pencil slides off the cover as it opens, out over the front edge, and is set down on the desk there

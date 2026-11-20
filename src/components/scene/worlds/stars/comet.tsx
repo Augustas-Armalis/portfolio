@@ -36,10 +36,10 @@ export function Comet({ world, id, from, to, seconds = 28, after = 30, again, ta
           float len = uTail * smoothstep(0.0, 0.12, uK) * (1.0 - smoothstep(0.9, 1.0, uK));
           vec3 c = head - dir * (vUv.x * len - uW * 1.5 * (1.0 - vUv.x) * 0.3);
           vec3 side = normalize(cross(dir, c - cameraPosition));
-          float half = uW * (0.35 + 0.65 * (1.0 - vUv.x)) * (1.0 + 2.0 * (1.0 - smoothstep(0.0, 0.05, vUv.x)));
-          vec3 w = c + side * vUv.y * half;
+          float halfW = uW * (0.35 + 0.65 * (1.0 - vUv.x)) * (1.0 + 2.0 * (1.0 - smoothstep(0.0, 0.05, vUv.x)));
+          vec3 w = c + side * vUv.y * halfW;
           // (metres from the head, along and across: its glow is round whatever the tail does)
-          vM = vec2(dot(w - head, -dir), vUv.y * half) / uW;
+          vM = vec2(dot(w - head, -dir), vUv.y * halfW) / uW;
           vOn = step(0.0, uK) * smoothstep(0.0, 0.06, uK) * (1.0 - smoothstep(0.92, 1.0, uK));
           gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
         }`,
