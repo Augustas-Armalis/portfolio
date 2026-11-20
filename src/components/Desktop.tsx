@@ -1095,7 +1095,7 @@ export function Resume() {
   return (
     <div className="flex justify-center bg-[#E9EAED] p-6">
       <article className="w-full max-w-[560px] bg-white px-12 py-11 text-ink shadow-[0_1px_3px_rgb(0_0_0/0.12)]">
-        <h1 className="text-[26px] font-semibold tracking-[-0.022em]">{about.name}</h1>
+        <h2 className="text-[26px] font-semibold tracking-[-0.022em]">{about.name}</h2>
         <p className="mt-1 text-[13px] text-ink-2">
           {owner.role}. {owner.city}.
         </p>
@@ -1359,7 +1359,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
           <motion.button
             type="button"
             key={it.id}
-            aria-label={it.name}
+            // named by its visible label (an aria-label here also took in the lettering drawn on its icon)
             onPointerDown={onIconDown(it)}
             onDoubleClick={() => run(it)}
             onKeyDown={(e) => e.key === "Enter" && run(it)}
@@ -1468,6 +1468,7 @@ function Welcome() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.16 } }}
           transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.35 }}
+          aria-label="Welcome note"
           data-glass=""
           style={{ width: NOTE_W }}
           className={`${glass(dark ? "widget-dark" : "widget")} sq-panel group absolute left-6 top-6 rounded-[26px] p-5 ${dark ? "text-white" : "text-ink"}`}
@@ -1574,6 +1575,8 @@ export default function Desktop(_: { user?: UserId }) {
       {wp.src.startsWith("live:") && <LiveWallpaper />}
       <MenuBar />
       {/* isolate: windows stack among themselves, always under the menu bar and the dock */}
+      {/* the page's one h1: every window's own title is an h2 under it */}
+      <h1 className="sr-only">Augustas Armalis, design engineer and founder</h1>
       <div ref={area} id="os-window-layer" className="absolute inset-x-0 bottom-0 top-[24px] isolate">
         <Welcome />
         <DesktopIcons area={area} />

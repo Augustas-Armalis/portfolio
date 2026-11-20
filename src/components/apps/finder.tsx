@@ -199,7 +199,7 @@ export function Finder({ start }: { start: PlaceId }) {
   if (compact)
     return (
       <>
-        <h1 className="t-large px-4 pb-2 text-ink">{cur.title}</h1>
+        <h2 className="t-large px-4 pb-2 text-ink">{cur.title}</h2>
         <div className="pb-24">{phoneDetail}</div>
         <TabBar
           id={`finder-${start}`}

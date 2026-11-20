@@ -270,7 +270,7 @@ function RepoView({ it }: { it: StoryItem }) {
         <div className="flex items-center gap-4">
           {it.app && <AppIcon id={it.app} size={compact ? 60 : 64} />}
           <div className="min-w-0 flex-1">
-            <h1 className={compact ? "t-title2 text-ink" : "m-large text-ink"}>{p.name}</h1>
+            <h2 className={compact ? "t-title2 text-ink" : "m-large text-ink"}>{p.name}</h2>
             {p.what && <p className={`mt-0.5 text-ink-2 [text-wrap:pretty] ${compact ? "t-sub" : "m-body"}`}>{p.what}</p>}
           </div>
         </div>

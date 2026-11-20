@@ -76,7 +76,7 @@ export function About() {
     // laid out like About This Mac: the machine (here, the person), its name, a short spec sheet, two buttons, the fine print
     <div data-drag className={`flex h-full flex-col items-center overflow-auto bg-[var(--bg)] px-6 text-center ${compact ? "pb-14 pt-2" : "pb-5 pt-11"}`}>
       <Monogram size={96} />
-      <h1 className={`mt-5 text-ink ${compact ? "t-large" : "m-large"}`}>{owner.name}</h1>
+      <h2 className={`mt-5 text-ink ${compact ? "t-large" : "m-large"}`}>{owner.name}</h2>
       <p className={`mt-1 text-ink-2 ${compact ? "t-sub" : "m-body"}`}>{owner.role}</p>
       <p className={`mt-4 max-w-[290px] text-ink-2 [text-wrap:pretty] ${compact ? "t-foot" : "text-[12px] leading-[17px]"}`}>{about.intro}</p>
       <dl className={`mt-5 grid w-full max-w-[290px] grid-cols-[88px_1fr] gap-x-3 gap-y-[6px] ${compact ? "t-foot" : "text-[12px] leading-[16px]"}`}>

@@ -86,7 +86,7 @@ export function Novel() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={novel.cover} alt={novel.title} draggable={false} data-sq="" className="book-cover aspect-[2/3] w-[168px] shrink-0 rounded-[12px] bg-[#0b0d12] object-cover" />
         <div className={`min-w-0 ${compact ? "" : "pt-1"}`}>
-          <h1 className={`${SERIF} text-[28px] font-semibold leading-[1.12] tracking-[-0.015em] text-ink [text-wrap:balance]`}>{novel.title}</h1>
+          <h2 className={`${SERIF} text-[28px] font-semibold leading-[1.12] tracking-[-0.015em] text-ink [text-wrap:balance]`}>{novel.title}</h2>
           <p className="t-sub mt-2 text-ink-2">{novel.author}</p>
           <p className="t-foot text-ink-3">Iliustracijos: {novel.illustrator}</p>
           <div className={`mt-4 flex items-center gap-3 ${compact ? "justify-center" : "@max-[459px]:justify-center"}`}>

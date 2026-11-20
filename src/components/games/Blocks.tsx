@@ -306,7 +306,7 @@ export default function Blocks({ compact = false }: { compact?: boolean }) {
           onClick={(e) => e.stopPropagation()}
           className={`flex w-full max-w-[380px] flex-col items-center rounded-[28px] bg-black/30 px-8 pb-7 pt-9 text-center backdrop-blur-2xl ${GLASS_RING}`}
         >
-          <h1 className="text-[34px] font-bold leading-[41px] tracking-[-0.02em] text-white">Blocks</h1>
+          <h2 className="text-[34px] font-bold leading-[41px] tracking-[-0.02em] text-white">Blocks</h2>
           <p className="mt-1 text-[15px] leading-5 text-white/70">A small world to build in.</p>
           {failed ? (
             <p className="mt-6 text-[13px] leading-[18px] text-white/60">This device could not start WebGL, which Blocks needs.</p>

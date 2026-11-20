@@ -18,7 +18,7 @@ function Page({ note }: { note: Note }) {
   return (
     <article className={`mx-auto w-full max-w-[560px] ${compact ? "px-5 pb-16 pt-1" : "px-8 pb-10 pt-5"}`}>
       <div className={`text-center text-ink-3 ${compact ? "t-foot" : "m-sub"}`}>{note.date}</div>
-      {!compact && <h1 className="m-large mt-3 text-ink">{note.title}</h1>}
+      {!compact && <h2 className="m-large mt-3 text-ink">{note.title}</h2>}
       <div className={compact ? "mt-3" : "mt-2"}>
         {note.blocks.map((b, i) =>
           "h" in b ? (

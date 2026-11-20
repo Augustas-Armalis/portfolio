@@ -563,10 +563,14 @@ svg.lucide.bold {
   --accent-tint: rgb(0 122 255 / 0.12);
   /* labels (Apple semantic greys, cooled) */
   --label: #1a1b1e;
-  --label-2: rgb(60 60 67 / 0.62);
+  --label-2: rgb(60 60 67 / 0.76);
   --label-3: rgb(60 60 67 / 0.32);
-  --label-2s: #5b5f68;
-  --label-3s: #8b9099;
+  /* secondary and tertiary text pass AA (4.5:1) on every light surface: white, the grouped grey, the sidebar */
+  --label-2s: #4b4f57;
+  --label-3s: #686d76;
+  /* a fill under white text: the system blue is 4.0:1 there; this one 4.7 */
+  --accent-fill: #0071e3;
+  --accent-fill-hover: #0066cc;
   --fill-solid: #f1f1f4;
   --page: #e7e8ec;
   --surface-2: #f7f7f9;
@@ -609,8 +613,10 @@ svg.lucide.bold {
   --label: #f5f5f7;
   --label-2: rgb(235 235 245 / 0.6);
   --label-3: rgb(235 235 245 / 0.3);
-  --label-2s: #a1a1a8;
-  --label-3s: #6e6e75;
+  --label-2s: #b4b4bb;
+  --label-3s: #98989e;
+  --accent-fill: #0a6fe0;
+  --accent-fill-hover: #0a64cc;
   --fill-solid: #2c2c2f;
   --page: #121214;
   --surface-2: #232326;
@@ -684,14 +690,14 @@ svg.lucide.bold {
 .btn-icon.btn-md { width: 30px; padding: 0; }
 .btn-icon.btn-lg { width: 44px; padding: 0; }
 .btn-bordered { background: var(--bg-elevated); color: var(--label); box-shadow: var(--shadow-1); }
-.btn-prominent { background: var(--accent); color: #fff; font-weight: 600; box-shadow: 0 1px 2px rgb(0 60 140 / 0.24), inset 0 0.5px 0 rgb(255 255 255 / 0.2); }
+.btn-prominent { background: var(--accent-fill); color: #fff; font-weight: 600; box-shadow: 0 1px 2px rgb(0 60 140 / 0.24), inset 0 0.5px 0 rgb(255 255 255 / 0.2); }
 .btn-tinted { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
 .btn-plain { background: transparent; color: var(--label); }
 .btn-glass { color: var(--label); }
 .btn-glass-dark { color: #fff; }
 @media (hover: hover) and (pointer: fine) {
   .btn-bordered:hover:not(:disabled) { background: #f7f7f9; }
-  .btn-prominent:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-prominent:hover:not(:disabled) { background: var(--accent-fill-hover); }
   .btn-tinted:hover:not(:disabled) { background: rgb(0 122 255 / 0.18); }
   .btn-plain:hover:not(:disabled) { background: var(--hover); }
   .btn-glass:hover:not(:disabled) { --g-fill: rgb(255 255 255 / 0.8); }
@@ -1434,4 +1440,12 @@ html.win-busy * {
 .win .split-side button > span:has(> .icon-tile) {
   width: auto;
   height: auto;
+}
+/* a floating sidebar scrolls without a bar along its edge (an overlay scrollbar, hidden at rest like macOS): the
+   bar drew a second light line down the panel's right side in dark mode */
+.win aside[data-drag] {
+  scrollbar-width: none;
+}
+.win aside[data-drag]::-webkit-scrollbar {
+  display: none;
 }

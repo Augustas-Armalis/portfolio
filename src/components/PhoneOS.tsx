@@ -320,7 +320,9 @@ const WIDGET_H = "h-[152px]";
 const widget = `glass-press relative overflow-hidden rounded-[26px] text-left text-white ${glass("widget-dark")}`;
 const kicker = "text-[12px] font-semibold leading-4 tracking-[-0.005em] text-white/60";
 
-function Widget({ app, onOpen, className = "", children, label }: { app: AppId; onOpen: Open; className?: string; children: React.ReactNode; label: string }) {
+// a widget is named by what it shows (a separate label read differently from the words on it); only a widget
+// that shows pictures alone carries a label
+function Widget({ app, onOpen, className = "", children, label }: { app: AppId; onOpen: Open; className?: string; children: React.ReactNode; label?: string }) {
   return (
     <button type="button" aria-label={label} data-glass="" data-widget={app} onClick={(e) => onOpen(app, rectOf(e.currentTarget))} className={`${widget} ${className}`}>
       {children}
@@ -336,7 +338,7 @@ function PlayingWidget({ onOpen }: { onOpen: Open }) {
   const on = p.playing && p.id === track.id;
   return (
     <div className={`relative ${WIDGET_H}`}>
-      <Widget app="records" onOpen={onOpen} label={`Open Music: ${track.title}`} className="flex h-full w-full items-center gap-4 p-4 pr-[84px]">
+      <Widget app="records" onOpen={onOpen} className="flex h-full w-full items-center gap-4 p-4 pr-[84px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={track.cover} alt="" draggable={false} className="h-[120px] w-[120px] shrink-0 rounded-[18px] object-cover shadow-[0_8px_22px_-8px_rgb(0_0_0/0.55)]" />
         <span className="min-w-0 flex-1">
@@ -376,7 +378,7 @@ function ClockWidget({ onOpen }: { onOpen: Open }) {
   }, []);
   const hand = (deg: number, len: number, w: number, col: string) => <line x1="50" y1="50" x2={50 + Math.sin((deg * Math.PI) / 180) * len} y2={50 - Math.cos((deg * Math.PI) / 180) * len} stroke={col} strokeWidth={w} strokeLinecap="round" />;
   return (
-    <Widget app="about" onOpen={onOpen} label={`Kaunas time${now ? `, ${now.label}` : ""}. Open About`} className={`flex ${WIDGET_H} flex-col items-center justify-between p-3`}>
+    <Widget app="about" onOpen={onOpen} className={`flex ${WIDGET_H} flex-col items-center justify-between p-3`}>
       <svg viewBox="0 0 100 100" className="h-[98px] w-[98px]" aria-hidden>
         <circle cx="50" cy="50" r="48" fill="rgb(255 255 255 / 0.94)" />
         {Array.from({ length: 12 }, (_, i) => (
@@ -410,7 +412,7 @@ function ProjectsWidget({ onOpen }: { onOpen: Open }) {
   const id = STACK[i];
   const p = projects[id]!;
   return (
-    <Widget app="projects" onOpen={onOpen} label="Open Projects" className={`flex ${WIDGET_H} flex-col p-4`}>
+    <Widget app="projects" onOpen={onOpen} className={`flex ${WIDGET_H} flex-col p-4`}>
       <span className={kicker}>Projects</span>
       <span className="relative mt-2 block flex-1">
         <AnimatePresence initial={false} mode="popLayout">
@@ -451,7 +453,7 @@ function PhotoWidget({ onOpen }: { onOpen: Open }) {
 
 function WorkingWidget({ onOpen }: { onOpen: Open }) {
   return (
-    <Widget app={mainWork.id as AppId} onOpen={onOpen} label={`Working on ${mainWork.name}. Open it`} className={`flex ${WIDGET_H} flex-col justify-between p-4`}>
+    <Widget app={mainWork.id as AppId} onOpen={onOpen} className={`flex ${WIDGET_H} flex-col justify-between p-4`}>
       <span className="flex items-start justify-between">
         <span className={kicker}>Working on</span>
         <AppIcon id={mainWork.id as AppId} size={34} />
@@ -468,7 +470,7 @@ function WorkingWidget({ onOpen }: { onOpen: Open }) {
 // Back to the field, and straight into the air.
 function FlyWidget({ onFly }: { onFly: () => void }) {
   return (
-    <button type="button" data-glass="" data-widget="fly" aria-label="Fly: back to the field by paper plane" onClick={onFly} className={`${widget} flex ${WIDGET_H} flex-col justify-between p-4`}>
+    <button type="button" data-glass="" data-widget="fly" onClick={onFly} className={`${widget} flex ${WIDGET_H} flex-col justify-between p-4`}>
       <span aria-hidden className="absolute inset-0 bg-[radial-gradient(120%_90%_at_100%_0%,rgb(255_214_150/0.34),transparent_60%)]" />
       <span className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white text-black">
         <Send size={18} strokeWidth={2.1} className="-ml-0.5 mt-0.5" />
@@ -483,7 +485,7 @@ function FlyWidget({ onFly }: { onFly: () => void }) {
 
 function ContactWidget({ onOpen }: { onOpen: Open }) {
   return (
-    <Widget app="contact" onOpen={onOpen} label="Get in Touch" className={`flex ${WIDGET_H} flex-col justify-between p-4`}>
+    <Widget app="contact" onOpen={onOpen} className={`flex ${WIDGET_H} flex-col justify-between p-4`}>
       <span className="flex items-start justify-between">
         <span className={kicker}>Get in Touch</span>
         <Monogram size={34} />
@@ -518,7 +520,7 @@ function GamesWidget({ onOpen }: { onOpen: Open }) {
 function TimelineWidget({ onOpen }: { onOpen: Open }) {
   const rows = timeline.filter((m) => m.key).slice(-3);
   return (
-    <Widget app="about" onOpen={onOpen} label="Milestones. Open About" className="flex w-full flex-col gap-1.5 p-4 [@media(max-height:879px)]:hidden">
+    <Widget app="about" onOpen={onOpen} className="flex w-full flex-col gap-1.5 p-4 [@media(max-height:879px)]:hidden">
       <span className={kicker}>Lately</span>
       {rows.map((m) => (
         <span key={m.title} className="flex items-baseline gap-3">
@@ -655,7 +657,7 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
       <div className="relative px-[13px] pb-[calc(var(--phone-bottom)-24px)]">
         <div className="flex justify-center gap-[9px] py-3" role="tablist" aria-label="Home screen pages">
           {Array.from({ length: PAGES }, (_, i) => (
-            <button key={i} type="button" role="tab" aria-selected={page === i} aria-label={`Page ${i + 1}`} onClick={() => go(i)} className="grid h-5 w-4 place-items-center" data-page-dot={i}>
+            <button key={i} type="button" role="tab" aria-selected={page === i} aria-label={`Page ${i + 1}`} onClick={() => go(i)} className="relative grid h-5 w-4 place-items-center after:absolute after:-inset-x-1 after:-inset-y-3 after:content-['']" data-page-dot={i}>
               <span className={`h-[7px] w-[7px] rounded-full transition-colors duration-300 ${page === i ? "bg-white" : "bg-white/35"}`} />
             </button>
           ))}
@@ -776,12 +778,12 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
         {id === "contact" || id === "about" || id === "blocks" || id === "doom" || id === "projects" || id === "games" || projects[id] ? (
           <div className={story ? "" : id === "contact" || id === "about" || p?.kind === "code" ? "h-[calc(var(--phone-top)+50px)]" : "h-[calc(var(--phone-top)+4px)]"} />
         ) : (
-        <motion.h1
+        <motion.h2
           style={{ opacity: big }}
           className={`pb-2 pl-4 pr-16 text-[34px] font-bold leading-[41px] tracking-[0.011em] ${detail ? "pt-[calc(var(--phone-top)+56px)]" : "pt-[calc(var(--phone-top)+6px)]"}`}
         >
           {title}
-        </motion.h1>
+        </motion.h2>
         )}
         <PhoneNav.Provider value={setDetail}>
           <Chrome.Provider value={{ compact: true }}>
@@ -937,6 +939,8 @@ export default function PhoneOS() {
 
   return (
     <div className="phone-root no-callout absolute inset-0 overflow-hidden bg-page" data-real={real ? "1" : "0"} data-pill={pill ? "1" : "0"}>
+      {/* the page's one h1: every screen's own title is an h2 under it */}
+      <h1 className="sr-only">Augustas Armalis, design engineer and founder</h1>
       {!real && <StatusBar light={lightBar} />}
       <Island real={real} />
       <AnimatePresence initial={false}>
