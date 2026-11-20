@@ -2,303 +2,322 @@
 
 import * as THREE from "three";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
-import { GLSL_NOISE } from "../shared";
-import { GLSL_SKY, SKY_U } from "../sky";
-import { GLSL_AIR, Kit, WORLD_U, angel, makePoints, makeTempera, makeWater, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
-import { Birds, LightShafts, type Flock, type Shaft } from "./life";
-import { WORLDS, groundAt, heightAt } from "./voyage";
+import { Kit, makePoints, makeTempera, makeWater, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { Birds, type Flock } from "./life";
+import { Procession, RayedSun, RisingFlock, SunShafts, heapBlobs, heapMesh, makeHeapMaterial, useDeepLens, type Beam, type Heap } from "./fairy/shared";
+import { COLONNADE, ISLE, POOL_R, TOP_R, TOP_Y, Wings, buildColonnade, buildSteps, seraph, stoneAt } from "./paradise/isle";
+import { Blooms, Butterflies, CloudDeck, Ship, makeWingMaterial, type Bloom, type Flutter } from "./paradise/life";
+import { makeSea } from "./paradise/sea";
+import { WORLDS, groundAt } from "./voyage";
 
-// Paradise (Angels, 1909). A yellow-green noon under rows of cloud. On the
-// left a still lake, its shore one long curve of pale sand; on the right a
-// meadow thick with small flowers, and beyond it broad pale steps climbing
-// away in an arc. Angels stand about in the grass and on the steps, slight
-// figures in blue, rose, green and white with tall narrow wings; one, larger
-// and nearer, bends to pick a flower. White birds cross the sky.
+// Paradise (Rojus, 1909). He painted a shore curving away under a sky of gold and olive cloud: a still sea
+// to the left as far as the eye goes, pale sand, a meadow thick with flowers and butterflies, angels standing
+// about in it with tall wings of blue, rose, green and yellow, one bending to pick a flower, and a great flight
+// of pale steps climbing out of the picture to the right.
+//
+// Here that curve goes all the way round: a round isle in an endless sea. The plane comes in over the water
+// with the sun's road on it, follows the sand round the isle with the meadow and its company on the right,
+// then turns inland and goes straight up the great flight, between two ranks of tall angels and a procession
+// climbing, to a court of pale columns open to the sky, a still pool in it, and the way on standing in the pool.
 
 const def = WORLDS.paradise;
-export const PARADISE_PAL: GroundPalette = { a: [0.08, 0.125, 0.034], b: [0.13, 0.15, 0.042], c: [0.058, 0.1, 0.038], shore: [0.5, 0.42, 0.2], shoreAt: [0.1, 0.62] };
+const SAND: V3 = [0.62, 0.52, 0.27];
+export const PARADISE_PAL: GroundPalette = {
+  a: [0.1, 0.165, 0.04],
+  b: [0.17, 0.2, 0.05],
+  c: [0.075, 0.135, 0.045],
+  shore: SAND,
+  shoreAt: [1.6, 5.4],
+  hook: {
+    decl: "",
+    lit: /* glsl */ `
+      {
+        // (the sea's own sheet draws everything under the water: see paradise/sea.ts)
+        if (h < -0.3) discard;
+        float meadow = smoothstep(4.8, 6.2, h);
+        vec3 fl = uSkyCol + uKeyCol * 0.34 * sunUp;
+        // drifts of flowers seen from far off: the meadow is never one green
+        float drift = vnoise(p * 0.028 + 5.0) * 0.6 + vnoise(p * 0.085) * 0.4;
+        vec3 dcol = mix(vec3(0.95, 0.84, 0.3), vec3(0.96, 0.92, 0.82), vnoise(p * 0.017 + 9.0));
+        dcol = mix(dcol, vec3(0.86, 0.42, 0.4), smoothstep(0.62, 0.8, vnoise(p * 0.021 + 31.0)));
+        col = mix(col, dcol * fl * 0.8, smoothstep(0.5, 0.78, drift) * 0.3 * meadow);
+        // and nearer, flower by flower: dabs of white, yellow, red and blue (gone before they could swim)
+        float nearF = (1.0 - smoothstep(90.0, 320.0, gd)) * meadow * (1.0 - smoothstep(0.3, 1.1, px * 2.4));
+        if (nearF > 0.0) {
+          vec2 fc = p * 0.5; vec2 fi = floor(fc); float fh = hash12(fi + 17.0);
+          vec2 fo = vec2(hash12(fi + 3.1), hash12(fi + 7.7));
+          float fd = length(fract(fc) - 0.2 - 0.6 * fo);
+          float speck = (1.0 - smoothstep(0.1, 0.17, fd)) * step(0.3, fh);
+          vec3 fcol = fh < 0.58 ? vec3(1.0, 0.98, 0.9) : fh < 0.8 ? vec3(1.0, 0.84, 0.2) : fh < 0.9 ? vec3(0.92, 0.18, 0.12) : vec3(0.32, 0.44, 0.98);
+          col = mix(col, fcol * fl, speck * nearF);
+        }
+        // the foot of the great flight stands in its own shade
+        col *= mix(0.62, 1.0, smoothstep(525.0, 536.0, length(p)));
+        // the sand: clean and pale, faintly ribbed by the water, wet where it has just been
+        vec3 light = uSkyCol * 0.7 + uKeyCol * (0.22 + 0.5 * max(uKeyDir.y, 0.0)) * sunUp;
+        vec3 sandC = vec3(${SAND.map((x) => x.toFixed(3)).join(", ")}) * (0.94 + 0.12 * vnoise(vec2(length(p) * 0.35 + vnoise(p * 0.03) * 3.0, atan(p.y, p.x) * 40.0))) * light;
+        col = mix(sandC, col, smoothstep(2.6, 5.4, h + (vnoise(p * 0.2) - 0.5) * 0.5));
+        col *= mix(0.78, 1.0, smoothstep(0.0, 0.7, h));
+      }
+    `,
+  },
+};
+// (grass in the meadow only: not on the sand, and not under the stone of the steps)
+const GRASS_MASK = `return smoothstep(4.6, 6.0, h) * smoothstep(${(ISLE.meadow - 2).toFixed(1)}, ${(ISLE.meadow + 3).toFixed(1)}, length(p));`;
 
-// the steps curve round the meadow: arcs struck from the middle of the lake, like its shore
-// (a great flight: twenty-four steps of four and a half metres, climbing a hundred metres away round the lake)
-export const STEPS = { x: -200, z: 100, r0: 392, tread: 12, rise: 4.4, n: 24, y0: 4.8, a0: -0.94, a1: 0.56 };
-const STEP_TOP: V3 = [0.86, 0.76, 0.42];
-const STEP_EDGE: V3 = [0.98, 0.9, 0.58];
-const STEP_FACE: V3 = [0.6, 0.5, 0.26];
-const CLOUD_Y = 380;
-const glv = (c: V3) => `vec3(${c.map((x) => x.toFixed(3)).join(", ")})`;
-
-// His sky: long bars of cloud laid in rows, olive in the shade, with short
-// flat strokes of yellow light along them. One function draws them overhead
-// and again, upside down, in the water.
-const GLSL_BARS = /* glsl */ `
-vec4 barsAt(vec2 q){
-  float row = q.y / 170.0 + vnoise(q * 0.0015) * 0.5;
-  float ri = floor(row); float rf = fract(row);
-  float n = vnoise(vec2(q.x / 300.0 + ri * 7.31, ri * 1.7)) * 0.7 + vnoise(vec2(q.x / 90.0 - ri * 3.1, ri + 4.0)) * 0.3;
-  float body = smoothstep(0.32, 0.5, n);
-  float band = smoothstep(0.06, 0.24, rf) * smoothstep(0.96, 0.72, rf);
-  // long soft dabs of light laid along the bar, no two alike
-  float dab = vnoise(vec2(q.x / 58.0 + ri * 3.7, rf * 3.4 + ri * 1.3)) * 0.7 + vnoise(vec2(q.x / 21.0 - ri * 5.1, rf * 6.0)) * 0.3;
-  float lit = smoothstep(0.5, 0.64, dab) * smoothstep(0.18, 0.42, rf) * smoothstep(1.0, 0.8, rf) * (0.6 + 0.4 * n);
-  return vec4(mix(uCloudShade, uCloudLit, lit), body * band * 0.92);
-}`;
-function makeBars() {
-  return new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, ...WORLD_U },
-    vertexShader: /* glsl */ `
-      varying vec3 vWorld; varying vec2 vLocal;
-      void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vLocal = wp.xz - modelMatrix[3].xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: /* glsl */ `
-      varying vec3 vWorld; varying vec2 vLocal;
-      ${GLSL_NOISE}
-      ${GLSL_SKY}
-      ${GLSL_AIR}
-      ${GLSL_BARS}
-      void main(){
-        vec4 b = barsAt(vLocal);
-        vec3 dv = vWorld - cameraPosition;
-        float dist = length(dv);
-        // row behind row they sink into the sky's own colour at the horizon
-        float far = smoothstep(500.0, 2500.0, dist);
-        vec3 col = mix(b.rgb, airCol(normalize(dv)), far * 0.72);
-        gl_FragColor = vec4(col, b.a * (1.0 - smoothstep(1900.0, 2800.0, dist)) * exp(-dist * uMist * 0.4));
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  });
-}
-// what stands mirrored in the lake: the cloud bars, and the pale flight of steps beyond the meadow
-const REFLECT = /* glsl */ `
-${GLSL_BARS}
-vec4 worldReflect(vec3 P, vec3 r){
-  // low rays are bent up a little, so the far water still carries the rows as bands of light
-  float t = ${CLOUD_Y.toFixed(1)} / max(r.y, 0.22);
-  vec4 b = barsAt(P.xz + r.xz * t);
-  vec4 o = vec4(mix(b.rgb, skyBase(r), smoothstep(500.0, 2500.0, t) * 0.5), b.a * 0.7);
-  vec2 d = P.xz - vec2(${STEPS.x.toFixed(1)}, ${STEPS.z.toFixed(1)});
-  vec2 v = r.xz; float A = dot(v, v); float B = dot(d, v);
-  float R = ${STEPS.r0.toFixed(1)};
-  float top = ${(STEPS.n * STEPS.rise).toFixed(1)};
-  for (int i = 0; i < 2; i++) {
-    float disc = B * B - A * (dot(d, d) - R * R);
-    if (disc <= 0.0) return o;
-    float ts = (-B + sqrt(disc)) / max(A, 1e-5);
-    float y = r.y * ts - ${STEPS.y0.toFixed(1)};
-    if (i == 0) { R += clamp(y, 0.0, top) * ${(STEPS.tread / STEPS.rise).toFixed(3)}; continue; }
-    vec2 h = d + v * ts;
-    float ang = atan(h.y, h.x);
-    float on = step(-${STEPS.rise.toFixed(1)}, y) * step(y, top) * smoothstep(${STEPS.a0.toFixed(2)}, ${(STEPS.a0 + 0.03).toFixed(2)}, ang) * smoothstep(${STEPS.a1.toFixed(2)}, ${(STEPS.a1 - 0.03).toFixed(2)}, ang);
-    vec3 sc = mix(${glv(STEP_FACE)}, ${glv(STEP_TOP)}, step(0.45, fract(y / ${STEPS.rise.toFixed(1)}))) * (uSkyCol * 0.8 + uKeyCol * 0.5);
-    o = mix(o, vec4(sc, 1.0), on * 0.9);
-  }
-  return o;
-}`;
-
-function steps(mobile: boolean) {
-  const seg = mobile ? 44 : 96;
-  const pos: number[] = [];
-  const col: number[] = [];
-  const P = (r: number, a: number, y: number) => new THREE.Vector3(STEPS.x + Math.cos(a) * r, y, STEPS.z + Math.sin(a) * r);
-  const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3, ca: V3, cb: V3) => {
-    pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, b.x, b.y, b.z, d.x, d.y, d.z, c.x, c.y, c.z);
-    // (the stone keeps a little of the noon in it: pale and warm even in the shade, as he painted it)
-    col.push(...ca, 0.14, ...cb, 0.14, ...ca, 0.14, ...cb, 0.14, ...cb, 0.14, ...ca, 0.14);
-  };
-  const green: V3 = [0.2, 0.28, 0.08];
-  for (let i = 0; i <= STEPS.n; i++) {
-    const ri = STEPS.r0 + i * STEPS.tread;
-    const last = i === STEPS.n;
-    // above the last step a broad landing, and the meadow falling away behind it
-    const ro = ri + (last ? 70 : STEPS.tread);
-    const y = STEPS.y0 + i * STEPS.rise;
-    for (let s = 0; s < seg; s++) {
-      const a = STEPS.a0 + (s / seg) * (STEPS.a1 - STEPS.a0);
-      const a2 = STEPS.a0 + ((s + 1) / seg) * (STEPS.a1 - STEPS.a0);
-      // the tread, paler toward its front edge, and the riser under it
-      quad(P(ri, a, y), P(ro, a, y), P(ri, a2, y), P(ro, a2, y), STEP_EDGE, last ? green : STEP_TOP);
-      quad(P(ri, a, y - STEPS.rise - (i === 0 ? 8 : 0)), P(ri, a, y), P(ri, a2, y - STEPS.rise - (i === 0 ? 8 : 0)), P(ri, a2, y), STEP_FACE, [0.72, 0.62, 0.34]);
-      if (last) quad(P(ro, a, y), P(ro + 110, a, -12), P(ro, a2, y), P(ro + 110, a2, -12), green, [0.1, 0.16, 0.05]);
-    }
-    // the ends of the flight
-    for (const a of [STEPS.a0, STEPS.a1]) quad(P(ri, a, -12), P(ro, a, -12), P(ri, a, y), P(ro, a, y), STEP_FACE, STEP_FACE);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute("aCol", new THREE.Float32BufferAttribute(col, 4));
-  g.computeVertexNormals();
-  g.computeBoundingSphere();
-  return g;
-}
+const WING_COLS: V3[] = [
+  [0.16, 0.36, 0.78],
+  [0.8, 0.34, 0.44],
+  [0.2, 0.56, 0.36],
+  [0.86, 0.7, 0.2],
+  [0.5, 0.36, 0.78],
+  [0.22, 0.6, 0.64],
+  [0.9, 0.86, 0.74],
+  [0.9, 0.52, 0.26],
+];
+const ROBES: V3[] = [
+  [0.82, 0.8, 0.72],
+  [0.6, 0.7, 0.86],
+  [0.86, 0.68, 0.66],
+  [0.66, 0.8, 0.68],
+  [0.88, 0.82, 0.6],
+];
 
 export default function ParadiseWorld({ props }: { props: WorldProps }) {
+  useDeepLens("paradise");
   const b = useDisposable(() => {
     const r = rng(606);
     const g = (x: number, z: number) => groundAt(def, x, z);
-    const dry = (x: number, z: number) => heightAt(def.terrain!, x, z) > 1.5;
+    const polar = (a: number, d: number): [number, number] => [Math.cos(a) * d, Math.sin(a) * d];
     const k = new Kit();
+    const wings = new Wings();
     const glows: Halo[] = [];
-    // pale robes, and wings in his soft colours
-    const wings: V3[] = [
-      [0.14, 0.3, 0.62],
-      [0.62, 0.26, 0.34],
-      [0.16, 0.42, 0.26],
-      [0.66, 0.54, 0.16],
-      [0.4, 0.28, 0.62],
-      [0.18, 0.46, 0.5],
-      [0.7, 0.68, 0.6],
-    ];
-    const robes: V3[] = [
-      [0.7, 0.68, 0.6],
-      [0.5, 0.6, 0.74],
-      [0.74, 0.58, 0.56],
-      [0.56, 0.7, 0.58],
-    ];
-    // polar about the lake: the meadow is the band between the sand and the steps
-    const M = (a: number, d: number): [number, number] => [STEPS.x + Math.cos(a) * d, STEPS.z + Math.sin(a) * d];
-    // a company of them in the grass before the steps, in twos and threes, turned to one another
-    const groups = props.mobile ? 5 : 9;
+    const halos: Halo[] = [];
     let n = 0;
-    for (let gi = 0; gi < groups; gi++) {
-      const a = STEPS.a0 + 0.2 + (gi / (groups - 1)) * (STEPS.a1 - STEPS.a0 - 0.5);
-      const [cx, cz] = M(a, STEPS.r0 - 12 - (gi % 3) * 13 - r() * 8);
-      const m = 2 + (gi % 2);
-      for (let i = 0; i < m; i++) {
-        const x = cx + Math.cos(i * 2.2 + gi) * 4.2;
-        const z = cz + Math.sin(i * 2.2 + gi) * 4.2;
-        if (!dry(x, z)) continue;
-        const s = 4.0 + r() * 1.4;
-        angel(k, [x, g(x, z) - 0.1, z], s, Math.atan2(cx - x, cz - z) + (r() - 0.5) * 0.6, robes[n % robes.length], { glow: 0.05, open: 0.26 + r() * 0.14, wing: wings[n % wings.length] });
-        n++;
-      }
-    }
-    // some on the steps themselves, going up
-    for (let i = 0; i < (props.mobile ? 5 : 10); i++) {
-      const st = 1 + ((i * 3) % (STEPS.n - 2));
-      const a = STEPS.a0 + 0.15 + r() * (STEPS.a1 - STEPS.a0 - 0.3);
-      const [x, z] = M(a, STEPS.r0 + st * STEPS.tread + 4.5);
-      angel(k, [x, STEPS.y0 + st * STEPS.rise, z], 4.2 + r(), -a + Math.PI / 2 + (r() - 0.5) * 1.2, robes[n % robes.length], { glow: 0.05, wing: wings[n % wings.length] });
+    const angelAt = (x: number, z: number, s: number, yaw: number, pose?: number, o: { wing?: V3; robe?: V3; open?: number; glow?: number } = {}) => {
+      const rr = Math.hypot(x, z);
+      const y = rr >= ISLE.meadow ? g(x, z) - 0.05 : stoneAt(rr);
+      seraph(k, wings, [x, y, z], s, yaw, { robe: o.robe ?? ROBES[n % ROBES.length], wing: o.wing ?? WING_COLS[(n * 3 + 1) % WING_COLS.length], pose: pose ?? [0, 3, 1, 0, 2, 3][n % 6], glow: o.glow ?? 0.07, open: o.open ?? 0.3 + r() * 0.3 });
       n++;
-    }
-    // and the one who bends to pick a flower, larger and nearer, the wings arched over like a shell
-    const [bx, bz] = M(0.42, 338);
-    const by = g(bx, bz) - 0.1;
-    const byaw = 0.7;
-    angel(k, [bx, by, bz], 7.6, byaw, [0.72, 0.66, 0.56], { bend: 1.25, glow: 0.07, open: 0.34, wing: [0.74, 0.62, 0.3] });
-    // the flower under the hand
-    const fx = bx + Math.sin(byaw) * 7.6 * 0.72;
-    const fz = bz + Math.cos(byaw) * 7.6 * 0.72;
-    k.add(new THREE.SphereGeometry(0.42, 8, 6), [fx, g(fx, fz) + 0.7, fz], [1, 0.98, 0.9], { glow: 0.9 });
-    k.add(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 4), [fx, g(fx, fz) + 0.3, fz], [0.2, 0.3, 0.08]);
-    glows.push({ p: [bx, by + 6, bz], size: 26, col: [1, 0.94, 0.74], k: 0.14 });
+      return y;
+    };
+    const W = Math.PI; // where the plane meets the shore: the isle's west
 
-    // the guardians: colossal angels standing along the top of the steps, facing the lake, and across the water on
-    // the far shore, so the meadow's small company is seen against figures that tower over it
-    const top = STEPS.y0 + STEPS.n * STEPS.rise;
-    const rTop = STEPS.r0 + STEPS.n * STEPS.tread + 22;
-    const nG = props.mobile ? 5 : 9;
-    for (let i = 0; i < nG; i++) {
-      const a = STEPS.a0 + 0.12 + (i / (nG - 1)) * (STEPS.a1 - STEPS.a0 - 0.24);
-      const [x, z] = M(a, rTop);
-      const s = 34 + r() * 10;
-      angel(k, [x, top - 0.5, z], s, Math.atan2(STEPS.x - x, STEPS.z - z), robes[i % robes.length], { glow: 0.16, open: 0.2 + r() * 0.1, wing: wings[i % wings.length] });
-      glows.push({ p: [x, top + s * 1.7, z], size: s * 1.4, col: [1, 0.95, 0.75], k: 0.16 });
-    }
-    for (let i = 0; i < (props.mobile ? 3 : 5); i++) {
-      const a = 2.3 + i * 0.32;
-      const [x, z] = M(a, 318);
-      const s = 26 + r() * 8;
-      angel(k, [x, g(x, z) - 0.5, z], s, Math.atan2(STEPS.x - x, STEPS.z - z), robes[(i + 2) % robes.length], { glow: 0.14, open: 0.3, wing: wings[(i + 3) % wings.length] });
-    }
-    // light pouring down through the gaps in the cloud: onto the meadow, the steps and the water
-    const shafts: Shaft[] = [];
-    for (let i = 0; i < (props.mobile ? 5 : 10); i++) {
-      const a = STEPS.a0 - 0.3 + r() * (STEPS.a1 - STEPS.a0 + 1.6);
-      const [x, z] = M(a, 200 + r() * 420);
-      shafts.push({ x, z, y0: -2, y1: 280, r: 14 + r() * 20, k: 0.5 + r() * 0.4 });
-    }
-    // white birds over the water, wheeling
-    const flocks: Flock[] = [
-      { c: [-200, 90, 120], r: 160, n: props.mobile ? 6 : 12, size: 2.6, speed: 11 },
-      { c: [-60, 140, -120], r: 110, n: props.mobile ? 4 : 8, size: 3.2, speed: 10 },
-      { c: [-380, 70, 300], r: 90, n: props.mobile ? 4 : 7, size: 2.2, speed: 9 },
-    ];
-
-    // flowers: thick in the meadow between the sand and the steps, thinning up the way in
-    const spot = (q: () => number): [number, number] => {
-      for (let tries = 0; tries < 12; tries++) {
-        let x: number;
-        let z: number;
-        if (q() < 0.3) {
-          z = 480 - q() * 230;
-          x = 70 + (q() + q() - 1) * 80;
-        } else [x, z] = M(STEPS.a0 - 0.1 + q() * (STEPS.a1 - STEPS.a0 + 0.5), 318 + Math.pow(q(), 0.8) * (STEPS.r0 - 320));
-        if (dry(x, z)) return [x, z];
+    // ---- the company of the picture, where the plane first comes to the sand
+    {
+      // the one who bends to the flower: larger and nearer, the wings arched over like a shell
+      const [bx, bz] = polar(W + 0.2, 612);
+      const yaw = Math.atan2(-bx, -bz) + 2.2;
+      const by = angelAt(bx, bz, 7.4, yaw, 4, { wing: [0.92, 0.8, 0.34], robe: [0.86, 0.8, 0.66], open: 0.5, glow: 0.09 });
+      glows.push({ p: [bx, by + 6, bz], size: 26, col: [1, 0.94, 0.74], k: 0.16 });
+      const fx = bx + Math.sin(yaw) * 7.4 * 0.66;
+      const fz = bz + Math.cos(yaw) * 7.4 * 0.66;
+      k.add(new THREE.SphereGeometry(0.4, 8, 6), [fx, g(fx, fz) + 0.75, fz], [1, 0.98, 0.9], { glow: 0.9, scale: [1, 0.6, 1] });
+      k.add(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 4), [fx, g(fx, fz) + 0.35, fz], [0.2, 0.3, 0.08]);
+      // a close group of four behind it, their wings blue, rose, green and rose again
+      const [gx, gz] = polar(W + 0.29, 590);
+      for (let i = 0; i < 4; i++) {
+        const x = gx + Math.cos(i * 1.7 + 0.4) * 5.2;
+        const z = gz + Math.sin(i * 1.7 + 0.4) * 5.2;
+        angelAt(x, z, 4.6 + r() * 0.8, Math.atan2(gx - x, gz - z), [0, 3, 1, 0][i], { wing: WING_COLS[[0, 1, 2, 1][i]] });
       }
-      return M(0, 360);
-    };
-    const flowers = (count: number, seed: number) =>
-      pointsGeometry(
-        count,
-        (_, q) => {
-          const [x, z] = spot(q);
-          return [x, g(x, z) + 0.5 + q() * 0.35, z, 0.5 + q() * 0.9];
-        },
-        seed,
-      );
-    // butterflies: a few over the meadow and out along the sand, never still
-    const nB = props.mobile ? 60 : 150;
-    const butterflies = pointsGeometry(
-      nB,
-      (_, q) => {
-        const [x, z] = q() < 0.5 ? spot(q) : M(STEPS.a0 + q() * (STEPS.a1 - STEPS.a0 + 0.3), 290 + q() * 40);
-        return [x, Math.max(g(x, z), 0) + 1.6 + q() * 4, z, 0.9 + q() * 0.8];
-      },
-      1313,
-    );
-    const nF = props.mobile ? 1300 : Math.round(4200 * (0.5 + 0.5 * props.effects));
-    // low mist far out over the lake
-    const puffs: Puff[] = [];
-    for (let i = 0; i < 8; i++) puffs.push({ p: [-520 - r() * 240, 30 + r() * 8, 300 - r() * 520], size: 70 + r() * 60, a: 0.5 });
+      // two apart from them: one in blue under yellow wings, one with a flower held out
+      const [ax, az] = polar(W + 0.36, 566);
+      angelAt(ax, az, 5.2, Math.atan2(-ax, -az) + 2.6, 3, { wing: WING_COLS[3], robe: ROBES[1] });
+      angelAt(ax + 9, az - 12, 4.8, Math.atan2(-ax, -az) + 3.4, 1, { wing: WING_COLS[0] });
+      // three small and far off at the meadow's edge, greenish
+      for (let i = 0; i < 3; i++) {
+        const [x, z] = polar(W + 0.5 + i * 0.012, 668 - i * 6);
+        angelAt(x, z, 3.6, Math.atan2(-x, -z) + 3, 3, { wing: WING_COLS[2] });
+      }
+    }
+    // ---- companies all round the meadow, in twos and threes, turned to one another
+    const groups = props.mobile ? 12 : 26;
+    for (let gi = 0; gi < groups; gi++) {
+      const a = W + 0.62 + (gi / groups) * (Math.PI * 2 - 0.75) + (r() - 0.5) * 0.1;
+      const [cx, cz] = polar(a, gi % 4 === 3 ? 664 + r() * 16 : 545 + r() * 70);
+      // (the foot of the great flight is kept clear for the procession)
+      if (Math.abs(cx) < 40 && cz < 0) continue;
+      const m = 2 + (gi % 3 === 0 ? 2 : gi % 2);
+      for (let i = 0; i < m; i++) {
+        const x = cx + Math.cos(i * 2.2 + gi) * 4.6;
+        const z = cz + Math.sin(i * 2.2 + gi) * 4.6;
+        angelAt(x, z, 4.2 + r() * 1.6, Math.atan2(cx - x, cz - z) + (r() - 0.5) * 0.6);
+      }
+    }
+    // ---- on the steps themselves: sitting companies low down (as in the picture), single figures higher, looking out to sea
+    for (let i = 0; i < (props.mobile ? 16 : 44); i++) {
+      const st = 1 + Math.floor(Math.pow(r(), 1.4) * (ISLE.n - 3));
+      const a = r() * Math.PI * 2;
+      const [x, z] = polar(a, ISLE.meadow - st * ISLE.tread - 4.5);
+      if (Math.abs(x) < 56 && z < 0) continue;
+      angelAt(x, z, 4.4 + r() * 1.4, Math.atan2(x, z) + (r() - 0.5) * 1.4);
+    }
+    // ---- the great flight's two ranks: tall angels facing one another across the way up, flowers held out
+    for (let i = 0; i < 8; i++) {
+      const st = 1 + i * 3;
+      const rr = ISLE.meadow - st * ISLE.tread - 4.5;
+      for (const sd of [-1, 1]) {
+        const x = sd * 44;
+        const z = -Math.sqrt(rr * rr - x * x);
+        const s = 13 + (i % 2) * 3;
+        const y = angelAt(x, z, s, sd > 0 ? -Math.PI / 2 : Math.PI / 2, i % 3 === 0 ? 1 : i % 3 === 1 ? 0 : 2, { open: 0.5, glow: 0.12 });
+        glows.push({ p: [x, y + s * 1.7, z], size: s * 1.3, col: [1, 0.95, 0.76], k: 0.2 });
+      }
+    }
+    // ---- the court: colossal angels round its rim, facing out over the sea; lesser ones about the pool
+    const nG = props.mobile ? 6 : 10;
+    for (let i = 0; i < nG; i++) {
+      const a = (i / nG) * Math.PI * 2 + 0.31;
+      const [x, z] = polar(a, TOP_R - 22);
+      const s = 25 + (i % 2) * 5;
+      angelAt(x, z, s, Math.atan2(x, z), i % 2 ? 0 : 3, { open: 0.62, glow: 0.16 });
+      glows.push({ p: [x, TOP_Y + s * 1.72, z], size: s * 1.5, col: [1, 0.95, 0.75], k: 0.2 });
+    }
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.39;
+      const [x, z] = polar(a, POOL_R + 12);
+      angelAt(x, z, 7.5, Math.atan2(-x, -z), i % 2 ? 1 : 0, { glow: 0.12 });
+    }
+    buildColonnade(k);
+    for (let i = 0; i < COLONNADE.n; i += 2) {
+      const a = ((i + 0.5) / COLONNADE.n) * Math.PI * 2;
+      halos.push({ p: [Math.cos(a) * COLONNADE.r, TOP_Y + COLONNADE.h + 8, Math.sin(a) * COLONNADE.r], size: 7, col: [1, 0.9, 0.6], k: 0.55 });
+    }
+    glows.push({ p: [0, TOP_Y + 30, 0], size: 200, col: [1, 0.9, 0.6], k: 0.1 });
 
+    // ---- flowers: the big ones of his foreground, thick where the plane goes by and up to the foot of the flight
+    const blooms: Bloom[] = [];
+    const nB = props.mobile ? 3200 : Math.round(11000 * (0.5 + 0.5 * props.effects));
+    for (let i = 0; i < nB; i++) {
+      const side = r();
+      const a = side < 0.74 ? W - 0.25 + r() * 1.85 : r() * Math.PI * 2;
+      const d = 529 + Math.pow(r(), 0.7) * 150;
+      const [x, z] = polar(a, d);
+      const y = g(x, z);
+      if (y < 4.6) continue;
+      blooms.push({ p: [x, y + 0.55 + r() * 0.5, z], size: 0.5 + r() * r() * 1.1, seed: r() });
+    }
+    // butterflies over the meadow, and some settled on the sand as in the picture
+    const flutter: Flutter[] = [];
+    for (let i = 0; i < (props.mobile ? 110 : 320); i++) {
+      const a = W - 0.2 + r() * 1.8;
+      const onSand = i % 6 === 0;
+      const [x, z] = polar(a, onSand ? 690 + r() * 22 : 535 + r() * 150);
+      flutter.push({ p: [x, Math.max(g(x, z), 0.1) + (onSand ? 0.12 : 1.4 + r() * 5), z], roam: onSand ? 0 : 3 + r() * 6, size: 0.45 + r() * 0.5, seed: r() });
+    }
+    // ---- the sky: long low heaps of gold and olive cloud in ranks to the horizon, and one great bank behind the isle
+    const near: Heap[] = [];
+    const far: Heap[] = [];
+    const reach = 2500 * Math.min(1.1, Math.max(0.7, props.far + 0.2));
+    for (let z = 2000; z > -reach; z -= 300) {
+      const row = Math.round((2000 - z) / 300);
+      for (let x = -reach - 400 + (row % 2) * 230; x < reach; x += 460) {
+        const cx = x + (r() - 0.5) * 260;
+        const cz = z + (r() - 0.5) * 130;
+        if (r() < 0.12) continue;
+        const w = 220 + r() * 220;
+        const h: Heap = { p: [cx, 640 + (r() - 0.5) * 120, cz], w, seed: r(), tall: 0.7 + r() * 0.3 };
+        (Math.hypot(cx + 300, cz) < 1200 ? near : far).push(h);
+        if (r() < 0.45) far.push({ p: [cx + 200, 900 + (r() - 0.5) * 100, cz + 150], w: w * 0.8, seed: r(), tall: 0.5 });
+      }
+    }
+    for (let i = 0; i < 7; i++) far.push({ p: [500 + i * 150 + (r() - 0.5) * 80, 520 + i * 70 + r() * 60, -900 + (r() - 0.5) * 500 + i * 60], w: 520 - i * 30, seed: r(), tall: 1.25 });
+    const heapMat = makeHeapMaterial({});
+
+    // ---- light pouring down through the gaps: on the sea, on the meadow where the company stands, on the flight and the court
+    const beams: Beam[] = [];
+    const beam = (x: number, z: number, y: number, w: number, kk: number) => beams.push({ foot: [x, y, z], len: 760, w: w * 0.6, k: kk * 0.62 });
+    beam(0, 0, TOP_Y, 120, 1.0);
+    beam(30, -330, 70, 60, 0.8);
+    beam(-20, -470, 20, 46, 0.7);
+    beam(...polar(W + 0.22, 620), 6, 70, 0.8);
+    for (let i = 0; i < (props.mobile ? 5 : 11); i++) {
+      const a = W - 1.0 + r() * 2.6;
+      const [x, z] = polar(a, 800 + r() * 900);
+      beam(x, z, 0, 50 + r() * 90, 0.45 + r() * 0.4);
+    }
+    // white birds over the water and round the court
+    const flocks: Flock[] = [
+      { c: [-900, 60, 300], r: 190, n: props.mobile ? 6 : 12, size: 2.6, speed: 11 },
+      { c: [-760, 90, -260], r: 150, n: props.mobile ? 5 : 9, size: 3.0, speed: 10 },
+      { c: [-300, 110, -820], r: 170, n: props.mobile ? 5 : 9, size: 2.6, speed: 10 },
+      { c: [0, TOP_Y + 100, 0], r: 180, n: props.mobile ? 6 : 14, size: 2.8, speed: 12 },
+    ];
+    // the procession: two files going up the great flight, step by step
+    const files = [-15, 15].map((x) => {
+      const pts: THREE.Vector3[] = [];
+      for (let d = 600; d > TOP_R - 30; d -= 2.25) {
+        const z = -Math.sqrt(d * d - x * x);
+        pts.push(new THREE.Vector3(x, d >= ISLE.meadow ? g(x, z) : stoneAt(d), z));
+      }
+      return pts;
+    });
+    // haze lying far out on the sea
+    const puffs: Puff[] = [];
+    for (let i = 0; i < (props.mobile ? 8 : 18); i++) {
+      const a = r() * Math.PI * 2;
+      const d = 1500 + r() * 900;
+      puffs.push({ p: [Math.cos(a) * d, 18 + r() * 20, Math.sin(a) * d], size: 200 + r() * 200, a: 0.45 });
+    }
     return {
+      base: props,
       set: k.build(),
-      steps: steps(props.mobile),
-      tempera: makeTempera({ amb: 0.92, key: 0.4, dab: 0.8, grain: 1, ao: 0.3, aoH: 30, wrap: 0.5, irid: 0.2, rim: [0.5, 0.45, 0.25], rimPow: 3 }),
-      shafts,
+      wings: wings.build(),
+      wingMat: makeWingMaterial(),
+      steps: buildSteps(props.mobile),
+      tempera: makeTempera({ amb: 0.84, key: 0.5, dab: 0.8, grain: 0.7, wrap: 0.6, irid: 0.14, rim: [0.5, 0.45, 0.25], rimPow: 3 }),
+      stone: makeTempera({ amb: 0.8, key: 0.62, dab: 0.9, wrap: 0.3 }),
+      sea: makeSea({ def, sand: SAND, deep: [0.05, 0.1, 0.09], shallow: [0.22, 0.34, 0.2], tint: [0.95, 1.0, 1.02], calm: 0.45 }),
+      pool: makeWater({ def, deep: [0.06, 0.12, 0.12], calm: 0.25, tint: [1.0, 1.02, 1.05] }),
+      blooms,
+      flutter,
+      near: heapMesh(heapBlobs(near, 5), heapMat, props.mobile ? 1 : 2),
+      far: heapMesh(heapBlobs(far, 9), heapMat, 1),
+      heapMat,
+      beams,
       flocks,
+      files,
       glows,
+      halos,
       puffs,
-      bars: makeBars(),
-      flowersA: flowers(nF, 717),
-      flowersB: flowers(Math.round(nF * 0.6), 919),
-      butterflies,
-      flowerA: makePoints({ a: [1.0, 0.98, 0.9], b: [1.0, 0.86, 0.3], scale: 120, solid: true, gain: 1.2, max: 9 }),
-      flowerB: makePoints({ a: [0.95, 0.5, 0.62], b: [0.42, 0.56, 1.0], scale: 110, solid: true, gain: 1.15, max: 8 }),
-      butterfly: makePoints({ a: [1.0, 0.98, 0.92], b: [1.0, 0.84, 0.4], scale: 220, solid: true, gain: 1.25, max: 12, drift: 2.4 }),
-      water: makeWater({ def, deep: [0.07, 0.11, 0.1], calm: 0.3, tint: [0.92, 1.0, 1.04], shore: PARADISE_PAL.shore, reflect: REFLECT }),
+      motes: pointsGeometry(props.mobile ? 200 : Math.round(900 * props.effects), (_, q) => [(q() - 0.5) * 420, TOP_Y * q() + 20 + q() * 120, -620 * q() + 120, 0.5 + q() * 1.3], 9),
+      moteMat: makePoints({ a: [1, 0.9, 0.56], b: [1, 0.97, 0.84], scale: 300, drift: 3, gain: 0.7, max: 14 }),
     };
-  }, [props.mobile, props.effects > 0.5]);
+  }, [props.mobile, props.effects > 0.5, props.trees, props.far, props.grass, props.reduced]);
   return (
     <>
-      <WorldBase id="paradise" def={def} pal={PARADISE_PAL} props={props} tip={[0.42, 0.46, 0.14]} pathTint={[1, 0.95, 0.76]} tall={0.8} mask="return smoothstep(0.45, 0.9, h);" />
-      <mesh material={b.water} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
-        <planeGeometry args={[5200, 5200]} />
+      <WorldBase id="paradise" def={def} pal={PARADISE_PAL} props={b.base} tip={[0.44, 0.48, 0.14]} pathTint={[1, 0.95, 0.76]} tall={0.8} mask={GRASS_MASK} groundSize={2600} angels={false} />
+      <RayedSun size={0.46} gain={0.45} />
+      <CloudDeck size={20000} />
+      <mesh material={b.sea} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
+        <planeGeometry args={[30000, 30000]} />
       </mesh>
-      <mesh material={b.bars} rotation={[-Math.PI / 2, 0, 0]} position={[0, CLOUD_Y, 0]} renderOrder={-3}>
-        <planeGeometry args={[5600, 5600]} />
+      <mesh geometry={b.steps} material={b.stone} />
+      <mesh material={b.pool} rotation={[-Math.PI / 2, 0, 0]} position={[0, TOP_Y + 0.5, 0]}>
+        <circleGeometry args={[POOL_R + 0.5, 64]} />
       </mesh>
-      <mesh geometry={b.steps} material={b.tempera} />
       <mesh geometry={b.set} material={b.tempera} />
-      <points geometry={b.flowersA} material={b.flowerA} />
-      <points geometry={b.flowersB} material={b.flowerB} />
-      <points geometry={b.butterflies} material={b.butterfly} />
-      {props.effects > 0.2 && <Mist puffs={b.puffs} />}
+      <mesh geometry={b.wings} material={b.wingMat} />
+{/* a boat puts out from the sand as the plane comes to the shore; two more are far out already */}
+      <Ship from={[-742, 0.2, 40]} heading={-1.9} reach={380} />
+      <Ship from={[-1500, 0.2, -700]} heading={-2.3} sailing scale={1.3} />
+      <Ship from={[-900, 0.2, -1500]} heading={-2.6} sailing scale={1.3} />
+      {/* white birds go up from the sand as it passes */}
+      <RisingFlock origin={[-700, 2, -150]} n={props.mobile ? 20 : 46} reach={170} size={1.7} tint={[1, 1, 0.97]} lit away={[-0.9, -0.4]} seed={7} />
+            <Blooms list={b.blooms} />
+      <Butterflies list={b.flutter} />
+      {b.files.map((f, i) => (
+        <Procession key={i} road={f} n={props.mobile ? 14 : 34} speed={1.1} scale={2.7} seed={4 + i} robe={[0.86, 0.82, 0.7]} wing={i ? [0.62, 0.7, 0.9] : [0.92, 0.7, 0.72]} glow={0.12} />
+      ))}
+      <primitive object={b.near} />
+      <primitive object={b.far} />
+      <SunShafts list={b.beams} tint={[1, 0.93, 0.66]} />
       <Halos list={b.glows} kind={2} />
-      <LightShafts list={b.shafts} tint={[1, 0.95, 0.7]} />
+      <Halos list={b.halos} />
       <Birds flocks={b.flocks} tint={[1, 1, 0.97]} lit />
+      <points geometry={b.motes} material={b.moteMat} />
+      {props.effects > 0.2 && <Mist puffs={b.puffs} />}
     </>
   );
 }
