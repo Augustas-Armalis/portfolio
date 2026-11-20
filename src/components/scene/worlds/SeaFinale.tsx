@@ -47,7 +47,7 @@ function shipGeometry() {
   k.add(new THREE.CylinderGeometry(0.1, 0.17, 17, 6), [0.6, 9.4, 0], wood);
   k.add(new THREE.CylinderGeometry(0.07, 0.09, 12.5, 5), [0.9, 3.0, 0], wood, { rot: [0, 0, Math.PI / 2 - 0.04] });
   // sails: bellied a little, cream, each edged with a dark drawn line
-  const sail = (pts: V3[], belly: number) => {
+  const sail = (pts: V3[], belly: number, dark: boolean) => {
     const g = new THREE.BufferGeometry();
     const N = 8;
     const pos: number[] = [];
@@ -78,8 +78,8 @@ function shipGeometry() {
     g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     g.setIndex(idx);
     g.computeVertexNormals();
-    k.add(g, [0, 0, 0], [0.86, 0.8, 0.62], { top: [1, 0.95, 0.78], glow: 0.05 });
-    k.tube([pts[0], pts[1], pts[2], pts[0]], 0.07, [0.05, 0.04, 0.05], { seg: 30, sides: 4 });
+    k.add(g, [0, 0, 0], dark ? [0.014, 0.018, 0.05] : [0.8, 0.72, 0.5], { top: dark ? [0.03, 0.04, 0.1] : [0.96, 0.9, 0.7], glow: dark ? 0 : 0.04 });
+    k.tube([pts[0], pts[1], pts[2], pts[0]], 0.07, dark ? [0.5, 0.42, 0.26] : [0.05, 0.04, 0.05], { seg: 30, sides: 4 });
   };
   sail(
     [
@@ -88,6 +88,7 @@ function shipGeometry() {
       [-6.6, 3.2, 0],
     ],
     1.5,
+    true,
   );
   sail(
     [
@@ -96,6 +97,7 @@ function shipGeometry() {
       [7.7, 2.5, 0],
     ],
     1.1,
+    false,
   );
   // the pennant at the masthead
   k.box(1.9, 0.34, 0.03, [-0.4, 17.9, 0], [0.7, 0.2, 0.12], { glow: 0.1 });
@@ -118,7 +120,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     for (let i = 0; i < 26; i++) {
       const a = (i / 26) * Math.PI * 2 + r() * 0.2;
       const d = 1700 + r() * 600;
-      puffs.push({ p: [Math.cos(a) * d, 10 + r() * 20, 100 + Math.sin(a) * d], size: 280 + r() * 240, a: 0.4 });
+      puffs.push({ p: [Math.cos(a) * d, 10 + r() * 20, 100 + Math.sin(a) * d], size: 280 + r() * 240, a: 0.25 });
     }
     // the sky's level rows of small rounded cloud, going off to the horizon behind the wave and to either side
     const clouds: PaintedCloud[] = [];
@@ -189,7 +191,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
   return (
     <>
       <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.9, 0.6]} pathGain={0.3} angels={false} marks={false} />
-      <GreatSun size={0.46} tint={[1, 0.78, 0.34]} rays={26} gain={0.55} />
+      <GreatSun size={0.46} tint={[1, 0.78, 0.34]} rays={26} gain={0.38} />
       <PaintedClouds list={b.clouds} warm={[0.95, 0.8, 0.5]} shade={[0.5, 0.36, 0.2]} hi={[1.3, 1.12, 0.7]} order={-3} />
       <mesh geometry={b.sea} material={b.seaMat} frustumCulled={false} renderOrder={-4} />
       <mesh geometry={b.crest} material={b.crestMat} />

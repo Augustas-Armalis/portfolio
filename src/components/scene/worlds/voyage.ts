@@ -241,21 +241,21 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // behind the great wave, so the water is lit through
   seafinale: {
     label: "Sonata of the Sea. Finale",
-    zenith: [0.27, 0.22, 0.11],
-    upper: [0.45, 0.35, 0.16],
-    horizon: [0.68, 0.52, 0.24],
+    zenith: [0.15, 0.1, 0.05],
+    upper: [0.36, 0.26, 0.12],
+    horizon: [0.62, 0.47, 0.22],
     glow: [1.0, 0.74, 0.32],
     amb: [0.36, 0.38, 0.27],
     key: [1.0, 0.84, 0.5],
-    keyI: 1.6,
+    keyI: 1.25,
     sunAz: -4,
-    sunEl: 15,
+    sunEl: 12,
     keyAz: -4,
-    keyEl: 19,
+    keyEl: 17,
     cloudLit: [1.0, 0.86, 0.56],
     cloudShade: [0.5, 0.42, 0.3],
     night: 0,
-    exposure: 0.86,
+    exposure: 0.8,
     fx: [0.0, 0.7, 0.0, 0],
   },
   // Funeral Symphony VI: a vast night of ultramarine pastel, the sky the lightest thing in it; a thin moon with
@@ -707,7 +707,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "seafinale",
     place: "sea",
     air: AIR.seafinale,
-    fog: [0.0001, 0.006],
+    fog: [0.00006, 0.006],
     // all water: the great wave is this world's own height field (seafinale/shape.ts), standing a little over
     // the mean sea so the swell has room to run under the plane
     terrain: FINALE_TERRAIN,
@@ -720,7 +720,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     gate: FINALE_GATE,
     path: FINALE_PATH,
     obstacles: [],
-    canvases: [{ painting: "sea-finale", x: 300, z: 520, yaw: -0.3 }],
+    canvases: [{ painting: "sea-finale", x: 286, z: 520, yaw: -0.34 }],
   },
   funeral: {
     id: "funeral",

@@ -6,8 +6,8 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
-import { WORLD_U, makePoints, makeTempera, noise2, paint, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
-import { Birds, type Flock } from "./life";
+import { Kit, makePoints, makeTempera, noise2, paint, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { Birds, PaintedClouds, type Flock, type PaintedCloud } from "./life";
 import { ORIGIN, WORLDS, voyage } from "./voyage";
 import { ROAD_W, funeralLand } from "./funeral/land";
 import { buildFuneralRock, makeLedgeMaterial, makeRockMaterial } from "./funeral/rock";
@@ -185,6 +185,45 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       puffs.push({ p: [L.pts[j].x - L.tan[j][1] * side, L.y[j] + 6 + r() * 26, L.pts[j].z + L.tan[j][0] * side], size: 40 + r() * 50, a: 0.3 });
     }
 
+    // wayside shrines (koplytstulpiai) at the outside of each turn of the road and at the pass: a tall post, a
+    // small roofed box at its head with a candle in it, a cross over it; the crowd goes by under them
+    const shrines = new Kit();
+    const wood: V3 = [0.012, 0.014, 0.04];
+    for (const i of [L.iPass - 380, L.iPass - 228, L.iPass - 80, L.iPass + 6]) {
+      if (i < 12) continue;
+      const cx = (L.pts[i - 12].x + L.pts[Math.min(L.N - 1, i + 12)].x) / 2 - L.pts[i].x;
+      const cz = (L.pts[i - 12].z + L.pts[Math.min(L.N - 1, i + 12)].z) / 2 - L.pts[i].z;
+      const cl = Math.hypot(cx, cz);
+      // (at the pass, where the road runs straight, it stands on the right)
+      const ox = cl > 1.5 ? -cx / cl : -L.tan[i][1];
+      const oz = cl > 1.5 ? -cz / cl : L.tan[i][0];
+      const x = L.pts[i].x + ox * (ROAD_W / 2 - 0.9);
+      const z = L.pts[i].z + oz * (ROAD_W / 2 - 0.9);
+      const y = L.y[i];
+      const yaw = Math.atan2(ox, oz);
+      shrines.box(0.42, 7.2, 0.42, [x, y + 3.6, z], wood, { rot: [0, yaw, 0] });
+      shrines.box(1.3, 1.25, 1.1, [x, y + 7.7, z], wood, { rot: [0, yaw, 0], top: [0.03, 0.035, 0.09] });
+      shrines.box(0.9, 0.8, 0.12, [x - ox * 0.52, y + 7.66, z - oz * 0.52], [1.0, 0.72, 0.3], { rot: [0, yaw, 0], glow: 1.3 });
+      shrines.add(new THREE.ConeGeometry(1.25, 1.0, 4), [x, y + 8.8, z], wood, { rot: [0, yaw + Math.PI / 4, 0] });
+      shrines.box(0.1, 1.2, 0.1, [x, y + 9.8, z], wood);
+      shrines.box(0.62, 0.1, 0.1, [x, y + 9.9, z], wood, { rot: [0, yaw + Math.PI / 2, 0] });
+      halos.push({ p: [x - ox * 0.7, y + 7.66, z - oz * 0.7], size: 2.6, col: [1, 0.74, 0.34], k: 0.7 });
+      glows.push({ p: [x - ox * 1.6, y + 6.5, z - oz * 1.6], size: 16, col: [1, 0.7, 0.3], k: 0.12 });
+    }
+
+    // a sea of cloud far off and far below the walls, row on row of small rounded forms going out to the edge
+    // of sight, the moon's light along one side of each: the depth of the night
+    const clouds: PaintedCloud[] = [];
+    for (let i = 0; i < (props.mobile ? 60 : 150); i++) {
+      const a = r() * Math.PI * 2;
+      const d = 1300 + Math.pow(r(), 0.8) * 1200;
+      const x = Math.cos(a) * d;
+      const z = Math.sin(a) * d + 100;
+      const y = 70 + r() * 150 + (d - 1300) * 0.08;
+      if (L.ground(x, z) > y - 30) continue;
+      clouds.push({ p: [x, y, z], w: 130 + r() * 200 + (d - 1300) * 0.06, seed: r() });
+    }
+
     // sparks of the lights they carry, drifting up off the crowd
     const motes = pointsGeometry(
       props.mobile ? 500 : 1400,
@@ -221,6 +260,9 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       halos,
       puffs,
       flocks,
+      clouds,
+      shrines: shrines.build(),
+      shrineMat: makeTempera({ amb: 1.0, key: 0.3, rim: [0.4, 0.26, 0.08], rimPow: 3.2 }),
     };
   }, [props.mobile, props.effects > 0.5]);
   useFrame(({ camera }) => {
@@ -242,7 +284,10 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
         <mesh key={i} geometry={g} material={b.tempera} />
       ))}
       <primitive object={b.souls.group} />
+      <primitive object={b.souls.bierMesh} />
       <primitive object={b.souls.lampMesh} />
+      <mesh geometry={b.shrines} material={b.shrineMat} />
+      <PaintedClouds list={b.clouds} warm={[0.16, 0.24, 0.5]} shade={[0.03, 0.05, 0.16]} hi={[0.42, 0.56, 0.8]} order={1} />
       <points geometry={b.motes} material={b.moteMat} />
       <Birds flocks={b.flocks} tint={[0.004, 0.008, 0.03]} seed={19} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}

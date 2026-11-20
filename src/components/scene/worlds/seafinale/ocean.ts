@@ -39,13 +39,13 @@ const LACE_GLSL = /* glsl */ `
   }
   // a string of beads along the lace's walls
   float beads(vec2 p, float wall){
-    vec2 c = fract(p * 22.0) - 0.5;
+    vec2 c = fract(p * 30.0) - 0.5;
     return smoothstep(0.8, 0.96, wall) * (1.0 - smoothstep(0.2, 0.34, length(c)));
   }
-  const vec3 W_DEEP = vec3(0.016, 0.034, 0.014);
-  const vec3 W_GREEN = vec3(0.07, 0.19, 0.04);
-  const vec3 W_LIME = vec3(0.3, 0.4, 0.06);
-  const vec3 W_GOLD = vec3(0.8, 0.6, 0.13);
+  const vec3 W_DEEP = vec3(0.03, 0.03, 0.012);
+  const vec3 W_GREEN = vec3(0.1, 0.17, 0.03);
+  const vec3 W_LIME = vec3(0.4, 0.42, 0.07);
+  const vec3 W_GOLD = vec3(0.86, 0.62, 0.14);
   const vec3 W_FOAM = vec3(0.98, 0.9, 0.7);
   // the water's own colour by how thin it is between the eye and the light: umber-green, green, yellow-green, gold
   vec3 waterCol(float thin){
@@ -148,25 +148,40 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         vec3 L = uSunDir;
         vec3 Lh = normalize(vec3(L.x, 0.0, L.z));
         // how thin the water is between the eye and the light: the upper face of the wave, the crests of the swell
-        float thinW = smoothstep(0.06, 0.92, up);
+        // (most light comes through the middle of the face; above it the wave is in its own crest's shade)
+        float thinW = smoothstep(0.04, 0.5, up) * (1.0 - 0.55 * smoothstep(0.55, 0.85, up));
         float thinS = smoothstep(0.6, 4.4, sw + (c0 - 0.8) * 1.5) * 0.6;
         float thin = mix(thinS, thinW, onWave * front);
         float toSun = pow(max(dot(-V, Lh), 0.0), 2.0);
         vec3 water = waterCol(thin * (0.72 + 0.28 * toSun));
+        // (the troughs of the swell are umber, as his foreground waves are)
+        water = mix(water, vec3(0.04, 0.024, 0.01), (1.0 - onWave) * smoothstep(1.5, -3.5, sw) * 0.42);
         // lit from within: the low sun behind the water
         vec3 col = water * (uSkyCol * 0.95 + uKeyCol * (0.12 + thin * (0.5 + 0.9 * toSun)));
         // the long fine lines of the water drawn up the face, lighter and darker, always moving up
         float line = vnoise(vec2((s + f * 110.0) * 0.3, up * 2.6 - uTime * 0.1)) * 0.55 + vnoise(vec2((s - f * 40.0) * 0.9, up * 6.0 - uTime * 0.16)) * 0.45;
         col *= 1.0 + (line - 0.5) * 1.2 * onWave * front;
         // under the overhanging crest the face stands in the wave's own shade: umber, as he painted the hollow
-        float hollow = smoothstep(0.42, 0.7, up) * (1.0 - smoothstep(0.86, 0.98, up)) * onWave * front * smoothstep(900.0, 700.0, abs(s));
-        col = mix(col, col * vec3(0.5, 0.36, 0.24), hollow * 0.7);
+        float hollow = smoothstep(0.5, 0.72, up + (line - 0.5) * 0.16) * (1.0 - smoothstep(0.88, 0.99, up)) * onWave * front * smoothstep(900.0, 700.0, abs(s));
+        col = mix(col, vec3(0.085, 0.052, 0.022) * (0.5 + 1.1 * line) * (uSkyCol * 1.1 + uKeyCol * 0.12), hollow * 0.82);
         // the sky in it: strongly at a grazing eye on the open sea, hardly at all on the lit face
         vec3 r = reflect(-V, n); r.y = abs(r.y) + 0.002; r = normalize(r);
         float fres = 0.03 + 0.97 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
         col = mix(col, skyBase(r), fres * (1.0 - 0.75 * onWave * front));
         // the sun's road on the open water
         col += uKeyCol * pow(max(dot(r, L), 0.0), 140.0) * 0.9 * (1.0 - onWave) * smoothstep(-0.02, 0.06, L.y);
+        // far down in the open water, the lights of ships that went under long ago (the sonata's Andante): seen
+        // only looking down into it, never at a distance
+        {
+          float deepLook = smoothstep(0.25, 0.7, V.y) * (1.0 - onWave);
+          for (int i = 0; i < 5; i++) {
+            float fi = float(i);
+            vec2 c = vec2(210.0 - fi * 46.0 + 30.0 * sin(fi * 2.3), 560.0 - fi * 92.0);
+            vec2 d = (p - c) + V.xz / max(V.y, 0.2) * 14.0;
+            float g = exp(-dot(d, d) * 0.012) + 0.5 * exp(-dot(d - vec2(5.0, 3.0), d - vec2(5.0, 3.0)) * 0.05);
+            col += vec3(1.0, 0.66, 0.24) * g * deepLook * (0.5 + 0.2 * sin(uTime * 0.8 + fi * 2.0)) * 0.55;
+          }
+        }
         // ---- foam ----
         vec2 drift = vec2(uTime * 0.6, -uTime * 2.4);
         vec3 l1 = lace((p + drift) * 0.19, uTime * 0.3);
@@ -343,19 +358,20 @@ export function makeCrestMaterial() {
         float fz = (v - ${LIP_FINGERS.toFixed(3)}) / ${(1 - LIP_FINGERS).toFixed(3)};
         float su = s / 44.0 + 0.4 * sin(s * 0.013) + 0.15 * sin(s * 0.047);
         float fid = floor(su); float fu = fract(su) - 0.5;
-        float flen = 0.5 + 0.5 * hash12(vec2(fid, 2.0));
-        float fw = 0.5 * pow(max(0.0, 1.0 - fz / flen), 0.55) + 0.04;
+        // (rounded lobes, as he drew the foam's edge: scallops, some long, most short)
+        float flen = 0.34 + 0.66 * pow(hash12(vec2(fid, 2.0)), 1.6);
+        float fw = 0.5 * sqrt(max(0.0, 1.0 - (fz / flen) * (fz / flen))) + 0.02;
         // (a second, smaller row between them)
         float su2 = s / 17.0 + 3.0; float fu2 = fract(su2) - 0.5; float flen2 = 0.18 + 0.3 * hash12(vec2(floor(su2), 5.0));
-        float fw2 = 0.5 * pow(max(0.0, 1.0 - fz / flen2), 0.6);
+        float fw2 = 0.5 * sqrt(max(0.0, 1.0 - (fz / flen2) * (fz / flen2)));
         float inF = fz < 0.0 ? 1.0 : max(step(abs(fu), fw) * step(fz, flen), step(abs(fu2), fw2) * step(fz, flen2));
         float edgeD = fz < 0.0 ? 1.0 : min(max(fw - abs(fu), 0.0) * 44.0, (flen - fz) * 90.0);
         // ---- the lace: the further from the shoulder, the more it is holes ----
         vec3 l1 = lace(vec2(s * 0.06, v * 20.0 - uTime * 0.05), uTime * 0.25);
         vec3 l2 = lace(vec2(s * 0.19 + 5.0, v * 62.0 - uTime * 0.11), uTime * 0.4);
         // (whole cells of the lace are open: a net, not a sieve; none near the shoulder, most at the fingers' ends)
-        float open = smoothstep(0.6, 1.0, v);
-        float hole = step(l1.x, 0.45) * step(l1.y, open * 0.85);
+        float open = smoothstep(0.72, 1.0, v);
+        float hole = step(l1.x, 0.45) * step(l1.y, open * 0.4);
         if (inF < 0.5 || (hole > 0.5 && edgeD > 2.5)) discard;
         vec3 n = normalize(vN);
         vec3 V = normalize(cameraPosition - vWorld);
@@ -368,7 +384,7 @@ export function makeCrestMaterial() {
         vec3 water = waterCol(0.3 + 0.7 * thin * (0.65 + 0.35 * pow(toSun, 2.0)));
         vec3 col = water * (uSkyCol * 0.95 + uKeyCol * (0.2 + (0.5 + 1.3 * pow(toSun, 2.0)) * (0.3 + 0.7 * thin)));
         // seen from under, in the hollow, it is the wave's own shade with the light coming through in lines
-        col = mix(col, col * vec3(0.62, 0.5, 0.34), under * (1.0 - 0.6 * pow(toSun, 3.0)) * 0.7);
+        col = mix(col, col * vec3(0.6, 0.42, 0.26), under * (1.0 - 0.6 * pow(toSun, 3.0)) * 0.75);
         // the sun itself, seen through the sheet
         col += uKeyCol * vec3(0.95, 1.0, 0.55) * pow(toSun, 46.0) * (0.25 + 0.75 * thin) * 1.2;
         // falling water: long lines down the sheet
@@ -378,7 +394,9 @@ export function makeCrestMaterial() {
         float fres = pow(1.0 - max(dot(n, V), 0.0), 4.0);
         col = mix(col, skyBase(reflect(-V, n)), fres * 0.3 * (1.0 - under));
         // foam: lace over the sheet toward its edge, thick on the fingers, and beads along every edge
-        float foam = l1.x * smoothstep(0.5, 0.9, v) * 0.9 + l2.x * smoothstep(0.62, 1.0, v) * 0.5;
+        // (on its upper side the crest is a thick cap of foam, a honeycomb of bubbles; from under, the water shows through)
+        float cap = smoothstep(0.3, 0.6, v) * (1.0 - 0.72 * under);
+        float foam = cap * (0.62 + 0.38 * l2.x) * (0.8 + 0.2 * l1.x) + l1.x * smoothstep(0.5, 0.9, v) * 0.5 * under;
         foam = max(foam, 1.0 - smoothstep(0.5, 2.6, edgeD));
         foam += beads(vec2(s * 0.06, v * 20.0 - uTime * 0.05), l1.x) * 0.6 * smoothstep(0.3, 0.6, v);
         foam = mix(foam, smoothstep(0.55, 1.0, v) * 0.6, smoothstep(300.0, 1000.0, dist));

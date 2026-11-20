@@ -181,9 +181,11 @@ function makeLampMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: n
         float along = mod(aL.y + walked, uRd.w);
         vec2 tn; vec3 c = roadAt(aL.x * uRd.w + along, tn);
         vec3 fwd = vec3(tn.x, 0.0, tn.y); vec3 right = vec3(-tn.y, 0.0, tn.x);
-        float seed = aL.w;
+        // (the whole part of the last number: 0 a light carried in the hand, 1 a candle standing on a bier)
+        float tier = floor(aL.w);
+        float seed = fract(aL.w);
         float ph = (aL.y + walked) * 4.4 + seed * 6.2832;
-        vec3 base = c + right * aL.z + fwd * 0.5 + vec3(0.0, 1.5 + abs(sin(ph)) * 0.045, 0.0) + uFO;
+        vec3 base = c + right * aL.z + fwd * 0.5 * (1.0 - tier) + vec3(0.0, 1.5 + tier * 2.05 + abs(sin(ph)) * 0.045 * (1.0 - tier), 0.0) + uFO;
         vec4 mv = viewMatrix * vec4(base, 1.0);
         float d = -mv.z;
         // far off it is still a point of light, never less than a pixel or two
@@ -209,6 +211,53 @@ function makeLampMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: n
         vec3 c = mix(vec3(1.0, 0.7, 0.3), vec3(1.0, 0.95, 0.8), exp(-r * r * 160.0));
         float air = (1.0 - valleyAmt(vWorld) * 0.8) * (1.0 - airAmt(vWorld) * 0.7);
         gl_FragColor = vec4(c * a * vK * air * glowK() * 2.2, 1.0);
+        ${END}
+      }`,
+  });
+}
+
+// a bier: carried along the road with the rest, level, over the hoods
+function makeBierMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: number) {
+  return new THREE.ShaderMaterial({
+    uniforms: { ...SKY_U, ...WORLD_U, ...FUNERAL_U, uRoad: { value: roadTex }, uRd: { value: rd }, uWalk: { value: walk }, uRim: { value: new THREE.Color(1.0, 0.62, 0.16) } },
+    vertexShader: /* glsl */ `
+      attribute vec4 aL;
+      uniform float uTime;
+      varying vec3 vWorld; varying vec3 vN; varying vec3 vP;
+      ${ROAD_GLSL}
+      void main(){
+        float walked = uTime * uWalk;
+        float along = mod(aL.y + walked, uRd.w);
+        vec2 tn; vec3 c = roadAt(aL.x * uRd.w + along, tn);
+        vec3 fwd = vec3(tn.x, 0.0, tn.y); vec3 right = vec3(-tn.y, 0.0, tn.x);
+        float ph = (aL.y + walked) * 4.4;
+        // borne on the shoulders: it rides a little with the bearers' step
+        vec3 base = c + right * aL.z + vec3(0.0, ${(HEIGHT * 0.86).toFixed(2)} + abs(sin(ph)) * 0.03, 0.0) + uFO;
+        vec3 wp = base + right * (position.x + sin(ph * 0.5) * 0.03) + vec3(0.0, position.y, 0.0) + fwd * position.z;
+        vWorld = wp; vP = position;
+        vN = normalize(right * normal.x + vec3(0.0, normal.y, 0.0) + fwd * normal.z);
+        gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uRim;
+      varying vec3 vWorld; varying vec3 vN; varying vec3 vP;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${GLSL_AIR}
+      ${GLSL_FUNERAL_AIR}
+      void main(){
+        vec3 n = normalize(vN);
+        vec3 V = normalize(cameraPosition - vWorld);
+        // a black pall with a thin border of dull gold, lit from above by its four candles
+        float border = max(smoothstep(0.5, 0.56, abs(vP.x)), smoothstep(1.2, 1.27, abs(vP.z))) * step(0.5, vP.y);
+        vec3 alb = mix(vec3(0.006, 0.006, 0.02), vec3(0.3, 0.2, 0.06), border * 0.8);
+        vec3 col = alb * (uSkyCol * 1.4 + uKeyCol * 0.2);
+        vec2 q = abs(vP.xz) - vec2(0.5, 1.05);
+        float candle = exp(-dot(q, q) * 1.6) * smoothstep(0.2, 0.9, n.y);
+        col += (alb * 6.0 + 0.01) * uRim * candle * glowK() * 2.0;
+        col += uRim * pow(1.0 - abs(dot(n, V)), 3.0) * 0.12 * glowK();
+        col = funeralAir(col, vWorld);
+        gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,
   });
@@ -294,14 +343,50 @@ export function buildSouls(mobile: boolean, effects: number) {
   }
 
   // the lights
+  // the dead, carried among them: a few biers far apart along the road, each a dark box under a pall, borne on
+  // the shoulders at the middle of the road, a candle at each corner
+  const biers: number[] = [];
+  for (let c = 2; c < count - 2; c += 5) biers.push(c, (c * 17.3) % CHUNK, ((c * 7) % 5) - 2, 0.1 + ((c * 0.37) % 0.8));
+  const nB = biers.length / 4;
   const perL = lamps.length / 3;
-  const la = new Float32Array(count * perL * 4);
-  for (let c = 0; c < count; c++) for (let j = 0; j < perL; j++) la.set([c, lamps[j * 3], lamps[j * 3 + 1], lamps[j * 3 + 2]], (c * perL + j) * 4);
+  const la = new Float32Array((count * perL + nB * 4) * 4);
+  for (let c = 0; c < count; c++) for (let j = 0; j < perL; j++) la.set([c, lamps[j * 3], lamps[j * 3 + 1], lamps[j * 3 + 2] * 0.999], (c * perL + j) * 4);
+  for (let i = 0; i < nB; i++)
+    [
+      [-1.05, -0.5],
+      [-1.05, 0.5],
+      [1.05, -0.5],
+      [1.05, 0.5],
+    ].forEach(([ds, dl], k) => la.set([biers[i * 4], (biers[i * 4 + 1] + ds + CHUNK) % CHUNK, biers[i * 4 + 2] + dl, 1 + ((i * 0.31 + k * 0.17) % 0.99)], (count * perL + i * 4 + k) * 4));
+  const bierBox = new THREE.BoxGeometry(0.86, 0.46, 2.25).translate(0, 0.33, 0);
+  const pall = new THREE.BoxGeometry(1.16, 0.07, 2.6).translate(0, 0.6, 0);
+  const skirt = new THREE.BoxGeometry(1.2, 0.5, 2.64).translate(0, 0.32, 0);
+  const bierSrc = new THREE.BufferGeometry();
+  {
+    const parts = [bierBox, pall, skirt].map((g) => g.toNonIndexed());
+    const pos: number[] = [];
+    const nor: number[] = [];
+    parts.forEach((g) => {
+      pos.push(...(g.attributes.position.array as Float32Array));
+      nor.push(...(g.attributes.normal.array as Float32Array));
+    });
+    bierSrc.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    bierSrc.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+    [bierBox, pall, skirt, ...parts].forEach((g) => g.dispose());
+  }
+  const bierGeo = new THREE.InstancedBufferGeometry();
+  bierGeo.setAttribute("position", bierSrc.attributes.position);
+  bierGeo.setAttribute("normal", bierSrc.attributes.normal);
+  bierGeo.setAttribute("aL", new THREE.InstancedBufferAttribute(new Float32Array(biers), 4));
+  bierGeo.instanceCount = nB;
+  const bierMat = makeBierMaterial(roadTex, new THREE.Vector4(L.N, L.STEP, 0, CHUNK), walk);
+  const bierMesh = new THREE.Mesh(bierGeo, bierMat);
+  bierMesh.frustumCulled = false;
   const lampGeo = new THREE.InstancedBufferGeometry();
   lampGeo.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
   lampGeo.setIndex([0, 1, 2, 0, 2, 3]);
   lampGeo.setAttribute("aL", new THREE.InstancedBufferAttribute(la, 4));
-  lampGeo.instanceCount = count * perL;
+  lampGeo.instanceCount = count * perL + nB * 4;
   const lampMat = makeLampMaterial(roadTex, new THREE.Vector4(L.N, L.STEP, 0, CHUNK), walk);
   const lampMesh = new THREE.Mesh(lampGeo, lampMat);
   lampMesh.frustumCulled = false;
@@ -341,5 +426,5 @@ export function buildSouls(mobile: boolean, effects: number) {
     stats.drawn = stats.near + stats.mid + stats.far;
   };
 
-  return { group, lampMesh, update, stats, souls: per * count, per, count, geos: [...src, ...lod, lampGeo], mats: [...mats, lampMat], roadTex };
+  return { group, lampMesh, bierMesh, update, stats, souls: per * count, per, count, geos: [...src, ...lod, lampGeo, bierSrc, bierGeo], mats: [...mats, lampMat, bierMat], roadTex };
 }

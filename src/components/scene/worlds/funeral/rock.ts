@@ -539,7 +539,7 @@ export function makeLedgeMaterial() {
           float depth = vK.z;
           float stroke = vnoise(vec2(vK.w * 0.42 + vK.y * 9.0, depth * 1.6)) * 0.6 + vnoise(vec2(vK.w * 1.7, depth * 4.0 + 4.0)) * 0.4;
           stroke = smoothstep(0.2, 0.8, stroke);
-          vec3 alb = mix(vec3(0.012, 0.018, 0.1), vec3(0.004, 0.012, 0.03), smoothstep(0.05, 0.9, depth)) * (0.25 + 1.5 * stroke * stroke);
+          vec3 alb = mix(vec3(0.014, 0.022, 0.12), vec3(0.004, 0.012, 0.03), smoothstep(0.05, 0.9, depth)) * (0.16 + 2.0 * stroke * stroke);
           alb *= chalk(vLocal, dist);
           float lam = clamp(dot(n, uKeyDir) * 0.55 + 0.45, 0.0, 1.0);
           col = alb * (uSkyCol * 1.2 + uKeyCol * lam * lam * 0.3);
