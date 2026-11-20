@@ -483,18 +483,21 @@ export function makeKingMaterial(k: King) {
         alb *= 1.0 + weave * 0.14 * wk;
         height += weave * 0.05 * wk;
         // hair: long strands running the way it falls
-        // (laid in the world's own measure, the way it hangs, so it never swirls where two locks meet)
+        // (laid in the world's own measure, the way it hangs: two sets of strands, one across the fall and one through
+        // it, each running straight down it, so nothing swirls where the form turns or where two locks meet; and only
+        // on what is wholly hair, so no stripe of it strays onto a cheek or a hood)
         float hAlong = dot(vObj.xy, uHairDir);
         float hAcross = dot(vObj.xy, vec2(-uHairDir.y, uHairDir.x));
-        float hs = mix(hAcross, vObj.z, smoothstep(0.35, 0.75, abs(n.x * uHairDir.y - n.y * uHairDir.x)));
-        float sf = fwidth(hs);
-        float strand = vnoise(vec2(hs * 1.5, hAlong * 0.045)) * 0.6 + vnoise(vec2(hs * 4.4 + 7.0, hAlong * 0.11)) * 0.4;
-        strand = mix(0.5, strand, 1.0 - smoothstep(0.12, 0.5, sf));
+        float hW = smoothstep(0.55, 0.95, hairW);
+        float sf = fwidth(hAcross) + fwidth(vObj.z);
+        float fineS = 1.0 - smoothstep(0.1, 0.4, sf);
+        float strand = 0.5 * (vnoise(vec2(hAcross * 1.4, hAlong * 0.04)) + vnoise(vec2(vObj.z * 1.4 + 9.0, hAlong * 0.04)));
+        strand = mix(strand, 0.5 * (vnoise(vec2(hAcross * 3.6 + 7.0, hAlong * 0.1)) + vnoise(vec2(vObj.z * 3.6 + 3.0, hAlong * 0.1))), 0.4 * fineS);
         // (and the locks themselves, broad enough to show from the far end of the glade)
-        float lockN = vnoise(vec2(hs * 0.42 + 3.0, hAlong * 0.016));
-        strand = mix(strand, lockN, 0.45 + 0.4 * smoothstep(0.12, 0.5, sf));
-        alb *= 1.0 + hairW * (strand - 0.5) * 1.7;
-        height += hairW * strand * 0.4;
+        float lockN = 0.5 * (vnoise(vec2(hAcross * 0.42 + 3.0, hAlong * 0.016)) + vnoise(vec2(vObj.z * 0.42 + 5.0, hAlong * 0.016)));
+        strand = mix(strand, lockN, 0.5);
+        alb *= 1.0 + hW * (strand - 0.5) * 1.5;
+        height += hW * strand * 0.12 * fineS;
         // skin: old, the paint dragged over it
         float age = vnoise(vObj.xy * 0.6 + vObj.z * 0.33) * 0.6 + vnoise(vObj.xy * 1.9 - vObj.z * 0.8) * 0.4;
         alb *= 1.0 + skinW * (age - 0.5) * 0.3;

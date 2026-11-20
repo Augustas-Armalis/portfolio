@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { WorldBase, useDisposable, type WorldProps } from "./common";
@@ -9,7 +9,7 @@ import { Kit, haloGeometry, makeTempera, rng, type GroundPalette, type Halo, typ
 import { kingSteps, makeCrownMaterial, makeKingMaterial } from "./kings/figures";
 import { BY, DOME_AT, DOME_U, GLSL_END, GLSL_KINGS, GLSL_KINGS_CORE, KINGS_UNIFORMS, R } from "./kings/light";
 import { aisleX, makeWoodMaterial, woodGeometry, type Walk } from "./kings/wood";
-import { KINGS, KINGS_WATER, ORIGIN, WORLDS, groundAt, heightGLSL } from "./voyage";
+import { KINGS, KINGS_WATER, ORIGIN, WORLDS, groundAt, heightGLSL, voyage } from "./voyage";
 
 // Fairy Tale of the Kings (Karalių pasaka, 1909). A night wood of enormous
 // trunks whose boughs close overhead; small towns and towers live in the
@@ -39,9 +39,9 @@ const BELL_DROP = 120;
 const OWN_OBSTACLES = def.obstacles.length;
 
 export const KINGS_PAL: GroundPalette = {
-  a: [0.036, 0.03, 0.022],
-  b: [0.046, 0.036, 0.024],
-  c: [0.02, 0.021, 0.017],
+  a: [0.062, 0.05, 0.036],
+  b: [0.08, 0.06, 0.038],
+  c: [0.034, 0.036, 0.028],
   hook: {
     uniforms: DOME_U,
     decl: GLSL_KINGS_CORE,
@@ -53,14 +53,14 @@ export const KINGS_PAL: GroundPalette = {
       // leaf-mould lying in drifts, darker and lighter; moss wherever it is damp
       vec3 a2 = alb * (0.66 + 0.8 * fbm(p * 0.021 + 9.0));
       float mossG = smoothstep(0.42, 0.74, vnoise(p * 0.03 + 3.0) * 0.6 + vnoise(p * 0.11) * 0.4);
-      a2 = mix(a2, vec3(0.024, 0.046, 0.024) * (0.7 + 0.6 * vnoise(p * 0.7)), mossG * 0.6);
+      a2 = mix(a2, vec3(0.036, 0.07, 0.034) * (0.7 + 0.6 * vnoise(p * 0.7)), mossG * 0.6);
       // fallen leaves, pale and russet, each lying its own way
       vec2 lc = p * 0.9; vec2 li = floor(lc);
       vec2 lr = fract(lc) - 0.5 - (vec2(hash12(li + 1.0), hash12(li + 2.0)) - 0.5) * 0.6;
       float la = hash12(li + 5.0) * 3.1416;
       lr = vec2(cos(la) * lr.x - sin(la) * lr.y, sin(la) * lr.x + cos(la) * lr.y);
       float leaf = (1.0 - smoothstep(0.1, 0.17, length(lr * vec2(1.0, 2.0)))) * step(0.62, hash12(li)) * (1.0 - smoothstep(0.2, 0.6, lf));
-      a2 = mix(a2, mix(vec3(0.11, 0.058, 0.024), vec3(0.085, 0.074, 0.034), hash12(li + 8.0)), leaf);
+      a2 = mix(a2, mix(vec3(0.2, 0.1, 0.04), vec3(0.15, 0.13, 0.06), hash12(li + 8.0)), leaf);
       // dropped twigs, and small stones worked up through the mould
       vec2 tc = p * 0.33; vec2 ti = floor(tc); vec2 tf = fract(tc) - 0.5;
       float ta = hash12(ti + 3.0) * 3.1416;
@@ -70,7 +70,7 @@ export const KINGS_PAL: GroundPalette = {
       vec2 pc = p * 1.5; vec2 pj = floor(pc);
       float pd = length(fract(pc) - 0.5 - (vec2(hash12(pj + 1.0), hash12(pj + 2.0)) - 0.5) * 0.6);
       float peb = (1.0 - smoothstep(0.09, 0.15, pd)) * step(0.8, hash12(pj + 7.0)) * near;
-      a2 = mix(a2, vec3(0.075, 0.07, 0.062) * (0.7 + 0.6 * hash12(pj)), peb);
+      a2 = mix(a2, vec3(0.13, 0.12, 0.105) * (0.7 + 0.6 * hash12(pj)), peb);
       // it is not flat: the mould lies in soft humps, and every leaf and stone stands a little proud of it
       float hgt = (vnoise(p * 0.4) * 0.6 + vnoise(p * 1.2 + 4.0) * 0.4) * 0.6 * near + leaf * 0.07 + peb * 0.14 + twig * 0.05 + mossG * 0.14 * vnoise(p * 2.0) * near;
       n = bumpN(n, vWorld, hgt, 1.0);
@@ -759,17 +759,21 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
   const swing = useRef(0);
   const b = useDisposable(() => {
     // made ahead of time while the plane was over the sea, or here and now
-    if (madeWood && madeWood.key === woodKey(props)) {
-      const w = madeWood.wood;
-      madeWood = null;
-      return w;
-    }
+    // (it stays where it was put until this world is let go: a render that React begins and then begins again must
+    // find it there both times, or the second would make the whole wood over again on the spot)
+    if (madeWood && madeWood.key === woodKey(props)) return madeWood.wood;
     const g = woodSteps(props, Infinity);
     let r = g.next();
     while (!r.done) r = g.next();
     return r.value;
   }, [props.mobile, props.trees, props.effects > 0.5]);
 
+  useEffect(
+    () => () => {
+      if (madeWood?.wood === b) madeWood = null;
+    },
+    [b],
+  );
   useFrame(({ camera }, delta) => {
     // the night stands round the eye wherever it goes (this group sits at the world's own centre)
     night.current?.position.copy(camera.position).sub(ORIGIN);
@@ -805,8 +809,10 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       bl.rotation.x = Math.sin(time * 0.52 * 0.93 + 1.1) * swing.current * 0.35;
     }
     if (lod.current.near ? dk > 470 : dk < 430) lod.current.near = !lod.current.near;
+    // (while the world is still being made ready under another sky, both forms stand, so both are sent to the card then)
+    const live = voyage.cur === "kings";
     kingRefs.current.forEach((m, i) => {
-      if (m) m.visible = i < 2 === lod.current.near;
+      if (m) m.visible = !live || i < 2 === lod.current.near;
     });
     const m = bird.current;
     if (m) {

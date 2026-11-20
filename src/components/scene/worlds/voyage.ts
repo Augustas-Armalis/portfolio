@@ -256,7 +256,7 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   },
   // Fairy Tale of the Kings: a night wood, brown-black and teal; the only strong light is the little world
   kings: {
-    label: "Karalių pasaka",
+    label: "Fairy Tale of the Kings",
     zenith: [0.004, 0.011, 0.02],
     upper: [0.008, 0.026, 0.036],
     horizon: [0.014, 0.04, 0.046],
@@ -765,7 +765,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
   },
   kings: {
     id: "kings",
-    title: "Karalių pasaka",
+    title: "Fairy Tale of the Kings",
     year: "1909",
     music: "kings",
     place: "none",
