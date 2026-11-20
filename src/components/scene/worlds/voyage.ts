@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { useSyncExternalStore } from "react";
 import { roadX, roadY, HOME_GATE_Z } from "../flightPath";
 import { airState, arrivalHours, mixSky, skyState, type Air, type SkyState } from "../sky";
+import { funeralLand } from "./funeral/land";
+import { GROTTO } from "./sea/shape";
+import { FINALE_ENTRY, FINALE_GATE, FINALE_PATH, FINALE_TERRAIN } from "./seafinale/shape";
 
 // Angelų takas, the path of angels. The paper plane's flight is a pilgrimage
 // along a path of light between worlds, and every world is one painting by
@@ -16,8 +19,8 @@ import { airState, arrivalHours, mixSky, skyState, type Air, type SkyState } fro
 // that neither can see the other (the camera's far plane is 3000 m), near
 // enough that 32-bit floats still resolve a quarter of a millimetre.
 
-export type WorldId = "home" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "funeral" | "kings";
-export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "sea", "funeral", "kings"];
+export type WorldId = "home" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "seafinale" | "funeral" | "kings";
+export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "sea", "seafinale", "funeral", "kings"];
 // Fairy Tale of the Kings: where the two kings stand, and the small lit world they hold between their hands
 export const KINGS = { z: -170, domeY: 70, domeR: 30 };
 export const ORIGIN = new THREE.Vector3(-2500, 0, -2700);
@@ -85,6 +88,7 @@ export type WorldDef = {
 };
 
 const T0: Terrain = { base: 0, sines: [], bumps: [], rim: [1, 2, 0] };
+const FUNERAL = funeralLand();
 
 // Colours below are scene-linear, written before the lens (ACES and the grade) sees them.
 // The Sonata of the Sun's aqueducts: each crosses the path of light at `c`, an arch centred on it; `u` runs along
@@ -234,25 +238,47 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
     exposure: 0.95,
     fx: [0.0, 0.0, 0.0, 0.3],
   },
-  // Funeral Symphony VI: a vast deep-ultramarine night, a thin moon, the procession's hoods catching a faint gold
+  // Sonata of the Sea, Finale: a pale warm sky in level bands, ochre and amber; the sun low and straight ahead,
+  // behind the great wave, so the water is lit through
+  seafinale: {
+    label: "Sonata of the Sea. Finale",
+    zenith: [0.15, 0.1, 0.05],
+    upper: [0.36, 0.26, 0.12],
+    horizon: [0.62, 0.47, 0.22],
+    glow: [1.0, 0.74, 0.32],
+    amb: [0.36, 0.38, 0.27],
+    key: [1.0, 0.84, 0.5],
+    keyI: 1.25,
+    sunAz: -4,
+    sunEl: 12,
+    keyAz: -4,
+    keyEl: 17,
+    cloudLit: [1.0, 0.86, 0.56],
+    cloudShade: [0.5, 0.42, 0.3],
+    night: 0,
+    exposure: 0.8,
+    fx: [0.0, 0.7, 0.0, 0],
+  },
+  // Funeral Symphony VI: a vast night of ultramarine pastel, the sky the lightest thing in it; a thin moon with
+  // fine rays low over the far wall, its light cold on the rock; the gold is the procession's own
   funeral: {
     label: "Funeral Symphony VI",
-    zenith: [0.006, 0.012, 0.07],
-    upper: [0.014, 0.03, 0.14],
-    horizon: [0.04, 0.07, 0.2],
-    glow: [0.62, 0.55, 0.32],
-    amb: [0.07, 0.11, 0.26],
-    key: [0.95, 0.84, 0.5],
-    keyI: 0.95,
+    zenith: [0.008, 0.02, 0.13],
+    upper: [0.014, 0.038, 0.2],
+    horizon: [0.02, 0.058, 0.24],
+    glow: [0.5, 0.6, 0.6],
+    amb: [0.06, 0.1, 0.27],
+    key: [0.72, 0.92, 0.88],
+    keyI: 0.9,
     sunAz: 0,
     sunEl: -24,
-    keyAz: 38,
-    keyEl: 30,
-    cloudLit: [0.12, 0.14, 0.26],
-    cloudShade: [0.02, 0.03, 0.08],
+    keyAz: 45,
+    keyEl: 26,
+    cloudLit: [0.3, 0.42, 0.62],
+    cloudShade: [0.03, 0.06, 0.2],
     night: 0.8,
-    exposure: 1.35,
-    fx: [0.0, 0.0, 0.0, 0.55],
+    exposure: 1.2,
+    fx: [0.0, 0.0, 0.0, 0.5],
   },
   // Fairy Tale of the Kings: a night wood, brown-black and teal; the only strong light is the little world
   kings: {
@@ -666,45 +692,67 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "sea",
     place: "sea",
     air: AIR.sea,
-    fog: [0.00022, 0.004],
+    fog: [0.00011, 0.004],
     // no land at all: the glass of the bay, and the island (worlds/Sea.tsx) lying across it
     terrain: null,
     water: 0,
     centre: [200, -260],
     radius: 960,
     ceil: 260,
-    entry: { x: 10, z: 500, above: 12, yaw: 0 },
-    // behind the island, on dark water: not seen until the plane has rounded the spit under the head
-    gate: { x: 520, z: -900, above: 22, yaw: Math.PI / 2 },
-    // out over the glass toward the whole island, down the eyes' paths to its face, along the face under the
-    // head with the eyes beside the plane, round the low spit and back behind it to the way on
+    entry: { x: 60, z: 520, above: 12, yaw: -0.08 },
+    // between the island's two eyes, at the waterline: a low grotto runs into the rock, and that is the way on
+    // (no arch of light: worlds/Sea.tsx)
+    gate: { x: GROTTO.x, z: GROTTO.z - 30, above: 9, yaw: 0 },
+    // out over the glass toward the whole island, a little aside so it lies broadside, then in toward the head
+    // as the dusk falls, down the eyes' paths and between them
     path: [
-      [10, 500, 12],
-      [24, 400, 10],
-      [50, 260, 9],
-      [100, 100, 9],
-      [170, -60, 10],
-      [250, -230, 12],
-      [330, -380, 14],
-      [440, -470, 15],
-      [580, -520, 16],
-      [720, -590, 18],
-      [790, -700, 20],
-      [760, -820, 21],
-      [650, -890, 22],
-      [520, -900, 22],
-      [470, -900, 22],
+      [60, 520, 12],
+      [70, 420, 10],
+      [64, 310, 9],
+      [30, 200, 9],
+      [-10, 80, 9],
+      [-10, -50, 9],
+      [50, -170, 9],
+      [170, -280, 9],
+      [320, -370, 9],
+      [GROTTO.x - 30, GROTTO.z + 75, 9],
+      [GROTTO.x - 5, GROTTO.z + 22, 9],
+      [GROTTO.x, GROTTO.z - 30, 9],
+      [GROTTO.x + 4, GROTTO.z - 68, 9],
     ],
-    // the island (worlds/Sea.tsx ISLAND): its head, its back and its spit, as bells along it
+    // the island (worlds/sea/island.ts), as bells along it: the head stands either side of the grotto
     obstacles: [
-      { x: 400, z: -640, r: 125, h: 235, bell: true },
-      { x: 260, z: -640, r: 95, h: 160, bell: true },
-      { x: 90, z: -640, r: 70, h: 95, bell: true },
-      { x: -120, z: -640, r: 55, h: 70, bell: true },
-      { x: -330, z: -640, r: 40, h: 40, bell: true },
-      { x: 540, z: -640, r: 55, h: 70, bell: true },
+      { x: GROTTO.x - 135, z: -625, r: 100, h: 270, bell: true },
+      { x: GROTTO.x + 135, z: -625, r: 100, h: 250, bell: true },
+      { x: 150, z: -640, r: 110, h: 180, bell: true },
+      { x: -60, z: -640, r: 90, h: 120, bell: true },
+      { x: -280, z: -640, r: 70, h: 100, bell: true },
+      { x: -500, z: -640, r: 50, h: 60, bell: true },
+      { x: 720, z: -640, r: 55, h: 70, bell: true },
     ],
-    canvases: [{ painting: "tranquility", x: -26, z: 330, yaw: 0.6 }],
+    canvases: [{ painting: "tranquility", x: -70, z: 400, yaw: 0.8 }],
+  },
+  seafinale: {
+    id: "seafinale",
+    title: "Jūros sonata. Finale",
+    year: "1908",
+    music: "seafinale",
+    place: "sea",
+    air: AIR.seafinale,
+    fog: [0.00006, 0.006],
+    // all water: the great wave is this world's own height field (seafinale/shape.ts), standing a little over
+    // the mean sea so the swell has room to run under the plane
+    terrain: FINALE_TERRAIN,
+    water: null,
+    centre: [-60, 150],
+    radius: 940,
+    ceil: 340,
+    entry: FINALE_ENTRY,
+    // at the wave's far end, in the hanging lace of its crest: out through it, into calm (no arch of light)
+    gate: FINALE_GATE,
+    path: FINALE_PATH,
+    obstacles: [],
+    canvases: [{ painting: "sea-finale", x: 286, z: 520, yaw: -0.34 }],
   },
   funeral: {
     id: "funeral",
@@ -713,55 +761,21 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "funeral",
     place: "none",
     air: AIR.funeral,
-    fog: [0.0005, 0.016],
-    // dark hills the road winds over and along, a great dark mountain to the left and a cliff to the right, as in the picture
-    terrain: {
-      base: 2,
-      sines: [
-        [0.009, 0.006, 0.4, 9],
-        [-0.007, 0.011, 2.1, 7],
-        [0.019, 0.014, 1.2, 2.6],
-        [0.031, -0.023, 3.3, 1.1],
-      ],
-      bumps: [
-        [-420, -160, 230, 150],
-        [430, -40, 200, 120],
-        [-300, 300, 150, 40],
-        [260, 320, 150, 34],
-        [0, -470, 110, 40],
-      ],
-      rim: [600, 950, 60],
-    },
+    fog: [0.00022, 0.005],
+    // colossal mountains, and the fin of rock the procession's road climbs in three switchbacks to the cave: the
+    // land, the road, the path of light beside it and the way in are all worked out together in funeral/land.ts
+    terrain: FUNERAL.terrain,
     water: null,
-    centre: [0, 0],
-    radius: 640,
-    ceil: 220,
-    entry: { x: 0, z: 500, above: 18, yaw: 0 },
-    gate: { x: 0, z: -470, above: 16, yaw: 0 },
-    // low along the road, over the procession, as it snakes over the hills and along the cliff edges to the pass
-    path: [
-      [0, 500, 18],
-      [30, 400, 15],
-      [-50, 310, 14],
-      [-150, 240, 14],
-      [-130, 140, 14],
-      [-10, 90, 14],
-      [120, 40, 14],
-      [170, -60, 14],
-      [80, -150, 15],
-      [-70, -180, 15],
-      [-150, -270, 16],
-      [-90, -370, 16],
-      [0, -430, 16],
-      [0, -470, 16],
-      [0, -505, 16],
-    ],
-    // the two cypresses at the pass and the rock of the cave (worlds/Funeral.tsx)
-    obstacles: [
-      { x: -22, z: -440, r: 4, h: 44 },
-      { x: 22, z: -446, r: 4, h: 40 },
-    ],
-    canvases: [{ painting: "funeral-vi", x: -46, z: 430, yaw: 0.6 }],
+    centre: [0, 100],
+    radius: 990,
+    ceil: 430,
+    entry: FUNERAL.entry,
+    // inside the cave's mouth, where the procession goes into the mountain (no arch of light: worlds/Funeral.tsx)
+    gate: FUNERAL.gate,
+    path: FUNERAL.path,
+    // the two cypresses at the pass, the rock either side of the cave, the great walls
+    obstacles: [...FUNERAL.obstacles],
+    canvases: [{ painting: "funeral-vi", x: FUNERAL.canvas.x, z: FUNERAL.canvas.z, yaw: FUNERAL.canvas.yaw }],
   },
   kings: {
     id: "kings",
