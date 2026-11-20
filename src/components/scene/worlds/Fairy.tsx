@@ -7,8 +7,8 @@ import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, 
 import { Birds, type Flock } from "./life";
 import { buildCastle } from "./fairy/castle";
 import { MT, PEAKS, WARDS, buildMountain, buildPeaks, buildRamp, mountainCrowns, peakRadius, rampLine, roadLine } from "./fairy/mountain";
-import { GLSL_GROUND_LIFE, Kindling, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp } from "./fairy/shared";
-import { WORLDS, groundAt, pathOf } from "./voyage";
+import { GLSL_GROUND_LIFE, Kindling, archGeometry, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp } from "./fairy/shared";
+import { WORLDS, gateOf, groundAt, pathOf } from "./voyage";
 
 // Fairy Tale (Castle Fairy Tale, 1909), after the painting and after the way the film "Angelų takais" built it
 // in the round. A wide plain of woods and small fields under a whole sky of gilded cloud; out of it one great
@@ -247,7 +247,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     }
     // (none stands in the way on)
     const gate = def.gate!;
-    for (const list of [plain, close]) for (let i = list.length - 1; i >= 0; i--) if (Math.hypot(list[i].p[0] - gate.x, list[i].p[2] - gate.z) < 40) list.splice(i, 1);
+    for (const list of [plain, close]) for (let i = list.length - 1; i >= 0; i--) if (Math.hypot(list[i].p[0] - gate.x, list[i].p[2] - gate.z) < 95) list.splice(i, 1);
 
     // ---- hamlets in their fields: a tower, a huddle of roofs, lit windows, cypresses standing by
     const k = new Kit();
@@ -354,6 +354,49 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       lamps.push({ p: [gx, gy + 7, gz], size: 16, col: [1, 0.76, 0.4], k: 0.7 });
     }
 
+    // ---- the way on: an outer gate of the castle standing alone on its hill, the light hanging in its arch
+    {
+      const gt = gateOf("fairy")!;
+      const gy = g(gt.pos.x, gt.pos.z) - 2;
+      const mid = gt.pos.y - gy;
+      const c = Math.cos(gt.yaw);
+      const sn = Math.sin(gt.yaw);
+      k.add(archGeometry(36, mid + 27, 10, 13), [gt.pos.x, gy, gt.pos.z], [0.25, 0.13, 0.25], { top: [0.9, 0.5, 0.22], rot: [0, gt.yaw, 0], glow: 0.1 });
+      // a second order within it, and a crest of small battlements over it
+      k.add(archGeometry(33, mid + 25.5, 1.5, 15), [gt.pos.x, gy, gt.pos.z], [0.16, 0.1, 0.22], { top: [0.6, 0.36, 0.3], rot: [0, gt.yaw, 0], glow: 0.05 });
+      for (const sd of [-1, 1]) {
+        const tx = gt.pos.x + c * sd * 34;
+        const tz = gt.pos.z - sn * sd * 34;
+        const H = mid + 44;
+        k.lathe(
+          [
+            [9.4, 0],
+            [8, H * 0.05],
+            [7.2, H * 0.86],
+            [9, H * 0.93],
+            [9, H],
+            [4, H + 0.01],
+          ],
+          [tx, g(tx, tz) - 4, tz],
+          [0.25, 0.13, 0.25],
+          { top: [0.9, 0.5, 0.22], seg: 14, glow: 0.1 },
+        );
+        k.lathe(
+          [
+            [10.2, 0],
+            [6, 7],
+            [3.2, 17],
+            [1.2, 27],
+            [0.05, 34],
+          ],
+          [tx, g(tx, tz) - 4 + H, tz],
+          roofs[sd > 0 ? 0 : 1][0],
+          { top: roofs[sd > 0 ? 0 : 1][1], seg: 14, glow: 0.14 },
+        );
+        lamps.push({ p: [gt.pos.x + c * sd * 19, gt.pos.y - 4, gt.pos.z - sn * sd * 19], size: 7, col: [1, 0.74, 0.38], k: 0.6 });
+      }
+    }
+
     // ---- the sky: heaps of cloud in ranks, near ones overhead and row behind row to the horizon
     const heaps: Heap[] = [];
     const far: Heap[] = [];
@@ -450,7 +493,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
   }, [props.mobile, props.trees, props.far, props.effects > 0.5, props.grass, props.reduced]);
   return (
     <>
-      <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={b.base} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} mask={GRASS_MASK} groundSize={14000} angels={false} />
+      <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={b.base} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} mask={GRASS_MASK} groundSize={14000} angels={false} gate="veil" gateSize={[16, 24]} />
       <RayedSun />
       {/* the mountain, measured from its own foot */}
       <group position={[MT.x, b.y0, MT.z]}>

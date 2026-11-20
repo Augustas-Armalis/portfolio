@@ -150,6 +150,28 @@ export function buildMountain(mobile: boolean, ground: (x: number, z: number) =>
   return { soil: ground3, wall };
 }
 
+// How high the mountain's own ground stands at a place (x, z from its foot): whatever is built on it is seated on this.
+export function surfaceY(x: number, z: number) {
+  const r = Math.hypot(x, z);
+  if (r <= MT.core) return MT.coreY;
+  const a = Math.atan2(z, x);
+  // the turn (0..1) at which the spiral passes this bearing; then try each coil
+  const u0 = (((MT.th0 - a) / TAU) % 1 + 1) % 1;
+  let y = 0;
+  for (let k = 0; k < 4; k++) {
+    const u = u0 + k;
+    if (u > MT.turns + 0.5) break;
+    const e = terraceEnds(u);
+    if (r <= e.r0 && r >= e.r1) return e.y0 + ((e.r0 - r) / Math.max(1e-3, e.r0 - e.r1)) * (e.y1 - e.y0);
+    // (on the wall's own thickness: its foot)
+    if (r > e.r0 && r <= rhoOf(u) + MT.batter * kOf(u) + 0.5) y = Math.max(y, footOf(u));
+  }
+  if (y > 0) return y;
+  // below the lowest coil: the slope it stands on
+  const r0 = rhoOf(u0) + MT.batter * kOf(u0);
+  return Math.max(0, footOf(u0) - (r - r0) * SKIRT);
+}
+
 // The way up from the plain: a ramp climbing across the lowest slope to where the road begins behind the wall.
 export const RAMP = { u0: -0.1, u1: 0.09 };
 const sideAt = (u: number, y: number) => {
