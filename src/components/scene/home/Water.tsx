@@ -7,7 +7,7 @@ import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { voyage } from "../worlds/voyage";
 import { MIRROR_LAYER } from "./Forest";
-import { GLSL_HOME_AIR, HLAKE, HOME_U, hLakeK, landH, rng } from "./land";
+import { GLSL_HOME_AIR, HLAKE, HOLD, HOME_U, hLakeK, landH, rng } from "./land";
 import { REFLECT_U } from "./Terrain";
 
 // The lake's mirror. The sky, the mountains, the woods and the reeds are drawn
@@ -50,6 +50,7 @@ export function LakeMirror({ quality }: { quality: number }) {
     };
   }, [rt]);
   useFrame(() => {
+    if (HOLD.on) return;
     const cam = camera as THREE.PerspectiveCamera;
     const T = tmp;
     let see = voyage.cur === "home" && cam.position.y > HLAKE.y + 0.05 && cam.position.distanceTo(T.sphere.center) < 900;

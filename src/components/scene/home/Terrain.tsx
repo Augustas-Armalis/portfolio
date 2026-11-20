@@ -126,7 +126,9 @@ export function makeLandMaterial() {
         vec3 col;
 
         // ----- the land -----
-        vec3 N = normalize(vN);
+        // (found here, at the pixel: the mesh rides with the eye, and a normal carried by its sliding vertices makes the
+        // light crawl over the hills in flight)
+        vec3 N = landN(p);
         vec2 fm = fieldMix(p);
         vec3 alb = fieldAlbK(fm);
         float fw = max(fwidth(p.x), fwidth(p.y));
@@ -240,7 +242,8 @@ export function makeLandMaterial() {
           vec2 g3 = vec2(texture2D(uCloudTex, w3 + vec2(E, 0.0)).b - c0, texture2D(uCloudTex, w3 + vec2(0.0, E)).b - c0);
           vec2 slope = g1 * mix(1.4, 3.2, seaK) * keep1 + g2 * mix(0.8, 4.2, seaK) * keep2 + g3 * 5.0 * seaK * keep2;
           float cst = coastZ(p.x) - p.y; // (negative out at sea)
-          float swell = sin(cst * 0.21 + uTime * 0.55 + c0 * 5.0) * seaK * keep2 * smoothstep(-260.0, -8.0, cst);
+          // (only near by: from high up a regular swell is rings drawn on the sea)
+          float swell = sin(cst * 0.21 + uTime * 0.55 + c0 * 5.0 + b0 * 3.0) * seaK * keep2 * smoothstep(-260.0, -8.0, cst) * (1.0 - smoothstep(70.0, 420.0, dist));
           slope += vec2(0.0, 1.0) * swell * 0.05;
           vec3 n = normalize(vec3(-slope.x, 1.0, -slope.y));
           vec3 r = reflect(-V, n);

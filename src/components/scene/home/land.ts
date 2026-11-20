@@ -333,6 +333,19 @@ vec3 fieldLight(float sh){
 float windWave(vec2 p){ return smoothstep(0.25, 0.85, vnoise(p * 0.22 - vec2(0.864, 0.503) * uTime * 0.55)); }
 `;
 
+// While this is on nothing of the world is drawn: the scene's programs are being compiled off the main thread
+// behind the loader (see the room), and a draw would force each one to finish there and then.
+export const HOLD = { on: false };
+
+// how long each part of the world took to make (ms), for whoever is measuring the load: window.__gen
+export function timed<T>(name: string, fn: () => T): T {
+  const t0 = performance.now();
+  const out = fn();
+  const g = ((globalThis as unknown as { __gen?: Record<string, number> }).__gen ??= {});
+  g[name] = Math.round(((g[name] ?? 0) + performance.now() - t0) * 10) / 10;
+  return out;
+}
+
 // ---------- noise (JS) ----------
 function hash2(x: number, y: number) {
   const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
@@ -502,7 +515,8 @@ function dataTex(data: Uint8Array, n: number, filter = true) {
 }
 
 export function bakeForestMap() {
-  const n = 512;
+  // (14 m a texel: the woods' edges are soft anyway, and it is a quarter of the work behind the loader)
+  const n = 256;
   const data = new Uint8Array(n * n * 4);
   for (let j = 0; j < n; j++)
     for (let i = 0; i < n; i++) {
@@ -652,18 +666,18 @@ export function bakeCloudTex() {
 let made: { trees: HomeTree[]; amount: number } | null = null;
 export function homeLand(amount = 1) {
   if (!made || made.amount !== amount) {
-    const trees = plantHome(amount);
+    const trees = timed("plant", () => plantHome(amount));
     HOME_U.uForestMap.value?.dispose();
     HOME_U.uCrownMap.value?.dispose();
-    HOME_U.uForestMap.value = bakeForestMap();
-    HOME_U.uCrownMap.value = bakeCrownMap(trees);
-    HOME_U.uCloudTex.value ??= bakeCloudTex();
+    HOME_U.uForestMap.value = timed("forestMap", bakeForestMap);
+    HOME_U.uCrownMap.value = timed("crownMap", () => bakeCrownMap(trees));
+    HOME_U.uCloudTex.value ??= timed("cloudTex", bakeCloudTex);
     made = { trees, amount };
   }
   return made;
 }
 export function cloudTex() {
-  return (HOME_U.uCloudTex.value ??= bakeCloudTex());
+  return (HOME_U.uCloudTex.value ??= timed("cloudTex", bakeCloudTex));
 }
 
 // the footpath (shared with the old ground): where it runs and how wide

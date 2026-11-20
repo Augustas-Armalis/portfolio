@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { GLSL_HOME_AIR, HOME_U, rng } from "./land";
+import { timed, GLSL_HOME_AIR, HOME_U, rng } from "./land";
 
 // The heaped clouds of the home sky, as he painted them and as the film of
 // his paintings modelled them: each a solid rounded thing, a heap of soft
@@ -113,7 +113,7 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
           n = normalize(n - bg * 1.7 * fine * topK);
           // the rim: thinning away through a grain, and broken by the billows
           float facing = abs(dot(normalize(vN), V));
-          float edge = smoothstep(0.0, 0.2, facing + (b0 - 0.5) * 0.2 * fine);
+          float edge = smoothstep(0.0, 0.11, facing + (b0 - 0.5) * 0.12 * fine);
           // a cloud the eye is about to enter thins to nothing round it (the white it becomes is the air's)
           edge *= smoothstep(140.0, 520.0, dist + (b0 - 0.5) * 120.0);
           float grain = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -127,6 +127,8 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
           // shade: the sky's own blue-violet from above, darker and a little warmer (the land's light) underneath
           vec3 col = uCloudShade * (0.52 + 0.5 * up) * (0.72 + 0.28 * vOpen);
           col += uHorizon * 0.12 * (1.0 - up);
+          // at night they are paler than the sky behind them (the moon and the stars' light in them), never dark blots
+          col += vec3(0.045, 0.058, 0.095) * uNight * (0.7 + 0.3 * up);
           col += uCloudLit * lit * keyUp;
           // a low sun reaches in under them: the bellies on its side take its colour
           float lowSun = (1.0 - smoothstep(0.08, 0.34, uSunDir.y)) * smoothstep(-0.12, 0.0, uSunDir.y);
@@ -148,7 +150,7 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
     const total = Math.round((mobile ? 90 : 250) * amount);
     // (the great clouds are cut finest only on a machine with room to spare)
     const fine = amount >= 1 ? 3 : 2;
-    const geos = mobile ? [buildCloud(101, 2), buildCloud(138, 2)] : [buildCloud(101, fine), buildCloud(138, fine), buildCloud(175, 2), buildCloud(212, 2)];
+    const geos = timed("clouds", () => (mobile ? [buildCloud(101, 2), buildCloud(138, 2)] : [buildCloud(101, fine), buildCloud(138, fine), buildCloud(175, 2), buildCloud(212, 2)]));
     const kinds = geos.length;
     const meshes = geos.map((src, k) => {
       const great = !mobile && k < 2;

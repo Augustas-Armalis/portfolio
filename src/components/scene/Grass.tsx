@@ -9,7 +9,7 @@ import { ORIGIN, heightGLSL, voyage, type WorldDef } from "./worlds/voyage";
 import { DESK, GLSL_NOISE, GLSL_PATH, GLSL_SKY, pathW, pathX } from "./shared";
 import { SKY_U } from "./sky";
 import { GLSL_DESK_SHADOW } from "./World";
-import { GLSL_FIELD, GLSL_HOME_AIR, GLSL_LAND, HOME_U } from "./home/land";
+import { GLSL_FIELD, GLSL_HOME_AIR, GLSL_LAND, HOLD, HOME_U, timed } from "./home/land";
 
 // Instanced grass blades (after Ghost of Tsushima / al-ro / Codrops):
 // - each blade is a tapered strip bent along a constant-length arc
@@ -217,6 +217,8 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         vec3 toCam = cameraPosition - vec3(root.x, gy, root.y);
         float edge = 1.0 - abs(dot(normalize(toCam.xz), face));
         float width = w * (1.0 - pow(t, 1.5)) * (1.0 + edge * 0.9);
+        // never thinner than a pixel can carry: a hair of a blade sparkles as the wind moves it
+        width = max(width, length(toCam) * 0.0011 * (1.0 - 0.55 * t) * step(0.002, lod));
         vec3 p = vec3(root.x, gy, root.y) + vec3(bdir.x * x, y, bdir.y * x) + vec3(sideDir.x, 0.0, sideDir.y) * side * width;
         // normal: across the arc, rounded over the width, then toward the sky
         vec3 tang = normalize(vec3(bdir.x * sin(a), cos(a), bdir.y * sin(a)));
@@ -273,7 +275,7 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
 
         // further off every blade takes exactly the light of the field under it: no speckle, no edge, only its nap
         vec3 nap = fieldFar(fieldC, dist) * (0.86 + 0.24 * vT) * (0.93 + 0.14 * vRand) * (1.0 + vWave * 0.16);
-        col = mix(col, nap, smoothstep(5.0, 22.0, dist));
+        col = mix(col, nap, smoothstep(3.5, 15.0, dist));
         col = homeAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -308,7 +310,7 @@ export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boole
     () =>
       rings.map((r, i) => {
         const g = bladeGeometry(r.seg ?? 3);
-        scatter(g, r, 1234 + i * 97);
+        timed("grass", () => scatter(g, r, 1234 + i * 97));
         return g;
       }),
     [rings],
@@ -318,10 +320,13 @@ export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boole
   const walk = useRef<THREE.Mesh>(null);
   const innerOn = useRef(0);
   const walkOn = useRef(0);
+  const lastCam = useRef(new THREE.Vector2());
   const warmed = useRef(0);
   useEffect(() => () => geos.forEach((g) => g.dispose()), [geos]);
   useEffect(() => () => mats.forEach((m) => m.dispose()), [mats]);
   useFrame(({ camera }, dt) => {
+    // (while the world is held behind the loader no frame counts: the warming draws below must really be drawn)
+    if (HOLD.on) return;
     // the fine travelling tile grows in once the plane is up and away from the desk
     const d2 = camera.position.x * camera.position.x + camera.position.z * camera.position.z;
     const want = voyage.flying && d2 > 9 * 9 ? 1 : 0;
@@ -329,6 +334,9 @@ export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boole
     if (innerOn.current < 0.002 && !want) innerOn.current = 0;
     // and the finest one comes up underfoot whenever the eye is away from the desk and near the ground
     const wantW = d2 > 10 * 10 && camera.position.y < 14 ? 1 : 0;
+    const jumped = Math.hypot(camera.position.x - lastCam.current.x, camera.position.z - lastCam.current.y) > 6;
+    lastCam.current.set(camera.position.x, camera.position.z);
+    if (jumped) walkOn.current = wantW;
     walkOn.current += (wantW - walkOn.current) * (1 - Math.exp(-Math.min(dt, 0.1) * 2.2));
     if (walkOn.current < 0.002 && !wantW) walkOn.current = 0;
     mats.forEach((m) => {

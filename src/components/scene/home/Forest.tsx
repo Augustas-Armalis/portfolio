@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { GLSL_HOME_AIR, HOME_U, homeLand, type HomeTree, type TreeKind } from "./land";
+import { GLSL_HOME_AIR, HLAKE, HOME_U, homeLand, timed, type HomeTree, type TreeKind } from "./land";
 import { FAR_KIND, VARIANTS, buildTree, makeFarTreeTexture, makeLeafTexture } from "./trees";
 
 // The woods of the home world.
@@ -45,7 +45,7 @@ export function makeHomeTreeMaterial(leaves: THREE.Texture) {
         wp.x += gust * 0.0013 * h * h;
         wp.z += cos(uTime * 0.55 + ph * 1.3) * 0.0008 * h * h;
         float fol = step(0.75, aFol);
-        float fl = sin(uTime * (1.5 + aLeaf.y * 2.0) + wp.y * 1.7 + ph + aLeaf.y * 40.0);
+        float fl = sin(uTime * (1.5 + aLeaf.y * 2.0) + wp.y * 1.7 + ph + aLeaf.y * 40.0) * (1.0 - smoothstep(18.0, 70.0, length(wp - cameraPosition)));
         wp += fol * vec3(fl, 0.4 * sin(uTime * 1.7 + wp.x * 1.3), cos(uTime * 1.9 + wp.x * 1.7 + ph)) * 0.05;
         float ang = aLeaf.y * 6.2832 + fl * 0.06;
         vec2 cr = vec2(aCorner.x * cos(ang) - aCorner.y * sin(ang), aCorner.x * sin(ang) + aCorner.y * cos(ang));
@@ -135,7 +135,10 @@ function makeFarMaterial(sheet: THREE.Texture) {
       void main(){
         vec3 toCam = cameraPosition - aRoot;
         vec2 rt = normalize(vec2(toCam.z, -toCam.x) + 1e-5);
-        vec3 wp = aRoot + vec3(rt.x, 0.0, rt.y) * (position.x * aDim.x) + vec3(0.0, position.y * aDim.y, 0.0);
+        // seen from high above an upright card would be a sliver: it leans back toward the eye the steeper the look
+        float steep = smoothstep(0.3, 0.85, toCam.y / max(length(toCam), 1.0));
+        vec3 upV = normalize(mix(vec3(0.0, 1.0, 0.0), vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]), steep * 0.8));
+        vec3 wp = aRoot + vec3(rt.x, 0.0, rt.y) * (position.x * aDim.x) + upV * (position.y * aDim.y);
         vWorld = wp; vRoot = aRoot;
         vUv = vec2(position.x + 0.5, position.y);
         vLo = aLo; vHi = aHi; vCell = aDim.z;
@@ -219,13 +222,14 @@ function farBlock(list: HomeTree[], mat: THREE.Material) {
   g.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
   g.boundingSphere.radius += 10;
   const m = new THREE.Mesh(g, mat);
-  m.layers.enable(MIRROR_LAYER);
+  if (g.boundingSphere.center.z < 200 && Math.hypot(g.boundingSphere.center.x - HLAKE.x, g.boundingSphere.center.z - HLAKE.z) < 1100) m.layers.enable(MIRROR_LAYER);
   return m;
 }
 
 export function Forest({ amount, mobile }: { amount: number; mobile: boolean }) {
   const built = useMemo(() => {
     const { trees } = homeLand(amount);
+    const t0 = performance.now();
     const leaves = makeLeafTexture();
     const sheet = makeFarTreeTexture();
     const mat = makeHomeTreeMaterial(leaves);
@@ -250,7 +254,7 @@ export function Forest({ amount, mobile }: { amount: number; mobile: boolean }) 
       im.instanceMatrix.needsUpdate = true;
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
       im.computeBoundingSphere();
-      im.layers.enable(MIRROR_LAYER);
+      if (list.some((t) => Math.hypot(t.x - HLAKE.x, t.z - HLAKE.z) < 190)) im.layers.enable(MIRROR_LAYER);
       tris += ((geo.index?.count ?? 0) / 3) * list.length;
       meshes.push(im);
     };
@@ -286,6 +290,8 @@ export function Forest({ amount, mobile }: { amount: number; mobile: boolean }) 
     }
     tris += far.length * 2;
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __forest: { trees: trees.length, whole: trees.length - far.length, far: far.length, tris: Math.round(tris), draws: meshes.length } });
+    timed("forest", () => 0);
+    (globalThis as unknown as { __gen: Record<string, number> }).__gen.forest = Math.round(performance.now() - t0);
     return { meshes, geos, mats: [mat, farMat], texs: [leaves, sheet] };
   }, [amount, mobile]);
   useEffect(
