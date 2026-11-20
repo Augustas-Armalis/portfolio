@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { DESK, clamp01, easeInOutCubic, nowS, spring } from "./shared";
 import { postCtl } from "./Post";
 import { arriveGolden } from "./sky";
-import { KINGS, ORIGIN, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
+import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
 // A folded paper plane that lives on the desk. Click it and it takes off down
 // the road, and from there it is yours: it glides. The pointer (or A / D, or a
@@ -75,7 +75,7 @@ export const zoomMem = { v: 1, min: 0.55, max: 3.4 };
 // The bank keys (A / D and the arrows), held by the plane itself while it flies with a keyboard.
 const bank = { l: false, r: false };
 const bankKeys = () => (bank.r ? 1 : 0) - (bank.l ? 1 : 0);
-const kingsEye = new THREE.Vector3();
+const FLY_NEAR = 0.22;
 const NO_INPUT: FlightInput = { sx: 0, sy: 0 };
 const handsIn: FlightInput = { sx: 0, sy: 0, climb: 0 };
 const OPT_NONE = {};
@@ -188,6 +188,7 @@ export function Plane({
       b2: new THREE.Vector3(),
       b3: new THREE.Vector3(),
       lastYaw: 0,
+      near0: 0.01,
     }),
     [],
   );
@@ -646,11 +647,15 @@ export function Plane({
       airOf(edge);
       lookStep(dt, st.t < 1.7 ? null : input);
       chase(dt, cam, easeInOutCubic(clamp01(st.t / 1.7)));
-      // the lens: once in the air the far world softens a little behind whatever the eye is led to (Post.tsx)
-      postCtl.far.k = damp(postCtl.far.k, st.t > 2 ? 1 : 0, 0.9, dt);
-      // (before the kings the eye is led to the little world they hold: that stays sharp from any distance)
-      if (voyage.cur === "kings") postCtl.far.subject = kingsEye.set(ORIGIN.x, KINGS.domeY, ORIGIN.z + KINGS.z);
-      else if (postCtl.far.subject === kingsEye) postCtl.far.subject = null;
+      // the lens in flight (Post.tsx): the plane and the whole middle distance sharp, a slow soft fall-off far away, and whatever comes right up to the glass
+      postCtl.flight.k = damp(postCtl.flight.k, st.t > 2 ? 1 : 0, 0.9, dt);
+      // Out in the open the eye sees for kilometres: the near plane is drawn in from a centimetre (the desk's
+      // close-ups need that) to a hand's breadth, which gives the far distance some fifty times the depth to tell
+      // one far thing from another, so nothing shimmers or fights out there. (The plane is never nearer than 70 cm.)
+      if (st.t > 1.4 && cam.near < FLY_NEAR) {
+        st.near0 = cam.near;
+        cam.near = FLY_NEAR;
+      }
       sync();
     },
     beginLand: (cam) => {
@@ -676,7 +681,9 @@ export function Plane({
     },
     land: (dt, cam, home) => {
       st.t += dt;
-      postCtl.far.k = damp(postCtl.far.k, 0, 2.2, dt);
+      postCtl.flight.k = damp(postCtl.flight.k, 0, 2.2, dt);
+      // (coming back to the desk the lens sees close again: from under the cloud, or as the last approach begins)
+      if (st.landPhase >= 1 && cam.near !== st.near0) cam.near = st.near0;
       if (st.landPhase === 0) {
         // on, into the cloud
         glide(dt, NO_INPUT, OPT_HANDS);
@@ -773,8 +780,7 @@ export function Plane({
         voyage.assist = 0;
         voyage.mist = 0;
         st.landPhase = 0;
-        postCtl.far.k = 0;
-        postCtl.far.subject = null;
+        postCtl.flight.k = 0;
         voyage.planePos.set(0, -1e4, 0);
         voyage.planeSpeed = 0;
       }

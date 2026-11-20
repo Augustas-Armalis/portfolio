@@ -63,8 +63,8 @@ export function ridge2(x: number, y: number, oct = 4) {
 // - The far dissolve. `fog: [density, falloff, from, to]` in a world's entry (voyage.ts) makes everything between
 //   `from` and `to` metres from the eye melt completely into the sky's own colour, whatever the density: the far
 //   world is gone into the air before its geometry ends, so no edge of ground or cut-off hill is ever seen.
-//   Off unless a world gives the two distances. (Kept as start and 1 / span, so a material that never heard of
-//   it reads zeros and is left alone.)
+//   A world that gives no distances gets FAR_DISSOLVE (5.2 to 9.5 km: one sees for kilometres, and the horizon
+//   still melts). (Kept as start and 1 / span, so a material that never heard of it reads zeros and is left alone.)
 // - mistBelow(wpos, top, depth): how much of a low mist lies over a point (none above `top`, thickening down
 //   through `depth` metres, thin close to the eye). Mix toward airCol by it for hollows and water's edges.
 export const WORLD_U = {
@@ -72,19 +72,20 @@ export const WORLD_U = {
   uFogH: { value: 0.012 },
   uDissolve: { value: new THREE.Vector2(0, 0) },
 };
-// What the plane's passing does to a world (worlds/play.tsx keeps these): uPathLift 0..1 rises when a lantern is
-// flown through and falls away over a few seconds (the path of light brightens by it); uPlane is where the plane
-// is in the world and uPlaneTrail where it was a moment ago (birds part round both).
+// Where the plane is in the world (uPlane) and where it was a moment ago (uPlaneTrail), kept by worlds/play.tsx:
+// for whatever should notice its passing (birds part round both).
 export const PLAY_U = {
-  uPathLift: { value: 0 },
   uPlane: { value: new THREE.Vector3(0, -1e4, 0) },
   uPlaneTrail: { value: new THREE.Vector3(0, -1e4, 0) },
 };
+export const FAR_DISSOLVE: [number, number] = [5200, 9500];
 export function setWorldAir(fog: readonly (number | undefined)[]) {
   WORLD_U.uFogD.value = fog[0] ?? 0.001;
   WORLD_U.uFogH.value = fog[1] ?? 0.012;
-  const from = fog[2] ?? 0;
-  const to = fog[3] ?? 0;
+  // (a world that names no distances still melts into its sky far out, well inside the lens's own far plane, so
+  // nothing ever ends in a hard edge however clear its air)
+  const from = fog[2] ?? FAR_DISSOLVE[0];
+  const to = fog[3] ?? FAR_DISSOLVE[1];
   WORLD_U.uDissolve.value.set(from, to > from ? 1 / (to - from) : 0);
 }
 export const GLSL_AIR = /* glsl */ `

@@ -391,8 +391,7 @@ export function fadeParam(p: AudioParam, to: number, seconds: number) {
 //   - onMusicClaim(f) / onOwnerStop(f): told when somebody claims the music,
 //     and when an owner is told to stop, so the stream leaves as a voice would.
 //   - setDeskMusic(f): the desk's own background music is asked for and sent
-//     away by the ambience through the "desk-music" voice; with a handler set
-//     that voice is never played, and the handler decides what is heard.
+//     away by the ambience (deskMusicAsk); the handler decides what is heard.
 type Ext = { owner: Owner | null; on: boolean; claims: Set<(o: Owner) => void>; stops: Set<(o: Owner, fade: number) => void>; desk: ((on: boolean, fade: number) => void) | null; deskPrime: (() => void) | null };
 function ext(): Ext {
   const g = globalThis as G & { __aosExt?: Ext };
@@ -424,7 +423,9 @@ export function setDeskMusic(handler: ((on: boolean, fade: number) => void) | nu
   e.desk = handler;
   e.deskPrime = prime;
 }
-const DESK_VOICE = "desk-music";
+// (the ambience's side of it: ask for the desk's music or send it away; prime, inside the first gesture)
+export const deskMusicAsk = (on: boolean, fade: number) => void ext().desk?.(on, fade);
+export const deskMusicPrime = () => void ext().deskPrime?.();
 
 // ---------------------------------------------------------------------------
 // voices: media elements in the graph
@@ -579,7 +580,6 @@ function retryOnGesture(v: Voice) {
 // the voice, so that later it may start its recording on its own.
 let silence = "";
 export function voicePrime(v: Voice | null) {
-  if (v?.id === DESK_VOICE && ext().desk) return void ext().deskPrime?.();
   if (!v || !v.el.paused || v.want) return;
   const cur = v.el.getAttribute("src");
   if (cur && !cur.startsWith("blob:")) return;
@@ -613,7 +613,6 @@ export function voicePrime(v: Voice | null) {
 // already playing never restarts it.
 export function voicePlay(v: Voice | null, { fade = 0.4, level = 1 }: { fade?: number; level?: number } = {}) {
   if (!v) return;
-  if (v.id === DESK_VOICE && ext().desk) return void ext().desk?.(true, fade);
   const s = state();
   window.clearTimeout(v.timer);
   v.timer = 0;
@@ -653,7 +652,6 @@ export function voicePlayUrl(v: Voice | null, url: string, o: { fade?: number; l
 // Fade a voice out, then pause it. `release` also lets go of the file.
 export function voiceStop(v: Voice | null, fade = 0.6, release = false) {
   if (!v) return;
-  if (v.id === DESK_VOICE && ext().desk) return void ext().desk?.(false, fade);
   // already on its way out: the first fade stands (unless this one is the quicker)
   const ends = performance.now() + fade * 1000;
   if (!release && !v.want && v.level === 0 && v.timer && (v.stopAt ?? 0) <= ends + 50) return;

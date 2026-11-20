@@ -8,7 +8,7 @@ import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { LightGate, LightPath, type WorldProps } from "./common";
 import { Birds, type Flock } from "./life";
-import { PathLanterns, PlayFrame } from "./play";
+import { PlayFrame } from "./play";
 import { setWorldAir } from "./kit";
 import FairyWorld from "./Fairy";
 import FuneralWorld from "./Funeral";
@@ -224,6 +224,11 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
 
 export function Worlds(props: WorldProps) {
   const id = useWorld();
+  // dev: the scene itself, for audits from the console (what is drawn, with which material)
+  const root = useThree((s) => s.scene);
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { __three: root });
+  }, [root]);
   // the air of the world that stands, set before anything of it is drawn
   useMemo(() => {
     const def = WORLDS[id];
@@ -241,9 +246,7 @@ export function Worlds(props: WorldProps) {
         <>
           <LightPath id="home" def={WORLDS.home} angels effects={props.effects} from={10} />
           <LightGate id="home" def={WORLDS.home} />
-          {/* the avenue is the example of the interaction layer (worlds/play.tsx): a few rings of light on the way
-              to the gate, and a small flock over the road that parts round the plane */}
-          <PathLanterns id="home" every={44} from={46} to={pathOf("home").len - 36} radius={3.1} gain={0.9} />
+          {/* a small flock over the road that parts round the plane as it passes (worlds/play.tsx) */}
           {props.effects > 0.25 && <Birds flocks={HOME_FLOCKS} scatter={15} seed={11} />}
         </>
       )}

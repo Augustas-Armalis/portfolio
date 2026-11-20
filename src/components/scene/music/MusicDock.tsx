@@ -72,7 +72,7 @@ function Dock() {
       data-music-dock={open ? "open" : "closed"}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <GlassStyles />
+      <GlassStyles sheet={false} />
       <style>{`[data-music-dock] [data-deck]{pointer-events:none}[data-music-dock="open"] [data-deck][data-live]{pointer-events:auto;z-index:2}
 [data-music-dock="closed"] .md-rest{opacity:.62}[data-music-dock="closed"] .md-rest:hover,[data-music-dock="closed"] .md-rest:focus-within{opacity:1}`}</style>
       <motion.div initial={false} animate={{ opacity: show ? 1 : 0, y: show ? 0 : 8, scale: show ? 1 : 0.96 }} transition={GLASS_SPRING} style={{ pointerEvents: show ? "auto" : "none", transformOrigin: coarse ? "top left" : "top right" }} aria-hidden={!show}>
@@ -136,6 +136,8 @@ function Dock() {
                       </button>
                       <input type="range" min={0} max={1} step={0.01} value={m.volume} onChange={(e) => setMusicVolume(+e.target.value)} className="lg-range mr-2 flex-1" aria-label="Music volume" data-music="volume" />
                     </div>
+                    {/* the picker is the flight's: at the field there is one music, a volume and a mute */}
+                    {m.place === "flight" && (
                     <div className="flex max-h-[min(46vh,296px)] flex-col gap-0.5 overflow-y-auto p-1.5 pt-0.5" role="radiogroup" aria-label="What plays" data-music="list">
                       {list.map((x) => {
                         const on = m.choice === x.id;
@@ -149,6 +151,7 @@ function Dock() {
                         );
                       })}
                     </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

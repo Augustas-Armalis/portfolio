@@ -15,12 +15,14 @@ import { makeDeck, type Deck } from "@/lib/stream";
 //
 // Those are official uploads played through the embedded YouTube player
 // (lib/stream.ts): never downloaded, never rehosted. When a stream cannot
-// play (the embed or autoplay refused, no network, a blocker), the music we
-// host takes over without a word: in flight The Sea, VL 317, played by Jean
-// Dubé, dealt to the worlds by movement (lib/flightHosted.ts); at the desk his
-// Prelude, VL 268. Both are CC BY 4.0: their credit stands in the mini-player
-// for as long as they play. Augustas's own Nocturne and Afterlight play only
-// when they are chosen in the picker, never by default.
+// play (the embed or autoplay refused, no network, a blocker), in flight the
+// music we host takes over without a word: The Sea, VL 317, played by Jean
+// Dubé, dealt to the worlds by movement (lib/flightHosted.ts; CC BY 4.0, its
+// credit stands in the mini-player for as long as it plays). At the desk
+// nothing takes over: Čiurlionis's music is for the flight alone, it begins
+// with the take-off and leaves with the landing, and nothing else ever starts
+// on its own. Augustas's own Nocturne and Afterlight, and everything else in
+// the picker, play only when they are chosen.
 //
 // One thing plays at a time, across the whole site. In flight the music is the
 // owner "flight" of the audio manager whether it is a stream or a file (the
@@ -29,8 +31,9 @@ import { makeDeck, type Deck } from "@/lib/stream";
 // background that nobody owns, and it leaves the moment anything else plays.
 // Every change is a ramp: two decks cross over six seconds between worlds.
 //
-// The picker (scene/music/MusicDock.tsx): choose any of the above; the choice
-// is kept for the visit (one for the desk, one for the flight); a volume; a mute.
+// The mini-player (scene/music/MusicDock.tsx). At the field it is only what is
+// playing, a volume and a mute. In flight it opens into the picker as well:
+// any of the above, kept for the visit.
 //
 // Development: window.__music.report() (states, volumes, what was asked for
 // and why), .pick(id), .volume(v), .mute(on), .fail(deck) to rehearse a fallback.
@@ -60,10 +63,10 @@ export type Track = {
 const VIDEO = { miske: "R-3c28gbx34", jura: "3kGTf5yXW1g", juraLive: "89o4wK16g3E", spring: "6ksK2rqrjZk" };
 const yt = (id: string) => `https://www.youtube.com/watch?v=${id}`;
 export const TRACKS: Track[] = [
-  { id: "worlds", title: "Miške and Jūra, by world", by: "Lithuanian National Symphony Orchestra, Modestas Pitrėnas", source: "YouTube · Ondine", kind: "worlds", flightOnly: true },
-  { id: "miske", title: "Miške (In the Forest)", by: "Lithuanian National Symphony Orchestra, Modestas Pitrėnas", source: "YouTube · Ondine", kind: "yt", video: VIDEO.miske, url: yt(VIDEO.miske) },
-  { id: "jura", title: "Jūra (The Sea)", by: "Lithuanian National Symphony Orchestra, Modestas Pitrėnas", source: "YouTube · Ondine", kind: "yt", video: VIDEO.jura, url: yt(VIDEO.jura) },
-  { id: "jura-live", title: "Jūra, live in Vilnius", by: "Lithuanian National Symphony Orchestra, Mirga Gražinytė-Tyla", source: "YouTube · Lietuvos nacionalinė filharmonija", kind: "yt", video: VIDEO.juraLive, url: yt(VIDEO.juraLive) },
+  { id: "worlds", title: "In the Forest and The Sea, by world", by: "Lithuanian National Symphony Orchestra, Modestas Pitrėnas", source: "YouTube · Ondine", kind: "worlds", flightOnly: true },
+  { id: "miske", title: "In the Forest (Miške)", by: "Lithuanian National Symphony Orchestra, Modestas Pitrėnas", source: "YouTube · Ondine", kind: "yt", video: VIDEO.miske, url: yt(VIDEO.miske) },
+  { id: "jura", title: "The Sea (Jūra)", by: "Lithuanian National Symphony Orchestra, Modestas Pitrėnas", source: "YouTube · Ondine", kind: "yt", video: VIDEO.jura, url: yt(VIDEO.jura) },
+  { id: "jura-live", title: "The Sea, live in Vilnius", by: "Lithuanian National Symphony Orchestra, Mirga Gražinytė-Tyla", source: "YouTube · Lithuanian National Philharmonic", kind: "yt", video: VIDEO.juraLive, url: yt(VIDEO.juraLive) },
   { id: "spring", title: "Spring Fields Ambience and Music", by: "Martia's Muses", source: "YouTube · Martia's Muses", kind: "yt", video: VIDEO.spring, url: yt(VIDEO.spring) },
   { id: "sea-dube", title: "The Sea, VL 317", by: "M. K. Čiurlionis · Jean Dubé, piano", source: "Hosted here", kind: "sea", credit: "Jean Dubé, piano · CC BY 4.0" },
   { id: "prelude-dube", title: "Prelude, VL 268", by: "M. K. Čiurlionis · Jean Dubé, piano", source: "Hosted here", kind: "file", file: "/content/music/ciurlionis-prelude-vl268-dube.mp3", credit: "Jean Dubé, piano · CC BY 4.0" },
@@ -80,22 +83,23 @@ const trackOf = (id: TrackId) => TRACKS.find((t) => t.id === id)!;
 //   Jūra   I main theme 0:00 · II second theme 6:47 · III development 12:10 · IV the storm 13:59 ·
 //          V recapitulation 18:02 · VI inner recapitulation 23:11 · VII coda 29:58
 export const WORLD_MUSIC: Record<string, { video: string; at: number; gain?: number; part: string }> = {
-  road: { video: VIDEO.miske, at: 0, part: "Miške: the forest wakes" },
-  forest: { video: VIDEO.miske, at: 0, part: "Miške: the forest wakes" },
-  sun: { video: VIDEO.jura, at: 2, part: "Jūra: the main theme" },
-  stars: { video: VIDEO.jura, at: 410, gain: 0.9, part: "Jūra: the second theme" },
-  rex: { video: VIDEO.jura, at: 1394, part: "Jūra: the inner recapitulation" },
-  fairy: { video: VIDEO.jura, at: 1084, part: "Jūra: the recapitulation" },
-  paradise: { video: VIDEO.miske, at: 288, gain: 0.92, part: "Miške: Andante espressivo e cantabile" },
-  gate: { video: VIDEO.jura, at: 841, gain: 0.9, part: "Jūra: the storm" },
-  sea: { video: VIDEO.jura, at: 1799, gain: 0.8, part: "Jūra: the coda" },
-  funeral: { video: VIDEO.jura, at: 731, gain: 0.7, part: "Jūra: the development" },
-  kings: { video: VIDEO.miske, at: 823, gain: 0.85, part: "Miške: the main theme returns" },
+  road: { video: VIDEO.miske, at: 0, part: "In the Forest: the forest wakes" },
+  forest: { video: VIDEO.miske, at: 0, part: "In the Forest: the forest wakes" },
+  sun: { video: VIDEO.jura, at: 2, part: "The Sea: the main theme" },
+  stars: { video: VIDEO.jura, at: 410, gain: 0.9, part: "The Sea: the second theme" },
+  rex: { video: VIDEO.jura, at: 1394, part: "The Sea: the inner recapitulation" },
+  fairy: { video: VIDEO.jura, at: 1084, part: "The Sea: the recapitulation" },
+  paradise: { video: VIDEO.miske, at: 288, gain: 0.92, part: "In the Forest: Andante espressivo e cantabile" },
+  gate: { video: VIDEO.jura, at: 1236, gain: 0.9, part: "The Sea: the recapitulation, further in" },
+  sea: { video: VIDEO.jura, at: 1799, gain: 0.8, part: "The Sea: the coda" },
+  seafinale: { video: VIDEO.jura, at: 841, part: "The Sea: the storm" },
+  funeral: { video: VIDEO.jura, at: 731, gain: 0.7, part: "The Sea: the development" },
+  kings: { video: VIDEO.miske, at: 823, gain: 0.85, part: "In the Forest: the main theme returns" },
 };
 
 // How loud. A stream is levelled by its player's volume (0..1); a file by its voice in the graph. Both are
 // multiplied by the visitor's volume (the slider), which is 1 at its middle mark.
-const LEVEL = { deskStream: 0.13, flightStream: 0.46, deskFile: 0.3, flightFile: 0.85 };
+const LEVEL = { deskStream: 0.12, flightStream: 0.34, deskFile: 0.28, flightFile: 0.7, flightSea: 0.72 };
 const FADE = { world: 6, desk: 4, out: 2.5, pick: 1.6 };
 const DEFAULT: Record<Place, TrackId> = { desk: "spring", flight: "worlds" };
 const STORE = "ag-music";
@@ -194,7 +198,8 @@ const silent = () => st.muted || sceneMuted() || st.hidden;
 function resolve(): Now | null {
   const place = st.place;
   if (!place) return null;
-  const id = st.choice[place] ?? DEFAULT[place];
+  // (at the field there is one music and nothing to choose; the picker is the flight's)
+  const id = place === "desk" ? DEFAULT.desk : (st.choice[place] ?? DEFAULT[place]);
   const t = trackOf(id);
   const stream = place === "desk" ? LEVEL.deskStream : LEVEL.flightStream;
   const file = place === "desk" ? LEVEL.deskFile : LEVEL.flightFile;
@@ -205,7 +210,8 @@ function resolve(): Now | null {
     return { kind: "yt", key: `w:${st.world}`, video: w.video, at: w.at, level: stream * (w.gain ?? 1), track: "worlds", part: w.part };
   }
   if (t.kind === "yt") {
-    if (st.blocked) return place === "flight" ? { kind: "sea", key: `sea:${st.world}`, track: "sea-dube", level: 1 } : { kind: "file", key: "f:prelude-dube", file: trackOf("prelude-dube").file!, level: file, track: "prelude-dube" };
+    // (in flight the hosted Čiurlionis stands in; at the field nothing does: his music is for the flight only)
+    if (st.blocked) return place === "flight" ? { kind: "sea", key: `sea:${st.world}`, track: "sea-dube", level: 1 } : null;
     return { kind: "yt", key: `v:${t.video}`, video: t.video!, at: 0, level: stream, track: id };
   }
   if (t.kind === "sea") return place === "flight" ? { kind: "sea", key: `sea:${st.world}`, track: id, level: 1 } : { kind: "file", key: "f:sea", file: "/content/music/ciurlionis-jura-dube.mp3", level: file, track: id };
@@ -256,7 +262,7 @@ function apply(fade?: number) {
     st.now = want;
     if (want.kind === "yt") decks()[st.live].fade(streamLevel(want), 1.2);
     else if (want.kind === "file") voicePlayUrl(st.place === "flight" ? pickVoice() : bgVoice(), want.file, { fade: 1.2, level: fileLevel(want) });
-    else hostedFlightVolume(st.flightVol * gainOf());
+    else hostedFlightVolume(st.flightVol * gainOf() * LEVEL.flightSea);
     return emit();
   }
   // the same poem in the hosted engine moves between its own movements by itself
@@ -283,7 +289,7 @@ function apply(fade?: number) {
     externalMusic(null, false);
   } else {
     externalMusic(null, false);
-    hostedFlightVolume(st.flightVol * gainOf());
+    hostedFlightVolume(st.flightVol * gainOf() * LEVEL.flightSea);
     hostedFlightTo(st.world);
   }
   watching(true);
@@ -353,9 +359,10 @@ function desk(on: boolean, fade: number) {
 }
 export function musicFlight(key: string) {
   if (typeof window === "undefined") return;
+  // the way home out of the kings' light is the landing: the music leaves with the flight, slowly
+  if (key === "home") return musicFlightStop(8);
   st.place = "flight";
-  // (the way home out of the kings' light keeps whatever was playing)
-  if (key !== "home") st.world = key;
+  st.world = key;
   note(`flight: ${key}`);
   apply();
 }
@@ -374,7 +381,7 @@ export function musicFlightVolume(v: number) {
   const now = st.now;
   if (st.place !== "flight" || !now) return;
   if (now.kind === "yt") decks()[st.live].fade(streamLevel(now), 0.6);
-  else if (now.kind === "sea") hostedFlightVolume(v * gainOf());
+  else if (now.kind === "sea") hostedFlightVolume(v * gainOf() * LEVEL.flightSea);
   else channel("flight").gain.setTargetAtTime(v, channel("flight").context.currentTime, 0.2);
 }
 // (inside a tap that will lead to a flight: the hosted decks are woken so they may start later without one)
@@ -386,7 +393,8 @@ export function musicPrime() {
 
 // ---- the picker ----
 export function pickTrack(id: TrackId) {
-  const place = st.place ?? "desk";
+  if (st.place !== "flight") return;
+  const place = st.place;
   st.choice[place] = id;
   // choosing something is asking for sound, and a stream that failed earlier is given another chance
   st.muted = false;
@@ -401,7 +409,7 @@ export function setMusicVolume(v: number) {
   const now = st.now;
   if (now?.kind === "yt") decks()[st.live].fade(streamLevel(now), 0.15);
   else if (now?.kind === "file") voicePlayUrl(st.place === "flight" ? pickVoice() : bgVoice(), now.file, { fade: 0.15, level: fileLevel(now) });
-  else if (now?.kind === "sea") hostedFlightVolume(st.flightVol * gainOf());
+  else if (now?.kind === "sea") hostedFlightVolume(st.flightVol * gainOf() * LEVEL.flightSea);
   emit();
 }
 export function setMusicMuted(m: boolean) {
@@ -427,7 +435,7 @@ function view(): MusicView {
   const d = now?.kind === "yt" && st.decks ? st.decks[st.live] : null;
   snap = {
     place,
-    choice: place ? (st.choice[place] ?? DEFAULT[place]) : DEFAULT.desk,
+    choice: place === "flight" ? (st.choice.flight ?? DEFAULT.flight) : DEFAULT.desk,
     playing,
     part: now?.kind === "yt" ? (now.part ?? null) : null,
     kind: now?.kind ?? null,

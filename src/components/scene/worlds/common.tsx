@@ -8,7 +8,7 @@ import { POST_U } from "../Post";
 import { WorldGrass } from "../Grass";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { GLSL_AIR, Kit, PLAY_U, WORLD_U, angel, haloGeometry, makeCanvasMaterial, makeHaloMaterial, makePoints, makePuffMaterial, makeTempera, makeTerrainMaterial, pointsGeometry, puffGeometry, rng, terrainGeometry, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { GLSL_AIR, Kit, WORLD_U, angel, haloGeometry, makeCanvasMaterial, makeHaloMaterial, makePoints, makePuffMaterial, makeTempera, makeTerrainMaterial, pointsGeometry, puffGeometry, rng, terrainGeometry, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { WORLDS, WORLD_ORDER, gateOf, groundAt, originOf, pathOf, voyage, type WorldDef, type WorldId } from "./voyage";
 
 // What every world shares: its ground and grass, the path of light with its
@@ -95,12 +95,12 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
       depthWrite: false,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
-      uniforms: { ...SKY_U, ...WORLD_U, uPathLift: PLAY_U.uPathLift, uTint: { value: new THREE.Color(...tint) }, uGain: { value: gain }, uLen: { value: len }, uStyle: { value: style }, uWide: { value: PATH_WIDTH[style] / 0.9 } },
+      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) }, uGain: { value: gain }, uLen: { value: len }, uStyle: { value: style }, uWide: { value: PATH_WIDTH[style] / 0.9 } },
       vertexShader: /* glsl */ `
         varying vec2 vUv; varying vec3 vWorld;
         void main(){ vUv = uv; vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
-        uniform vec3 uTint; uniform float uGain; uniform float uLen; uniform float uStyle; uniform float uWide; uniform float uPathLift;
+        uniform vec3 uTint; uniform float uGain; uniform float uLen; uniform float uStyle; uniform float uWide;
         varying vec2 vUv; varying vec3 vWorld;
         ${GLSL_NOISE}
         ${GLSL_SKY}
@@ -153,8 +153,7 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
           fade *= (1.0 - airAmt(vWorld) * 0.7) * exp(-dist * uMist * 1.5);
           // (the fine things on it are for the near and middle distance: far off only the thread is left)
           extra *= 1.0 - smoothstep(110.0, 260.0, dist);
-          // (a lantern flown through lifts the whole way for a few seconds)
-          gl_FragColor = vec4((uTint * a + extra) * fade * uGain * glowK() * (1.0 + uPulse * 0.6) * (1.0 + uPathLift * 1.1), 1.0);
+          gl_FragColor = vec4((uTint * a + extra) * fade * uGain * glowK() * (1.0 + uPulse * 0.6), 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,
@@ -616,11 +615,10 @@ function CanvasStand({ p, x, z, cy, yaw, world }: { p: PaintingInfo; x: number; 
   const aspect = p.width / p.height;
   const H = canvasH(p);
   const W = H * aspect;
-  const m = /^(.*?)\s*\((\d{4})\)\s*$/.exec(p.title);
-  // "English name (Lithuanian name, 1909)": the label carries his own title
-  const lt = /\(([^()]+?),\s*(\d{4})\)\s*$/.exec(p.title);
-  const title = lt ? lt[1] : m ? m[1] : p.title;
-  const year = lt ? lt[2] : m ? m[2] : "";
+  // The caption is English: "Title (1909)" or "Title (his own Lithuanian title, 1909)" both give Title, 1909.
+  const m = /^(.*?)\s*\((?:[^()]*?,\s*)?(\d{4})\)\s*$/.exec(p.title);
+  const title = m ? m[1] : p.title;
+  const year = m ? m[2] : "";
   const b = useDisposable(() => {
     const state = { loaded: false, yaw, near: 0, seed: (x * 12.9898 + z * 78.233) % 6.283 };
     const map = new THREE.TextureLoader().load(p.file, () => (state.loaded = true));

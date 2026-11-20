@@ -2,6 +2,7 @@
 
 import { motion, type HTMLMotionProps } from "motion/react";
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useQuality } from "@/lib/quality";
 
 // One material for everything that floats over the 3D world: hover labels,
 // the flight's controls, every focus mode's bar, the player. Liquid Glass,
@@ -69,9 +70,20 @@ html[data-ui-hidden] [data-chrome]{opacity:0!important;pointer-events:none!impor
 @media (prefers-reduced-transparency:reduce){.lg{background:rgb(28 32 36/.94);-webkit-backdrop-filter:none;backdrop-filter:none}}
 `;
 
-// The styles, once, wherever the scene shell mounts.
-export function GlassStyles() {
-  return <style dangerouslySetInnerHTML={{ __html: CSS }} />;
+// The styles, once, wherever the scene shell mounts. With them, where there is no lens at all (the Low level
+// draws straight to the screen), the sheet the picture is on: the same paper grain the lens gives everywhere else,
+// as one still layer of fine noise over the view and under the controls. It costs nothing and never moves.
+const GRAIN = `url("data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0.9 0.9 0.9 0 -0.85'/></filter><rect width='220' height='220' filter='url(#n)'/></svg>`,
+)}")`;
+export function GlassStyles({ sheet = true }: { sheet?: boolean }) {
+  const q = useQuality();
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
+      {sheet && q.post === 0 && <div aria-hidden data-paper="" className="pointer-events-none absolute inset-0 z-[5]" style={{ backgroundImage: GRAIN, backgroundSize: "220px 220px", mixBlendMode: "soft-light", opacity: 0.55 }} />}
+    </>
+  );
 }
 
 let lensOk: boolean | null = null;

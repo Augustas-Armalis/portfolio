@@ -1,4 +1,4 @@
-import { audioGraph, audioHushed, channel, compressorGain, fadeParam, MIX, music, onMuteChange, resumeAudio, sceneMuted, setSceneMuted, voice, voicePlay, voicePrime, voiceRoute, voiceStop, type Voice } from "@/lib/audio";
+import { audioGraph, audioHushed, channel, compressorGain, deskMusicAsk, deskMusicPrime, fadeParam, MIX, music, onMuteChange, resumeAudio, sceneMuted, setSceneMuted, voice, voicePlay, voicePrime, voiceRoute, voiceStop, type Voice } from "@/lib/audio";
 import { playPiano, preloadPiano } from "@/lib/piano";
 
 // The sound of the place itself: real recordings only (all CC0, see
@@ -10,9 +10,9 @@ import { playPiano, preloadPiano } from "@/lib/piano";
 //   waves   sea-waves.mp3    waves on a beach (2.9 min)
 //   birds   forest-birds.mp3 a forest by day: only in Paradise, whose painting has its white birds, and quietly
 //
-// The desk and the field round it are an empty field and music: the wind bed alone, about -40 dBFS, and once
-// the visitor has clicked, his own Nocturne for Absent Things, low, fading in over 4 s whenever nothing else
-// plays there (the mute pill silences it with everything else in the world). No birds, no meadow, no animals.
+// The desk and the field round it are an empty field and music: the wind bed alone, barely there (about -52
+// dBFS), and once the visitor has clicked, the field's own quiet music (the music director's: see deskMusic
+// below; the mute pill silences it with everything else in the world). No birds, no meadow, no animals.
 //
 // How it is put together:
 // - Each recording is streamed, never decoded whole: two <audio> elements per
@@ -58,7 +58,7 @@ const bed = (o: Partial<Bed>): Bed => ({ wind: 0, hp: 120, lp: 1400, waves: 0, w
 // where the ceiling cuts it off. Only the rush of air is left.
 const WIND_CEIL = 1000;
 const BEDS: Record<string, Bed> = {
-  // home: an empty field. Soft filtered wind, nothing else (and the music: DESK_MUSIC below)
+  // home: an empty field. Soft filtered wind, nothing else (and the field's music: see deskMusic below)
   // (a little quieter than it was: about 2.5 dB down by day and at night)
   desk: bed({ wind: 0.75, hp: 80, lp: 650 }), // about -42.5 by day, -46.5 at night (measured: see the home scene's report)
   avenue: bed({ wind: 0.72, hp: 80, lp: 760 }), // the wood: the same air, a little more of it
@@ -102,6 +102,10 @@ const REC: Record<RecId, { file: string; rms: number; gain: number; len: number;
   birds: { file: "/assets/ambience/forest-birds.mp3", rms: -49.9, gain: 2.6, len: 325.9, head: 0, tail: 3.5, x: 3 },
 };
 const LEVEL = { piano: 0.04, wet: 0.8 };
+// He found the field's air far too loud. Every bed is cut hard from the table's figures: at the desk and in the
+// avenue by 9.5 dB (about -52 dBFS by day: barely there, a breath under the field's music), in the painted worlds
+// by 6 dB (between -37 and -48).
+const CUT = { desk: 0.335, world: 0.5 };
 const DUCK = 0.45; // the bed under music: -7 dB
 const DUCK_IN = 0.5; // time constants (s): about 1.5 s down
 const DUCK_OUT = 0.9; // about 2.7 s back up
@@ -219,6 +223,8 @@ function targets(s: Scene) {
   // birds are a thing of the day: gone by dusk, back after dawn
   const day = 1 - smooth(0.3, 0.6, night);
   const home = key === "desk" || key === "avenue";
+  // (every bed is taken well down from the figures in the table: see CUT)
+  const cut = home ? CUT.desk : CUT.world;
   let wind = b.wind;
   let waves = Math.max(b.waves, b.shore * clamp01(s.water));
   let birds = b.birds * day * (1 - 0.4 * fly);
@@ -234,7 +240,7 @@ function targets(s: Scene) {
     key,
     day,
     // (the place's own levels: these move only when the place does)
-    bed: { wind: wind * REC.wind.gain, waves: waves * REC.waves.gain, birds: birds > 0.02 ? REC.birds.gain * b.birds : 0 },
+    bed: { wind: wind * REC.wind.gain * cut, waves: waves * REC.waves.gain * cut, birds: birds > 0.02 ? REC.birds.gain * b.birds * cut : 0 },
     // the wind settles after dark; in the air it rises a little with speed
     lean: { wind: (1 - 0.3 * night * (home ? 1 : 0)) * (1 + 0.45 * fly * fly), waves: 1 - 0.25 * fly, birds: b.birds > 0 ? birds / b.birds : 0 },
     // at home the night wind is darker and loses its birds; a fast plane hears a little more of the top
@@ -354,29 +360,16 @@ function pianoNote() {
 const isOn = () => running && !sceneMuted() && scene.active && document.visibilityState === "visible";
 
 // ---- the desk's music ----
-// At the desk, when nothing else is playing, his Nocturne for Absent Things, low, on a loop: it comes in over
-// 4 s after the first click, and leaves (over 2.5 s) the moment anything else plays (the headphones, the
-// flight's music, the OS's player) or the plane is in the air or the OS is on screen. A voice with no owner, so
-// it never takes the music from anyone else and the sky does not lean toward evening for it.
-const DESK_MUSIC = { file: "/content/music/nocturne-for-absent-things.mp3", level: 0.36, fadeIn: 4, fadeOut: 2.5 };
-let deskVoice: Voice | null = null;
+// The field has music of its own once the visitor has clicked. What it is belongs to the music director
+// (lib/musicDirector.ts: by default the Spring Fields embed, quietly); here it is only asked for and sent away:
+// asked for at the desk and in the avenue when nothing else is playing and the plane is not in the air, sent away
+// (over 2.5 s) the moment anything else plays, the plane takes off or the OS is on screen.
 let deskOn = false;
-function deskMusicVoice() {
-  if (deskVoice) return deskVoice;
-  deskVoice = voice("desk-music", { channel: "music", scene: true, loop: true });
-  return deskVoice;
-}
 function deskMusic(on: boolean, key: string) {
   const want = on && (key === "desk" || key === "avenue") && scene.speed < 1 && !music.playing;
   if (want === deskOn) return;
-  const v = deskMusicVoice();
-  if (!v) return;
   deskOn = want;
-  if (want) {
-    v.el.loop = true;
-    if (v.el.getAttribute("src") !== DESK_MUSIC.file) v.el.src = DESK_MUSIC.file;
-    voicePlay(v, { fade: DESK_MUSIC.fadeIn, level: DESK_MUSIC.level });
-  } else voiceStop(v, DESK_MUSIC.fadeOut);
+  deskMusicAsk(want, want ? 4 : 2.5);
 }
 
 function tick() {
@@ -444,7 +437,7 @@ function dispose() {
   silence(r);
   if (deskOn) {
     deskOn = false;
-    voiceStop(deskVoice, 0.5);
+    deskMusicAsk(false, 0.5);
   }
   r.out.gain.setTargetAtTime(0, r.ctx.currentTime, 0.1);
   window.setTimeout(() => r.master.disconnect(), 1500);
@@ -472,7 +465,7 @@ export function startAmbience() {
     // inside the gesture: the wind's and the waves' elements play their moment of silence, so each may begin its
     // recording later without one (a phone refuses a first play() that comes from a timer)
     for (const id of ["wind", "waves"] as RecId[]) voicesOf(rig.strips[id])?.forEach((v) => voicePrime(v));
-    voicePrime(deskMusicVoice());
+    deskMusicPrime();
     running = true;
     wasOn = false;
     nextNote = performance.now() + 20000 + Math.random() * 20000;
@@ -496,7 +489,7 @@ export function stopAmbience() {
   if (rig) silence(rig);
   if (deskOn) {
     deskOn = false;
-    voiceStop(deskVoice, DESK_MUSIC.fadeOut);
+    deskMusicAsk(false, 2.5);
   }
 }
 

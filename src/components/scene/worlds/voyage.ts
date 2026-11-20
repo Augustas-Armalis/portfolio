@@ -313,9 +313,10 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     fog: [0.004, 0.05],
     terrain: T0,
     water: null,
-    centre: [0, -120],
-    radius: 300,
-    ceil: 70,
+    // (room to explore: the plane may wander well over a kilometre from the avenue, and high, before the air leans it back)
+    centre: [0, -160],
+    radius: 1300,
+    ceil: 170,
     entry: { x: 1.4, z: -40, above: 6, yaw: 0 },
     gate: { x: roadX(HOME_GATE_Z), z: HOME_GATE_Z, above: roadY(HOME_GATE_Z), yaw: 0 },
     path: [], // follows the road: see pathOf()

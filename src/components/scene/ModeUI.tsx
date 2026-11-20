@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronsUp, Download, Ellipsis, EyeOff, Grid3x3, LayoutGrid, LocateFixed, Lock, LockOpen, Moon, Music2, Pause, PlaneLanding, Play, Route, SkipBack, SkipForward, Smartphone, Sun, Turtle, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ChevronsUp, Download, EyeOff, Grid3x3, LayoutGrid, LocateFixed, Lock, LockOpen, Minus, Moon, Music2, Pause, PlaneLanding, Play, Plus, Route, Settings2, SkipBack, SkipForward, Smartphone, Sun, X } from "lucide-react";
 import { gyroAvailable, gyroCentre, gyroStart, gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
@@ -10,7 +10,6 @@ import { play } from "@/lib/sfx";
 import { setMusicOpen, useMusic } from "@/lib/musicDirector";
 import { WORLDS, WORLD_ORDER, setFlight, setGuide, travelStep, travelTo, useFlightFlags, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
-import { useLight } from "./worlds/play";
 import { photoCtl, postCtl, type Capture } from "./Post";
 
 // DOM controls for the focused desk modes. Quiet, glassy, dark-on-light pills
@@ -766,31 +765,37 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
 // ---------- book ----------
 
 export function BookUI({ info, page, onExit, onPrev, onNext, onApp }: { info: { spread: number; spreads: number; ready: boolean }; page?: { n: number; of: number }; onExit: () => void; onPrev: () => void; onNext: () => void; onApp: () => void }) {
-  const tall = `${btn} [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-4 [@media(pointer:coarse)]:text-[14px]`;
+  const total = info.spreads * 2 - 2;
+  const where = !info.ready ? "Opening…" : page ? `${page.n}` : info.spread === 0 ? "1" : 2 * info.spread + 1 > total ? `${2 * info.spread}` : `${2 * info.spread}–${2 * info.spread + 1}`;
+  const arrow = "lg-btn pointer-events-auto grid h-7 w-7 shrink-0 place-items-center text-white/95 [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10";
+  const link = "lg-btn pointer-events-auto inline-flex h-7 items-center px-2.5 text-[12px] font-medium text-white/92 [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:px-3 [@media(pointer:coarse)]:text-[13px]";
   return (
     <>
-      <TopBar title="Žiemos naktys šviesesnės" hint="Click or drag a page, or use ← →" hintId="book" exitLabel="Close book" onExit={onExit} />
+      <TopBar title="Novel" hint="Click or drag a page, or use ← →" hintId="book" exitLabel="Close book" onExit={onExit} />
       <Bottom>
-        {/* one row on a desk, two on a phone: the pages, then where else to read it */}
-        <Glass radius={26} panel className="pointer-events-auto flex items-center gap-1 p-1 max-sm:flex-col max-sm:gap-0.5" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-1">
-            <button type="button" className={tall} onClick={onPrev} aria-label="Previous page">
-              ←
+        {/* one small pill of the family: the pages (arrows, where you are), then where else to read it; two rows on a phone */}
+        <Glass radius={20} panel className="pointer-events-auto flex items-center gap-0.5 p-0.5 max-sm:flex-col max-sm:gap-0" data-book="bar" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <div className="flex items-center">
+            <button type="button" className={arrow} onClick={onPrev} aria-label="Previous page">
+              <ChevronLeft size={15} strokeWidth={2.2} />
             </button>
-            <span className="min-w-[72px] text-center text-[12px] tabular-nums text-white/70">{!info.ready ? "Opening…" : page ? `${page.n} / ${page.of}` : info.spread === 0 ? `1 / ${info.spreads * 2 - 2}` : 2 * info.spread + 1 > info.spreads * 2 - 2 ? `${2 * info.spread} / ${info.spreads * 2 - 2}` : `${2 * info.spread}–${2 * info.spread + 1} / ${info.spreads * 2 - 2}`}</span>
-            <button type="button" className={tall} onClick={onNext} aria-label="Next page">
-              →
+            <span className="min-w-[78px] whitespace-nowrap px-1 text-center text-[12px] font-medium tabular-nums tracking-[-0.01em] text-white/95" aria-live="polite" data-book="page">
+              {where}
+              {info.ready && <span className="text-white/55"> / {page ? page.of : total}</span>}
+            </span>
+            <button type="button" className={arrow} onClick={onNext} aria-label="Next page">
+              <ChevronRight size={15} strokeWidth={2.2} />
             </button>
           </div>
-          <span className="mx-1 h-4 w-px bg-white/25 max-sm:hidden" />
-          <div className="flex items-center gap-1 whitespace-nowrap">
-            <button type="button" className={tall} onClick={onApp}>
+          <span className="mx-1 h-3.5 w-px bg-white/22 max-sm:hidden" />
+          <div className="flex items-center whitespace-nowrap">
+            <button type="button" className={link} onClick={onApp}>
               Read in the Novel app
             </button>
-            <a className={tall + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.epub" download>
+            <a className={link} href="/content/novel/Ziemos_Naktys_Sviesesnes.epub" download>
               EPUB
             </a>
-            <a className={tall + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.pdf" download>
+            <a className={link} href="/content/novel/Ziemos_Naktys_Sviesesnes.pdf" download>
               PDF
             </a>
           </div>
@@ -898,6 +903,13 @@ function Stick({ onStick }: { onStick: (x: number, y: number) => void }) {
 // that barely moves. It takes the thumb wherever it lands and follows it.
 function Throttle({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const id = useRef<number | null>(null);
+  const cur = useRef(value);
+  cur.current = value;
+  // let go, it settles on the nearest of the four speeds (slow, cruise, fast, very fast)
+  const settle = () => {
+    id.current = null;
+    onChange(SPEED_STEPS[stepOf(cur.current)]);
+  };
   const PAD = 22;
   const put = (e: React.PointerEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -918,7 +930,7 @@ function Throttle({ value, onChange }: { value: number; onChange: (v: number) =>
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
-      aria-valuetext={value < 0.2 ? "Slow glide" : value < 0.6 ? "Cruise" : "Fast"}
+      aria-valuetext={SPEED_NAMES[stepOf(value)]}
       data-flight="throttle"
       onPointerDown={(e) => {
         e.stopPropagation();
@@ -933,14 +945,14 @@ function Throttle({ value, onChange }: { value: number; onChange: (v: number) =>
       onPointerMove={(e) => {
         if (id.current === e.pointerId) put(e);
       }}
-      onPointerUp={() => (id.current = null)}
-      onPointerCancel={() => (id.current = null)}
+      onPointerUp={settle}
+      onPointerCancel={settle}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         if (e.key === "ArrowUp" || e.key === "ArrowDown") {
           e.preventDefault();
           e.stopPropagation();
-          onChange(Math.min(1, Math.max(0, value + (e.key === "ArrowUp" ? 0.08 : -0.08))));
+          onChange(SPEED_STEPS[Math.min(SPEED_STEPS.length - 1, Math.max(0, stepOf(value) + (e.key === "ArrowUp" ? 1 : -1)))]);
         }
       }}
     >
@@ -950,6 +962,12 @@ function Throttle({ value, onChange }: { value: number; onChange: (v: number) =>
       <span className="pointer-events-none absolute inset-x-[22.5px] bottom-[22px] top-[26px] rounded-full bg-white/30">
         <span className="absolute inset-x-0 bottom-0 rounded-full bg-white/95" style={{ height: `${value * 100}%` }} />
       </span>
+      {/* the four speeds, as notches beside the slot */}
+      <span className="pointer-events-none absolute bottom-[22px] left-[9px] top-[26px]">
+        {SPEED_STEPS.map((v, i) => (
+          <span key={i} className={`absolute h-[2px] w-[6px] translate-y-1/2 rounded-full transition-colors duration-300 ${stepOf(value) === i ? "bg-white" : "bg-white/40"}`} style={{ bottom: `${v * 100}%` }} />
+        ))}
+      </span>
       <span className="pointer-events-none absolute inset-x-0 bottom-[22px] top-[26px]">
         <span className="absolute left-1/2 h-[18px] w-8 -translate-x-1/2 translate-y-1/2 rounded-full bg-white/95 shadow-[0_0_0_0.5px_rgb(255_255_255/0.8),0_2px_8px_rgb(0_0_0/0.2)]" style={{ bottom: `${value * 100}%` }} />
       </span>
@@ -957,6 +975,22 @@ function Throttle({ value, onChange }: { value: number; onChange: (v: number) =>
   );
 }
 
+// The names shown in the scene's UI are English everywhere (the list itself, and its order, come from voyage.ts;
+// a world this table has not heard of yet shows its own title).
+const WORLD_NAMES: Partial<Record<WorldId, string>> = {
+  home: "Home",
+  sun: "Sonata of the Sun",
+  stars: "Sonata of the Stars",
+  rex: "Rex",
+  fairy: "Castle Fairy Tale",
+  paradise: "Paradise",
+  gate: "The Offering",
+  seafinale: "Sonata of the Sea: Finale",
+  sea: "Tranquility",
+  funeral: "Funeral Symphony VI",
+  kings: "Fairy Tale of the Kings",
+};
+export const worldName = (id: WorldId) => WORLD_NAMES[id] ?? WORLDS[id].title;
 // The worlds, as a small glass list of their paintings: one tap and the cloud closes and opens on that world.
 const thumbOf = (id: WorldId) => (id === "home" ? null : `/assets/ciurlionis/${WORLDS[id].canvases[0]?.painting ?? id}.jpg`);
 function WorldsList({ current, onPick, mobile }: { current: WorldId; onPick: (id: WorldId) => void; mobile: boolean }) {
@@ -978,7 +1012,7 @@ function WorldsList({ current, onPick, mobile }: { current: WorldId; onPick: (id
             <span className="h-7 w-7 shrink-0 overflow-hidden rounded-[9px] bg-white/15">
               {t ? <img src={t} alt="" className="h-full w-full object-cover" decoding="async" /> : null}
             </span>
-            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium tracking-[-0.01em]">{id === "home" ? "The path of angels" : WORLDS[id].title}</span>
+            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium tracking-[-0.01em]">{worldName(id)}</span>
           </button>
         );
       })}
@@ -998,35 +1032,50 @@ function FlightMusicButton({ className, size }: { className: (on: boolean) => st
   );
 }
 
-// The light gathered in this world (worlds/play.tsx): a very small ring that fills as the lanterns on the path are
-// flown through, and breathes once when the last is gathered. Only there in a world that has lanterns.
-function LightMark({ size }: { size: number }) {
-  const l = useLight();
-  const C = 2 * Math.PI * 6;
+// The speed, in four steps: slow, cruise, fast, very fast. Minus and plus step it down and up, a bar can be
+// tapped to go straight to it, and its name stands above it for a moment when it changes. The keys (Shift or E
+// faster, Ctrl or Q slower) move the same throttle smoothly, and the bars follow.
+export const SPEED_STEPS = [0.12, 0.42, 0.72, 1];
+const SPEED_NAMES = ["Slow", "Cruise", "Fast", "Very fast"];
+const stepOf = (thr: number) => SPEED_STEPS.reduce((best, v, i) => (Math.abs(v - thr) < Math.abs(SPEED_STEPS[best] - thr) ? i : best), 0);
+function SpeedSteps({ value, onChange, size }: { value: number; onChange: (v: number) => void; size: number }) {
+  const step = stepOf(value);
+  const [said, setSaid] = useState<number | null>(null);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    setSaid(step);
+    const t = window.setTimeout(() => setSaid(null), 1300);
+    return () => window.clearTimeout(t);
+  }, [step]);
+  const go = (i: number) => onChange(SPEED_STEPS[Math.min(SPEED_STEPS.length - 1, Math.max(0, i))]);
+  const side = `lg-btn pointer-events-auto grid shrink-0 place-items-center text-white/95 disabled:opacity-35`;
   return (
-    <AnimatePresence initial={false}>
-      {l.of > 0 && (
-        <motion.span
-          key="light"
-          role="img"
-          aria-label={`Light gathered: ${l.got} of ${l.of}`}
-          data-flight="light"
-          data-tip={l.done ? "All the light gathered" : "Light gathered"}
-          className="lg-tip grid shrink-0 place-items-center overflow-visible"
-          style={{ height: size, width: size }}
-          initial={{ width: 0, opacity: 0, scale: 0.6 }}
-          animate={{ width: size, opacity: 1, scale: l.done ? [1, 1.35, 1] : 1 }}
-          exit={{ width: 0, opacity: 0, scale: 0.6 }}
-          transition={{ ...GLASS_SPRING, scale: l.done ? { duration: 0.9, ease: "easeInOut", times: [0, 0.4, 1] } : GLASS_SPRING }}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-            <circle cx="8" cy="8" r="6" fill="none" stroke="rgb(255 255 255 / 0.28)" strokeWidth="1.5" />
-            <circle cx="8" cy="8" r="6" fill="none" stroke={l.done ? "#ffd98a" : "#fff"} strokeWidth="1.5" strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C * (1 - (l.of ? l.got / l.of : 0))} transform="rotate(-90 8 8)" style={{ transition: "stroke-dashoffset .9s cubic-bezier(.22,1,.36,1), stroke .6s ease" }} />
-            <circle cx="8" cy="8" r="1.6" fill={l.done ? "#ffd98a" : "rgb(255 255 255 / 0.85)"} style={{ transition: "fill .6s ease" }} />
-          </svg>
-        </motion.span>
-      )}
-    </AnimatePresence>
+    <div className="relative flex shrink-0 items-center" role="group" aria-label="Speed" data-flight="speed">
+      <button type="button" aria-label="Slower (Ctrl or Q)" className={side} style={{ height: size, width: size * 0.8 }} disabled={step === 0} onClick={() => go(step - 1)}>
+        <Minus size={13} strokeWidth={2.4} />
+      </button>
+      <div className="flex items-end gap-[3px] px-0.5" style={{ height: size }} role="radiogroup" aria-label="Speed">
+        {SPEED_STEPS.map((_, i) => (
+          <button key={i} type="button" role="radio" aria-checked={i === step} aria-label={SPEED_NAMES[i]} data-speed={i} className="pointer-events-auto flex h-full w-[9px] items-center justify-center" onClick={() => go(i)}>
+            <span className="w-[5px] rounded-full transition-[background-color,height,transform] duration-300 [transition-timing-function:var(--lg-spring)]" style={{ height: 7 + i * 4, backgroundColor: i <= step ? "#fff" : "rgb(255 255 255 / 0.3)", transform: i === step ? "scaleX(1.25)" : undefined }} />
+          </button>
+        ))}
+      </div>
+      <button type="button" aria-label="Faster (Shift or E)" className={side} style={{ height: size, width: size * 0.8 }} disabled={step === SPEED_STEPS.length - 1} onClick={() => go(step + 1)}>
+        <Plus size={13} strokeWidth={2.4} />
+      </button>
+      <AnimatePresence>
+        {said !== null && (
+          <motion.span key={said} className="pointer-events-none absolute bottom-[calc(100%+12px)] left-1/2 -translate-x-1/2 whitespace-nowrap text-[11.5px] font-medium text-white [text-shadow:0_1px_8px_rgb(0_0_0/0.6),0_0_2px_rgb(0_0_0/0.35)]" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 0.95, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} data-flight="speed-name">
+            {SPEED_NAMES[said]}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -1115,7 +1164,8 @@ function useChrome(on: boolean) {
 }
 
 // The flight's controls: one small capsule of round glass buttons at the foot of the view and nothing else. Music,
-// the worlds, follow the path (and, while it is followed, a slow pace), the look, hide, land. No bar across the top
+// the worlds, follow the path, the speed in four steps (on a phone the throttle under the right thumb has the same
+// four), the look, hide, land. No bar across the top
 // and no standing text: on the first flight of all one quiet line says how to fly, then never again; each world's
 // name stands for a few seconds as plain type. On a phone the same capsule sits between a stick under the left
 // thumb (while you fly it yourself) and a throttle under the right; a drag anywhere else turns the eye.
@@ -1125,7 +1175,6 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const flags = useFlightFlags();
   const guide = (flags & 1) > 0;
   const guided = (flags & 2) > 0;
-  const cruise = (flags & 4) > 0;
   const locked = (flags & 8) > 0;
   const gyro = (flags & 16) > 0;
   const chrome = useChrome(flying);
@@ -1157,7 +1206,6 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   // the throttle is also worked from the keys: the slider follows
   const [thr, setThr] = useState(voyage.throttle);
   useEffect(() => {
-    if (!mobile) return;
     let raf = 0;
     let last = voyage.throttle;
     const tick = () => {
@@ -1166,7 +1214,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [mobile]);
+  }, []);
   const throttle = (v: number) => {
     voyage.throttle = v;
     setThr(v);
@@ -1220,7 +1268,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
           exit={{ opacity: 0, filter: "blur(6px)" }}
           transition={{ duration: 0.9, ease: EASE }}
         >
-          <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em] text-white">{world === "home" ? "Angelų takas" : def.title}</div>
+          <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em] text-white">{world === "home" ? "Path of Angels" : worldName(world)}</div>
           {sub && <div className="mt-0.5 text-[12px] leading-tight text-white/75">{sub}</div>}
         </motion.div>
       )}
@@ -1238,15 +1286,13 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
         {/* lit while the quiet hand has the plane */}
         <span className={`absolute right-[5px] top-[5px] h-[5px] w-[5px] rounded-full transition-[background-color,opacity] duration-500 ${guide && guided ? "bg-amber-500 opacity-100" : "opacity-0"}`} />
       </button>
-      <AnimatePresence initial={false}>
-        {guide && (
-          <motion.div key="slow" className="flex overflow-hidden" initial={{ width: 0, opacity: 0, scale: 0.6 }} animate={{ width: "auto", opacity: 1, scale: 1 }} exit={{ width: 0, opacity: 0, scale: 0.6 }} transition={GLASS_SPRING}>
-            <button type="button" aria-pressed={cruise} aria-label="Slow pace while the path is followed" data-tip="Take it slowly" data-flight="cruise" className={ib(cruise)} onClick={() => setFlight({ cruise: !cruise })}>
-              <Turtle size={isz + 1} strokeWidth={sw} />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {!mobile && (
+        <>
+          <span className="mx-0.5 h-4 w-px shrink-0 bg-white/25" />
+          <SpeedSteps value={thr} onChange={throttle} size={32} />
+          <span className="mx-0.5 h-4 w-px shrink-0 bg-white/25" />
+        </>
+      )}
       {mobile && canGyro && (
         <button type="button" aria-pressed={gyro} aria-label="Look by moving your phone" className={ib(gyro)} onClick={toggleGyro}>
           <Smartphone size={isz} strokeWidth={sw} />
@@ -1264,7 +1310,6 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
       <button type="button" aria-label="Hide the controls" data-tip="Hide  H" data-flight="hide" className={ib(false)} onClick={() => (setPanel(null), chrome.hide())}>
         <EyeOff size={isz} strokeWidth={sw} />
       </button>
-      <LightMark size={mobile ? 32 : 30} />
       <span className="mx-0.5 h-4 w-px shrink-0 bg-white/25" />
       <button type="button" data-mode-exit="" data-flight="land" aria-label="Land (Esc)" data-tip="Land  Esc" className={ib(false)} onClick={(e) => (e.stopPropagation(), onLand())}>
         <PlaneLanding size={isz + 1} strokeWidth={sw} />
@@ -1333,19 +1378,28 @@ const fmtH = (h: number) => {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 };
 
-// The desk's few controls: Orbit / Explore, Back to desk, and the graphics level. (The sky here always follows
-// the visitor's own clock; the hour can be set only inside the camera's photo mode.) The desk itself shows no
-// chrome: only a small round glass button with three dots, bottom left (top left on a phone), faint until the
-// pointer or focus comes to it, that opens into the controls. While exploring, a "Back to desk" pill stands
-// beside it.
+// The desk's one control: a small glass gear in the bottom corner (top corner on a phone), low-key until the
+// pointer or focus comes to it. One tap opens the graphics presets (Auto, Low, Medium, High, Ultra) in a compact
+// popover, with the way of looking round (Orbit or Explore) under them. While exploring, a "Back to desk" pill
+// stands beside it. (The sky here always follows the visitor's own clock; the hour is set only in the camera.)
 export function NavBar({ nav, onNav, onBack, mobile = false }: { nav: "orbit" | "explore"; onNav: (n: "orbit" | "explore") => void; onBack: () => void; label?: string; mobile?: boolean }) {
   const seg = (on: boolean) => `lg-btn pointer-events-auto px-3 font-medium ${mobile ? "h-10 text-[14px]" : "h-7 text-[12.5px]"} ${on ? "lg-on" : "text-white/90"}`;
-  const [gfx, setGfx] = useState(false);
   const [open, setOpen] = useState(false);
   const choice = useQualityChoice();
-  const quality = useQuality();
   const body = (
     <>
+      {/* the graphics presets, at once */}
+      <div className="flex flex-col gap-1" data-desk="graphics">
+        <span className="px-2 text-[11px] font-medium text-white/60">Graphics</span>
+        <div className="flex gap-0.5 rounded-full" role="radiogroup" aria-label="Graphics quality">
+          {(["auto", "low", "medium", "high", "ultra"] as QualityChoice[]).map((c) => (
+            <button key={c} type="button" role="radio" aria-checked={choice === c} className={`lg-btn pointer-events-auto flex-1 whitespace-nowrap px-2.5 font-medium ${mobile ? "h-10 text-[13px]" : "h-7 text-[12px]"} ${choice === c ? "lg-on" : "text-white/92"}`} onClick={() => setQualityChoice(c)}>
+              {QUALITY_LABELS[c]}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* and the way of looking round */}
       <div className="flex items-center gap-1">
         <div className="flex gap-0.5 rounded-full">
           <button type="button" className={seg(nav === "orbit")} onClick={() => onNav("orbit")}>
@@ -1359,7 +1413,7 @@ export function NavBar({ nav, onNav, onBack, mobile = false }: { nav: "orbit" | 
           {nav === "explore" && (
             <motion.button
               type="button"
-              className={`lg-btn lg-chip pointer-events-auto whitespace-nowrap px-3 font-medium text-white/92 ${mobile ? "h-10 text-[14px]" : "h-7 text-[12.5px]"}`}
+              className={`lg-btn pointer-events-auto whitespace-nowrap px-3 font-medium text-white/92 ${mobile ? "h-10 text-[14px]" : "h-7 text-[12.5px]"}`}
               initial={{ opacity: 0, x: -6, scale: 0.94 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -6, scale: 0.94 }}
@@ -1370,76 +1424,22 @@ export function NavBar({ nav, onNav, onBack, mobile = false }: { nav: "orbit" | 
             </motion.button>
           )}
         </AnimatePresence>
-        {!mobile && (
-          <button type="button" className="lg-btn pointer-events-auto ml-1 h-7 whitespace-nowrap px-2.5 text-[12px] font-medium text-white/85" aria-expanded={gfx} onClick={() => setGfx((g) => !g)}>
-            Graphics · {QUALITY_LABELS[choice]}
-          </button>
-        )}
       </div>
-      {mobile ? (
-        <div className="flex items-center justify-between gap-3 px-2 pb-0.5 text-[12.5px] text-white/65">
-          <span className="whitespace-nowrap">{nav === "explore" ? "Drag to look · pinch to move" : ""}</span>
-          <button type="button" className="lg-btn pointer-events-auto -mr-1 h-9 whitespace-nowrap px-2.5 text-[12.5px] font-medium text-white/85" aria-expanded={gfx} onClick={() => setGfx((g) => !g)}>
-            Graphics · {QUALITY_LABELS[choice]}
-          </button>
-        </div>
-      ) : (
-        nav === "explore" && <div className="px-2 pb-0.5 text-[11px] text-white/65">Drag to look · W A S D to move</div>
-      )}
-      <AnimatePresence initial={false}>
-        {gfx && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
-            <div className="flex flex-col gap-1.5 px-1 pb-1 pt-0.5">
-              <div className="flex gap-0.5 rounded-full">
-                {(["auto", "low", "medium", "high", "ultra"] as QualityChoice[]).map((c) => (
-                  <button key={c} type="button" className={`lg-btn pointer-events-auto flex-1 px-2 font-medium ${mobile ? "h-9 text-[12.5px]" : "h-6 text-[11.5px]"} ${choice === c ? "lg-on" : "text-white/90"}`} onClick={() => setQualityChoice(c)}>
-                    {QUALITY_LABELS[c]}
-                  </button>
-                ))}
-              </div>
-              {!mobile &&
-                (
-                  [
-                    ["Resolution", "resolution", (quality.dpr - 0.75) / 1.25],
-                    ["Grass", "grass", (quality.grass - 0.2) / 1.3],
-                    ["Effects", "effects", quality.effects],
-                  ] as [string, "resolution" | "grass" | "effects", number][]
-                ).map(([name, key, v]) => (
-                  <label key={key} className="flex items-center gap-2 px-1 text-[11.5px] text-white/80">
-                    <span className="w-[68px]">{name}</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      defaultValue={Math.min(1, Math.max(0, v))}
-                      key={`${key}-${choice}-${quality.preset}`}
-                      onPointerUp={(e) => setQualityOverride(key, +(e.target as HTMLInputElement).value)}
-                      onKeyUp={(e) => setQualityOverride(key, +(e.target as HTMLInputElement).value)}
-                      className="lg-range flex-1"
-                      aria-label={name}
-                    />
-                  </label>
-                ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </>
   );
   const stop = { onPointerDown: (e: React.PointerEvent) => e.stopPropagation(), onClick: (e: React.MouseEvent) => e.stopPropagation() };
   if (mobile)
     return (
       <div className="pointer-events-none absolute z-30" style={{ top: SAFE.t, left: SAFE.l }} data-desk="nav">
-        <Glass radius={open ? 24 : 22} lens={false} panel={open} className="pointer-events-auto overflow-hidden" style={{ filter: open ? undefined : "opacity(0.62)" }} initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING} {...stop}>
-          <button type="button" aria-label={open ? "Close the controls" : "Controls: look around, graphics"} aria-expanded={open} className="lg-btn grid h-11 w-11 place-items-center text-white" onClick={() => setOpen((o) => !o)}>
-            {open ? <X size={18} strokeWidth={2.1} /> : <Ellipsis size={19} strokeWidth={2.2} />}
+        <Glass radius={open ? 24 : 22} lens={false} panel={open} className="pointer-events-auto overflow-hidden" style={{ filter: open ? undefined : "opacity(0.8)" }} initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING} {...stop}>
+          <button type="button" aria-label={open ? "Close" : "Graphics quality"} aria-expanded={open} className="lg-btn grid h-11 w-11 place-items-center text-white" onClick={() => setOpen((o) => !o)}>
+            {open ? <X size={18} strokeWidth={2.1} /> : <Settings2 size={18} strokeWidth={2} />}
           </button>
           <AnimatePresence initial={false}>
             {open && (
               // it opens downward and outward from the button, and what is in it is never squeezed on the way
               <motion.div key="body" initial={{ height: 0, width: 44, opacity: 0 }} animate={{ height: "auto", width: "auto", opacity: 1 }} exit={{ height: 0, width: 44, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
-                <div className="flex w-[min(312px,calc(100vw-28px))] flex-col gap-1.5 px-1.5 pb-1.5">{body}</div>
+                <div className="flex w-[min(318px,calc(100vw-28px))] flex-col gap-2 px-1.5 pb-1.5">{body}</div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1449,7 +1449,7 @@ export function NavBar({ nav, onNav, onBack, mobile = false }: { nav: "orbit" | 
   return (
     <div className="pointer-events-none absolute bottom-5 left-4 z-30 flex items-end gap-2">
       {/* (the faintness is on a wrapper: the glass's own entrance animates its opacity) */}
-      <div className={`pointer-events-auto transition-opacity duration-300 ${open ? "opacity-100" : "opacity-45 hover:opacity-100 focus-within:opacity-100"}`}>
+      <div className={`pointer-events-auto transition-opacity duration-300 ${open ? "opacity-100" : "opacity-70 hover:opacity-100 focus-within:opacity-100"}`}>
       <Glass
         radius={open ? 22 : 18}
         lens={false}
@@ -1461,15 +1461,15 @@ export function NavBar({ nav, onNav, onBack, mobile = false }: { nav: "orbit" | 
         transition={GLASS_SPRING}
         {...stop}
       >
-        <div className="flex items-end">
-          <button type="button" aria-label={open ? "Close the controls" : "Controls: orbit, explore, graphics"} aria-expanded={open} className="lg-btn grid h-9 w-9 shrink-0 place-items-center text-white" onClick={() => setOpen((o) => !o)}>
-            {open ? <X size={15} strokeWidth={2.1} /> : <Ellipsis size={17} strokeWidth={2.2} />}
+        <div className="flex flex-col-reverse">
+          <button type="button" aria-label={open ? "Close" : "Graphics quality"} data-desk-gear="" aria-expanded={open} className="lg-btn grid h-9 w-9 shrink-0 place-items-center text-white" onClick={() => setOpen((o) => !o)}>
+            {open ? <X size={15} strokeWidth={2.1} /> : <Settings2 size={16} strokeWidth={2} />}
           </button>
           <AnimatePresence initial={false}>
             {open && (
-              // it opens outward from the button, along the bottom edge
-              <motion.div key="body" initial={{ width: 0, opacity: 0 }} animate={{ width: "auto", opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
-                <div className="flex flex-col-reverse gap-1.5 py-1 pr-1">{body}</div>
+              // it opens upward from the gear
+              <motion.div key="body" initial={{ height: 0, width: 36, opacity: 0 }} animate={{ height: "auto", width: "auto", opacity: 1 }} exit={{ height: 0, width: 36, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
+                <div className="flex w-max flex-col gap-2 p-1.5 pb-1">{body}</div>
               </motion.div>
             )}
           </AnimatePresence>
