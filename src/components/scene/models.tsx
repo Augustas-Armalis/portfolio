@@ -497,61 +497,83 @@ export function Monitor({ screenMat, screenRef }: { screenMat: THREE.Material; s
 
 // ---------- phone (mobile) ----------
 
-// A titanium phone standing in the slot of a small machined-aluminium dock.
+// A current Pro iPhone (flat titanium sides, thin even bezels, the Dynamic Island on its lock face, a camera plateau
+// across the full width of the back) leaning back on a small machined-aluminium stand: a low base, a lip the phone
+// rests against at the front, and a back rest. Nothing covers the screen: the lip is lower than the bezel.
 export function Phone({ screenMat, screenRef }: { screenMat: THREE.Material; screenRef: RefObject<THREE.Mesh | null> }) {
   const m = getMats();
   useNightLift();
+  const BASE_H = 0.005;
   const geo = useGeo(() => {
-    const bevel = 0.0013;
+    const bevel = 0.0009;
     const shell = new THREE.ExtrudeGeometry(roundedRectShape(PHONE.w - bevel * 2, PHONE.h - bevel * 2, PHONE.r - bevel), {
       depth: PHONE.d - bevel * 2,
       bevelEnabled: true,
       bevelThickness: bevel,
       bevelSize: bevel,
-      bevelSegments: 4,
-      curveSegments: 16,
+      bevelSegments: 3,
+      curveSegments: 18,
     });
     shell.translate(0, 0, -(PHONE.d - bevel * 2) / 2);
-    const bx = PHONE.w / 2 + 0.0003;
+    const bx = PHONE.w / 2 + 0.0002;
     const back = -PHONE.d / 2;
-    // side buttons and the camera plateau on the back
+    const top = PHONE.h / 2;
+    // buttons: Action and volume on the left, the side button and Camera Control on the right
     const body = merge([
       shell,
-      put(rbox(0.0014, 0.02, 0.0032, 0.0006, 2), bx, 0.018, 0),
-      put(rbox(0.0014, 0.011, 0.0032, 0.0006, 2), -bx, 0.03, 0),
-      put(rbox(0.0014, 0.011, 0.0032, 0.0006, 2), -bx, 0.015, 0),
-      put(rbox(0.0014, 0.006, 0.0032, 0.0006, 2), -bx, 0.045, 0),
-      put(rbox(0.035, 0.036, 0.0026, 0.0011, 3), 0.0135, PHONE.h / 2 - 0.0225, back - 0.0005),
+      put(rbox(0.0011, 0.007, 0.0028, 0.0005, 2), -bx, top - 0.032, 0),
+      put(rbox(0.0011, 0.012, 0.0028, 0.0005, 2), -bx, top - 0.047, 0),
+      put(rbox(0.0011, 0.012, 0.0028, 0.0005, 2), -bx, top - 0.062, 0),
+      put(rbox(0.0011, 0.017, 0.0028, 0.0005, 2), bx, top - 0.052, 0),
+      put(rbox(0.0009, 0.0115, 0.0026, 0.0005, 2), bx, -0.032, 0),
     ]);
+    // the camera plateau: a raised band across the whole width near the top of the back
+    const plateau = put(rbox(PHONE.w - 0.0016, 0.027, 0.0016, 0.0007, 3), 0, top - 0.0205, back - 0.0006);
     const spots: [number, number][] = [
-      [0.0215, PHONE.h / 2 - 0.0135],
-      [0.0215, PHONE.h / 2 - 0.0315],
-      [0.0065, PHONE.h / 2 - 0.0225],
+      [-0.0215, top - 0.0128],
+      [-0.0215, top - 0.0282],
+      [-0.0075, top - 0.0205],
     ];
-    const rings = merge(spots.map(([x, y]) => put(cyl(0.0074, 0.0078, 0.0022, 28), x, y, back - 0.0027, Math.PI / 2)));
-    const lenses = merge(spots.map(([x, y]) => put(cyl(0.0056, 0.0056, 0.0003, 24), x, y, back - 0.0039, Math.PI / 2)));
+    const rings = merge(spots.map(([x, y]) => put(cyl(0.0062, 0.0066, 0.0018, 32), x, y, back - 0.0021, Math.PI / 2)));
+    const lenses = merge([
+      ...spots.map(([x, y]) => put(cyl(0.0047, 0.0047, 0.0003, 28), x, y, back - 0.0031, Math.PI / 2)),
+      // flash and LiDAR at the far end of the plateau
+      put(cyl(0.0021, 0.0021, 0.0003, 20), 0.022, top - 0.0145, back - 0.0016, Math.PI / 2),
+      put(cyl(0.0024, 0.0024, 0.0003, 20), 0.022, top - 0.0265, back - 0.0016, Math.PI / 2),
+    ]);
     return {
       body,
+      plateau,
       rings,
       lenses,
-      glass: roundedPlane(PHONE.w - 0.0012, PHONE.h - 0.0012, PHONE.r - 0.0006),
+      glass: roundedPlane(PHONE.w - 0.0008, PHONE.h - 0.0008, PHONE.r - 0.0004),
       screen: roundedPlane(PHONE.aw, PHONE.ah, PHONE.ar),
-      dock: prism(0.086, 0.066, 0.016, 0.0195, 0.003, 4),
+      base: prism(0.082, 0.066, 0.014, BASE_H, 0.0014, 4),
+      lip: rbox(0.058, 0.0026, 0.0036, 0.0011, 3),
+      rest: rbox(0.046, 0.07, 0.004, 0.0016, 3),
     };
   });
-  const y0 = DESK.top + 0.0105;
   const lean = PHONE.lean;
+  // the bottom edge sits on the base: its back corner (the lowest point once leaning) just touches the top
+  const y0 = DESK.top + BASE_H + Math.sin(-lean) * (PHONE.d / 2) + 0.0002;
   const cy = y0 + Math.cos(-lean) * (PHONE.h / 2);
   const cz = -Math.sin(-lean) * (PHONE.h / 2);
   const fz = PHONE.d / 2;
+  const pz = cz - 0.004;
+  // where the front of the bottom edge is, for the lip in front of it
+  const lipZ = -0.004 + Math.cos(-lean) * fz + 0.0019;
   return (
     <group>
       <group position={[0, DESK.top, 0]}>
-        <mesh geometry={geo.dock} material={m.anodised} position={[0, 0, -0.011]} castShadow receiveShadow />
-        <Blob w={0.12} d={0.1} opacity={0.34} />
+        <mesh geometry={geo.base} material={m.anodised} position={[0, 0, -0.008]} castShadow receiveShadow />
+        <mesh geometry={geo.lip} material={m.anodised} position={[0, BASE_H + 0.0013, lipZ]} castShadow />
+        <Blob w={0.11} d={0.095} opacity={0.34} />
       </group>
-      <group position={[0, cy, cz - 0.004]} rotation={[lean, 0, 0]}>
+      <group position={[0, cy, pz]} rotation={[lean, 0, 0]}>
+        {/* the back rest, behind the lower half of the phone, down into the base */}
+        <mesh geometry={geo.rest} material={m.anodised} position={[0, -PHONE.h / 2 + 0.031, -fz - 0.0021]} castShadow />
         <mesh geometry={geo.body} material={m.titanium} castShadow />
+        <mesh geometry={geo.plateau} material={m.titanium} />
         <mesh geometry={geo.rings} material={m.steel} />
         <mesh geometry={geo.lenses} material={m.lens} />
         <mesh geometry={geo.glass} material={m.glass} position={[0, 0, fz + 0.0002]} />

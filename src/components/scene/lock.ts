@@ -5,12 +5,12 @@ import { GEIST, geistReady } from "./font";
 // date, and a large live clock. On the phone it's the iOS-style lock screen.
 // Values are written as display (sRGB) colour, like the boot frame.
 
-const WALL = { desktop: "/wallpapers/founder-foggy-sunrise.jpg", mobile: "/wallpapers/engineer-joel-filipe.jpg" };
+const WALL = { desktop: "/wallpapers/founder-foggy-sunrise.jpg", mobile: "/wallpapers/golden-peaks-phone.webp" };
 const FONT = GEIST;
 
 export function makeLockScreen(mobile: boolean) {
   const W = mobile ? 720 : 1600;
-  const H = mobile ? 1536 : 900;
+  const H = mobile ? 1510 : 900;
   const c = document.createElement("canvas");
   c.width = W;
   c.height = H;
@@ -58,6 +58,16 @@ export function makeLockScreen(mobile: boolean) {
     g.font = `500 ${Math.round((mobile ? 14 : 18) * u)}px ${FONT}`;
     g.fillStyle = "rgba(255,255,255,0.75)";
     g.fillText(mobile ? "Tap to unlock" : "Click to start", W / 2, H - (mobile ? 70 : 70) * u);
+    // the phone's Dynamic Island, at its real size and place on a 393-point-wide screen
+    if (mobile) {
+      const s = W / 393;
+      const iw = 124 * s;
+      const ih = 36 * s;
+      g.fillStyle = "#000";
+      g.beginPath();
+      g.roundRect((W - iw) / 2, 11 * s, iw, ih, ih / 2);
+      g.fill();
+    }
     tex.needsUpdate = true;
   };
   const ready = new Promise<void>((res) => {

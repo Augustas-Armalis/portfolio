@@ -238,7 +238,7 @@ export const projects: Partial<Record<AppId, Project>> = {
     what: "Where brands found creators and ran whole campaigns with them.",
     story: [
       "Contles was my biggest startup. Brands found content creators on it and worked with them in one place, from the first application to the finished content and the payment. Some of the biggest Lithuanian and international brands used it.",
-      "We built it ourselves, from zero and without investment. It started in the ISM entrepreneurship club and won it. Then Kickstart Lab, where it picked up several wins, three minutes on the main stage of Startup Fair at Litexpo, and the big one: Rykliai, Lithuania's Shark Tank.",
+      "We built it ourselves, from zero and without investment. It started in the ISM entrepreneurship club and won it. Then Kickstart Lab, where it picked up several wins, three minutes on the main stage of Startup Fair at Litexpo, and the big one: we took part in Rykliai, Lithuania's Shark Tank.",
       "Building it was intense and exciting: a team locked in for months, more mistakes than I can count, and more learned than anywhere else. In the autumn of 2026 we decided to stop and take everything we learned into bigger things.",
     ],
     role: "CEO, product and design",
@@ -569,7 +569,7 @@ export const resume = {
       rows: [
         { when: "Now", title: "Founder, head of design", org: "Larpo Studio", body: "A full-stack website and product design studio for SaaS and AI teams. My first business: over six figures earned, a team of four, now on its fourth brand.", app: "larpo" },
         { when: "2025 – now", title: "Lead product designer", org: "Acquisity", body: "Over a year leading product design for Acquisity's AI acquisition platform: product, rebrand, website and front end." },
-        { when: "2025 – 2026", title: "CEO, product and design", org: "Contles", body: "A creator-marketing platform, built from zero without investment. First at the ISM entrepreneurship club, Kickstart Lab, Startup Fair, Rykliai (Shark Tank Lithuania).", app: "contles" },
+        { when: "2025 – 2026", title: "CEO, product and design", org: "Contles", body: "A creator-marketing platform, built from zero without investment. First at the ISM entrepreneurship club, then Kickstart Lab and Startup Fair, and a place on Rykliai, Lithuania's Shark Tank.", app: "contles" },
       ] as ResumeRow[],
     },
     {
@@ -595,7 +595,7 @@ export type Milestone = { when: string; title: string; body: string; app?: AppId
 export const timeline: Milestone[] = [
   { when: "Jun 2025", title: "Acquisity", body: "Product design for an AI acquisition platform. Now leading it." },
   { when: "Oct 2025", title: "Lunor", body: "My designs, shared. People bought and used loads of them.", app: "lunor" },
-  { when: "Dec 2025", title: "Contles begins", body: "Brands and creators in one place. First at the ISM club, then Kickstart Lab, Startup Fair and Rykliai.", app: "contles", key: true },
+  { when: "Dec 2025", title: "Contles begins", body: "Brands and creators in one place. First at the ISM club, then Kickstart Lab, Startup Fair and Rykliai, Lithuania's Shark Tank.", app: "contles", key: true },
   { when: "2026", title: "Capto and Filzy", body: "An evening project that became a product, and a better way to send files.", app: "capto" },
   { when: "Aug 2026", title: "The novel, and a first release", body: "Žiemos naktys šviesesnės is finished. Nocturne for Absent Things comes out on Spotify.", app: "novel", key: true },
   { when: "Aug 2026", title: "Larpo, fourth brand", body: "The studio's new site goes live. A team of four.", app: "larpo", key: true },
