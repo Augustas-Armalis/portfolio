@@ -1604,8 +1604,6 @@ export default function Desktop(_: { user?: UserId }) {
       {wp.src.startsWith("live:") && <LiveWallpaper />}
       <MenuBar />
       {/* isolate: windows stack among themselves, always under the menu bar and the dock */}
-      {/* the page's one h1: every window's own title is an h2 under it */}
-      <h1 className="sr-only">Augustas Armalis, design engineer and founder</h1>
       <div ref={area} id="os-window-layer" className="absolute inset-x-0 bottom-0 top-[24px] isolate">
         <Welcome />
         <DesktopIcons area={area} />

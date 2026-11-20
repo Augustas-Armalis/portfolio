@@ -159,8 +159,6 @@ function Lock({ onPower }: { onPower: () => void }) {
     <div
       className="wp-photo absolute inset-0 flex flex-col items-center bg-black text-white"
       style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}
-      role="button"
-      tabIndex={0}
       onPointerDown={() => {
         held.current = false;
         hold.current = window.setTimeout(() => {
@@ -171,8 +169,8 @@ function Lock({ onPower }: { onPower: () => void }) {
       onPointerUp={() => window.clearTimeout(hold.current)}
       onPointerLeave={() => window.clearTimeout(hold.current)}
       onPointerCancel={() => window.clearTimeout(hold.current)}
+      // a tap anywhere opens it; the control a keyboard or a screen reader finds is the button below
       onClick={() => !held.current && login()}
-      onKeyDown={(e) => e.key === "Enter" && login()}
       data-lock=""
     >
       {wp.src.startsWith("live:") && <LiveWallpaper />}
@@ -201,14 +199,19 @@ function Lock({ onPower }: { onPower: () => void }) {
             </motion.div>
           ))}
         </motion.div>
-        <motion.div
+        <motion.button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!held.current) login();
+          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ ...M.arrive, delay: seamless ? 0.55 : 0.4 }}
-          className="mt-7 text-[15px] font-medium text-white/80 [text-shadow:0_1px_6px_rgb(0_0_0/0.3)]"
+          className="mt-5 flex h-11 items-center px-4 text-[15px] font-medium text-white/80 [text-shadow:0_1px_6px_rgb(0_0_0/0.3)]"
         >
           Tap to open
-        </motion.div>
+        </motion.button>
         {/* the way back out, always in sight: the phone goes dark and the desk is there again */}
         <motion.button
           type="button"
@@ -786,7 +789,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
 
 // ---------- app window: grows out of its icon, home gesture to close ----------
 
-function AppWindow({ id, origin, onClosed }: { id: AppId; origin: Origin | null; onClosed: () => void }) {
+function AppWindow({ id, origin, onClosed, onLeaving }: { id: AppId; origin: Origin | null; onClosed: () => void; onLeaving?: (leaving: boolean) => void }) {
   const [vw] = useState(() => window.innerWidth);
   const [vh] = useState(() => window.innerHeight);
   const o = origin ?? { x: vw / 2 - 31, y: vh / 2 - 31, w: 62, h: 62 };
@@ -814,6 +817,8 @@ function AppWindow({ id, origin, onClosed }: { id: AppId; origin: Origin | null;
 
   const to = (target: number, velocity = 0) => {
     anim.current?.stop();
+    // on its way back to its icon the app no longer covers the home screen: the icons take taps again at once
+    onLeaving?.(target === 0);
     anim.current = animate(p, target, {
       ...(target === 1 ? M.sheet : M.ui),
       velocity,
@@ -907,6 +912,9 @@ export default function PhoneOS() {
   const lightBar = !(up) || !phoneApp || phoneApp === "terminal" || phoneApp === "doom" || phoneApp === "blocks" || (!!phoneApp && heroDark);
   const shutdown = useOS((s) => s.shutdown);
   const [power, setPower] = useState(false);
+  // an app that is closing has let go of the home screen
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => setLeaving(false), [phoneApp]);
   // A real phone already has a status bar and an island of its own: ours would sit under them, everything twice.
   // There (a touch screen; the desktop's phone preview is a mouse) the clock, signal and battery are left out,
   // the island is only a pill for live activity, and every screen starts just under the real bar.
@@ -942,6 +950,8 @@ export default function PhoneOS() {
           <motion.div
             key="home"
             className="absolute inset-0"
+            // under an open app the home screen is out of reach: nothing on it takes focus or a tap
+            inert={!!phoneApp && !leaving}
             // transform only: the widgets and the Dock are glass, and glass inside a fading parent goes flat. The
             // lock screen is over it while it settles, and comes back over it at once when the phone locks.
             initial={{ scale: reducedMotion() ? 1 : 1.08 }}
@@ -964,7 +974,7 @@ export default function PhoneOS() {
           </motion.div>
         )}
       </AnimatePresence>
-      {up && phoneApp && <AppWindow key={phoneApp} id={phoneApp} origin={origin} onClosed={() => openPhoneApp(null)} />}
+      {up && phoneApp && <AppWindow key={phoneApp} id={phoneApp} origin={origin} onClosed={() => openPhoneApp(null)} onLeaving={setLeaving} />}
       <AnimatePresence>{power && <PowerSheet key="power" onClose={() => setPower(false)} />}</AnimatePresence>
       <PowerOverlay />
     </div>
