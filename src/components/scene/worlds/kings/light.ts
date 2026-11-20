@@ -29,13 +29,16 @@ export const DOME_U = {
   uOccR: { value: [new THREE.Vector3(1.5 * R, 2.7 * R, 1.7 * R), new THREE.Vector3(0.85 * R, 0.8 * R, 0.8 * R), new THREE.Vector3(1.55 * R, 3.1 * R, 1.75 * R), new THREE.Vector3(0.9 * R, 0.8 * R, 0.85 * R)] },
   // x: how thick the mist is (per metre at its thickest), y: how much of the light hangs in it, z: how strongly the shafts are cut, w: how light the mist itself is
   uFogK: { value: new THREE.Vector4(0.0048, 1.3, 1, 1) },
+  // what happens as the plane comes on (set each frame by the world): x: the little world's light (1, and brighter as
+  // the kings lean to it), y: how far they have leaned (0..1), z: how many of the stars are out (0..1)
+  uEvt: { value: new THREE.Vector4(1, 0, 0.3, 0) },
 };
 export const KINGS_UNIFORMS = { ...SKY_U, ...DOME_U };
 if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __kingsU: DOME_U });
 
 // (the core alone, for shaders that already carry the noise and the sky: the ground)
 export const GLSL_KINGS_CORE = /* glsl */ `
-uniform vec3 uDome; uniform float uR; uniform vec3 uOccC[4]; uniform vec3 uOccR[4]; uniform vec4 uFogK;
+uniform vec3 uDome; uniform float uR; uniform vec3 uOccC[4]; uniform vec3 uOccR[4]; uniform vec4 uFogK; uniform vec4 uEvt;
 const vec3 DOME_WARM = vec3(1.0, 0.62, 0.31);
 
 // ---- the night behind the wood ----
@@ -58,7 +61,9 @@ float mistAt(vec3 p){
   float n = vnoise(q) * 0.62 + vnoise(q * 2.9 + vec2(4.1 - uTime * 0.012, 1.7 + uTime * 0.008) + p.y * 0.011) * 0.38;
   float bank = smoothstep(0.22, 0.8, n);
   // a blanket that lies between the roots, a taller haze through the trunks, thin air above
-  return exp(-h / 12.0) * (0.16 + 1.9 * bank) + exp(-h / 75.0) * (0.2 + 0.46 * bank) + 0.045;
+  // (it stands back from the little world: in the glade the air is clearer, and what is dark there stays dark)
+  float open = mix(0.4, 1.0, smoothstep(140.0, 520.0, length(p.xz - uDome.xz)));
+  return (exp(-h / 12.0) * (0.16 + 1.9 * bank) + exp(-h / 75.0) * (0.2 + 0.46 * bank) + 0.045) * open;
 }
 
 // ---- the light ----
@@ -78,7 +83,7 @@ float domeVis(vec3 p){
 vec2 domeLight(vec3 P, vec3 n){
   vec3 L = uDome + vec3(0.0, uR * 0.35, 0.0) - P; float d = length(L); L /= max(d, 0.001);
   // (it breathes with the two who hold it, a twentieth brighter and dimmer)
-  float att = (1.0 + 0.05 * sin(uTime * 0.38)) / (1.0 + d * d / (uR * uR * 7.5));
+  float att = uEvt.x * (1.0 + 0.05 * sin(uTime * 0.38)) / (1.0 + d * d / (uR * uR * 7.5));
   // it shines up and out: the dish and the hands shade whatever lies below it
   att *= smoothstep(-0.62, 0.1, -L.y);
   return vec2(dot(n, L), att);
@@ -105,7 +110,9 @@ vec3 airFrom(vec3 col, vec3 ro, vec3 P){
   float od = len * ((m0 + m1 + m2) * 0.3333 * uFogK.x + uMist);
   float T = exp(-od);
   // (its own colour: the night's blue-teal, a little lighter where the eye looks level through the most of it)
-  vec3 fc = mix(vec3(0.019, 0.045, 0.06), vec3(0.006, 0.014, 0.023), smoothstep(0.0, 0.55, abs(rd.y))) * uFogK.w;
+  vec3 fc = mix(vec3(0.02, 0.043, 0.05), vec3(0.006, 0.013, 0.019), smoothstep(0.0, 0.55, rd.y));
+  // (looking down into the floor of the wood it is the brown-black of the trunks, not the night's blue)
+  fc = mix(fc, vec3(0.021, 0.019, 0.016), smoothstep(0.02, -0.22, rd.y)) * uFogK.w;
   col = col * T + fc * (1.0 - T);
   // the warmth gathered along the line
   vec3 C = uDome + vec3(0.0, uR * 0.4, 0.0);
@@ -121,7 +128,7 @@ vec3 airFrom(vec3 col, vec3 ro, vec3 P){
   k *= exp(-od * (tc / max(len, 0.001)) * 0.6);
   // it does not light the air beneath the dish
   k *= mix(0.2, 1.0, smoothstep(-0.7, 0.15, q.y / max(sqrt(p2), 1.0)));
-  return col + DOME_WARM * gathered * k * uR * 0.082 * (1.0 + uPulse * 0.25) * (1.0 + 0.05 * sin(uTime * 0.38));
+  return col + DOME_WARM * gathered * k * uR * 0.082 * (1.0 + uPulse * 0.25) * (1.0 + 0.05 * sin(uTime * 0.38)) * uEvt.x;
 }
 vec3 kingsAir(vec3 col, vec3 P){ return airFrom(col, cameraPosition, P); }
 
@@ -137,11 +144,12 @@ vec3 bumpN(vec3 n, vec3 P, float h, float k){
   vec3 g = (r1 * hx + r2 * hy) * sign(det) / max(abs(det), 1e-7);
   return normalize(n - g * k);
 }
-// what the wood's own night gives a surface: teal from all round, a breath of colder blue from above
-// (and what little of the sky's own light comes down through the vault, from one side: it is this that gives a trunk its roundness in the dark)
+// What the wood's own night gives a surface. The darks of this picture are brown-black, not blue: an umber from
+// all round, and only on what faces up a little of the sky's teal coming down through the vault (it is this that
+// gives a trunk its roundness in the dark).
 vec3 coolFill(vec3 n){
-  return uSkyCol * (0.62 + 0.38 * n.y) * 0.9 + vec3(0.012, 0.03, 0.056) * clamp(0.5 + 0.5 * n.y, 0.0, 1.0)
-    + vec3(0.05, 0.1, 0.14) * pow(max(dot(n, vec3(0.2507, 0.8023, 0.5416)), 0.0), 1.6);
+  return vec3(0.06, 0.052, 0.044) * (0.6 + 0.4 * n.y)
+    + vec3(0.03, 0.062, 0.07) * pow(max(dot(n, vec3(0.2507, 0.8023, 0.5416)), 0.0), 1.6);
 }
 `;
 

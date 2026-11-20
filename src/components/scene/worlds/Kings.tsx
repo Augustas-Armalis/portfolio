@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { WorldBase, useDisposable, type WorldProps } from "./common";
@@ -9,7 +9,7 @@ import { Kit, haloGeometry, makeTempera, rng, type GroundPalette, type Halo, typ
 import { kingSteps, makeCrownMaterial, makeKingMaterial } from "./kings/figures";
 import { BY, DOME_AT, DOME_U, GLSL_END, GLSL_KINGS, GLSL_KINGS_CORE, KINGS_UNIFORMS, R } from "./kings/light";
 import { aisleX, makeWoodMaterial, woodGeometry, type Walk } from "./kings/wood";
-import { KINGS, KINGS_WATER, ORIGIN, WORLDS, groundAt, heightGLSL } from "./voyage";
+import { KINGS, KINGS_WATER, ORIGIN, WORLDS, groundAt, heightGLSL, voyage } from "./voyage";
 
 // Fairy Tale of the Kings (Karalių pasaka, 1909). A night wood of enormous
 // trunks whose boughs close overhead; small towns and towers live in the
@@ -32,13 +32,16 @@ import { KINGS, KINGS_WATER, ORIGIN, WORLDS, groundAt, heightGLSL } from "./voya
 // everything small that moves.
 
 const def = WORLDS.kings;
+// the bell-light: where it hangs (over the clearing, in the plane's way but well above it) and how long its thread is
+const BELL: V3 = [30, 52, 372];
+const BELL_DROP = 120;
 // the world's own tall things (the kings, the painting); the trunks join them whenever the wood is built
 const OWN_OBSTACLES = def.obstacles.length;
 
 export const KINGS_PAL: GroundPalette = {
-  a: [0.02, 0.032, 0.028],
-  b: [0.034, 0.036, 0.026],
-  c: [0.014, 0.024, 0.026],
+  a: [0.062, 0.05, 0.036],
+  b: [0.08, 0.06, 0.038],
+  c: [0.034, 0.036, 0.028],
   hook: {
     uniforms: DOME_U,
     decl: GLSL_KINGS_CORE,
@@ -46,20 +49,41 @@ export const KINGS_PAL: GroundPalette = {
     // lies on it in a pool (but not straight beneath, where the hands shade it), and the kings' shadows across it
     lit: /* glsl */ `{
       float lf = fwidth(p.x) + fwidth(p.y);
+      float near = 1.0 - smoothstep(0.15, 0.7, lf);
+      // leaf-mould lying in drifts, darker and lighter; moss wherever it is damp
+      vec3 a2 = alb * (0.66 + 0.8 * fbm(p * 0.021 + 9.0));
       float mossG = smoothstep(0.42, 0.74, vnoise(p * 0.03 + 3.0) * 0.6 + vnoise(p * 0.11) * 0.4);
-      vec3 a2 = mix(alb, vec3(0.018, 0.05, 0.027) * (0.7 + 0.6 * vnoise(p * 0.7)), mossG * 0.75);
+      a2 = mix(a2, vec3(0.036, 0.07, 0.034) * (0.7 + 0.6 * vnoise(p * 0.7)), mossG * 0.6);
+      // fallen leaves, pale and russet, each lying its own way
       vec2 lc = p * 0.9; vec2 li = floor(lc);
       vec2 lr = fract(lc) - 0.5 - (vec2(hash12(li + 1.0), hash12(li + 2.0)) - 0.5) * 0.6;
       float la = hash12(li + 5.0) * 3.1416;
       lr = vec2(cos(la) * lr.x - sin(la) * lr.y, sin(la) * lr.x + cos(la) * lr.y);
-      float leaf = (1.0 - smoothstep(0.1, 0.17, length(lr * vec2(1.0, 2.0)))) * step(0.7, hash12(li)) * (1.0 - smoothstep(0.2, 0.6, lf));
-      a2 = mix(a2, mix(vec3(0.1, 0.062, 0.028), vec3(0.075, 0.07, 0.035), hash12(li + 8.0)), leaf);
+      float leaf = (1.0 - smoothstep(0.1, 0.17, length(lr * vec2(1.0, 2.0)))) * step(0.62, hash12(li)) * (1.0 - smoothstep(0.2, 0.6, lf));
+      a2 = mix(a2, mix(vec3(0.2, 0.1, 0.04), vec3(0.15, 0.13, 0.06), hash12(li + 8.0)), leaf);
+      // dropped twigs, and small stones worked up through the mould
+      vec2 tc = p * 0.33; vec2 ti = floor(tc); vec2 tf = fract(tc) - 0.5;
+      float ta = hash12(ti + 3.0) * 3.1416;
+      vec2 tr = vec2(cos(ta) * tf.x - sin(ta) * tf.y, sin(ta) * tf.x + cos(ta) * tf.y);
+      float twig = (1.0 - smoothstep(0.012, 0.03, abs(tr.y + 0.04 * sin(tr.x * 9.0)))) * (1.0 - smoothstep(0.26, 0.34, abs(tr.x))) * step(0.55, hash12(ti)) * near;
+      a2 = mix(a2, vec3(0.022, 0.015, 0.01), twig * 0.85);
+      vec2 pc = p * 1.5; vec2 pj = floor(pc);
+      float pd = length(fract(pc) - 0.5 - (vec2(hash12(pj + 1.0), hash12(pj + 2.0)) - 0.5) * 0.6);
+      float peb = (1.0 - smoothstep(0.09, 0.15, pd)) * step(0.8, hash12(pj + 7.0)) * near;
+      a2 = mix(a2, vec3(0.13, 0.12, 0.105) * (0.7 + 0.6 * hash12(pj)), peb);
+      // it is not flat: the mould lies in soft humps, and every leaf and stone stands a little proud of it
+      float hgt = (vnoise(p * 0.4) * 0.6 + vnoise(p * 1.2 + 4.0) * 0.4) * 0.6 * near + leaf * 0.07 + peb * 0.14 + twig * 0.05 + mossG * 0.14 * vnoise(p * 2.0) * near;
+      n = bumpN(n, vWorld, hgt, 1.0);
       // wet at the water's edge
       float wet = 1.0 - smoothstep(${KINGS_WATER.toFixed(2)}, ${(KINGS_WATER + 1.4).toFixed(2)}, h);
       a2 *= mix(1.0, 0.55, wet);
+      // where the two great robes come down to it the ground lies in their shade
+      float kc = smoothstep(0.82, 1.5, length((vWorld.xz - uOccC[0].xz) / (uOccR[0].xz * 1.12))) * smoothstep(0.82, 1.5, length((vWorld.xz - uOccC[2].xz) / (uOccR[2].xz * 1.12)));
       vec2 dl = domeLight(vWorld, n);
       float lit = dl.y * domeVis(vWorld) * clamp(dl.x, 0.0, 1.0) * smoothstep(uR * 0.9, uR * 2.6, length(vWorld.xz - uDome.xz));
-      col = a2 * (coolFill(n) * 0.9 + DOME_WARM * lit * 3.6);
+      col = a2 * (coolFill(n) * 0.9 * mix(0.22, 1.0, kc) + DOME_WARM * lit * 3.6);
+      // a wet gleam on the mud by the water, toward the light
+      col += DOME_WARM * wet * dl.y * domeVis(vWorld) * pow(max(dot(reflect(-normalize(cameraPosition - vWorld), n), normalize(uDome - vWorld)), 0.0), 14.0) * 0.5;
     }`,
     air: `col = kingsAir(col, vWorld);`,
   },
@@ -92,8 +116,16 @@ function makeNight() {
         vec3 d = normalize(vWorld - cameraPosition);
         vec3 col = nightBands(d);
         float up = smoothstep(0.02, 0.3, d.y);
-        float st = starLayer(d, 46.0, 0.2) + 0.6 * starLayer(d, 110.0, 0.3);
-        col += mix(vec3(0.8, 0.88, 1.0), vec3(1.0, 0.9, 0.74), step(0.6, fract(st * 37.0))) * st * up * 0.5;
+        float st = starLayer(d, 46.0, 0.3) + 0.6 * starLayer(d, 110.0, 0.4);
+        col += mix(vec3(0.8, 0.88, 1.0), vec3(1.0, 0.9, 0.74), step(0.6, fract(st * 37.0))) * st * up * 0.8 * uEvt.z;
+        // and the large soft white ones he dotted over the whole upper picture, a few to every gap in the vault
+        {
+          vec3 p = d * 17.0; vec3 id = floor(p); vec3 h = hash33(id);
+          float dd = length(fract(p) - 0.5 - (h - 0.5) * 0.6);
+          // (they come out one by one as the plane goes in under the vault: each has its own moment)
+          float big = exp(-dd * dd * 420.0) * step(0.42, h.x) * (0.6 + 0.4 * sin(uTime * (0.2 + h.y * 0.4) + h.z * 6.283)) * smoothstep(h.y - 0.12, h.y + 0.12, uEvt.z * 1.24 - 0.12);
+          col += vec3(0.62, 0.74, 0.86) * big * smoothstep(0.06, 0.3, d.y) * 0.75;
+        }
         gl_FragColor = vec4(kingsAir(col, cameraPosition + d * 1400.0), 1.0);
         ${GLSL_END}
       }`,
@@ -172,10 +204,11 @@ function makeWater() {
 function makeDomeSky() {
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
-    uniforms: { ...SKY_U },
+    uniforms: { ...SKY_U, uEvt: DOME_U.uEvt },
     vertexShader: /* glsl */ `varying vec3 vLocal; void main(){ vLocal = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
       varying vec3 vLocal;
+      uniform vec4 uEvt;
       ${GLSL_SKY}
       void main(){
         vec3 d = normalize(vLocal);
@@ -184,7 +217,11 @@ function makeDomeSky() {
         col = mix(col, vec3(1.66, 1.46, 1.2), smoothstep(0.2, 0.85, h));
         // the low sun of that country, a little to one side
         col += vec3(1.0, 0.8, 0.5) * pow(max(dot(d, normalize(vec3(-0.35, 0.3, -0.9))), 0.0), 9.0) * 0.9;
-        gl_FragColor = vec4(col * (1.0 + uPulse * 0.2), 1.0);
+        // its thin day moon, as he put it, high on the left
+        vec3 m = normalize(vec3(-0.3, 0.6, -0.74));
+        float moon = (1.0 - smoothstep(0.05, 0.056, distance(d, m))) * smoothstep(0.046, 0.052, distance(d, normalize(m + vec3(0.03, 0.012, 0.0))));
+        col = mix(col, vec3(2.4, 2.3, 2.1), moon);
+        gl_FragColor = vec4(col * (1.0 + uPulse * 0.2) * (0.9 + 0.1 * uEvt.x), 1.0);
         ${GLSL_END}
       }`,
   });
@@ -549,11 +586,17 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
   yield;
   const left = yield* kingSteps(-1, props.mobile, budget);
   const right = yield* kingSteps(1, props.mobile, budget);
+  // (and each again in coarse clay, for the long way in, when they are small in the mist)
+  const leftFar = yield* kingSteps(-1, props.mobile, budget, true);
+  const rightFar = yield* kingSteps(1, props.mobile, budget, true);
+  leftFar.crown.dispose();
+  rightFar.crown.dispose();
   yield;
 
   // ---------- the little world ----------
-  // His own homestead under the glass, in the light of that picture: a pale field, a path, low roofs, round
-  // trees gone rose and gold in a low sun, a poplar or two, blue hills behind. In the middle of it the desk.
+  // His own homestead under the glass, in the light of that picture: warm earth, a pale path, low houses with red
+  // roofs, small dark trees against a cream sky (round ones, slim poplars), a thin tower, blue hills behind, a day
+  // moon. In the middle of it, where he put a white fountain of a tree, the desk, and the display on it alight.
   const k = new Kit();
   const DP = (x: number, y: number, z: number): V3 => [DOME_AT.x + x, by + y, KINGS.z + z];
   const GL = 2.0; // its own light (lights are turned down at night; this is the one that is not)
@@ -561,46 +604,70 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
   k.add(new THREE.CylinderGeometry(R + 0.9, R - 6, 3.6, 72), DP(0, -1.95, 0), [0.045, 0.026, 0.018], { top: [0.2, 0.1, 0.04] });
   k.add(new THREE.TorusGeometry(R + 0.5, 0.4, 8, 96), DP(0, 0.05, 0), [1, 0.62, 0.3], { glow: 1.0, rot: [Math.PI / 2, 0, 0] });
   k.add(new THREE.TorusGeometry(R - 2.6, 0.7, 8, 72), DP(0, -3.2, 0), [0.12, 0.06, 0.03], { rot: [Math.PI / 2, 0, 0] });
-  // the field and the path that leaves the desk
-  k.add(new THREE.CylinderGeometry(R - 0.3, R - 0.3, 0.5, 64), DP(0, -0.2, 0), [0.98, 0.8, 0.5], { glow: GL * 0.5 });
-  k.box(2.2, 0.14, R * 1.5, DP(2.4, 0.12, -R * 0.1), [1, 0.9, 0.72], { glow: GL * 0.56, rot: [0, 0.16, 0] });
-  k.add(new THREE.SphereGeometry(R * 0.5, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), DP(-R * 0.3, 0, -R * 0.5), [0.66, 0.58, 0.76], { glow: GL * 0.42, scale: [1.3, 0.4, 0.6] });
-  k.add(new THREE.SphereGeometry(R * 0.4, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), DP(R * 0.42, 0, -R * 0.58), [0.74, 0.6, 0.68], { glow: GL * 0.42, scale: [1.3, 0.4, 0.6] });
-  // the desk, the display on it, a chair's worth of shadow
-  k.box(5.2, 0.3, 2.5, DP(0, 2.6, 5), [0.5, 0.27, 0.15], { glow: GL * 0.42 });
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.box(0.24, 2.5, 0.24, DP(sx * 2.3, 1.25, 5 + sz * 0.95), [0.36, 0.19, 0.1], { glow: GL * 0.36 });
-  k.box(2.5, 1.5, 0.12, DP(0, 3.9, 4.5), [0.08, 0.06, 0.07], { glow: 0 });
-  k.box(2.3, 1.3, 0.03, DP(0, 3.9, 4.58), [1.0, 0.86, 0.7], { glow: GL * 0.7 });
-  k.box(0.3, 0.9, 0.2, DP(0, 3.0, 4.5), [0.1, 0.08, 0.08], { glow: 0 });
-  // roofs
+  // the ground: warm earth, paler in the middle where the light lies
+  k.add(new THREE.CylinderGeometry(R - 0.3, R - 0.3, 0.5, 64), DP(0, -0.2, 0), [0.8, 0.5, 0.27], { glow: GL * 0.46 });
+  k.add(new THREE.CylinderGeometry(R * 0.55, R * 0.62, 0.3, 48), DP(0, 0.0, 1), [1.0, 0.82, 0.52], { glow: GL * 0.5 });
+  // the path: in from the near rim, round the desk and away between the houses
+  for (const [x, z, len, rot] of [
+    [3.4, 16, 13, 0.2],
+    [1.6, 6, 9, -0.25],
+    [3.2, -3, 11, 0.42],
+    [7.6, -13, 12, 0.3],
+  ] as const)
+    k.box(1.7, 0.14, len, DP(x, 0.2, z), [1, 0.93, 0.78], { glow: GL * 0.6, rot: [0, rot, 0] });
+  // blue hills along the far rim
+  k.add(new THREE.SphereGeometry(R * 0.5, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), DP(-R * 0.34, 0, -R * 0.62), [0.56, 0.52, 0.76], { glow: GL * 0.44, scale: [1.3, 0.3, 0.5] });
+  k.add(new THREE.SphereGeometry(R * 0.4, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), DP(R * 0.4, 0, -R * 0.66), [0.64, 0.54, 0.7], { glow: GL * 0.44, scale: [1.3, 0.34, 0.5] });
+  // the desk, the display on it alight (the brightest thing in that country), the keyboard, a chair's worth of shadow
+  k.box(5.6, 0.32, 2.7, DP(0, 2.7, 3), [0.52, 0.28, 0.15], { glow: GL * 0.44 });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.box(0.26, 2.6, 0.26, DP(sx * 2.5, 1.3, 3 + sz * 1.05), [0.36, 0.19, 0.1], { glow: GL * 0.36 });
+  k.box(2.9, 1.8, 0.14, DP(0, 4.3, 2.4), [0.08, 0.06, 0.07], { glow: 0 });
+  k.box(2.66, 1.56, 0.04, DP(0, 4.3, 2.5), [1.0, 0.9, 0.76], { glow: GL * 1.1 });
+  k.box(0.34, 0.9, 0.22, DP(0, 3.3, 2.4), [0.1, 0.08, 0.08], { glow: 0 });
+  k.box(1.9, 0.1, 0.6, DP(0, 2.92, 3.5), [0.9, 0.86, 0.8], { glow: GL * 0.5 });
+  // houses with red roofs, in two huddles either side of the path
   for (const [x, z, w, rot] of [
-    [-9, -6, 6.4, 0.3],
-    [-15.5, -1, 4.6, -0.2],
-    [10, -9, 5.4, -0.4],
-    [17, 2, 4.2, 0.5],
+    [-10, -5, 5.2, 0.3],
+    [-15.5, 0, 4.0, -0.2],
+    [-7, -11, 3.6, 0.1],
+    [11, -8, 4.6, -0.4],
+    [16.5, -2, 3.8, 0.5],
+    [14, -14, 3.4, 0.2],
   ] as const) {
-    k.box(w, 3.0, w * 0.72, DP(x, 1.5, z), [0.98, 0.8, 0.6], { glow: GL * 0.46, rot: [0, rot, 0] });
-    k.add(new THREE.ConeGeometry(w * 0.8, 2.6, 4), DP(x, 4.3, z), [0.74, 0.22, 0.14], { glow: GL * 0.44, rot: [0, rot + Math.PI / 4, 0], scale: [1, 1, 0.74] });
+    k.box(w, 2.6, w * 0.72, DP(x, 1.3, z), [0.98, 0.82, 0.62], { glow: GL * 0.46, rot: [0, rot, 0] });
+    k.add(new THREE.ConeGeometry(w * 0.8, 2.4, 4), DP(x, 3.8, z), [0.72, 0.19, 0.12], { glow: GL * 0.44, rot: [0, rot + Math.PI / 4, 0], scale: [1, 1, 0.74] });
+    k.box(0.5, 0.8, 0.06, DP(x + Math.sin(rot) * w * 0.37, 1.2, z + Math.cos(rot) * w * 0.37), [0.2, 0.1, 0.07], { glow: 0, rot: [0, rot, 0] });
   }
-  // round trees, rose and ochre; slim dark poplars; a thin tower
+  // trees: many and small and dark against the sky, round ones in clumps, slim poplars standing over them
   const tr = rng(77);
-  for (let i = 0; i < 26; i++) {
-    const a = 0.62 + (i / 26) * (Math.PI * 2 - 1.24) + Math.PI / 2;
-    const d = R * (0.42 + tr() * 0.48);
-    const x = Math.cos(a) * d;
-    const z = Math.sin(a) * d - 3;
-    if (i % 5 === 2) {
-      const h = 11 + tr() * 6;
-      k.add(new THREE.ConeGeometry(1.5, h, 7), DP(x, h / 2 + 0.4, z), [0.26, 0.12, 0.11], { glow: GL * 0.3, top: [0.46, 0.24, 0.15] });
-    } else {
-      const s = 2.8 + tr() * 2.6;
-      const rose = tr() < 0.6;
-      k.add(new THREE.CylinderGeometry(0.22, 0.3, 3.4, 5), DP(x, 1.7, z), [0.34, 0.16, 0.1], { glow: GL * 0.3 });
-      k.add(new THREE.SphereGeometry(s, 12, 9), DP(x, 3.2 + s * 0.8, z), rose ? [0.66, 0.27, 0.19] : [0.72, 0.43, 0.19], { glow: GL * 0.4, scale: [1, 0.92, 1], top: rose ? [0.92, 0.5, 0.35] : [0.96, 0.68, 0.33] });
+  const clumps: [number, number, number][] = [
+    [-12, -9, 7],
+    [12, -11, 7],
+    [-19, 3, 5],
+    [20, 4, 5],
+    [0, -19, 9],
+    [-21, -10, 4],
+    [22, -9, 4],
+    [-9, 13, 3],
+    [11, 14, 3],
+  ];
+  for (const [cx, cz, n] of clumps)
+    for (let i = 0; i < n; i++) {
+      const x = cx + (tr() - 0.5) * 9;
+      const z = cz + (tr() - 0.5) * 7;
+      if (Math.hypot(x, z) > R - 3.5) continue;
+      if (tr() < 0.24) {
+        const h = 7.5 + tr() * 6.5;
+        k.add(new THREE.ConeGeometry(0.95, h, 7), DP(x, h / 2 + 0.3, z), [0.22, 0.1, 0.08], { glow: GL * 0.3, top: [0.4, 0.2, 0.12] });
+      } else {
+        const s = 1.5 + tr() * 1.5;
+        const rose = tr() < 0.55;
+        k.add(new THREE.CylinderGeometry(0.14, 0.2, 2.2, 5), DP(x, 1.1, z), [0.3, 0.14, 0.09], { glow: GL * 0.3 });
+        k.add(new THREE.SphereGeometry(s, 12, 9), DP(x, 2.0 + s * 0.85, z), rose ? [0.46, 0.17, 0.12] : [0.5, 0.27, 0.11], { glow: GL * 0.36, scale: [1, 0.9, 1], top: rose ? [0.86, 0.42, 0.28] : [0.9, 0.6, 0.26] });
+      }
     }
-  }
-  k.box(1.1, 15, 1.1, DP(15, 7.5, -13), [0.3, 0.14, 0.12], { glow: GL * 0.3 });
-  k.add(new THREE.ConeGeometry(1.1, 3.4, 4), DP(15, 16.6, -13), [0.3, 0.14, 0.12], { glow: GL * 0.3, rot: [0, Math.PI / 4, 0] });
+  k.box(0.9, 13, 0.9, DP(15, 6.5, -15), [0.26, 0.12, 0.1], { glow: GL * 0.3 });
+  k.add(new THREE.ConeGeometry(0.9, 3.0, 4), DP(15, 14.4, -15), [0.26, 0.12, 0.1], { glow: GL * 0.3, rot: [0, Math.PI / 4, 0] });
 
   // fireflies over the water and among the roots, all down the aisle and thick in the glade
   const fx = Math.max(0.4, props.effects);
@@ -633,13 +700,15 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
   for (const t of wood.trunks) def.obstacles.push({ x: t.x, z: t.z, r: t.R + 6, h: t.H });
   yield;
   return {
-    wood: wood.geo,
+    woodChunks: wood.chunks,
     bark: makeWoodMaterial(),
     left: left.geo,
+    leftFar: leftFar.geo,
     leftMat: makeKingMaterial(left),
     leftCrown: left.crown,
     leftCrownMat: makeCrownMaterial(left),
     right: right.geo,
+    rightFar: rightFar.geo,
     rightMat: makeKingMaterial(right),
     rightCrown: right.crown,
     rightCrownMat: makeCrownMaterial(right),
@@ -664,6 +733,11 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
     leafMat: makeLeaves(),
     walkers: walkersGeometry(wood.walks, props.mobile ? 26 : 80, 9),
     walkerMat: makeWalkers(),
+    bellThread: new THREE.CylinderGeometry(0.16, 0.16, BELL_DROP, 4),
+    bellCage: new THREE.ConeGeometry(2.2, 2.0, 6, 1, true),
+    bellLamp: new THREE.SphereGeometry(1.5, 14, 10),
+    bellDark: new THREE.MeshBasicMaterial({ color: "#050505", side: THREE.DoubleSide, fog: false }),
+    bellGlow: new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 0.92, 0.4), fog: false }),
     owlG: owlGeometry(),
     owlMat: makeOwl(),
     birdG,
@@ -678,23 +752,68 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
   const bird = useRef<THREE.Mesh>(null);
   const owl = useRef<THREE.Mesh>(null);
   const night = useRef<THREE.Mesh>(null);
+  const chunkRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const kingRefs = useRef<(THREE.Mesh | null)[]>([]);
+  const lod = useRef({ near: false });
+  const bell = useRef<THREE.Group>(null);
+  const swing = useRef(0);
   const b = useDisposable(() => {
     // made ahead of time while the plane was over the sea, or here and now
-    if (madeWood && madeWood.key === woodKey(props)) {
-      const w = madeWood.wood;
-      madeWood = null;
-      return w;
-    }
+    // (it stays where it was put until this world is let go: a render that React begins and then begins again must
+    // find it there both times, or the second would make the whole wood over again on the spot)
+    if (madeWood && madeWood.key === woodKey(props)) return madeWood.wood;
     const g = woodSteps(props, Infinity);
     let r = g.next();
     while (!r.done) r = g.next();
     return r.value;
   }, [props.mobile, props.trees, props.effects > 0.5]);
 
-  useFrame(({ camera }) => {
+  useEffect(
+    () => () => {
+      if (madeWood?.wood === b) madeWood = null;
+    },
+    [b],
+  );
+  useFrame(({ camera }, delta) => {
     // the night stands round the eye wherever it goes (this group sits at the world's own centre)
     night.current?.position.copy(camera.position).sub(ORIGIN);
     const time = SKY_U.uTime.value;
+    // what is far off in the mist is drawn plainly: a piece of the wood without its small things, the kings in coarse clay
+    const cx = camera.position.x - ORIGIN.x;
+    const cy = camera.position.y - ORIGIN.y;
+    const cz = camera.position.z - ORIGIN.z;
+    b.woodChunks.forEach((c, i) => {
+      const m = chunkRefs.current[i];
+      const bs = c.geo.boundingSphere;
+      if (!m || !bs) return;
+      const d = Math.hypot(bs.center.x - cx, bs.center.y - cy, bs.center.z - cz) - bs.radius;
+      const count = d > 240 ? c.essential : Infinity;
+      if (c.geo.drawRange.count !== count) c.geo.setDrawRange(0, count);
+    });
+    const dk = Math.hypot(cx, cy - DOME_AT.y, cz - KINGS.z);
+    // what happens on the way: the stars come out as the plane goes in under the vault; when it is near, the kings
+    // lean the least bit closer over what they hold, and its light answers
+    const ev = DOME_U.uEvt.value;
+    const k1 = 1 - Math.exp(-delta * 0.5);
+    const sm = (t: number) => THREE.MathUtils.smoothstep(t, 0, 1);
+    ev.z += (0.25 + 0.75 * sm((760 - dk) / 420) - ev.z) * k1;
+    ev.y += (sm((300 - dk) / 190) - ev.y) * k1;
+    ev.x = 1 + 0.2 * ev.y;
+    // the bell-light: one great lantern let down from the vault over the clearing. It hangs still until the plane
+    // comes by, swings slowly while it passes beneath, and settles again behind it
+    const bl = bell.current;
+    if (bl) {
+      const want = 0.34 * sm(1 - Math.abs(cz - BELL[2] - 40) / 230);
+      swing.current += (want - swing.current) * (1 - Math.exp(-delta * 0.35));
+      bl.rotation.z = Math.sin(time * 0.52) * swing.current;
+      bl.rotation.x = Math.sin(time * 0.52 * 0.93 + 1.1) * swing.current * 0.35;
+    }
+    if (lod.current.near ? dk > 470 : dk < 430) lod.current.near = !lod.current.near;
+    // (while the world is still being made ready under another sky, both forms stand, so both are sent to the card then)
+    const live = voyage.cur === "kings";
+    kingRefs.current.forEach((m, i) => {
+      if (m) m.visible = !live || i < 2 === lod.current.near;
+    });
     const m = bird.current;
     if (m) {
       // every half minute or so it crosses above the two crowns
@@ -711,7 +830,6 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       const n = Math.floor(time / period);
       const t = (time - n * period) / 16;
       const dir = n % 2 ? 1 : -1;
-      const cz = camera.position.z - ORIGIN.z;
       ow.visible = t < 1 && cz - 150 > KINGS.z + 190;
       if (ow.visible) {
         const z = cz - 150 + dir * (t - 0.5) * 36;
@@ -729,15 +847,37 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       <mesh ref={night} geometry={b.nightGeo} material={b.nightMat} renderOrder={-9} frustumCulled={false} />
       <WorldBase id="kings" def={def} pal={KINGS_PAL} props={props} grass={false} pathTint={[1, 0.8, 0.52]} pathGain={0.05} angels={false} marks={false} groundSize={3400} />
       <mesh geometry={b.waterGeo} material={b.waterMat} renderOrder={1} />
-      <mesh geometry={b.wood} material={b.bark} />
-      <mesh geometry={b.left} material={b.leftMat} />
+      {b.woodChunks.map((c, i) => (
+        <mesh
+          key={i}
+          ref={(m) => {
+            chunkRefs.current[i] = m;
+          }}
+          geometry={c.geo}
+          material={b.bark}
+        />
+      ))}
+      {[b.left, b.right, b.leftFar, b.rightFar].map((g, i) => (
+        <mesh
+          key={i}
+          ref={(m) => {
+            kingRefs.current[i] = m;
+          }}
+          geometry={g}
+          material={i % 2 ? b.rightMat : b.leftMat}
+        />
+      ))}
       <mesh geometry={b.leftCrown} material={b.leftCrownMat} />
-      <mesh geometry={b.right} material={b.rightMat} />
       <mesh geometry={b.rightCrown} material={b.rightCrownMat} />
       <mesh geometry={b.little} material={b.lit} />
       <mesh geometry={b.domeGeo} material={b.domeSky} position={at} />
       <mesh geometry={b.domeGeo} material={b.domeGlass} position={at} renderOrder={5} />
       <mesh geometry={b.raysGeo} material={b.raysMat} renderOrder={6} frustumCulled={false} />
+      <group ref={bell} position={[BELL[0], BELL[1] + BELL_DROP, BELL[2]]}>
+        <mesh geometry={b.bellThread} material={b.bellDark} position={[0, -BELL_DROP / 2, 0]} />
+        <mesh geometry={b.bellCage} material={b.bellDark} position={[0, -BELL_DROP + 2.3, 0]} />
+        <mesh geometry={b.bellLamp} material={b.bellGlow} position={[0, -BELL_DROP, 0]} />
+      </group>
       <mesh geometry={b.walkers} material={b.walkerMat} />
       <mesh geometry={b.leaves} material={b.leafMat} />
       <mesh geometry={b.lampGeo} material={b.lampMat} renderOrder={6} />
@@ -766,8 +906,21 @@ if (typeof window !== "undefined" && process.env.NODE_ENV !== "production")
         if (r.done) {
           const w = r.value as Record<string, unknown>;
           const tris = (k: string) => Math.round(((w[k] as THREE.BufferGeometry).index?.count ?? 0) / 3);
-          const out = { totalMs: Math.round(performance.now() - t0), longestStepMs: Math.round(longest), steps, wood: tris("wood"), left: tris("left"), right: tris("right"), crowns: tris("leftCrown") + tris("rightCrown") };
-          for (const v of Object.values(w)) if (v instanceof THREE.BufferGeometry || v instanceof THREE.Material) v.dispose();
+          const chunks = w.woodChunks as { geo: THREE.BufferGeometry; essential: number }[];
+          const out = {
+            totalMs: Math.round(performance.now() - t0),
+            longestStepMs: Math.round(longest),
+            steps,
+            wood: chunks.reduce((a, c) => a + Math.round((c.geo.index?.count ?? 0) / 3), 0),
+            woodFar: chunks.reduce((a, c) => a + Math.round(c.essential / 3), 0),
+            pieces: chunks.length,
+            left: tris("left"),
+            right: tris("right"),
+            leftFar: tris("leftFar"),
+            rightFar: tris("rightFar"),
+            crowns: tris("leftCrown") + tris("rightCrown"),
+          };
+          letGo(w);
           return out;
         }
       }
@@ -790,5 +943,11 @@ export function prepareKings(props: Pick<WorldProps, "mobile" | "trees" | "effec
 export function dropKings() {
   const w = madeWood?.wood as Record<string, unknown> | undefined;
   madeWood = null;
-  if (w) for (const v of Object.values(w)) if (v instanceof THREE.BufferGeometry || v instanceof THREE.Material || v instanceof THREE.Texture) v.dispose();
+  if (w) letGo(w);
+}
+function letGo(w: Record<string, unknown>) {
+  for (const v of Object.values(w)) {
+    if (v instanceof THREE.BufferGeometry || v instanceof THREE.Material || v instanceof THREE.Texture) v.dispose();
+    else if (Array.isArray(v)) for (const c of v) (c as { geo?: THREE.BufferGeometry }).geo?.dispose();
+  }
 }
