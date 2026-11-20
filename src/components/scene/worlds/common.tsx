@@ -145,10 +145,14 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
             float glint = smoothstep(0.55, 1.0, sin(run)) * (0.5 + 0.5 * vnoise(vec2(vUv.x * 0.6, vUv.y * 4.0 + uTime * 0.3)));
             extra = uTint * glint * exp(-vUv.y * vUv.y * 2.4) * 0.5;
           }
-          float dist = length(vWorld - cameraPosition);
-          float fade = smoothstep(2.0, 16.0, dist) * (1.0 - smoothstep(240.0, 520.0, dist));
-          // far off it is a thread; let it keep its light there
-          fade *= 1.0 + smoothstep(30.0, 160.0, dist) * 0.8;
+          vec3 toEye = cameraPosition - vWorld;
+          float dist = length(toEye);
+          // A low trail of light on the way just ahead, going out with distance. It used to keep its light for half
+          // a kilometre "as a thread": flown along, or seen from below where the way climbs, that thread stood up the
+          // middle of the picture as a thin bright line from the ground into the sky. Now it is only shown where
+          // the eye looks down ON it (never edge-on, never from beneath), and is gone by two hundred and forty metres.
+          float fade = smoothstep(2.0, 16.0, dist) * (1.0 - smoothstep(110.0, 240.0, dist));
+          fade *= smoothstep(0.012, 0.07, toEye.y / max(dist, 0.001));
           fade *= smoothstep(0.0, 14.0, vUv.x) * smoothstep(uLen, uLen - 14.0, vUv.x);
           fade *= (1.0 - airAmt(vWorld) * 0.7) * exp(-dist * uMist * 1.5);
           // (the fine things on it are for the near and middle distance: far off only the thread is left)
