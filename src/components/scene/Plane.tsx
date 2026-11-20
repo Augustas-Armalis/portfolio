@@ -18,9 +18,10 @@ import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kin
 // go at once. Passing a gate, cloud closes, the next world is made under it,
 // and the cloud opens.
 
-// `soft`: the stick is a thumb on glass, so it is eased before the plane hears it; `auto`: there is no stick while
-// the path is followed (a phone), so the quiet hand has the plane at once. `look` is a drag across the view and
-// `gyro` the phone's own turning: both only turn the eye, never the plane.
+// `soft`: the stick is a thumb on glass, so it is eased a little more before the plane hears it; `auto`: there is no
+// stick while the path is followed (Follow the path on, with a mouse or on a phone), so the quiet hand has the plane
+// at once and the keys only nudge it. `look` is a drag across the view, in screen widths (so a whole drag across
+// any screen is the same turn), and `gyro` the phone's own turning: both only turn the eye, never the plane.
 export type FlightInput = {
   sx: number;
   sy: number;
@@ -49,12 +50,29 @@ export type PlaneApi = {
 };
 
 const damp = (a: number, b: number, lambda: number, dt: number) => a + (b - a) * (1 - Math.exp(-lambda * dt));
+// A critically damped spring, solved exactly for the step (so it is the same at 30 fps or 144, and never rings):
+// moves st[x] toward `to` with its velocity kept in st[v]. `w` is its natural frequency (settles in about 4/w s).
+function spring2<K extends string>(st: Record<K, number>, x: K, v: K, to: number, w: number, dt: number) {
+  const e = Math.exp(-w * dt);
+  const c = st[x] - to;
+  const t = (st[v] + w * c) * dt;
+  st[v] = (st[v] - w * t) * e;
+  st[x] = to + (c + t) * e;
+}
+// how far one screen width of drag turns the eye (about 135 degrees)
+export const LOOK_PER_WIDTH = 2.35;
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 const smooth01 = (t: number) => {
   const k = clamp01(t);
   return k * k * (3 - 2 * k);
 };
 export const SPEED = { min: 3.2, max: 28 };
+const NO_INPUT: FlightInput = { sx: 0, sy: 0 };
+const handsIn: FlightInput = { sx: 0, sy: 0, climb: 0 };
+const OPT_NONE = {};
+const OPT_HANDS = { hands: true };
+const OPT_LAUNCH = { launching: true };
+const OPT_LAUNCH_HANDS = { launching: true, hands: true };
 export const speedOf = (throttle: number) => SPEED.min + (SPEED.max - SPEED.min) * Math.pow(clamp01(throttle), 1.35);
 
 // A classic dart, folded from one sheet: the keel pinched underneath, wings
@@ -113,7 +131,11 @@ export function Plane({
       roll: 0,
       rollV: 0,
       pitchV: 0,
+      yawR: 0,
+      yawRV: 0,
+      climbF: 0,
       speed: 0,
+      speedT: 0,
       t: 0,
       idle: 9, // seconds since the controls were last touched
       pathI: 0,
@@ -227,8 +249,9 @@ export function Plane({
       st.lookIdle = 0;
     } else if (L) {
       if (L.dx || L.dy) {
-        st.lookTY = THREE.MathUtils.clamp(st.lookTY + L.dx * 0.0052, -2.95, 2.95);
-        st.lookTP = THREE.MathUtils.clamp(st.lookTP + L.dy * 0.0044, -1.15, 1.35);
+        // grab the world, as at the desk: drag right and the eye swings round to the right, drag down and it rises
+        st.lookTY = THREE.MathUtils.clamp(st.lookTY - L.dx * LOOK_PER_WIDTH, -2.95, 2.95);
+        st.lookTP = THREE.MathUtils.clamp(st.lookTP - L.dy * LOOK_PER_WIDTH * 0.8, -1.15, 1.35);
         st.lookIdle = 0;
       } else if (!L.held) st.lookIdle += dt;
       if (!voyage.lockView && st.lookIdle > 2.6) {
@@ -237,7 +260,7 @@ export function Plane({
         st.lookTP -= st.lookTP * k;
       }
     }
-    const k = 1 - Math.exp(-dt * 9);
+    const k = 1 - Math.exp(-dt * 6.5);
     st.lookYaw += wrap(st.lookTY - st.lookYaw) * k;
     st.lookPitch += (st.lookTP - st.lookPitch) * k;
   };
@@ -251,7 +274,7 @@ export function Plane({
   const place = (id: WorldId, lp: THREE.Vector3, yaw: number) => {
     st.pos.copy(lp).add(originOf(id));
     st.yaw = yaw;
-    st.pitch = st.roll = st.rollV = st.pitchV = 0;
+    st.pitch = st.roll = st.rollV = st.pitchV = st.yawR = st.yawRV = 0;
     st.pathI = 0;
     st.seek = 0;
     st.gateSide = -1;
@@ -305,16 +328,20 @@ export function Plane({
     voyage.throttle = clamp01(voyage.throttle + (input.thr ?? 0) * 0.42 * dt - (input.wheel ?? 0) * 0.0009);
 
     // the stick, with a soft centre so small corrections are small
-    const shape = (v: number) => v * (0.5 + 0.5 * v * v);
-    // a thumb's stick is eased on its way to the plane, so a quick thumb is never a twitch
-    st.sx = damp(st.sx, input.sx, input.soft ? 7.5 : 60, dt);
-    st.sy = damp(st.sy, input.sy, input.soft ? 7.5 : 60, dt);
+    const shape = (v: number) => v * (0.45 + 0.55 * v * v);
+    // a pointer lying still off-centre is not steering: after a while it is let go of, and the plane levels itself
+    const stale = !input.keys && performance.now() - (input.moved ?? 0) > 7000;
+    // every input is low-passed on its way to the plane (a mouse's jitter, a key's on and off, a quick thumb), so
+    // nothing reaches the springs as a step; let go and the stick drifts back to the middle, slower still
+    const inSx = stale ? 0 : input.sx;
+    const inSy = stale ? 0 : input.sy;
+    st.sx = damp(st.sx, inSx, inSx === 0 ? 2.2 : input.soft ? 5 : 6, dt);
+    st.sy = damp(st.sy, inSy, inSy === 0 ? 2.2 : input.soft ? 5 : 6, dt);
+    st.climbF = damp(st.climbF, input.climb ?? 0, 4, dt);
     let sx = shape(st.sx);
     let sy = shape(st.sy);
-    const climb = input.climb ?? 0;
-    const touching = Math.abs(input.sx) > 0.03 || Math.abs(input.sy) > 0.03 || climb !== 0;
-    // a pointer lying still off-centre is not steering: after a while it is let go of
-    const stale = !input.keys && performance.now() - (input.moved ?? 0) > 7000;
+    const climb = st.climbF;
+    const touching = Math.abs(input.sx) > 0.03 || Math.abs(input.sy) > 0.03 || (input.climb ?? 0) !== 0;
     if (touching && !stale && !opts.hands) st.idle = 0;
     else st.idle += dt;
     const want = opts.hands || opts.launching || (voyage.guide && (st.idle > 3.2 || (input.auto && !touching))) ? 1 : 0;
@@ -410,27 +437,29 @@ export function Plane({
     const band = 2.6 + st.speed * 0.16;
     const low = clamp01(1 - (st.pos.y - floor) / band);
     const low3 = low * low * low;
-    let pitchT = sy * 0.5 + climb * 0.34;
+    let pitchT = sy * 0.4 + climb * 0.3;
     if (low > 0) pitchT = Math.max(pitchT, pitchT * (1 - low) + low3 * 0.6);
     const ceil = id === "home" ? def.ceil : def.ceil * 1.3;
     const high = clamp01((st.pos.y - (ceil - 24)) / 24);
     if (high > 0) pitchT = Math.min(pitchT, pitchT * (1 - high) - high * 0.3);
 
-    // bank and pitch are sprung, a touch under critical: they arrive, they don't snap
-    const rollT = THREE.MathUtils.clamp(sx, -1, 1) * 0.92;
-    st.rollV += ((rollT - st.roll) * 10.5 - st.rollV * 6.0) * dt;
-    st.roll += st.rollV * dt;
-    st.pitchV += ((pitchT - st.pitch) * 8.5 - st.pitchV * 5.6) * dt;
-    st.pitch += st.pitchV * dt;
-    // the bank is the turn: slow flight turns tighter
-    st.yaw -= st.roll * (0.8 + 2.2 / Math.max(st.speed, 3)) * dt;
+    // bank and pitch are critically damped springs: they arrive, they never snap or ring
+    const rollT = THREE.MathUtils.clamp(sx, -1, 1) * 0.8;
+    spring2(st, "roll", "rollV", rollT, 3.6, dt);
+    spring2(st, "pitch", "pitchV", pitchT, 3.2, dt);
+    // the bank is the turn (slow flight turns a little tighter); the rate of turn itself is sprung as well, so the
+    // heading swings in and out of a turn instead of starting and stopping
+    spring2(st, "yawR", "yawRV", st.roll * (0.62 + 1.5 / Math.max(st.speed, 3)), 4.5, dt);
+    st.yaw -= st.yawR * dt;
     // speed follows the throttle; diving gathers a little, climbing spends a little
     // the kings' wood is gone through slowly
     // and at a cruise the quiet hand takes its time everywhere
     st.cruise = damp(st.cruise, voyage.cruise ? 1 : 0, 1.4, dt);
     const pace = (id === "kings" ? kingsPace(lz - KINGS.z) : 1) * (1 - 0.55 * st.cruise * a);
     const vT = opts.launching ? Math.min(speedOf(voyage.throttle), 2 + st.t * 3.6) : speedOf(voyage.throttle) * pace - Math.sin(st.pitch) * 5 * pace;
-    st.speed = damp(st.speed, Math.max(SPEED.min * 0.8, vT), opts.launching ? 1.8 : 0.9, dt);
+    // (eased twice over: the pace a moment ago leads the pace now, so a change of speed has no corner in it)
+    st.speedT = damp(st.speedT, Math.max(SPEED.min * 0.8, vT), opts.launching ? 3 : 1.6, dt);
+    st.speed = damp(st.speed, st.speedT, opts.launching ? 3 : 1.6, dt);
     updateNose();
     st.pos.addScaledVector(st.nose, st.speed * dt);
     // off the desk it lifts first, clear of everything standing there
@@ -519,8 +548,8 @@ export function Plane({
       st.pos.y += 0.017;
       st.yaw = spot.rot;
       st.pitch = 0.3;
-      st.roll = st.rollV = st.pitchV = 0;
-      st.speed = 0.6;
+      st.roll = st.rollV = st.pitchV = st.yawR = st.yawRV = st.climbF = 0;
+      st.speed = st.speedT = 0.6;
       st.t = 0;
       st.idle = 9;
       st.pathI = 0;
@@ -545,7 +574,12 @@ export function Plane({
       const launching = st.t < 2.4 && voyage.cur === "home" && voyage.phase === "open";
       // in the first moments, and while cloud is over the lens, the plane flies itself
       const hands = st.t < 0.9 || voyage.phase === "closing";
-      const edge = glide(dt, hands ? { ...input, sx: 0, sy: 0, climb: 0 } : input, { launching, hands });
+      if (hands) {
+        handsIn.thr = input.thr;
+        handsIn.wheel = input.wheel;
+        handsIn.moved = input.moved;
+      }
+      const edge = glide(dt, hands ? handsIn : input, hands ? (launching ? OPT_LAUNCH_HANDS : OPT_HANDS) : launching ? OPT_LAUNCH : OPT_NONE);
       passage(dt);
       crossingStep(dt, voyage.next !== null && voyage.ready === voyage.next);
       airOf(edge);
@@ -578,7 +612,7 @@ export function Plane({
       st.t += dt;
       if (st.landPhase === 0) {
         // on, into the cloud
-        glide(dt, { sx: 0, sy: 0 }, { hands: true });
+        glide(dt, NO_INPUT, OPT_HANDS);
         voyage.veil = Math.min(1, voyage.veil + dt / 1.0);
         airOf(0);
         lookStep(dt, null);
@@ -682,7 +716,7 @@ export function Plane({
       place("home", p[best], 0);
       st.pathI = best;
       st.t = Math.max(st.t, 3);
-      st.speed = speedOf(voyage.throttle);
+      st.speed = st.speedT = speedOf(voyage.throttle);
     },
     jump: (id, along = 0) => {
       voyage.homing = false;
@@ -705,7 +739,7 @@ export function Plane({
       }
       st.t = Math.max(st.t, 3);
       st.idle = 9;
-      st.speed = speedOf(voyage.throttle);
+      st.speed = st.speedT = speedOf(voyage.throttle);
     },
     speed: () => st.speed,
     boost: () => 0,

@@ -1067,7 +1067,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const chip = (on: boolean) => `lg-btn pointer-events-auto flex h-7 items-center gap-1.5 whitespace-nowrap px-3 text-[12.5px] font-medium ${on ? "lg-on" : "lg-chip text-white/90"}`;
   return (
     <>
-      <TopBar title="Paper plane" hint="Mouse steers · drag to look around · W S or scroll for speed" exitLabel="Land" onExit={onLand} />
+      <TopBar title="Paper plane" hint={guide ? "Following the path · A D to nudge · drag to look around · W S or scroll for speed" : "Mouse steers · drag to look around · W S or scroll for speed"} exitLabel="Land" onExit={onLand} />
       <Bottom>
         <Glass className="pointer-events-auto flex items-center gap-1.5 p-1 pl-4" {...stop}>
           <label className="mr-1 flex items-center gap-2.5">
@@ -1084,7 +1084,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
               aria-valuetext={thr < 0.2 ? "Slow glide" : thr < 0.6 ? "Cruise" : "Fast"}
             />
           </label>
-          <button type="button" aria-pressed={guide} title="When you let go of the controls for a moment, the plane follows the path of light on its own" className={chip(guide)} onClick={() => setGuide(!guide)}>
+          <button type="button" aria-pressed={guide} title="The plane flies the path of light through every gate on its own; turn it off to steer with the mouse" className={chip(guide)} onClick={() => setGuide(!guide)}>
             {/* lit while the quiet hand has the plane */}
             {dot}
             Follow the path

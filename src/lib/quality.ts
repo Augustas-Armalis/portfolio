@@ -142,7 +142,9 @@ let frames = 0;
 let slowFor = 0;
 let fastFor = 0;
 let lastStep = 0;
-export function reportFrame(dt: number) {
+// `up: false` while flying: a step up mid-flight would rebuild grass, trees and the shadow map in the air (a
+// hitch for nothing); it waits for the desk. A step down is still taken, the device needs it.
+export function reportFrame(dt: number, up = true) {
   const s = get();
   if (s.choice !== "auto" || dt <= 0 || dt > 0.5) return;
   acc += dt;
@@ -161,7 +163,7 @@ export function reportFrame(dt: number) {
     // a step down is remembered as the ceiling for a while: don't bounce
     s.ceiling = s.auto;
     window.setTimeout(() => (get().ceiling = ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(get().auto) + 1)]), 60000);
-  } else if (fastFor >= 12 && i < ORDER.indexOf(s.ceiling)) s.auto = ORDER[i + 1];
+  } else if (up && fastFor >= 12 && i < ORDER.indexOf(s.ceiling)) s.auto = ORDER[i + 1];
   else return;
   lastStep = now;
   slowFor = fastFor = 0;

@@ -25,7 +25,7 @@ import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
 import { loader } from "./scene/Overlays";
 import { Post, photoCtl, postCtl, type Capture } from "./scene/Post";
 import { KEYMAP, PianoKeys, strike } from "./scene/Piano";
-import { Plane, type PlaneApi } from "./scene/Plane";
+import { LOOK_PER_WIDTH, Plane, type FlightInput, type PlaneApi } from "./scene/Plane";
 import { Reader, type ReaderApi, type ReaderInfo } from "./scene/Reader";
 import { SketchbookLive, type SketchApi } from "./scene/Sketch";
 import {
@@ -310,6 +310,8 @@ function Scene({
   const fast = useRef(false);
   const musicVol = useRef(1);
   const gatePhase = useRef<string>("open");
+  // the flight's input, filled in place each frame (nothing is allocated while flying)
+  const flightIn = useRef<FlightInput>({ sx: 0, sy: 0, look: { dx: 0, dy: 0, held: false }, gyro: null });
   useEffect(() => {
     if (!veil) return;
     postCtl.overlay = veil.mat;
@@ -1075,7 +1077,7 @@ function Scene({
     const dt = Math.min(rawDt, 0.1);
     updateSky(now);
     // Auto quality listens to the real frame time while the scene is simply being looked at or flown through
-    if (stage.current === "idle" || stage.current === "fly") reportFrame(rawDt);
+    if (stage.current === "idle" || stage.current === "fly") reportFrame(rawDt, stage.current !== "fly");
     const flying = stage.current === "fly";
     const lk = lakeK(cam.position.x, cam.position.z);
     const wdef = WORLDS[voyage.cur];
@@ -1219,22 +1221,37 @@ function Scene({
     }
     if (s === "fly") {
       const inp = input.current;
-      // the pointer (or a finger) is the stick; A / D bank, W / S and the wheel work the throttle, E / Q climb and sink
-      const k = inp.keys;
+      // the pointer (or a finger) is the stick; A / D bank, W / S and the wheel work the throttle, E / Q climb and sink.
+      // With Follow the path on there is no stick (the mouse only looks, by dragging): the plane flies the path
+      // through every gate, and the keys nudge it aside for as long as they are held.
       // (on a phone the stick is the glass one under the left thumb, and a drag anywhere else turns the eye)
-      let sx = mobile ? inp.jx : inp.sx;
+      const k = inp.keys;
+      const auto = mobile || voyage.guide;
+      let sx = mobile ? inp.jx : auto ? 0 : inp.sx;
       const bank = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
       if (bank) sx = bank;
       const thr = (k.has("w") || k.has("arrowup") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0);
       const climb = (k.has("e") || k.has(" ") ? 1 : 0) - (k.has("q") || k.has("shift") ? 1 : 0);
+      // a drag is measured in screen widths, so the same sweep turns the eye as far on any screen
+      const W = Math.max(320, window.innerWidth);
       // with the phone as the eye a drag moves what "straight ahead" is
       const g = voyage.gyro ? gyroLook() : null;
-      if (g && (inp.dx || inp.dy)) gyroNudge(inp.dx * 0.0052, inp.dy * 0.0044);
-      planeApi.current?.fly(
-        dt,
-        { sx, sy: mobile ? inp.jy : inp.sy, thr, climb, wheel: inp.zoom, moved: inp.last, keys: mobile || bank !== 0 || climb !== 0, soft: mobile, auto: mobile, look: { dx: inp.dx, dy: inp.dy, held: inp.dragging }, gyro: g },
-        cam,
-      );
+      if (g && (inp.dx || inp.dy)) gyroNudge((-inp.dx / W) * LOOK_PER_WIDTH, (-inp.dy / W) * LOOK_PER_WIDTH * 0.8);
+      const fi = flightIn.current;
+      fi.sx = sx;
+      fi.sy = mobile ? inp.jy : auto ? 0 : inp.sy;
+      fi.thr = thr;
+      fi.climb = climb;
+      fi.wheel = inp.zoom;
+      fi.moved = inp.last;
+      fi.keys = mobile || bank !== 0 || climb !== 0;
+      fi.soft = mobile;
+      fi.auto = auto;
+      fi.look!.dx = inp.dx / W;
+      fi.look!.dy = inp.dy / W;
+      fi.look!.held = inp.dragging;
+      fi.gyro = g;
+      planeApi.current?.fly(dt, fi, cam);
       inp.zoom = inp.dx = inp.dy = 0;
       return;
     }

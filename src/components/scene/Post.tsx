@@ -5,6 +5,11 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { SKY_U } from "./sky";
 
+// (read once a frame: kept, not made anew)
+const BUF = new THREE.Vector2();
+const FWD = new THREE.Vector3();
+const WHITE = new THREE.Color(1, 1, 1);
+
 // The lens and the hand: everything the world is seen through.
 //
 //   scene (linear HDR, MSAA, depth)
@@ -533,7 +538,7 @@ export function Post({ level }: { level: number }) {
       overlay();
       return;
     }
-    const buf = gl.getDrawingBufferSize(new THREE.Vector2());
+    const buf = gl.getDrawingBufferSize(BUF);
     const w = out ? out.width : Math.max(8, Math.floor(buf.x));
     const h = out ? out.height : Math.max(8, Math.floor(buf.y));
     const pc = camera as THREE.PerspectiveCamera;
@@ -618,7 +623,7 @@ export function Post({ level }: { level: number }) {
       const sunUp = SKY_U.uSunDir.value.y > -0.06;
       const dir = sunUp ? SKY_U.uSunDir.value : SKY_U.uMoonDir.value;
       sunV.copy(dir).multiplyScalar(1000).add(camera.position).project(camera);
-      const fwd = camera.getWorldDirection(new THREE.Vector3()).dot(dir);
+      const fwd = camera.getWorldDirection(FWD).dot(dir);
       const low2 = sunUp ? 1 - THREE.MathUtils.smoothstep(dir.y, 0.16, 0.62) : 0.35 * SKY_U.uNight.value;
       const inView = 1 - THREE.MathUtils.smoothstep(Math.max(Math.abs(sunV.x), Math.abs(sunV.y)), 1.0, 1.7);
       rayK = fwd > 0.05 ? low2 * inView * THREE.MathUtils.smoothstep(fwd, 0.05, 0.4) : 0;
@@ -633,7 +638,7 @@ export function Post({ level }: { level: number }) {
     const c = p.m.comp.uniforms;
     c.uBloom.value = 0.085 * (1 + SKY_U.uPulse.value * 0.35);
     c.uRays.value = rayK * 0.55;
-    (c.uRayCol.value as THREE.Color).copy(SKY_U.uGlow.value).lerp(new THREE.Color(1, 1, 1), 0.35);
+    (c.uRayCol.value as THREE.Color).copy(SKY_U.uGlow.value).lerp(WHITE, 0.35);
     if (SKY_U.uSunDir.value.y <= -0.06) (c.uRayCol.value as THREE.Color).set(0.6, 0.7, 1.0);
     c.uPx.value.set(1 / w, 1 / h);
     p.finishU.uLook.value = postCtl.look;
