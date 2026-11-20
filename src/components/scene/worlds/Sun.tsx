@@ -799,7 +799,7 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       <mesh material={b.greatSun} frustumCulled={false} renderOrder={-4}>
         <planeGeometry args={[2, 2]} />
       </mesh>
-      <WorldBase id="sun" def={def} pal={SUN_PAL} props={props} tip={[1.0, 0.7, 0.18]} pathTint={[1, 0.86, 0.56]} groundSize={8800} mask={SUN_GRASS_MASK} />
+      <WorldBase id="sun" def={def} pal={SUN_PAL} props={props} tip={[1.0, 0.7, 0.18]} pathTint={[1, 0.86, 0.56]} groundSize={8800} mask={SUN_GRASS_MASK} gate="veil" gateSize={[17, 18]} />
       <mesh geometry={b.city} material={b.tempera} />
       <mesh geometry={b.far} material={b.farMat} />
       <mesh geometry={b.props} material={b.propMat} />

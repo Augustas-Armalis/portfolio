@@ -612,6 +612,8 @@ export function makeLedgeMaterial() {
             col += vec3(0.03, 0.09, 0.3) * reach * reach * (0.25 + 1.6 * rib * bed) * 0.5;
             // the feet of the walls take a little gold from the lights that go by
             col += GOLD * exp(-vK.z * 9.0) * 0.012 * smoothstep(0.55, 0.2, deep) * glowK() * 2.0;
+            // and far inside, the sheet of light it came through (the still sea's pale green-gold) on the vault round it
+            col += vec3(0.2, 0.25, 0.15) * exp(-(1.0 - deep) * 5.5) * (0.3 + 1.5 * rib * bed) * 0.45;
           } else {
             col = alb * uSkyCol * (1.3 - deep);
             float breath = (0.85 + 0.15 * sin(uTime * 0.33)) * uCaveK;

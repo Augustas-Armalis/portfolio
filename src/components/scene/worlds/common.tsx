@@ -279,7 +279,10 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
     const s = Math.sin(gate.yaw);
     const at = (u: number, y: number): V3 => [gate.pos.x + c * u, y, gate.pos.z - s * u];
     const g0 = id === "home" ? 0 : Math.min(groundAt(def, at(-half, 0)[0], at(-half, 0)[2]), groundAt(def, at(half, 0)[0], at(half, 0)[2]));
-    const foot = Math.min(g0, def.water ?? g0) - 1.5;
+    // (a gate that hangs in the air, far above the land, is a lancet of its own height: never legs and a sheet
+    // of light drawn all the way down to the ground under it)
+    const hung = id !== "home" && gate.pos.y - Math.max(g0, def.water ?? -1e9) > 70;
+    const foot = hung ? gate.pos.y - 15 : Math.min(g0, def.water ?? g0) - 1.5;
     const top = gate.pos.y + rise;
     const spring = gate.pos.y + 2;
     // where it leads

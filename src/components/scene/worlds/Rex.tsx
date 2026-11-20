@@ -606,7 +606,7 @@ export default function RexWorld({ props }: { props: WorldProps }) {
   return (
     <>
       <GreatSun size={0.6} tint={[1, 0.74, 0.42]} rays={56} gain={0.9} />
-      <WorldBase id="rex" def={def} pal={REX_PAL} props={props} grass={false} pathTint={[1, 0.84, 0.6]} pathGain={1.4} angels={false} />
+      <WorldBase id="rex" def={def} pal={REX_PAL} props={props} grass={false} pathTint={[1, 0.84, 0.6]} pathGain={1.0} angels={false} gate="veil" />
       <mesh material={b.water} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
         <planeGeometry args={[9000, 9000]} />
       </mesh>

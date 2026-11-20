@@ -274,12 +274,14 @@ export function makeGrottoMaterial() {
       void main(){
         float deep = vK.x;
         float rib = vnoise(vec2(vLocal.x * 0.3 + vLocal.z * 0.21, vLocal.y * 0.22)) * 0.6 + vnoise(vLocal.xz * 0.9 + vLocal.y * 0.8) * 0.4;
-        vec3 alb = vec3(0.014, 0.03, 0.02) * (0.4 + 1.2 * rib);
+        vec3 alb = vec3(0.022, 0.042, 0.034) * (0.45 + 1.2 * rib);
         vec3 col = alb * uSkyCol * (1.0 - 0.85 * smoothstep(0.0, 0.35, deep));
         // the eyes' light on the lip
         col += alb * vec3(1.0, 0.7, 0.34) * (uEyeK.x + uEyeK.y) * 0.7 * exp(-deep * 9.0);
         // and the glimmer from within: a cold blue, moving like light off water on the vault
         float shimmer = vnoise(vec2(vLocal.x * 0.09 + uTime * 0.07, vLocal.z * 0.07 - uTime * 0.05)) * vnoise(vec2(vLocal.z * 0.13 + uTime * 0.04, vLocal.y * 0.2 + 3.0));
+        // the sheet of light that stands inside lights the wet rock round it, most where it stands
+        col += vec3(0.16, 0.26, 0.42) * exp(-pow((deep - 0.25) * 4.5, 2.0)) * (0.35 + 1.1 * rib) * 0.3 * glowK();
         // (its closed end is a soft pool of the same light, brightest at its heart)
         float end = step(1.1, deep);
         col += mix(vec3(0.05, 0.16, 0.42), vec3(0.16, 0.34, 0.9), smoothstep(0.75, 1.25, deep)) * deep * deep * mix(0.02 + 0.3 * shimmer, 0.05, end) * (0.5 + 0.5 * rib) * glowK() * 1.6;
