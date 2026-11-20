@@ -32,7 +32,7 @@ import { Post, photoCtl, postCtl, type Capture } from "./scene/Post";
 import { KEYMAP, PianoKeys, strike } from "./scene/Piano";
 import { LOOK_PER_WIDTH, Plane, type FlightInput, type PlaneApi } from "./scene/Plane";
 import { Reader, type ReaderApi, type ReaderInfo } from "./scene/Reader";
-import { SketchbookLive, type SketchApi } from "./scene/Sketch";
+import { SKETCH_OPEN_SHIFT, SketchbookLive, type SketchApi } from "./scene/Sketch";
 import {
   BOOT_T,
   DESK,
@@ -839,7 +839,8 @@ function Scene({
       v.toUp.set(0, 1, 0);
     } else if (m === "book" || m === "sketch") {
       const { c, rot } = P(m === "book" ? "book" : "sketchbook");
-      const spineX = m === "book" ? -0.0675 : -0.103;
+      // (the sketchbook slides a little to its right as it opens, to keep its cover on the desk)
+      const spineX = m === "book" ? -0.0675 : -0.103 + SKETCH_OPEN_SHIFT;
       const w = m === "book" ? 0.29 : 0.44;
       const h = m === "book" ? 0.22 : 0.17;
       // on a phone the novel is read a page at a time: one page fills the width, and the eye goes over to the other
