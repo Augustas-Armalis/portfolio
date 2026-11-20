@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { archGeometry } from "../fairy/shared";
 import { Kit, paint, type V3 } from "../kit";
 
 // The mount of Paradise. He painted a shore curving away, a meadow of flowers behind it and a great flight of
@@ -262,6 +263,9 @@ export function buildColonnade(k: Kit) {
       { top: lit, seg: 12, glow: 0.08 },
     );
   }
+  // the way on: the south bay is a portal, two stout piers and a pointed arch of the same pale stone, the ring passing over it
+  k.add(archGeometry(31, 40, 7, 9), [0, TOP_Y, COLONNADE.r - 1], stone, { top: lit, glow: 0.14 });
+  k.add(archGeometry(28.5, 38.6, 1.3, 11), [0, TOP_Y, COLONNADE.r - 1], [0.42, 0.33, 0.16], { top: stone, glow: 0.06 });
   // the ring: a slender beam carried round on the capitals, and a finer one above it
   k.add(new THREE.TorusGeometry(COLONNADE.r, 2.2, 6, 120), [0, TOP_Y + COLONNADE.h + 1.6, 0], stone, { top: lit, rot: [Math.PI / 2, 0, 0], scale: [1, 1, 0.8], glow: 0.18 });
   k.add(new THREE.TorusGeometry(COLONNADE.r, 0.9, 5, 120), [0, TOP_Y + COLONNADE.h + 5.2, 0], lit, { rot: [Math.PI / 2, 0, 0], glow: 0.5 });

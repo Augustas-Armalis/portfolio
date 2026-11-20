@@ -226,7 +226,7 @@ export function Butterflies({ list }: { list: Flutter[] }) {
 // ---------- the upper sky ----------
 // Over the heaps a high ceiling of cloud as he painted it: long flat strokes laid in rows, olive in their shade,
 // with short strokes of yellow light along them, row behind row going down into the horizon's own colour.
-export function CloudDeck({ y = 1250, size = 9000 }: { y?: number; size?: number }) {
+export function CloudDeck({ y = 1250, size = 9000, alpha = 0.82 }: { y?: number; size?: number; alpha?: number }) {
   const b = useDisposable(() => {
     const g = new THREE.PlaneGeometry(size, size);
     g.rotateX(Math.PI / 2);
@@ -256,12 +256,12 @@ export function CloudDeck({ y = 1250, size = 9000 }: { y?: number; size?: number
           vec3 dv = vWorld - cameraPosition; float dist = length(dv);
           float far = smoothstep(900.0, 5200.0, dist);
           col = mix(col, airCol(dv / dist), far * 0.8);
-          gl_FragColor = vec4(col, a * 0.82 * (1.0 - smoothstep(5000.0, 9000.0, dist)));
+          gl_FragColor = vec4(col, a * ${alpha.toFixed(2)} * (1.0 - smoothstep(5000.0, 9000.0, dist)));
           ${END}
         }`,
     });
     return { g, mat };
-  }, [size]);
+  }, [size, alpha]);
   return <mesh geometry={b.g} material={b.mat} position={[0, y, 0]} renderOrder={-3} frustumCulled={false} />;
 }
 

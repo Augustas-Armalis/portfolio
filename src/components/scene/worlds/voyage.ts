@@ -583,9 +583,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     radius: 1050,
     ceil: 300,
     entry: { x: -770, z: 660, above: 26, yaw: 0 },
-    gate: { x: 0, z: 0, above: 140, yaw: Math.PI },
+    gate: { x: 0, z: 111, above: 131, yaw: Math.PI },
     // in over the sea to the sand, round the isle along the shore with the meadow on the right, then inland and
-    // straight up the great flight to the court, and through the way on that stands in its pool
+    // straight up the great flight to the court, over its pool, and out through the portal in the colonnade's far side
     path: [
       [-770, 660, 26],
       [-764, 520, 22],
@@ -607,8 +607,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [6, -280, 124],
       [3, -200, 142],
       [0, -100, 141],
-      [0, 0, 140],
-      [0, 36, 140],
+      [0, 0, 137],
+      [0, 111, 131],
+      [0, 148, 131],
     ],
     // the mount of steps as a stack of drums (worlds/paradise/isle.ts ISLE)
     obstacles: [
@@ -653,7 +654,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     radius: 1450,
     ceil: 420,
     entry: { x: 0, z: 1480, above: 36, yaw: 0 },
-    gate: { x: 0, z: -1040, above: 50, yaw: 0 },
+    gate: { x: 0, z: -720, above: 48, yaw: 0 },
     // up the valley, under the ring of pearls and the dark smoke, between the terrace and the altar, to the pass;
     // then the whole length of the gorge between the leaning mountains
     path: [
@@ -666,10 +667,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [0, 40, 34],
       [0, -200, 42],
       [0, -430, 52],
-      [4, -650, 58],
-      [0, -860, 54],
-      [0, -1040, 50],
-      [0, -1080, 50],
+      [2, -580, 54],
+      [0, -720, 48],
+      [0, -758, 48],
     ],
     obstacles: [
       // the two leaning mountains (worlds/offering/rock.ts GATE): their feet, and the walls that lean over the gorge
@@ -682,6 +682,11 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       ]),
       // the terrace with its angel, and the altar
       { x: -330, z: 330, r: 180, h: 330 },
+      // the citadel it belongs to: the wall running back to the mountain, the lower terraces down the valley
+      { x: -318, z: 70, r: 70, h: 260 },
+      { x: -330, z: -70, r: 70, h: 260 },
+      { x: -410, z: 570, r: 175, h: 110 },
+      { x: -480, z: 770, r: 150, h: 70 },
       { x: 320, z: -40, r: 56, h: 90 },
     ],
     canvases: [{ painting: "offering", x: -44, z: 1300, yaw: 0.42 }],
