@@ -458,6 +458,23 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     }
     for (let i = 0; i < (props.mobile ? 10 : 26); i++) puffs.push({ p: [(r() - 0.5) * 1100, 0, 1300 - r() * 1400], size: 90 + r() * 110, a: 0.5 });
     for (const p of puffs) if (p.p[1] === 0) p.p[1] = g(p.p[0], p.p[2]) + 12 + r() * 16;
+    // air in layers: a long bank across the valley before the pass (the mountains stand up out of it), mist about
+    // the citadel's foot and among the needles, and banks behind the far walls so they go back in steps
+    for (let i = 0; i < (props.mobile ? 10 : 22); i++) {
+      const x = -820 + (i / 21) * 1640 + (r() - 0.5) * 50;
+      const z = 150 + (r() - 0.5) * 220;
+      if (Math.abs(x) < 80) continue;
+      puffs.push({ p: [x, g(x, z) + 16 + r() * 22, z], size: 150 + r() * 120, a: 0.5 });
+    }
+    for (let i = 0; i < (props.mobile ? 6 : 14); i++) {
+      const z = 880 - r() * 760;
+      puffs.push({ p: [-210 - r() * 60, g(-220, z) + 10 + r() * 30, z], size: 90 + r() * 80, a: 0.42 });
+    }
+    for (let i = 0; i < (props.mobile ? 8 : 18); i++) {
+      const a = (i / 18) * Math.PI * 2;
+      const d = 1500 + r() * 500;
+      puffs.push({ p: [Math.cos(a) * d, g(Math.cos(a) * d, Math.sin(a) * d) + 30 + r() * 50, Math.sin(a) * d], size: 300 + r() * 220, a: 0.5 });
+    }
     // ---- light let down into the gorge between the leaning walls
     const beams: Beam[] = [];
     for (let i = 0; i < (props.mobile ? 6 : 12); i++) {

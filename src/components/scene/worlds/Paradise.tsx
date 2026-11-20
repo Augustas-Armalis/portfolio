@@ -256,6 +256,20 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
     });
     // haze lying far out on the sea
     const puffs: Puff[] = [];
+    // air in layers: banks of mist lying on the sea beyond the shore (the isle is seen across them), a soft wreath
+    // about the foot of the great flight and another half-way up it, so the court stands clear above
+    for (let i = 0; i < (props.mobile ? 10 : 26); i++) {
+      const a = r() * Math.PI * 2;
+      const d = 900 + r() * 500;
+      puffs.push({ p: [Math.cos(a) * d, 7 + r() * 16, Math.sin(a) * d], size: 170 + r() * 150, a: 0.5 });
+    }
+    for (let i = 0; i < (props.mobile ? 8 : 20); i++) {
+      const a = (i / 20) * Math.PI * 2 + r() * 0.2;
+      // (the way up the flight itself is left clear)
+      if (Math.abs(a - Math.PI * 1.5) < 0.22) continue;
+      puffs.push({ p: [Math.cos(a) * (500 + r() * 50), 20 + r() * 16, Math.sin(a) * (500 + r() * 50)], size: 90 + r() * 70, a: 0.42 });
+      if (i % 2 === 0) puffs.push({ p: [Math.cos(a) * (350 + r() * 40), 70 + r() * 18, Math.sin(a) * (350 + r() * 40)], size: 80 + r() * 60, a: 0.34 });
+    }
     for (let i = 0; i < (props.mobile ? 8 : 18); i++) {
       const a = r() * Math.PI * 2;
       const d = 1500 + r() * 900;

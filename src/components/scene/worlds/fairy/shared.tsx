@@ -902,3 +902,117 @@ export function archGeometry(w: number, h: number, t: number, depth: number) {
   g.translate(0, 0, -depth / 2);
   return g;
 }
+
+// ---------- trees to be looked at ----------
+// The trees the plane passes close to, made the way the home field makes its own (scene/home/trees.ts): a real
+// short trunk and boughs, and a crown of many small leaf clumps, each a card that turns to the eye and wears a
+// painted cluster of leaves, cut soft by the lens's multisampling. Painted here in his manner: a round heaped
+// crown, deep greens, olive in the shade, a gentle warm light on top, never acid.
+export function makeLeafyMaterial(leaves: THREE.Texture, o: { lit?: V3; shade?: V3 } = {}) {
+  return new THREE.ShaderMaterial({
+    alphaToCoverage: true,
+    uniforms: { ...SKY_U, ...WORLD_U, uLeafTex: { value: leaves } },
+    vertexShader: /* glsl */ `
+      attribute vec3 aCol; attribute float aFol; attribute vec2 aCorner; attribute vec4 aLeaf; attribute float aSeed;
+      uniform float uTime;
+      varying vec3 vWorld; varying vec3 vN; varying vec3 vCol; varying float vFol; varying float vH; varying vec3 vLocal;
+      varying vec2 vUv; varying vec2 vOff; varying vec2 vLeaf; varying float vSeed;
+      void main(){
+        mat4 im = modelMatrix * instanceMatrix;
+        vec3 root = im[3].xyz;
+        vec3 wp = (im * vec4(position, 1.0)).xyz;
+        vec3 wn = mat3(im) * normal;
+        float sc = length(im[1].xyz);
+        float ph = root.x * 0.37 + root.z * 0.23;
+        float gust = sin(uTime * 0.7 + ph) * 0.6 + sin(uTime * 1.9 + ph * 1.7) * 0.25;
+        float h = max(wp.y - root.y, 0.0);
+        wp.x += gust * 0.0009 * h * h / sc;
+        float fol = step(0.75, aFol);
+        float fl = sin(uTime * (1.5 + aLeaf.y * 2.0) + wp.y * 1.7 + ph + aLeaf.y * 40.0) * (1.0 - smoothstep(20.0, 90.0, length(wp - cameraPosition)));
+        wp += fol * vec3(fl, 0.4 * sin(uTime * 1.7 + wp.x * 1.3), cos(uTime * 1.9 + wp.x * 1.7 + ph)) * 0.06 * sc;
+        float ang = aLeaf.y * 6.2832 + fl * 0.06;
+        vec2 cr = vec2(aCorner.x * cos(ang) - aCorner.y * sin(ang), aCorner.x * sin(ang) + aCorner.y * cos(ang));
+        vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+        vec3 U = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+        wp += (R * cr.x + U * cr.y) * aLeaf.x * sc;
+        vWorld = wp; vLocal = position; vN = normalize(wn); vCol = aCol; vSeed = aSeed;
+        vFol = aFol; vH = h / sc; vUv = aCorner; vOff = cr; vLeaf = aLeaf.zw;
+        gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uLeafTex;
+      varying vec3 vWorld; varying vec3 vN; varying vec3 vCol; varying float vFol; varying float vH; varying vec3 vLocal;
+      varying vec2 vUv; varying vec2 vOff; varying vec2 vLeaf; varying float vSeed;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${GLSL_AIR}
+      void main(){
+        vec3 n = normalize(vN);
+        vec3 alb = vCol;
+        float fol = step(0.75, vFol);
+        float ao = 1.0;
+        float cov = 1.0;
+        float dist = length(vWorld - cameraPosition);
+        if (fol > 0.5) {
+          float cell = floor(vLeaf.x + 0.5);
+          vec2 uv = (vec2(mod(cell, 2.0), floor(cell * 0.5)) + vec2(vUv.x, -vUv.y) * 0.5 + 0.5) * 0.5;
+          // further off the sheet is read blurred, so a clump is one rounded mass and never single leaves that sparkle
+          vec4 t = texture2D(uLeafTex, uv, mix(0.0, 1.8, smoothstep(30.0, 160.0, dist)));
+          float cut = mix(0.5, 0.2, smoothstep(40.0, 320.0, dist));
+          cov = clamp((t.a - cut) / max(fwidth(t.a) * 1.3, 0.0001) + 0.5, 0.0, 1.0);
+          if (cov < 0.1) discard;
+          vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+          vec3 U = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+          n = normalize(n + (R * vOff.x + U * vOff.y) * 0.5);
+          alb *= 0.7 + 0.46 * t.g / max(t.a, 0.3);
+          // each tree a little its own green: most deep, a few gone toward olive gold, a few toward blue
+          float k = fract(vSeed * 7.31);
+          alb *= mix(vec3(1.0), vec3(1.45, 1.2, 0.62), smoothstep(0.8, 0.98, k) * 0.7);
+          alb *= mix(vec3(1.0), vec3(0.7, 0.9, 1.08), smoothstep(0.22, 0.04, k) * 0.7);
+          ao = vLeaf.y;
+        } else {
+          alb *= 0.8 + 0.4 * vnoise(vec2(atan(vLocal.z, vLocal.x) * 4.0, vLocal.y * 1.3));
+        }
+        float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
+        float ndl = dot(n, uKeyDir);
+        float w = ndl * 0.5 + 0.5;
+        // light in three soft steps, as paint is laid: shade, the body colour, the lit top
+        float ramp = mix(max(ndl, 0.0), 0.25 * smoothstep(0.1, 0.42, w) + 0.75 * smoothstep(0.44, 0.9, w), fol);
+        // the shade is olive, not the sky's blue; the light is warm, not yellow
+        vec3 amb = uSkyCol * ${v3(o.shade ?? [1.0, 1.02, 0.74])} * mix(0.4, 1.0, 0.5 + 0.5 * n.y) * mix(0.36, 1.0, ao);
+        vec3 litAlb = alb * mix(vec3(1.0), ${v3(o.lit ?? [1.16, 1.04, 0.78])}, fol * ramp);
+        vec3 col = alb * amb + litAlb * uKeyCol * ramp * 0.5 * mix(0.5, 1.0, ao) * sunUp;
+        vec3 V = normalize(cameraPosition - vWorld);
+        float back = pow(clamp(dot(-V, uKeyDir), 0.0, 1.0), 3.0);
+        col += alb * vec3(1.1, 0.98, 0.56) * uKeyCol * back * (0.12 + 0.3 * ao) * fol * sunUp * 0.5;
+        // the foot sinks into the grass
+        col *= mix(0.5, 1.0, smoothstep(0.0, 1.6, vH));
+        col = applyAir(col, vWorld);
+        gl_FragColor = vec4(col, cov);
+        ${END}
+      }`,
+  });
+}
+// (geo: a tree from scene/home/trees.ts buildTree; each Crown gives where it stands and how big its crown is)
+export function leafyMesh(list: Crown[], geo: THREE.BufferGeometry, mat: THREE.Material, crownR = 5) {
+  const g = geo.clone();
+  const im = new THREE.InstancedMesh(g, mat, list.length);
+  const seeds = new Float32Array(list.length);
+  const o = new THREE.Object3D();
+  list.forEach((c, i) => {
+    const s = c.seed ?? (i * 0.6180339) % 1;
+    seeds[i] = s;
+    const sc = c.r / crownR;
+    o.position.set(...c.p);
+    // (a little broader than tall: his crowns are round heaps)
+    o.scale.set(sc * 1.12, sc * 0.94 * (c.h ?? 1), sc * 1.12);
+    o.rotation.set(0, s * 6.283, 0);
+    o.updateMatrix();
+    im.setMatrixAt(i, o.matrix);
+  });
+  g.setAttribute("aSeed", new THREE.InstancedBufferAttribute(seeds, 1));
+  im.instanceMatrix.needsUpdate = true;
+  im.computeBoundingSphere();
+  if (im.boundingSphere) im.boundingSphere.radius += 30;
+  return im;
+}

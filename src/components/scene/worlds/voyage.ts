@@ -512,17 +512,17 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 50],
     radius: 1560,
     ceil: 660,
-    entry: { x: 0, z: 1500, above: 38, yaw: 0 },
+    entry: { x: 0, z: 1500, above: 48, yaw: 0 },
     gate: { x: 646, z: -1335, above: 70, yaw: -0.363 },
     // down off the rise and low over the fields; then a long climb straight at the castle, the mountain rising to
     // fill the sky, to pass close under its towers by its right flank and the slim peak beside it; and away over
     // the plain beyond, down toward the sun
     path: [
-      [0, 1500, 37],
-      [3, 1380, 37],
-      [6, 1260, 33],
-      [10, 1130, 46],
-      [16, 1010, 57],
+      [0, 1500, 48],
+      [3, 1380, 47],
+      [6, 1260, 45],
+      [10, 1130, 52],
+      [16, 1010, 59],
       [30, 880, 102],
       [50, 700, 164],
       [72, 500, 228],
