@@ -188,7 +188,7 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           vDist = -mv.z;
           // a ribbon that faces the eye, never thinner than a pixel and a half
-          mv.x += uv.x * max(0.05, vDist * 0.0011);
+          mv.x += uv.x * max(0.11, vDist * 0.0016);
           vUv = uv; gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: /* glsl */ `
@@ -196,8 +196,8 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
         varying vec2 vUv; varying float vDist;
         ${GLSL_SKY}
         void main(){
-          float a = exp(-vUv.x * vUv.x * 5.0) * (1.0 - vUv.y) * (1.0 - vUv.y);
-          a *= smoothstep(2.0, 12.0, vDist) * (1.0 - smoothstep(70.0, 190.0, vDist)) * mix(0.16, 0.34, uNight) * exp(-vDist * uMist * 1.5);
+          float a = exp(-vUv.x * vUv.x * 4.0) * (1.0 - abs(vUv.x)) * (1.0 - vUv.y) * (1.0 - vUv.y) * (1.0 - vUv.y);
+          a *= smoothstep(5.0, 26.0, vDist) * (1.0 - smoothstep(70.0, 190.0, vDist)) * mix(0.14, 0.2, uNight) * exp(-vDist * uMist * 1.5);
           gl_FragColor = vec4(uTint * a * uGain, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>

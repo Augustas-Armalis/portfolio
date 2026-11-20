@@ -344,10 +344,25 @@ export function Trees({ mobile, fogDensity }: { mobile: boolean; fogDensity: num
     const o = new THREE.Object3D();
     const col = new THREE.Color();
     const sets: THREE.InstancedMesh[] = [];
-    (Object.keys(variants) as Kind[]).forEach((kind) =>
-      variants[kind].forEach((geo, v) => {
-        const list = trees.filter((t) => t.kind === kind && t.v === v);
-        if (!list.length) return;
+    // Trees that are never seen close (not by the desk, not at the roadside) are cut from a coarser block:
+    // the same seeds, so the same trees, at about a quarter of the triangles.
+    const coarse: Record<Kind, THREE.BufferGeometry[]> | null = mobile
+      ? null
+      : {
+          pine: [buildPine(11, 1), buildPine(29, 1), buildPine(47, 1)],
+          spruce: [buildSpruce(5, 1), buildSpruce(19, 1), buildSpruce(37, 1)],
+          birch: [buildBirch(7, 1), buildBirch(23, 1), buildBirch(41, 1)],
+        };
+    const isFar = (t: Tree) => !!coarse && Math.hypot(t.x, t.z) > 62 && Math.abs(t.x - roadX(t.z)) > 24;
+    const tiers: [Record<Kind, THREE.BufferGeometry[]>, boolean][] = coarse ? [[variants, false], [coarse, true]] : [[variants, false]];
+    tiers.forEach(([set, far]) =>
+    (Object.keys(set) as Kind[]).forEach((kind) =>
+      set[kind].forEach((geo, v) => {
+        const list = trees.filter((t) => t.kind === kind && t.v === v && isFar(t) === far);
+        if (!list.length) {
+          geo.dispose();
+          return;
+        }
         const im = new THREE.InstancedMesh(geo, mat, list.length);
         list.forEach((t, i) => {
           o.position.set(t.x, -0.05, t.z);
@@ -363,6 +378,7 @@ export function Trees({ mobile, fogDensity }: { mobile: boolean; fogDensity: num
         im.frustumCulled = false;
         sets.push(im);
       }),
+    ),
     );
     return { sets, mat };
   }, [mobile, fogDensity]);
