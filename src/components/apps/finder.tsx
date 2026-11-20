@@ -71,7 +71,7 @@ export function Finder({ start }: { start: PlaceId }) {
     } else if (it.app) openAny(it.app);
     else if (it.look) setLook(it.look.type === "resume" ? { title: it.name, node: <Resume /> } : { title: it.name, src: it.look.src });
   };
-  const sections = [{ title: "Favourites", items: places.map((p) => ({ id: p.id, label: p.title, icon: <span className="text-[var(--accent)]">{PLACE_ICON[p.id]}</span> })) }];
+  const sections = [{ title: "Favourites", items: places.map((p) => ({ id: p.id, label: p.title, icon: <span className="text-[var(--accent-text)]">{PLACE_ICON[p.id]}</span> })) }];
   const empty = <div className="t-sub py-16 text-center text-ink-3">{`Nothing here matches “${q.trim()}”.`}</div>;
 
   // the phone: Files. One tap opens.
@@ -85,7 +85,7 @@ export function Finder({ start }: { start: PlaceId }) {
           {g.title && <SectionHeader>{g.title}</SectionHeader>}
           <List>
             {g.items.map((it) => (
-              <ListRow key={it.id} onClick={() => run(it)} icon={<span className="my-1.5 flex h-11 w-11 shrink-0 items-center justify-center"><FinderIcon it={it} size={44} /></span>} title={it.name} sub={it.kind} chevron={!it.download} detail={it.download ? <ArrowDownToLine size={18} className="text-[var(--accent)]" /> : undefined} />
+              <ListRow key={it.id} onClick={() => run(it)} icon={<span className="my-1.5 flex h-11 w-11 shrink-0 items-center justify-center"><FinderIcon it={it} size={44} /></span>} title={it.name} sub={it.kind} chevron={!it.download} detail={it.download ? <ArrowDownToLine size={18} className="text-[var(--accent-text)]" /> : undefined} />
             ))}
           </List>
         </div>

@@ -95,7 +95,7 @@ function ControlCenter({ close }: { close: () => void }) {
   const { sound, setSound, playing, lockScreen, appearance, setAppearance } = useOS();
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between rounded-[16px] bg-white/60 dark:bg-white/10 px-3 py-2.5 shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]">
+      <div className="flex items-center justify-between rounded-[20px] bg-white/60 dark:bg-white/10 px-3 py-2.5 shadow-[0_0_0_0.5px_rgb(0_0_0/0.06)]">
         <span className="text-[12px] font-semibold text-ink">Appearance</span>
         <Segmented
           id="cc-appearance"

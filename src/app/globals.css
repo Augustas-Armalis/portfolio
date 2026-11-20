@@ -570,6 +570,8 @@ svg.lucide.bold {
   --label-3s: #686d76;
   /* a fill under white text: the system blue is 4.0:1 there; this one 4.7 */
   --accent-fill: #0071e3;
+  /* blue as text (links, tinted buttons, small blue labels): 5.0:1 on its own tint, 5.6 on white */
+  --accent-text: #0066cc;
   --accent-fill-hover: #0066cc;
   --fill-solid: #f1f1f4;
   --page: #e7e8ec;
@@ -616,6 +618,7 @@ svg.lucide.bold {
   --label-2s: #b4b4bb;
   --label-3s: #98989e;
   --accent-fill: #0a6fe0;
+  --accent-text: #6cb4ff;
   --accent-fill-hover: #0a64cc;
   --fill-solid: #2c2c2f;
   --page: #121214;
@@ -691,7 +694,7 @@ svg.lucide.bold {
 .btn-icon.btn-lg { width: 44px; padding: 0; }
 .btn-bordered { background: var(--bg-elevated); color: var(--label); box-shadow: var(--shadow-1); }
 .btn-prominent { background: var(--accent-fill); color: #fff; font-weight: 600; box-shadow: 0 1px 2px rgb(0 60 140 / 0.24), inset 0 0.5px 0 rgb(255 255 255 / 0.2); }
-.btn-tinted { background: var(--accent-tint); color: var(--accent); font-weight: 600; }
+.btn-tinted { background: var(--accent-tint); color: var(--accent-text); font-weight: 600; }
 .btn-plain { background: transparent; color: var(--label); }
 .btn-glass { color: var(--label); }
 .btn-glass-dark { color: #fff; }
@@ -1452,4 +1455,9 @@ html:not(.dark) .win[data-win="settings"] aside[data-drag] {
 }
 .win aside[data-drag]::-webkit-scrollbar {
   display: none;
+}
+/* a Mac list row that leads with a tile holds it as far from the left as from the top and bottom (8px in a
+   36px row), the founder's leading-tile rule */
+.m-list .list-row:has(> .icon-tile) {
+  padding-left: 8px;
 }

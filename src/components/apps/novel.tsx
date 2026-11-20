@@ -246,7 +246,7 @@ function ScrollReader({ book, ch, setCh, start, onPos }: { book: Book; ch: numbe
         <article className="mx-auto max-w-[66ch] px-8 pb-16 pt-10">
           <ChapterBody c={c} />
           {ch < last && (
-            <button type="button" onClick={() => setCh(ch + 1)} className="press mx-auto mt-12 flex h-9 items-center gap-1 rounded-full bg-[var(--accent-tint)] px-4 text-[13px] font-semibold text-[var(--accent)]">
+            <button type="button" onClick={() => setCh(ch + 1)} className="press mx-auto mt-12 flex h-9 items-center gap-1 rounded-full bg-[var(--accent-tint)] px-4 text-[13px] font-semibold text-[var(--accent-text)]">
               {book.chapters[ch + 1].title} <ChevronRight size={15} />
             </button>
           )}

@@ -226,7 +226,7 @@ function Queue({ compact }: { compact: boolean }) {
                   )}
                 </span>
               }
-              title={<span className={on ? "font-semibold text-[var(--accent)]" : ""}>{t.title}</span>}
+              title={<span className={on ? "font-semibold text-[var(--accent-text)]" : ""}>{t.title}</span>}
               sub={t.note}
               detail={<span className="tabular-nums">{t.durationLabel}</span>}
             />

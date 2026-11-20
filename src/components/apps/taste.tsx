@@ -45,8 +45,8 @@ export function Taste() {
         {
           title: "Taste",
           items: [
-            { id: "rules", label: "Rules", icon: <ListOrdered size={15} />, meta: <span className="text-[11px] tabular-nums text-ink-3">{taste.rules.length}</span> },
-            { id: "rated", label: "Designers I rate", icon: <Star size={15} />, meta: <span className="text-[11px] tabular-nums text-ink-3">{taste.rated.length}</span> },
+            { id: "rules", label: "Rules", icon: <ListOrdered size={15} />, meta: <span className="text-[11px] tabular-nums text-ink-2">{taste.rules.length}</span> },
+            { id: "rated", label: "Designers I rate", icon: <Star size={15} />, meta: <span className="text-[11px] tabular-nums text-ink-2">{taste.rated.length}</span> },
           ],
         },
       ]}

@@ -74,12 +74,12 @@ export function Contact() {
         </div>
         <div className="mt-5 grid grid-cols-4 gap-2 px-4">
           {actions.map((a) => (
-            <a key={a.k} href={a.href} target={a.href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[12px] bg-white text-[#0A84FF]">
+            <a key={a.k} href={a.href} target={a.href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[12px] bg-white text-[var(--accent-text)]">
               {a.icon}
               <span className="text-[11px] font-medium">{a.label}</span>
             </a>
           ))}
-          <button type="button" onClick={() => copy("handle", owner.x.label)} className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[12px] bg-white text-[#0A84FF]">
+          <button type="button" onClick={() => copy("handle", owner.x.label)} className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[12px] bg-white text-[var(--accent-text)]">
             {copied === "handle" ? <Check size={20} strokeWidth={2.2} /> : <Copy size={19} strokeWidth={1.9} />}
             <span className="text-[11px] font-medium">{copied === "handle" ? "Copied" : "Copy"}</span>
           </button>
@@ -89,7 +89,7 @@ export function Contact() {
             <a key={c.id} href={hrefOf(c)} target={c.href?.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="press-row flex min-h-[56px] items-center pl-4">
               <span className={`flex min-h-[56px] flex-1 flex-col justify-center pr-4 ${j ? "border-t-[0.5px] border-[#C6C6C8]" : ""}`}>
                 {c.value !== c.label && <span className="text-[13px] text-ink">{c.label}</span>}
-                <span className="text-[17px] tracking-[-0.02em] text-[#0A84FF]">{c.value}</span>
+                <span className="text-[17px] tracking-[-0.02em] text-[var(--accent-text)]">{c.value}</span>
               </span>
             </a>
           ))}
@@ -114,7 +114,7 @@ export function Contact() {
           />
         </div>
         <div className="mx-4 mt-4 sq-list overflow-hidden rounded-[12px] bg-white">
-          <button type="button" onClick={send} className="press-row flex h-11 w-full items-center justify-center text-[17px] font-semibold tracking-[-0.02em] text-[#0A84FF]">
+          <button type="button" onClick={send} className="press-row flex h-11 w-full items-center justify-center text-[17px] font-semibold tracking-[-0.02em] text-[var(--accent-text)]">
             Send Message
           </button>
         </div>
@@ -148,14 +148,14 @@ export function Contact() {
             ].map((a) => (
               <div key={a.label} className="flex flex-col items-center gap-1">
                 <Btn variant="tinted" capsule iconOnly size="md" label={a.label} href={a.href} onClick={a.run} icon={a.icon} className="!h-9 !w-9" />
-                <span className="m-sub text-[var(--accent)]">{a.label}</span>
+                <span className="m-sub text-[var(--accent-text)]">{a.label}</span>
               </div>
             ))}
           </div>
         </div>
         <div className={field}>
           <span className="w-[58px] text-right text-ink-3">To:</span>
-          <span className="inline-flex h-[22px] items-center rounded-[8px] bg-[#0A84FF]/[0.1] px-2 text-[13px] font-medium text-[#0A84FF]">{owner.name}</span>
+          <span className="inline-flex h-[22px] items-center rounded-[8px] bg-[#0A84FF]/[0.1] px-2 text-[13px] font-medium text-[var(--accent-text)]">{owner.name}</span>
         </div>
         <label htmlFor="contact-subject" className={field}>
           <span className="w-[58px] text-right text-ink-3">Subject:</span>
@@ -217,7 +217,7 @@ function QuickAction({ href, onClick, icon, label, sub }: { href?: string; onCli
   const cls = "press lift sq flex flex-col items-start gap-2 rounded-[20px] bg-[var(--bg-elevated)] p-3 text-left shadow-[var(--shadow-1)]";
   const inner = (
     <>
-      <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[var(--accent-tint)] text-[var(--accent)]">{icon}</span>
+      <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[var(--accent-tint)] text-[var(--accent-text)]">{icon}</span>
       <span className="min-w-0">
         <span className="block text-[13px] font-medium text-ink">{label}</span>
         <span className="block truncate text-[11px] text-ink-3">{sub}</span>

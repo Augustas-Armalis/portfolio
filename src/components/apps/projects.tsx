@@ -201,7 +201,7 @@ function Readme({ text }: { text: string }) {
   for (const raw of lines) {
     if (raw.trim().startsWith("```")) {
       if (code) {
-        out.push(<pre key={out.length} className="mt-2 overflow-x-auto rounded-[10px] bg-[var(--fill-2)] p-3 font-mono text-[12px] leading-[1.5] text-ink">{code.join("\n")}</pre>);
+        out.push(<pre key={out.length} tabIndex={0} className="mt-2 overflow-x-auto rounded-[10px] bg-[var(--fill-2)] p-3 font-mono text-[12px] leading-[1.5] text-ink">{code.join("\n")}</pre>);
         code = null;
       } else {
         flush();
@@ -287,7 +287,7 @@ function RepoView({ it }: { it: StoryItem }) {
                         key={f.name}
                         mac={!compact}
                         href={`${p.repo}/${f.dir ? "tree" : "blob"}/HEAD/${f.name}`}
-                        icon={<span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--accent)]">{f.dir ? <Folder size={16} fill="currentColor" fillOpacity={0.18} /> : <FileText size={15} className="text-ink-2" />}</span>}
+                        icon={<span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--accent-text)]">{f.dir ? <Folder size={16} fill="currentColor" fillOpacity={0.18} /> : <FileText size={15} className="text-ink-2" />}</span>}
                         title={<span className="font-mono text-[12.5px]">{f.name}</span>}
                         chevron={compact}
                       />

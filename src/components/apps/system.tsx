@@ -249,7 +249,7 @@ export function Terminal() {
 
   return (
     <div onClick={() => !compact && input.current?.focus()} className={`terminal on-dark flex h-full min-h-[260px] flex-col bg-[#1C1D20] leading-[1.6] text-[#E4E6EA] ${compact ? "pb-24 text-[13px]" : "text-[12px]"}`}>
-      <Toolbar title={<span className="text-white/80">Terminal</span>} sub={<span className="text-white/40">zsh</span>} />
+      <Toolbar title={<span className="text-white/80">Terminal</span>} sub={<span className="text-white/60">zsh</span>} />
       <div className="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono">
         {lines.map((l, i) => (
           <div key={i} className={`whitespace-pre-wrap ${l.startsWith("augustas@os") ? "text-white" : "text-[#A9ADB5]"}`}>
@@ -474,7 +474,7 @@ export function SettingsApp() {
               onClick={() => setQualityChoice(c)}
               title={QUALITY_LABELS[c]}
               sub={c === "auto" ? `Follows this device, now ${QUALITY_LABELS[quality.preset]}` : undefined}
-              detail={choice === c ? <Check size={compact ? 18 : 14} className="bold text-[var(--accent)]" /> : undefined}
+              detail={choice === c ? <Check size={compact ? 18 : 14} className="bold text-[var(--accent-text)]" /> : undefined}
             />
           ))}
         </List>
@@ -507,7 +507,7 @@ export function SettingsApp() {
         compact ? (
           <>
             <List className="mt-2">
-              <ListRow icon={<span className="my-2"><Monogram size={56} /></span>} title={<span className="t-title3">{owner.name}</span>} sub={owner.role} />
+              <ListRow icon={<span className="my-4"><Monogram size={56} /></span>} title={<span className="t-title3">{owner.name}</span>} sub={owner.role} />
             </List>
             {/* the phone's power control, where it is seen at once: back to the desk, with the screen off */}
             <List className="mt-5">

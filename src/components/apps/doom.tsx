@@ -128,7 +128,7 @@ export function Doom() {
       <div className="mt-6 text-[44px] font-black leading-none tracking-[0.08em] text-white">DOOM</div>
       <div className="t-sub mt-2 text-white/60">Episode 1 · Knee-Deep in the Dead</div>
       <div className="mt-6">
-        <Btn variant="prominent" capsule size="lg" onClick={() => setStarted(true)} icon={<Play size={16} fill="currentColor" />} className="!h-11 !bg-[#e0412f] !px-7 !text-[16px]">
+        <Btn variant="prominent" capsule size="lg" onClick={() => setStarted(true)} icon={<Play size={16} fill="currentColor" />} className="!h-11 !bg-[#c93224] !px-7 !text-[16px]">
           Play
         </Btn>
       </div>
@@ -212,7 +212,7 @@ export function Doom() {
 
   return (
     <div className="on-dark relative flex h-full min-h-[320px] flex-col bg-black">
-      <Toolbar title={<span className="text-white/85">DOOM</span>} sub={<span className="text-white/40">Shareware v1.9</span>} />
+      <Toolbar title={<span className="text-white/85">DOOM</span>} sub={<span className="text-white/60">Shareware v1.9</span>} />
       <div className="relative min-h-[280px] flex-1">
         <div ref={ref} className="jsdos-host absolute inset-0" />
         {card}

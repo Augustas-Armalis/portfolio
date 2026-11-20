@@ -638,7 +638,7 @@ export function SplitView({
               className="min-h-[60vh]"
             >
               {!nav && (
-                <button type="button" onClick={() => setPushed(false)} className="press flex h-11 items-center gap-0.5 pl-2 pr-3 text-[17px] tracking-[-0.02em] text-[var(--accent)]">
+                <button type="button" onClick={() => setPushed(false)} className="press flex h-11 items-center gap-0.5 pl-2 pr-3 text-[17px] tracking-[-0.02em] text-[var(--accent-text)]">
                   <ChevronLeft size={24} strokeWidth={2.2} className="-mr-0.5" /> Back
                 </button>
               )}
@@ -1257,7 +1257,7 @@ export function TabBar<T extends string>({ id, value, onChange, items }: { id: s
             data-seg=""
             data-tab={id}
             onClick={() => onChange(it.value)}
-            className={`tab-item relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[3px] rounded-full transition-colors duration-200 ${on ? "text-[var(--accent)]" : "text-ink-2"}`}
+            className={`tab-item relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[3px] rounded-full transition-colors duration-200 ${on ? "text-[var(--accent-text)]" : "text-ink-2"}`}
           >
             <span className="relative">{it.icon}</span>
             <span className="relative max-w-full truncate px-1 text-[10px] font-semibold leading-none">{it.label}</span>

@@ -42,6 +42,7 @@ function Joystick({ onMove }: { onMove: (x: number, y: number) => void }) {
 
   return (
     <div
+      role="application"
       aria-label="Move"
       className={`relative flex h-[120px] w-[120px] touch-none items-center justify-center rounded-full bg-white/10 backdrop-blur-md ${GLASS_RING}`}
       onPointerDown={(e) => {
@@ -315,7 +316,7 @@ export default function Blocks({ compact = false }: { compact?: boolean }) {
               <button
                 type="button"
                 onClick={play}
-                className="mt-6 h-11 min-w-[140px] rounded-full bg-white px-8 text-[15px] font-semibold text-black transition-transform duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none"
+                className="mt-6 h-11 min-w-[140px] rounded-full bg-[#fff] px-8 text-[15px] font-semibold text-black transition-transform duration-150 ease-out active:scale-[0.97] motion-reduce:transition-none"
               >
                 {started ? "Resume" : "Play"}
               </button>
@@ -328,7 +329,7 @@ export default function Blocks({ compact = false }: { compact?: boolean }) {
               >
                 {confirmErase ? "Tap again to erase" : "New world"}
               </button>
-              <p className="mt-5 text-[12px] leading-[18px] text-white/45">
+              <p className="mt-5 text-[12px] leading-[18px] text-white/60">
                 {touch
                   ? "Stick move · Drag look · Tap a block to select"
                   : "WASD move · Space jump · Click break · Right click place · 1-8 blocks · Esc pause"}
