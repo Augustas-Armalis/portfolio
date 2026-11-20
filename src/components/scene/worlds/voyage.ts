@@ -318,8 +318,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     radius: 1300,
     ceil: 170,
     entry: { x: 1.4, z: -40, above: 6, yaw: 0 },
-    // the way on is in the cave at the forest's end (home/journey.ts): deep inside it, in its carved frame
-    gate: { x: CAVE.x - Math.sin(CAVE.yaw) * CAVE.gateIn, z: CAVE.z - Math.cos(CAVE.yaw) * CAVE.gateIn, above: landH(CAVE.x, CAVE.z) + CAVE.floor + CAVE.above, yaw: CAVE.yaw },
+    // the way on is the arch carved into the mountain at the forest's end (home/journey.ts), a little inside its mouth
+    gate: { x: CAVE.x - Math.sin(CAVE.yaw) * 10, z: CAVE.z - Math.cos(CAVE.yaw) * 10, above: landH(CAVE.x, CAVE.z) + CAVE.above, yaw: CAVE.yaw },
     path: [], // the journey: up the road, over the lake, down the river through the town, the forest, the cave (see pathOf())
     obstacles: [],
     canvases: [],

@@ -92,7 +92,7 @@ float townStreet(vec2 p){
   float k = 0.0;
   float d = riverD(p);
   float w = riverW(p.x);
-  k = max(k, (1.0 - sst(1.5, 2.5, abs(d - w - 5.4))) * (1.0 - sst(${f(TOWN.r - 6)}, ${f(TOWN.r + 14)}, length(p - vec2(${f(TOWN.x)}, ${f(TOWN.z)})))));
+  k = max(k, (1.0 - sst(2.2, 3.4, abs(d - w - 7.2))) * (1.0 - sst(${f(TOWN.r - 6)}, ${f(TOWN.r + 14)}, length(p - vec2(${f(TOWN.x)}, ${f(TOWN.z)})))));
   vec2 sq = p - vec2(${f(SQUARE.x)}, ${f(SQUARE.z)});
   k = max(k, 1.0 - sst(17.0, 20.0, length(sq * vec2(1.0, 1.12))));
   vec2 hq = p - vec2(${f(HILL.x)}, ${f(HILL.z)});
@@ -123,14 +123,12 @@ export const riverLevel = (x: number, z: number) => (riverD(x, z) < riverW(x) + 
 
 // ---------- the forest and the mountain ----------
 // The cave: its mouth's middle on the ground, and the way it faces (the plane flies in toward -z, yaw as the gates')
-export const CAVE = { x: -366, z: -668, yaw: 0.06, half: 12.5, rise: 25, above: 9, floor: 1.2, gateIn: 46 };
+export const CAVE = { x: -366, z: -668, yaw: 0.06, half: 12.5, rise: 25, above: 9 };
 // the mountain the cave is cut into: its heart, how high its head stands over the cave's floor
 export const PEAK = { x: -392, z: -812, h: 185 };
 // the arch cut into the cliff: its half-width at the legs, where the arch springs and where its point stands, over
 // the cave's floor (the veil inside is the gate's own: CAVE.half, CAVE.rise)
-// the cave's mouth (a rough natural opening), how deep it goes, and the carved frame round the portal inside it
-export const MOUTH = { half: 19, top: 36, depth: 108 };
-export const ARCH = { half: 14, spring: CAVE.floor + CAVE.above + 2, apex: CAVE.floor + CAVE.above + CAVE.rise + 2.5, depth: MOUTH.depth };
+export const ARCH = { half: 14, spring: CAVE.above + 2, apex: CAVE.above + CAVE.rise + 2.5, depth: 112 };
 // the cave's frame: a point by its distance across (u, + to the right looking in) and into the mountain (a)
 export const caveAt = (u: number, a: number) => {
   const c = Math.cos(CAVE.yaw);
@@ -201,10 +199,8 @@ export const JOURNEY: [number, number, number][] = [
   [-270, -150, 6.8],
   [-292, -160, 6.8],
   ...FOREST_LINE.map(([x, z], i): [number, number, number] => [x, z, i < 2 ? 7.2 : 7.0]),
-  ...[18, CAVE.gateIn, 82].map((a): [number, number, number] => {
-    const p = caveAt(0, a);
-    return [p.x, p.z, CAVE.floor + CAVE.above + 0.4];
-  }),
+  [-367, -690, 9],
+  [-368, -712, 9],
 ];
 
 // the forest's track (GLSL): a path of dark earth and needles winding along the flight line from the town's edge to the
@@ -234,6 +230,6 @@ float caveIn(vec2 p){
   float c = cos(${f(CAVE.yaw)}), s = sin(${f(CAVE.yaw)});
   float u = c * q.x - s * q.y;
   float a = -s * q.x - c * q.y;
-  return (1.0 - sst(${f(MOUTH.half + 4)}, ${f(MOUTH.half + 8)}, abs(u))) * sst(-8.0, -3.0, a) * (1.0 - sst(${f(MOUTH.depth + 2)}, ${f(MOUTH.depth + 6)}, a));
+  return (1.0 - sst(${f(ARCH.half + 5)}, ${f(ARCH.half + 8)}, abs(u))) * sst(-19.0, -15.0, a) * (1.0 - sst(${f(ARCH.depth + 2)}, ${f(ARCH.depth + 6)}, a));
 }
 `;
