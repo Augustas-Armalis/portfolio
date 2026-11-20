@@ -506,6 +506,8 @@ export function Plane({
         if (process.env.NODE_ENV !== "production" && crossed && !inside && side < 60) console.warn(`[voyage] ${id}: passed the gate's plane outside it (${side.toFixed(1)} m aside, ${ry.toFixed(1)} m above its middle)`);
         st.gateAlong = along;
         if (through) {
+          // (for the gate's ripple only: where in its opening the plane went through)
+          voyage.gateHit = { world: id, side: Math.cos(gate.yaw) * rx - Math.sin(gate.yaw) * rz, up: ry, at: performance.now() };
           voyage.next = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1] ?? null;
           if (voyage.next) voyage.phase = "closing";
           else if (process.env.NODE_ENV !== "production") console.error(`[voyage] ${id}: through the gate, but no world follows`);

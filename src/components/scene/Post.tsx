@@ -618,8 +618,9 @@ export function Post({ level }: { level: number }) {
     }
 
     // god rays from the sun (or, faintly, the moon) when it is low and in front of us
+    // (at Medium too: the mask and the march are at a quarter of the frame, a small cost for the light they give)
     let rayK = 0;
-    if (lv >= 2) {
+    if (lv >= 1) {
       const sunUp = SKY_U.uSunDir.value.y > -0.06;
       const dir = sunUp ? SKY_U.uSunDir.value : SKY_U.uMoonDir.value;
       sunV.copy(dir).multiplyScalar(1000).add(camera.position).project(camera);

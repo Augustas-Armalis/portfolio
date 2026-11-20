@@ -86,21 +86,30 @@ export type WorldDef = {
 const T0: Terrain = { base: 0, sines: [], bumps: [], rim: [1, 2, 0] };
 
 // Colours below are scene-linear, written before the lens (ACES and the grade) sees them.
+// The Sonata of the Sun's aqueducts: each crosses the path of light at `c`, an arch centred on it; `u` runs along
+// the bridge, `n` arches of `w` metres, `H` high. Their piers by the path are obstacles (below); worlds/Sun.tsx builds them.
+export const SUN_BRIDGES: { c: [number, number]; u: [number, number]; n: number; w: number; H: number; tiers: number }[] = [
+  { c: [8, 150], u: [0.9615, -0.2747], n: 9, w: 80, H: 150, tiers: 1 },
+  { c: [-80, 15], u: [0.64, -0.768], n: 11, w: 90, H: 200, tiers: 2 },
+];
+
 const AIR: Record<Exclude<WorldId, "home">, Air> = {
-  // Sonata of the Sun: one flat field of dull gold, no sun in it but the drawn ones; the forms blue-grey against it
+  // Sonata of the Sun: a field of dull gold under a gold-green air; one great drawn sun low ahead (the world's
+  // GreatSun: the sky's own disc is not drawn) behind the bells and arches, so they stand as shade with a thread of
+  // gold round every edge and its rays pour through them
   sun: {
     label: "Sonata of the Sun",
-    zenith: [0.4, 0.38, 0.19],
-    upper: [0.5, 0.43, 0.17],
-    horizon: [0.63, 0.5, 0.18],
-    glow: [1.0, 0.72, 0.26],
-    amb: [0.44, 0.46, 0.5],
-    key: [1.0, 0.82, 0.5],
-    keyI: 2.3,
-    sunAz: -18,
-    sunEl: -25,
-    keyAz: -24,
-    keyEl: 26,
+    zenith: [0.33, 0.36, 0.22],
+    upper: [0.47, 0.44, 0.19],
+    horizon: [0.66, 0.53, 0.2],
+    glow: [1.0, 0.7, 0.24],
+    amb: [0.4, 0.44, 0.5],
+    key: [1.0, 0.8, 0.46],
+    keyI: 2.1,
+    sunAz: 12,
+    sunEl: 13,
+    keyAz: 12,
+    keyEl: 19,
     cloudLit: [0.7, 0.6, 0.3],
     cloudShade: [0.4, 0.4, 0.26],
     night: 0,
@@ -272,7 +281,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "sun",
     place: "sky",
     air: AIR.sun,
-    fog: [0.0003, 0.014],
+    fog: [0.0005, 0.011],
     terrain: {
       base: 2,
       sines: [
@@ -313,16 +322,20 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [158, -502, 20],
     ],
     obstacles: [
-      { x: 30, z: -190, r: 84, h: 196, bell: true },
-      { x: -92, z: -120, r: 62, h: 138, bell: true },
-      { x: 124, z: -92, r: 54, h: 140, bell: true },
-      { x: -10, z: -40, r: 70, h: 64, bell: true },
-      { x: -210, z: -260, r: 46, h: 92, bell: true },
-      { x: 210, z: -250, r: 42, h: 80, bell: true },
-      { x: 5.1, z: 206.2, r: 5, h: 58 },
-      { x: 34.9, z: 209.8, r: 5, h: 58 },
-      { x: -27.3, z: 102.9, r: 5.5, h: 64 },
-      { x: 3.3, z: 89.1, r: 5.5, h: 64 },
+      // the bells (see worlds/Sun.tsx BELLS)
+      { x: 30, z: -190, r: 84, h: 470, bell: true },
+      { x: -92, z: -120, r: 62, h: 330, bell: true },
+      { x: 124, z: -92, r: 54, h: 300, bell: true },
+      { x: -10, z: -40, r: 70, h: 120, bell: true },
+      { x: -210, z: -260, r: 46, h: 240, bell: true },
+      { x: 210, z: -250, r: 42, h: 210, bell: true },
+      // the towers of the two gatehouses on the way in (Sun.tsx GATEHOUSES)
+      { x: 55.7, z: 203.7, r: 13, h: 132 },
+      { x: -15.7, z: 212.3, r: 13, h: 132 },
+      { x: 23.6, z: 80.1, r: 14, h: 142 },
+      { x: -47.6, z: 111.9, r: 14, h: 142 },
+      // the piers either side of the way through each aqueduct
+      ...SUN_BRIDGES.flatMap((b) => [-1, 1].map((sd) => ({ x: b.c[0] + b.u[0] * sd * b.w * 0.5, z: b.c[1] + b.u[1] * sd * b.w * 0.5, r: b.w * 0.14 + 2, h: b.H + 12 }))),
     ],
     canvases: [{ painting: "sun-allegro", x: -31, z: 302, yaw: 0.65 }],
   },
@@ -786,6 +799,8 @@ export const voyage = {
   onEnter: null as ((id: WorldId) => void) | null,
   // the flight's ending: the plane has flown into the little world the kings hold, and is on its way home
   homing: false,
+  // where the plane went through the last gate, for the gate's ripple (side and height from its middle, metres)
+  gateHit: null as { world: WorldId; side: number; up: number; at: number } | null,
   warm: 0, // 0..1 the closing cloud is that world's light instead of the air's colour
   onHome: null as (() => void) | null,
 };

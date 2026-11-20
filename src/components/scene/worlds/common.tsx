@@ -8,8 +8,8 @@ import { POST_U } from "../Post";
 import { WorldGrass } from "../Grass";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { GLSL_AIR, Kit, WORLD_U, angel, haloGeometry, makeCanvasMaterial, makeHaloMaterial, makePuffMaterial, makeTempera, makeTerrainMaterial, puffGeometry, rng, terrainGeometry, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
-import { gateOf, groundAt, pathOf, type WorldDef, type WorldId } from "./voyage";
+import { GLSL_AIR, Kit, WORLD_U, angel, haloGeometry, makeCanvasMaterial, makeHaloMaterial, makePoints, makePuffMaterial, makeTempera, makeTerrainMaterial, pointsGeometry, puffGeometry, rng, terrainGeometry, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { WORLDS, WORLD_ORDER, gateOf, groundAt, pathOf, voyage, type WorldDef, type WorldId } from "./voyage";
 
 // What every world shares: its ground and grass, the path of light with its
 // waymarks and angels, the gate onward, and the paintings standing in their
@@ -263,7 +263,7 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
 // A tall lancet of pale light standing on the path, a slow veil of mist and
 // light inside it: the brightest thing in its world, so the eye always knows
 // the way on.
-export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 11, rise = 17 }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; half?: number; rise?: number }) {
+export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15, rise = 23 }: { id: WorldId; def: WorldDef; tint?: V3; gain?: number; half?: number; rise?: number }) {
   const b = useDisposable(() => {
     const gate = gateOf(id)!;
     const c = Math.cos(gate.yaw);
@@ -312,45 +312,124 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 11
     }
     shape.lineTo(half, foot - gate.pos.y);
     const veilGeo = new THREE.ShapeGeometry(shape, 8);
+    // The threshold itself: a breathing sheet of light you can half see through, and through it, warped as if by
+    // water or old glass, a glimpse of the next world's own sky (its horizon, its zenith, the glow of its light).
+    // When the plane goes through, a ripple runs out from where it crossed and the light flares (uHit).
+    const nextId = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1];
+    const na = nextId ? WORLDS[nextId].air : null;
+    const nZen = na ? na.zenith : ([0.3, 0.42, 0.62] as V3);
+    const nHor = na ? na.horizon : ([0.8, 0.72, 0.6] as V3);
+    const nGlow = na ? na.glow : ([1, 0.8, 0.5] as V3);
     const veil = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
-      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) }, uGain: { value: gain }, uSpan: { value: new THREE.Vector3(half, foot - gate.pos.y, top - gate.pos.y) } },
+      uniforms: {
+        ...SKY_U,
+        ...WORLD_U,
+        uTint: { value: new THREE.Color(...tint) },
+        uGain: { value: gain },
+        uSpan: { value: new THREE.Vector3(half, foot - gate.pos.y, top - gate.pos.y) },
+        uNZen: { value: new THREE.Color(...nZen) },
+        uNHor: { value: new THREE.Color(...nHor) },
+        uNGlow: { value: new THREE.Color(...nGlow) },
+        uHit: { value: 99 },
+        uHitP: { value: new THREE.Vector2(0, 0) },
+      },
       vertexShader: /* glsl */ `
         varying vec3 vLocal; varying vec3 vWorld;
         void main(){ vLocal = position; vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uTint; uniform float uGain; uniform vec3 uSpan;
+        uniform vec3 uNZen; uniform vec3 uNHor; uniform vec3 uNGlow; uniform float uHit; uniform vec2 uHitP;
         varying vec3 vLocal; varying vec3 vWorld;
         ${GLSL_NOISE}
         ${GLSL_SKY}
         ${GLSL_AIR}
         void main(){
           vec2 p = vLocal.xy;
-          float n = fbm(vec2(p.x * 0.09 + uTime * 0.02, p.y * 0.05 - uTime * 0.05)) * 0.7 + fbm(p * 0.22 + vec2(-uTime * 0.03, uTime * 0.02)) * 0.3;
+          float t = uTime;
+          // the slow breath of the whole gate
+          float breath = 0.86 + 0.14 * sin(t * 0.7) + 0.05 * sin(t * 1.9 + 1.3);
+          // refraction: the glimpse is seen through moving glass
+          vec2 w = p + (vec2(fbm(p * 0.07 + vec2(t * 0.04, 0.0)), fbm(p * 0.07 + vec2(5.2, -t * 0.035))) - 0.5) * 7.0;
+          // the ripple from where the plane went through
+          float age = uHit;
+          vec2 dh = p - uHitP; float rd = length(dh);
+          float ring = sin(rd * 0.55 - age * 13.0) * exp(-age * 1.3) * exp(-rd * 0.025) * step(0.0, age) * smoothstep(age * 16.0 + 6.0, age * 16.0 - 2.0, rd);
+          w += (dh / max(rd, 0.001)) * ring * 3.0;
+          // looking through: the next world's sky, its horizon at the plane's own height, a glow of its light up and to one side
+          float hy = w.y / max(uSpan.z, 1.0);
+          vec3 glimpse = mix(uNHor, uNZen, smoothstep(-0.05, 0.95, hy));
+          // and its land: a far line of hills under that sky
+          float hill = (fbm(vec2(w.x * 0.035 + 3.0, 1.0)) - 0.5) * 0.22 + 0.02;
+          glimpse = mix(glimpse, uNHor * 0.42 + uNZen * 0.12, smoothstep(hill + 0.01, hill - 0.02, hy));
+          glimpse += uNGlow * (exp(-length(w - vec2(uSpan.x * 0.28, uSpan.z * 0.3)) * 0.12) * 0.9 + exp(-abs(hy - 0.0) * 9.0) * 0.18);
+          // the glass: caustic threads of brighter light moving through it
+          float n = fbm(vec2(w.x * 0.09 + t * 0.02, w.y * 0.05 - t * 0.05)) * 0.7 + fbm(w * 0.22 + vec2(-t * 0.03, t * 0.02)) * 0.3;
+          float caustic = pow(1.0 - abs(sin((n * 3.0 + w.y * 0.02) * 6.2832)), 22.0);
           // brightest at the plane's own height, thinning up into the point and down into the mist
           float up = smoothstep(uSpan.z, 0.0, p.y);
           float down = smoothstep(uSpan.y, min(uSpan.y * 0.2, -4.0), p.y);
           float side = 1.0 - smoothstep(0.55, 1.0, abs(p.x) / uSpan.x) * 0.5;
-          float a = (0.3 + 0.7 * smoothstep(0.25, 0.75, n)) * up * (0.35 + 0.65 * down) * side;
-          vec3 col = mix(airCol(normalize(vWorld - cameraPosition)) * 1.3, uTint * 1.15 * glowK(), 0.5 + 0.3 * n) * uGain;
+          // the rim of the sheet, where it meets the arch, is brightest
+          float rim = smoothstep(0.7, 1.0, abs(p.x) / uSpan.x) + smoothstep(uSpan.z * 0.7, uSpan.z, p.y);
+          float flare = exp(-max(age, 0.0) * 2.2) * step(0.0, age);
+          vec3 col = mix(glimpse * 0.95, uTint * 0.9 * glowK(), 0.08 + 0.1 * n) + uTint * (caustic * 0.25 + rim * 0.8) * glowK();
+          col *= uGain * breath * (1.0 + flare * 2.6 + abs(ring) * 1.2);
+          float a = (0.6 + 0.15 * smoothstep(0.25, 0.75, n) + caustic * 0.1 + rim * 0.3) * up * (0.4 + 0.6 * down) * side;
           float dist = length(vWorld - cameraPosition);
-          gl_FragColor = vec4(col * (1.0 + uPulse * 0.4), clamp(a * 0.86, 0.0, 0.9) * smoothstep(0.5, 6.0, dist) * exp(-dist * uMist * 1.5));
+          gl_FragColor = vec4(col * (1.0 + uPulse * 0.4), clamp(a * 0.9 + flare * 0.3, 0.0, 0.94) * smoothstep(0.5, 6.0, dist) * exp(-dist * uMist * 1.5));
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,
     });
+    // light drifting round the gate: motes rising along its legs and hanging in the air before it
+    const motes = pointsGeometry(
+      140,
+      (i, q) => {
+        const u = (q() - 0.5) * half * 3.2;
+        const y = foot + q() * (top - foot + 8);
+        const w = (q() - 0.5) * 14;
+        return [gate.pos.x + c * u + s * w, y, gate.pos.z - s * u + c * w, 0.5 + q() * 1.4];
+      },
+      31,
+    );
     const halos: Halo[] = [{ p: [gate.pos.x, top + 0.6, gate.pos.z], size: 6, col: tint, k: 0.7 * gain }];
     const glow: Halo[] = [{ p: [gate.pos.x, gate.pos.y + 2, gate.pos.z], size: 60, col: tint, k: 0.3 * gain }];
     const puffs: Puff[] = [];
     const r = rng(17);
     for (let i = 0; i < 7; i++) puffs.push({ p: at((r() - 0.5) * half * 3.4, Math.max(foot + 3, gate.pos.y - 12) + r() * 5), size: 16 + r() * 16, a: 0.8 });
-    return { arch: k.build(), tempera: makeTempera({ amb: 0.9, key: 0.3 }), veilGeo, veil, halos: haloGeometry(halos), haloMat: makeHaloMaterial(0), glow: haloGeometry(glow), glowMat: makeHaloMaterial(2), puffs: puffGeometry(puffs), puffMat: makePuffMaterial(), pos: gate.pos.toArray() as V3, yaw: gate.yaw };
+    return {
+      arch: k.build(),
+      tempera: makeTempera({ amb: 0.9, key: 0.3, rim: tint, rimPow: 3 }),
+      veilGeo,
+      veil,
+      halos: haloGeometry(halos),
+      haloMat: makeHaloMaterial(0),
+      glow: haloGeometry(glow),
+      glowMat: makeHaloMaterial(2),
+      puffs: puffGeometry(puffs),
+      puffMat: makePuffMaterial(),
+      motes,
+      moteMat: makePoints({ a: tint, b: [1, 0.96, 0.86], scale: 140, drift: 2.2, gain: 1.1, max: 16 }),
+      pos: gate.pos.toArray() as V3,
+      yaw: gate.yaw,
+    };
   }, [id]);
+  // the moment of going through: a ripple from where the plane crossed, and a flare of light
+  useFrame(() => {
+    const h = voyage.gateHit;
+    const u = b.veil.uniforms;
+    if (h && h.world === id) {
+      u.uHit.value = (performance.now() - h.at) / 1000;
+      (u.uHitP.value as THREE.Vector2).set(h.side, h.up);
+    } else u.uHit.value = 99;
+  });
   return (
     <>
       <mesh geometry={b.arch} material={b.tempera} />
+      <points geometry={b.motes} material={b.moteMat} />
       <mesh geometry={b.puffs} material={b.puffMat} renderOrder={3} />
       <mesh geometry={b.veilGeo} material={b.veil} position={b.pos} rotation={[0, b.yaw, 0]} renderOrder={5} />
       <mesh geometry={b.glow} material={b.glowMat} renderOrder={6} />

@@ -152,7 +152,15 @@ export class Kit {
 // colour and their own light (aCol.a, which may run well past 1 for the lens
 // to bloom). `rim` draws a thin line of light round every silhouette, the way
 // he outlined forms in gold.
-export function makeTempera(o: { rim?: V3; rimPow?: number; amb?: number; key?: number; dab?: number; strata?: number } = {}) {
+//
+// The finer hand (all off unless asked for, so a world opts in):
+//   grain  pastel on a toothed ground: fine chalk grain and the long upright strokes he laid forms in with,
+//          strongest close to and gone in the distance (it never shimmers)
+//   ao     the foot of everything stands in its own shade, up to `aoH` metres (and in the creases)
+//   gold   leaf laid in patches: metal, catching the key light and the sky's glow as the eye moves
+//   irid   a pearl sheen at grazing angles, the colour turning with the angle
+//   wrap   light that comes through the edges of a form lit from behind (a soft back light)
+export function makeTempera(o: { rim?: V3; rimPow?: number; amb?: number; key?: number; dab?: number; strata?: number; grain?: number; ao?: number; aoH?: number; gold?: number; goldCol?: V3; irid?: number; wrap?: number } = {}) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
     uniforms: {
@@ -164,6 +172,12 @@ export function makeTempera(o: { rim?: V3; rimPow?: number; amb?: number; key?: 
       uKeyK: { value: o.key ?? 0.32 },
       uDab: { value: o.dab ?? 1 },
       uStrata: { value: o.strata ?? 0 },
+      uGrain: { value: o.grain ?? 0 },
+      uAO: { value: new THREE.Vector2(o.ao ?? 0, o.aoH ?? 30) },
+      uGold: { value: o.gold ?? 0 },
+      uGoldCol: { value: new THREE.Color(...(o.goldCol ?? [1, 0.74, 0.3])) },
+      uIrid: { value: o.irid ?? 0 },
+      uWrap: { value: o.wrap ?? 0 },
     },
     vertexShader: /* glsl */ `
       attribute vec4 aCol;
@@ -175,6 +189,7 @@ export function makeTempera(o: { rim?: V3; rimPow?: number; amb?: number; key?: 
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uRim; uniform float uRimP; uniform float uAmbK; uniform float uKeyK; uniform float uDab; uniform float uStrata;
+      uniform float uGrain; uniform vec2 uAO; uniform float uGold; uniform vec3 uGoldCol; uniform float uIrid; uniform float uWrap;
       varying vec3 vWorld; varying vec3 vN; varying vec4 vCol; varying vec3 vLocal;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -190,13 +205,48 @@ export function makeTempera(o: { rim?: V3; rimPow?: number; amb?: number; key?: 
           float bed = vnoise(vec2(vLocal.y * 0.16 + vnoise(vLocal.xz * 0.02) * 3.0, 1.7)) * 0.65 + vnoise(vec2(vLocal.y * 0.55, vLocal.x * 0.01 + 4.0)) * 0.35;
           alb *= 1.0 + (bed - 0.5) * 0.7 * uStrata * (1.0 - 0.6 * n.y * n.y);
         }
+        float dEye = length(vWorld - cameraPosition);
+        if (uGrain > 0.0) {
+          // chalk on a toothed ground, and the long upright strokes; both fade out before they could alias
+          float near = 1.0 - smoothstep(40.0, 520.0, dEye);
+          float tooth = vnoise(vLocal.xz * 1.9 + vLocal.y * 1.3) * 0.5 + vnoise(vLocal.xy * 4.3 - vLocal.z * 3.1) * 0.5;
+          float stroke = vnoise(vec2((vLocal.x + vLocal.z) * 0.42, vLocal.y * 0.018)) * 0.65 + vnoise(vec2((vLocal.x - vLocal.z) * 1.3, vLocal.y * 0.05 + 3.0)) * 0.35;
+          alb *= 1.0 + ((tooth - 0.5) * 0.22 * near + (stroke - 0.5) * 0.3 * (0.4 + 0.6 * near)) * uGrain;
+        }
+        float ao = 1.0;
+        if (uAO.x > 0.0) {
+          // the foot of a form stands in its own shade; creases (where the paint is darker anyway) a little more
+          ao = mix(1.0 - uAO.x, 1.0, smoothstep(-6.0, uAO.y, vLocal.y)) * mix(1.0 - 0.25 * uAO.x, 1.0, smoothstep(0.25, 0.6, dab));
+        }
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         float lit = clamp(dot(n, uKeyDir) * 0.6 + 0.4, 0.0, 1.0) * sunUp;
-        vec3 col = alb * (uSkyCol * (0.68 + 0.32 * n.y) * uAmbK + uKeyCol * lit * uKeyK);
+        vec3 col = alb * (uSkyCol * (0.68 + 0.32 * n.y) * uAmbK * ao + uKeyCol * lit * uKeyK * mix(1.0, ao, 0.5));
         // what shines is its own light, not lit paint as well
         col *= 1.0 - 0.85 * clamp(vCol.a, 0.0, 1.0);
         float fres = pow(1.0 - abs(dot(n, V)), uRimP);
         col += uRim * fres * (1.0 - clamp(vCol.a, 0.0, 1.0));
+        if (uWrap > 0.0) {
+          // lit from behind: the light comes round and through the thin edges
+          float back = pow(max(dot(-V, uKeyDir), 0.0), 3.0);
+          col += uKeyCol * alb * back * pow(1.0 - abs(dot(n, V)), 1.6) * uWrap * sunUp;
+        }
+        if (uGold > 0.0) {
+          // leaf laid in patches over the paint
+          float lq = vnoise(vLocal.xz * 0.3 + vLocal.y * 0.34 + 2.0) * 0.5 + vnoise(vLocal.xy * 1.4 + vLocal.z * 1.1) * 0.32 + vnoise(vLocal.zy * 4.1) * 0.18;
+          // flakes, not a coat: small and scattered, and only on what faces the sky (crowns, copings, ledges)
+          float leaf = smoothstep(0.66, 0.7, lq) * smoothstep(0.15, 0.75, n.y) * uGold;
+          leaf *= 1.0 - clamp(vCol.a, 0.0, 1.0);
+          vec3 R = reflect(-V, n);
+          float spec = pow(max(dot(R, uKeyDir), 0.0), 18.0) * 2.4 + pow(max(dot(R, uKeyDir), 0.0), 3.0) * 0.35;
+          vec3 metal = uGoldCol * (uSkyCol * 0.45 + uGlow * 0.55 * (0.4 + 0.6 * max(R.y, 0.0)) + uKeyCol * spec) * (0.75 + 0.5 * vnoise(vLocal.xz * 2.1 + vLocal.y));
+          col = mix(col, metal, leaf);
+        }
+        if (uIrid > 0.0) {
+          // a pearl sheen at grazing angles, its colour turning with the angle
+          float g = pow(1.0 - abs(dot(n, V)), 2.2);
+          vec3 pearl = 0.5 + 0.5 * cos(6.2832 * (g * 1.3 + vec3(0.0, 0.33, 0.67) + vLocal.y * 0.002));
+          col += pearl * g * uIrid * (uSkyCol * 0.5 + uKeyCol * 0.25) * (1.0 - clamp(vCol.a, 0.0, 1.0));
+        }
         col = applyAir(col, vWorld);
         // its own light, added after the air so a lamp still reads through the haze
         float glow = max(vCol.a, 0.0);
