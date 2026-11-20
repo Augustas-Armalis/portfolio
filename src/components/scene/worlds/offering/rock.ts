@@ -51,7 +51,7 @@ export function buildMassif(side: number, seed: number, mobile: boolean) {
       c = mix3(c, [c[0] * 1.5 + 0.03, c[1] * 0.95, c[2] * 0.6], Math.max(0, hue - 0.55) * 1.6);
       // the face that looks into the gorge is the darkest and coolest thing in the world
       const inward = Math.max(0, -Math.cos(a) * side) * (1 - k * 0.7);
-      c = mix3(c, [0.035, 0.045, 0.08], inward * 0.7);
+      c = mix3(c, [0.05, 0.055, 0.09], inward * 0.55);
       col.push(c[0] * band, c[1] * band, c[2] * band, 0);
     }
   }

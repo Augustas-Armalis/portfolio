@@ -9,12 +9,12 @@ import { buildGrove, type Kind, type Tree } from "../Trees";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
-import { GLSL_GROUND_LIFE, Kindling, Procession, RayedSun, RisingFlock, SunShafts, Walkers, boulderGeometry, heapBlobs, heapMesh, makeHeapMaterial, useDeepLens, type Beam, type Heap, type Lamp } from "./fairy/shared";
+import { GLSL_GROUND_LIFE, Kindling, archGeometry, Procession, RayedSun, RisingFlock, SunShafts, Walkers, boulderGeometry, heapBlobs, heapMesh, makeHeapMaterial, useDeepLens, type Beam, type Heap, type Lamp } from "./fairy/shared";
 import { GATE, buildMassif, massifPoint, needleGeometry } from "./offering/rock";
 import { GoldStars, type Star } from "./offering/stars";
 import { Wings, seraph } from "./paradise/isle";
 import { CloudDeck, makeWingMaterial } from "./paradise/life";
-import { ORIGIN, WORLDS, groundAt, pathOf, voyage } from "./voyage";
+import { ORIGIN, WORLDS, gateOf, groundAt, pathOf, voyage } from "./voyage";
 
 // The Offering (Auka, 1909), and the gate of mountains. A long valley of pines climbs to a pass between two
 // mountains that lean together until their crests cross a kilometre up, a gate as tall as the sky, the last
@@ -59,6 +59,9 @@ export const GATE_PAL: GroundPalette = {
         col = groundLife(col, p, gd, px, light, (1.0 - scree) * (1.0 - wood * 0.8) * (1.0 - way), vec3(0.62, 0.4, 0.7), vec3(0.95, 0.72, 0.24));
         // what stands on the ground shades it: the terrace, the altar
         { vec2 q = abs(p - vec2(${TERRACE.x.toFixed(1)}, ${TERRACE.z.toFixed(1)})) - vec2(${(TERRACE.w / 2).toFixed(1)}, ${(TERRACE.d / 2).toFixed(1)}); col *= mix(0.45, 1.0, smoothstep(0.0, 34.0, length(max(q, 0.0)))); }
+        { vec2 q = abs(p - vec2(-316.0, -6.0)) - vec2(22.0, 196.0); col *= mix(0.5, 1.0, smoothstep(0.0, 30.0, length(max(q, 0.0)))); }
+        { vec2 q = abs(p - vec2(-400.0, 565.0)) - vec2(150.0, 105.0); col *= mix(0.5, 1.0, smoothstep(0.0, 30.0, length(max(q, 0.0)))); }
+        { vec2 q = abs(p - vec2(-470.0, 772.0)) - vec2(135.0, 104.0); col *= mix(0.5, 1.0, smoothstep(0.0, 30.0, length(max(q, 0.0)))); }
         { vec2 q = abs(p - vec2(${ALTAR.x.toFixed(1)}, ${ALTAR.z.toFixed(1)})) - vec2(43.0); col *= mix(0.5, 1.0, smoothstep(0.0, 18.0, length(max(q, 0.0)))); }
       }
     `,
@@ -82,6 +85,10 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     const g = (x: number, z: number) => groundAt(def, x, z);
     const pts = pathOf("gate").pts;
     const nearPath = (x: number, z: number, d: number) => pts.some((q, j) => j % 3 === 0 && Math.hypot(q.x - x, q.z - z) < d);
+    // (where the citadel stands: the terrace, the wall behind it, the lower terraces, the ridge wall)
+    const inCitadel = (x: number, z: number) =>
+      (x < -236 && x > -660 && z > -200 && z < 890) || (x < -220 && x > -450 && Math.abs(z - TERRACE.z) < TERRACE.d / 2 + 16) || (x < -640 && x > -960 && Math.abs(z - (300 + (-x - 440) * 0.5)) < 60) || (x > -300 && x < -186 && Math.abs(z - 128) < 40);
+    const GT = def.gate!;
     const k = new Kit();
     const wings = new Wings();
     const halos: Halo[] = [];
@@ -101,6 +108,108 @@ export default function GateWorld({ props }: { props: WorldProps }) {
       k.box(w, 26, TERRACE.d - 16 * i, [TERRACE.x - 15 * i - 20, top + 26 * (i - 0.5), TERRACE.z - 6 * i], [0.1, 0.085, 0.06], { top: [0.3, 0.25, 0.12] });
       k.box(w + 3, 2.6, TERRACE.d - 16 * i + 3, [TERRACE.x - 15 * i - 20, top + 26 * i - 1.3, TERRACE.z - 6 * i], [0.36, 0.3, 0.12], { top: [0.56, 0.46, 0.2], glow: 0.04 });
     }
+    // ---- the citadel the terrace is the prow of: a great wall running back to the mountain with stepped towers on
+    // it and a gate in it, lower terraces going down the valley and into the hill, a wall out along the ridge,
+    // and stairs from the valley floor up to the angel's platform
+    const ochreLo: V3 = [0.34, 0.27, 0.1];
+    const ochreHi: V3 = [0.62, 0.5, 0.2];
+    const slab = (x: number, z: number, w: number, d: number, yTop: number, yaw = 0, frieze = true) => {
+      const cs = Math.cos(yaw);
+      const sn = Math.sin(yaw);
+      let gy = 1e9;
+      for (const [u, v] of [
+        [-1, -1],
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ])
+        gy = Math.min(gy, g(x + (cs * u * w) / 2 + (sn * v * d) / 2, z - (sn * u * w) / 2 + (cs * v * d) / 2));
+      gy -= 30;
+      if (yTop - gy < 4) return;
+      k.box(w, yTop - gy, d, [x, (yTop + gy) / 2, z], [0.02, 0.035, 0.05], { top: dark, rot: [0, yaw, 0] });
+      // (its paving stands a hand above the block's own top, so the two never lie in one plane)
+      if (frieze) k.box(w + 4, 5.6, d + 4, [x, yTop - 2.2, z], ochreLo, { top: ochreHi, glow: 0.06, rot: [0, yaw, 0] });
+    };
+    // a stepped tower, tier on tier, a lamp in its crown
+    const ziggurat = (x: number, z: number, base: number, y0: number, h: number, tiers = 4) => {
+      for (let i = 0; i < tiers; i++) {
+        const w = base * (1 - (i / tiers) * 0.72);
+        slab(x, z, w, w, y0 + (h * (i + 1)) / tiers, 0, true);
+      }
+      k.box(base * 0.14, base * 0.2, base * 0.14, [x, y0 + h + base * 0.1, z], [1, 0.74, 0.36], { glow: 1.2 });
+      halos.push({ p: [x, y0 + h + base * 0.12, z], size: base * 0.34, col: [1, 0.78, 0.42], k: 0.6 });
+    };
+    const WALL_TOP = ty + 96;
+    // the wall back to the mountain, a narrower walk on top of it
+    for (const [x, z, len] of [
+      [-305, 120, 136],
+      [-316, -8, 136],
+      [-332, -132, 124],
+    ] as const) {
+      slab(x, z, 36, len, WALL_TOP);
+      slab(x - 6, z, 16, len - 8, WALL_TOP + 22);
+    }
+    ziggurat(-312, 52, 60, WALL_TOP, 140);
+    ziggurat(-326, -78, 54, WALL_TOP, 118);
+    // its gate, toward the valley: a deep pointed arch with the light of the inner court in it, and a broad stair up to it
+    {
+      const gx = -305 + 18;
+      const gz = 128;
+      const gy = g(gx + 30, gz);
+      k.add(archGeometry(24, 54, 10, 16), [gx + 4, gy + 12, gz], ochreLo, { top: ochreHi, rot: [0, Math.PI / 2, 0], glow: 0.08 });
+      k.add(archGeometry(21, 51.5, 1.6, 18), [gx + 4, gy + 12, gz], [0.1, 0.16, 0.14], { top: ochreLo, rot: [0, Math.PI / 2, 0], glow: 0.04 });
+      k.box(1.2, 50, 20.5, [gx + 0.8, gy + 12 + 25, gz], [1, 0.56, 0.18], { top: [0.14, 0.06, 0.07], glow: 0.7 });
+      for (let i = 0; i < 9; i++) k.box(7.4, 14 - i * 1.5 + 30, 44 - i, [gx + 14 + i * 7, gy + 12 - i * 1.5 - (14 - i * 1.5 + 30) / 2, gz], [0.16, 0.13, 0.08], { top: ochreHi });
+      glows.push({ p: [gx + 16, gy + 30, gz], size: 60, col: [1, 0.66, 0.3], k: 0.4 });
+    }
+    // lower terraces going down the valley and back into the hill
+    slab(-400, 565, 300, 210, ty + 95);
+    slab(-476, 560, 160, 180, ty + 124);
+    slab(-470, 772, 270, 208, ty + 52);
+    slab(-540, 772, 140, 170, ty + 78);
+    ziggurat(-520, 560, 46, ty + 124, 96, 3);
+    // a wall out along the ridge to the west, towers at its turns
+    {
+      const ridge: [number, number][] = [
+        [-440, 300],
+        [-560, 330],
+        [-690, 380],
+        [-810, 450],
+        [-920, 540],
+      ];
+      for (let i = 0; i < ridge.length - 1; i++) {
+        const [x0, z0] = ridge[i];
+        const [x1, z1] = ridge[i + 1];
+        const mx = (x0 + x1) / 2;
+        const mz = (z0 + z1) / 2;
+        const len = Math.hypot(x1 - x0, z1 - z0);
+        slab(mx, mz, len + 10, 22, Math.max(g(x0, z0), g(x1, z1)) + 44, Math.atan2(-(z1 - z0), x1 - x0));
+        if (i > 0) ziggurat(x0, z0, 36, g(x0, z0) + 40, 70, 3);
+      }
+      ziggurat(-920, 540, 44, g(-920, 540) + 30, 96, 3);
+    }
+    // stairs: up the lower terrace's face from the valley floor, then along the platform's south side to its top
+    {
+      const g0 = g(-238, 690);
+      const nA = Math.ceil((ty + 95 - g0) / 5);
+      for (let i = 0; i < nA; i++) {
+        const yT = Math.min(ty + 95, g0 + (i + 1) * 5);
+        k.box(26, yT - g0 + 24, 9.2, [-237, (yT + g0 - 24) / 2, 672 + nA * 4.5 - i * 9], [0.16, 0.13, 0.08], { top: ochreHi });
+      }
+      for (let i = 0; i < 11; i++) k.box(9.2, (i + 1) * 5 + 2, 26, [-258 - i * 9, ty + 95 + ((i + 1) * 5 - 2) / 2, TERRACE.z + TERRACE.d / 2 + 13], [0.16, 0.13, 0.08], { top: ochreHi });
+    }
+    // stars in the citadel's dark faces as well
+    for (let i = 0; i < (props.mobile ? 20 : 54); i++) {
+      const onWall = i % 3 !== 0;
+      const size = 2 + r() * r() * 4.5;
+      if (onWall) {
+        const z = 186 - r() * 376;
+        if (Math.abs(z - 128) < 30 || Math.abs(z - 52) < 32 || Math.abs(z + 78) < 29) continue;
+        stars.push({ p: [z > 56 ? -286.4 : z > -72 ? -297.4 : -313.4, ty + 16 + r() * 70, z], size });
+      }
+      else stars.push({ p: [-249, ty + 12 + r() * 74, 468 + r() * 190], size });
+    }
+
     // the stars set in its dark face: toward the valley, and toward whoever comes up it
     for (let i = 0; i < (props.mobile ? 30 : 70); i++) {
       const v = ty + 18 + Math.pow(r(), 0.8) * (TERRACE.h - 34);
@@ -237,9 +346,20 @@ export default function GateWorld({ props }: { props: WorldProps }) {
         z = ALTAR.z + Math.sin(a) * (60 + r() * 90);
         h = 24 + r() * 70;
       }
-      if (Math.abs(x) < 60 || nearPath(x, z, 46)) continue;
+      if (Math.abs(x) < 60 || nearPath(x, z, 46) || inCitadel(x, z) || Math.hypot(x - GT.x, z - GT.z) < 70) continue;
       needle(x, z, h);
       i++;
+    }
+    // the way on stands in the narrow of the gorge: the light between two tall needles that lean together like the mountains
+    {
+      const gt = gateOf("gate")!;
+      for (const sd of [-1, 1]) {
+        const h = 150;
+        const geo = needleGeometry(h, 9, sd > 0 ? 7.3 : 2.1, [0.1, 0.075, 0.12], [0.6, 0.38, 0.2]);
+        geo.rotateZ(sd * 0.17);
+        geo.translate(sd * 37, g(sd * 37, gt.pos.z) + h / 2 - 6, gt.pos.z);
+        needles.push(geo);
+      }
     }
     const needleGeo = mergeGeometries(needles)!;
     needles.forEach((q) => q.dispose());
@@ -253,7 +373,7 @@ export default function GateWorld({ props }: { props: WorldProps }) {
       const z = inGorge ? GATE.z + 560 - r() * 1150 : 1300 - r() * 1500;
       if (nearPath(x, z, inGorge ? 14 : 24) || Math.abs(x - roadX(z)) < 8) continue;
       const md = Math.hypot((Math.abs(x) - GATE.off) / GATE.rx, (z - GATE.z) / GATE.rz);
-      if (md < 0.9) continue;
+      if (md < 0.9 || inCitadel(x, z) || Math.hypot(x - GT.x, z - GT.z) < 60) continue;
       if (!inGorge && md > 1.7 && r() < 0.75) continue;
       const rad = 1.2 + r() * r() * (inGorge ? 9 : 6);
       stones.push({ p: [x, g(x, z), z], r: rad, seed: r(), col: r() < 0.5 ? [0.2, 0.15, 0.17] : [0.3, 0.2, 0.13] });
@@ -282,7 +402,7 @@ export default function GateWorld({ props }: { props: WorldProps }) {
         const x = cx + (r() - 0.5) * 44;
         const z = cz + (r() - 0.5) * 40;
         if (nearPath(x, z, 14) || def.canvases.some((c) => Math.hypot(x - c.x, z - c.z) < 34)) continue;
-        if (Math.abs(x - TERRACE.x) < TERRACE.w / 2 + 30 && Math.abs(z - TERRACE.z) < TERRACE.d / 2 + 16) continue;
+        if (inCitadel(x, z)) continue;
         if (Math.hypot(x - ALTAR.x, z - ALTAR.z) < 62) continue;
         if (Math.hypot((Math.abs(x) - GATE.off) / GATE.rx, (z - GATE.z) / GATE.rz) < 0.95) continue;
         if (Math.abs(x - roadX(z)) < 9) continue;
@@ -295,6 +415,7 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     const puffs: Puff[] = [];
     for (let i = 0; i < (props.mobile ? 16 : 40); i++) {
       const z = GATE.z + 620 - r() * 1100;
+      if (Math.abs(z - GT.z) < 70) continue;
       puffs.push({ p: [(r() - 0.5) * 170, g(0, z) + 8 + r() * r() * 120, z], size: 46 + r() * 70, a: 0.5 });
     }
     for (let i = 0; i < (props.mobile ? 10 : 26); i++) puffs.push({ p: [(r() - 0.5) * 1100, 0, 1300 - r() * 1400], size: 90 + r() * 110, a: 0.5 });
@@ -303,6 +424,7 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     const beams: Beam[] = [];
     for (let i = 0; i < (props.mobile ? 6 : 12); i++) {
       const z = GATE.z + 420 - (i / 11) * 900 + (r() - 0.5) * 40;
+      if (Math.abs(z - GT.z) < 60) continue;
       beams.push({ foot: [(r() - 0.5) * 110, g(0, z) - 6, z], len: 640, w: 16 + r() * 26, k: 0.7 + r() * 0.6 });
     }
     // a low rank of gilded cloud far beyond the pass and to the sides
@@ -373,9 +495,9 @@ export default function GateWorld({ props }: { props: WorldProps }) {
   });
   return (
     <>
-      <WorldBase id="gate" def={def} pal={GATE_PAL} props={b.base} tip={[0.4, 0.36, 0.14]} pathTint={[1, 0.86, 0.6]} groundSize={12000} angels={false} mask={GRASS_MASK} />
+      <WorldBase id="gate" def={def} pal={GATE_PAL} props={b.base} tip={[0.4, 0.36, 0.14]} pathTint={[1, 0.86, 0.6]} groundSize={12000} angels={false} mask={GRASS_MASK} gate="veil" gateSize={[17, 27]} />
       <RayedSun size={0.5} gain={0.9} />
-      <CloudDeck y={1500} size={20000} />
+      <CloudDeck y={1500} size={20000} alpha={0.45} />
       <group position={[0, 0, GATE.z]}>
         <mesh geometry={b.left} material={b.rock} />
         <mesh geometry={b.right} material={b.rock} />
