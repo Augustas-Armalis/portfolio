@@ -26,6 +26,11 @@ const WHITE = new THREE.Color(1, 1, 1);
 //     -> a sky-only mask smeared away from the sun (god rays)
 //     -> composite at full resolution: whatever is in focus is the scene's own
 //        pixels, untouched; exposure, filmic curve, a gentle grade
+//     -> the steadying (with a mouse): each finished frame is laid over the one before it, carried to where
+//        the camera's own movement has taken every point (from the depth), and held to the colours actually
+//        present round the pixel now. What is smaller than a pixel (a blade of grass, a leaf's edge, a cloud's
+//        dithered rim, a far glint) no longer comes and goes from frame to frame as the eye moves: it settles.
+//        A still picture is untouched; the faster a point crosses the frame the less of the past it keeps.
 //     -> far away only, a light Kuwahara (flat dabs of paint); paper grain,
 //        vignette
 //
@@ -90,6 +95,12 @@ export const postCtl = {
   level: 0,
   // ambient occlusion: 0..1 how dark the contact shade is (0 = none)
   ao: 0.62,
+  // multipliers on the glow and on the rays from the sun (1 = as designed; a world may lean them, and a test may switch one off)
+  bloom: 1,
+  rays: 1,
+  // the steadying: how much of the frame before is kept under each new one where nothing moves (0 = none)
+  steady: 0.86,
+  steadyClip: 1.25, // how many deviations of the colours round a pixel the past may lie from their middle
   // In flight: `k` 0..1 the strength of the flight's lens (Plane.tsx eases it in after take-off and out on landing),
   // `from` the distance in metres at which the far softness begins (it is full only at eight times that), `subject`
   // a point a world wants kept clear of it.
@@ -551,6 +562,53 @@ void main(){
   gl_FragColor = vec4(mix(c0.rgb, c, c0.a), 1.0);
 }`;
 
+// The steadying. The frame before is read where this pixel's point of the world was then (uReproj takes this
+// frame's clip space to the last one's; the nearest depth of the pixel's neighbours is used, so a thin thing's
+// edge travels with the thing), through a sharp five-tap cubic so that being carried sideways a little every
+// frame does not soften it; it is then held inside the range of the nine pixels here and now, which is what
+// stops anything trailing; and it is mixed in less the faster the point moves across the frame.
+const STEADY = /* glsl */ `
+varying vec2 vUv; uniform sampler2D tMap; uniform sampler2D tHist; uniform sampler2D tDepth; uniform mat4 uReproj; uniform vec2 uTexel; uniform float uKeep; uniform float uClip;
+vec3 past(vec2 uv){
+  vec2 res = 1.0 / uTexel;
+  vec2 pos = uv * res; vec2 tc1 = floor(pos - 0.5) + 0.5; vec2 f = pos - tc1;
+  vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  vec2 w3 = f * f * (-0.5 + 0.5 * f);
+  vec2 w12 = w1 + w2; vec2 o12 = w2 / w12;
+  vec2 tc0 = (tc1 - 1.0) * uTexel; vec2 tc3 = (tc1 + 2.0) * uTexel; vec2 tc12 = (tc1 + o12) * uTexel;
+  vec3 r = texture2D(tHist, vec2(tc12.x, tc0.y)).rgb * (w12.x * w0.y)
+    + texture2D(tHist, vec2(tc0.x, tc12.y)).rgb * (w0.x * w12.y)
+    + texture2D(tHist, vec2(tc12.x, tc12.y)).rgb * (w12.x * w12.y)
+    + texture2D(tHist, vec2(tc3.x, tc12.y)).rgb * (w3.x * w12.y)
+    + texture2D(tHist, vec2(tc12.x, tc3.y)).rgb * (w12.x * w3.y);
+  return r / (w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y);
+}
+void main(){
+  vec4 c = texture2D(tMap, vUv);
+  if (uKeep <= 0.0) { gl_FragColor = c; return; }
+  float d = texture2D(tDepth, vUv).x;
+  d = min(d, min(min(texture2D(tDepth, vUv + vec2(uTexel.x, 0.0)).x, texture2D(tDepth, vUv - vec2(uTexel.x, 0.0)).x), min(texture2D(tDepth, vUv + vec2(0.0, uTexel.y)).x, texture2D(tDepth, vUv - vec2(0.0, uTexel.y)).x)));
+  vec4 pc = uReproj * vec4(vUv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
+  vec2 uv = pc.xy / pc.w * 0.5 + 0.5;
+  if (pc.w <= 0.0 || uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { gl_FragColor = c; return; }
+  vec3 mn = c.rgb; vec3 mx = c.rgb; vec3 m1 = c.rgb; vec3 m2 = c.rgb * c.rgb;
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    if (x == 0 && y == 0) continue;
+    vec3 n = texture2D(tMap, vUv + vec2(float(x), float(y)) * uTexel).rgb;
+    mn = min(mn, n); mx = max(mx, n); m1 += n; m2 += n * n;
+  }
+  // (held to the middle of what is here now, a little over one deviation either way, and never outside its
+  // extremes: tight enough that grass moving in the wind keeps its own blades, wide enough to still a flicker)
+  vec3 mu = m1 / 9.0; vec3 sd = sqrt(max(m2 / 9.0 - mu * mu, 0.0)) * uClip;
+  vec3 h = clamp(past(uv), max(mn, mu - sd), min(mx, mu + sd));
+  float speed = length((uv - vUv) / uTexel);
+  // (a screen's own picture, marked by alpha 0, is never mixed with its past: it must stay exact)
+  float k = uKeep * mix(1.0, 0.45, smoothstep(0.6, 7.0, speed)) * smoothstep(0.02, 0.3, c.a);
+  gl_FragColor = vec4(mix(c.rgb, h, k), c.a);
+}`;
+
 // distance under one point of the frame, packed into 24 bits
 const PICK = /* glsl */ `
 varying vec2 vUv; uniform vec2 uPoint;
@@ -587,12 +645,19 @@ function build(level: number) {
   const ao = new THREE.WebGLRenderTarget(4, 4, hdr);
   const ao2 = new THREE.WebGLRenderTarget(4, 4, hdr);
   const ldr = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false });
+  // the frame before, and the one being made (they change places every frame)
+  const hist = [0, 1].map(() => new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false }));
   const pick = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
   const depthU = { tDepth: { value: full.depthTexture }, uNear: { value: 0.01 }, uFar: { value: 3000 } };
   const cocU = { uFocus: { value: 2 }, uCocK: { value: 0 }, uBand: { value: 0.3 }, uMaxC: { value: MAX_C }, uFly: { value: new THREE.Vector3(0, 0, 0) }, uBack: { value: 1 } };
   const toneU = { uExposure: { value: 1 } };
   const finishU = { uTime: SKY_U.uTime, uLook: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) } };
   const paint = level >= 2;
+  // (the steadying needs two more passes over the frame: with a mouse at every level that has a lens; a phone's
+  // pixels are too small for the flicker to be seen and its GPU has nothing to spare)
+  const steady = !COARSE;
+  // the last pass is its own (the paint, or only the finish) whenever anything comes between the composite and the screen
+  const tail = paint || steady;
   const dofU = () => ({ tMap: { value: half.texture }, tTile: { value: tile2.texture }, uTexel: { value: new THREE.Vector2() }, uMaxR: { value: 5 } });
   const m = {
     half: pass(HALF, { tMap: { value: full.texture }, uTexel: { value: new THREE.Vector2() }, ...depthU, ...cocU, ...toneU }),
@@ -628,16 +693,20 @@ function build(level: number) {
         ...toneU,
         ...finishU,
       },
-      { USE_DOF: 1, USE_AO: 1, ...(level >= 2 ? { USE_RAYS: 1 } : {}), ...(paint ? {} : { FINISH: 1 }) },
+      { USE_DOF: 1, USE_AO: 1, ...(level >= 2 ? { USE_RAYS: 1 } : {}), ...(tail ? {} : { FINISH: 1 }) },
     ),
-    paint: pass(PAINT, { tMap: { value: ldr.texture }, uTexel: { value: new THREE.Vector2() }, uStep: { value: 1 }, uPaint: { value: 0.5 }, uPaintZ: { value: new THREE.Vector2(7, 30) }, ...depthU, ...finishU }),
+    steady: pass(STEADY, { tMap: { value: ldr.texture }, tHist: { value: hist[0].texture }, tDepth: { value: full.depthTexture }, uReproj: { value: new THREE.Matrix4() }, uTexel: { value: new THREE.Vector2() }, uKeep: { value: 0 }, uClip: { value: 1.25 } }),
+    paint: pass(PAINT, { tMap: { value: ldr.texture }, uTexel: { value: new THREE.Vector2() }, uStep: { value: 1 }, uPaint: { value: paint ? 0.5 : 0 }, uPaintZ: { value: new THREE.Vector2(7, 30) }, ...depthU, ...finishU }),
     pick: pass(PICK, { uPoint: { value: new THREE.Vector2(0.5, 0.5) }, ...depthU }),
   };
-  const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ao, ao2, ldr, pick];
-  return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, w: 0, h: 0 };
+  const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ao, ao2, ldr, ...hist, pick];
+  // (hist: which of the two holds the frame before, whether it holds one at all, and how the camera saw the world then)
+  const past = { i: 0, ok: false, vp: new THREE.Matrix4(), eye: new THREE.Vector3() };
+  return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, hist, past, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, steady, tail, w: 0, h: 0 };
 }
 
 const sunV = new THREE.Vector3();
+const VP = new THREE.Matrix4();
 
 export function Post({ level }: { level: number }) {
   const gl = useThree((s) => s.gl);
@@ -714,6 +783,8 @@ export function Post({ level }: { level: number }) {
       p.h = h;
       p.full.setSize(w, h);
       p.ldr.setSize(w, h);
+      p.hist.forEach((t) => t.setSize(w, h));
+      p.past.ok = false;
       p.half.setSize(w >> 1, h >> 1);
       p.dof.setSize(w >> 1, h >> 1);
       p.dof2.setSize(w >> 1, h >> 1);
@@ -815,15 +886,36 @@ export function Post({ level }: { level: number }) {
     }
 
     const c = p.m.comp.uniforms;
-    c.uBloom.value = 0.1 * (1 + SKY_U.uPulse.value * 0.35);
-    c.uRays.value = rayK * 0.55;
+    c.uBloom.value = 0.1 * (1 + SKY_U.uPulse.value * 0.35) * postCtl.bloom;
+    c.uRays.value = rayK * 0.55 * postCtl.rays;
     (c.uRayCol.value as THREE.Color).copy(SKY_U.uGlow.value).lerp(WHITE, 0.35);
     if (SKY_U.uSunDir.value.y <= -0.06) (c.uRayCol.value as THREE.Color).set(0.6, 0.7, 1.0);
     c.uPx.value.set(1 / w, 1 / h);
     p.finishU.uLook.value = postCtl.look;
     p.finishU.uRes.value.set(w, h);
-    if (p.paint) {
+    if (p.tail) {
       run(p.m.comp, p.ldr);
+      let src = p.ldr;
+      if (p.steady && !out) {
+        // where every point of this frame was in the last one: last frame's view of the world, undone by this one's
+        VP.multiplyMatrices(pc.projectionMatrix, pc.matrixWorldInverse);
+        const u = p.m.steady.uniforms;
+        (u.uReproj.value as THREE.Matrix4).copy(VP).invert().premultiply(p.past.vp);
+        // (a cut, a jump between worlds, the first frame: there is no past to lay under it)
+        const cut = !p.past.ok || p.past.eye.distanceToSquared(camera.position) > 400;
+        u.uKeep.value = cut ? 0 : postCtl.steady;
+        u.uClip.value = postCtl.steadyClip;
+        u.tHist.value = p.hist[p.past.i].texture;
+        u.uTexel.value.set(1 / w, 1 / h);
+        const next = 1 - p.past.i;
+        run(p.m.steady, p.hist[next]);
+        p.past.i = next;
+        p.past.ok = true;
+        p.past.vp.copy(VP);
+        p.past.eye.copy(camera.position);
+        src = p.hist[next];
+      } else if (out) p.past.ok = false;
+      p.m.paint.uniforms.tMap.value = src.texture;
       p.m.paint.uniforms.uTexel.value.set(1 / w, 1 / h);
       p.m.paint.uniforms.uStep.value = Math.max(1, h / 1100);
       run(p.m.paint, out ?? null);

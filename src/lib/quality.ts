@@ -145,8 +145,16 @@ let fastFor = 0;
 let lastStep = 0;
 // `up: false` while flying: a step up mid-flight would rebuild grass, trees and the shadow map in the air (a
 // hitch for nothing); it waits for the desk. A step down is still taken, the device needs it.
+// The first seconds of a visit are the arrival: the camera comes down out of the sky while the last shaders are
+// made, and a change of gear there rebuilds the lens, the grass and the shadows in the middle of the one shot that
+// must be seamless. The gear guessed behind the loader is kept until the camera has settled.
+const SETTLE_MS = 16000;
+let firstReport = 0;
 export function reportFrame(dt: number, up = true) {
   const s = get();
+  const t = performance.now();
+  if (!firstReport) firstReport = t;
+  if (t - firstReport < SETTLE_MS) return;
   if (s.choice !== "auto" || dt <= 0 || dt > 0.5) return;
   acc += dt;
   frames++;
