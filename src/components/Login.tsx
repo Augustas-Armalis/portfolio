@@ -1,8 +1,9 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Mark, MarkDeep } from "./Mark";
-import { useEffect } from "react";
+import { MarkDeep, SystemBootMark } from "./Mark";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { mainWork, owner } from "@/content";
 import { useOS, useWallpaper } from "@/store";
 import { EASE_OUT, glass, sfx, useGlassScope } from "./ui";
@@ -79,61 +80,75 @@ export function LockBackdrop() {
   );
 }
 
-// Sleep (black until a click) and Restart (black, the mark and a bar, then the login).
+// The boot frame, like a Mac starting up: pure black, the logo dead centre, and 60pt under it a thin bar.
+// These numbers are the whole layout; the 3D display's boot frame is meant to be drawn from the same ones.
+export const BOOT_UI = { logo: 84, gap: 60, barW: 200, barH: 3 };
+
+// The logo and the bar on black. `at` is when the boot began (ms): every part is placed on that clock with a
+// negative animation delay, so if this is mounted again part-way through (the desktop hands over to the lock
+// screen underneath a restart) it carries on from the same frame instead of starting over.
+export function BootScreen({ at }: { at: number }) {
+  const [t0] = useState(() => Math.max(0, (Date.now() - at) / 1000));
+  const { logo, gap, barW, barH } = BOOT_UI;
+  return (
+    <div className="absolute inset-0 text-white" aria-hidden>
+      <div className="boot-in absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center" style={{ height: logo, animationDelay: `${0.5 - t0}s` }}>
+        <SystemBootMark size={logo} />
+      </div>
+      <div
+        className="boot-in absolute left-1/2 top-1/2 overflow-hidden rounded-full bg-white/[0.22]"
+        style={{ width: barW, height: barH, marginLeft: -barW / 2, marginTop: logo / 2 + gap, animationDelay: `${0.9 - t0}s` }}
+      >
+        <div className="boot-fill h-full w-full rounded-full bg-white" style={{ animationDelay: `${1.0 - t0}s` }} />
+      </div>
+    </div>
+  );
+}
+
+// Sleep (black until a click) and Restart (the boot frame, then the lock screen).
+// It is drawn on <body>, outside whichever screen asked for it: the desktop and the lock screen each render one,
+// and the screen under it is swapped (and cross-faded) while it is up, which must not show through or restart it.
+const RESTART_MS = 3300;
 export function PowerOverlay() {
   const sleeping = useOS((s) => s.sleeping);
   const restarting = useOS((s) => s.restarting);
+  const restartAt = useOS((s) => s.restartAt);
   const sleep = useOS((s) => s.sleep);
-  // the restart chime lands as the mark appears, like a Mac powering back on
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => setHost(document.body), []);
+  // the chime lands as the logo appears, once per restart however many screens mount under it
   useEffect(() => {
     if (!restarting) return;
-    const t = window.setTimeout(() => sfx("boot"), 450);
+    const wait = restartAt + 500 - Date.now();
+    if (wait < 0) return;
+    const t = window.setTimeout(() => sfx("boot"), wait);
     return () => window.clearTimeout(t);
-  }, [restarting]);
-  return (
+  }, [restarting, restartAt]);
+  // already black when this copy mounts under a restart in progress: no second fade
+  const [late] = useState(() => restarting && Date.now() - restartAt > 200);
+  if (!host) return null;
+  return createPortal(
     <AnimatePresence>
       {(sleeping || restarting) && (
         <motion.div
           key={sleeping ? "sleep" : "restart"}
-          initial={{ opacity: 0 }}
+          initial={late ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.5 } }}
-          transition={{ duration: sleeping ? 0.6 : 0.25 }}
+          exit={{ opacity: 0, transition: { duration: 0.6, ease: EASE_OUT } }}
+          transition={{ duration: sleeping ? 0.6 : 0.25, ease: EASE_OUT }}
           onClick={() => sleeping && sleep(false)}
-          className="fixed inset-0 z-[6000] flex items-center justify-center bg-black"
+          role={sleeping ? "button" : undefined}
+          aria-label={sleeping ? "Wake" : undefined}
+          className="fixed inset-0 z-[6000] bg-black"
         >
-          {restarting && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, filter: "blur(6px)" }}
-              animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-              transition={{ delay: 0.35, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="relative flex flex-col items-center gap-14"
-            >
-              {/* a faint light behind the mark, like a display warming up */}
-              <motion.span
-                aria-hidden
-                className="absolute -top-24 h-64 w-64 rounded-full bg-[radial-gradient(closest-side,rgb(255_255_255/0.1),transparent)]"
-                animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-              />
-              <span className="relative text-white">
-                <Mark size={104} />
-              </span>
-              <div className="relative h-[5px] w-[180px] overflow-hidden rounded-full bg-white/[0.16]">
-                <motion.div
-                  className="h-full w-full origin-left rounded-full bg-white"
-                  initial={{ scaleX: 0.03 }}
-                  animate={{ scaleX: [0.03, 0.42, 0.58, 1] }}
-                  transition={{ delay: 0.6, duration: 1.8, times: [0, 0.35, 0.6, 1], ease: [0.4, 0, 0.6, 1] }}
-                />
-              </div>
-            </motion.div>
-          )}
+          {restarting && <BootScreen at={restartAt} />}
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    host,
   );
 }
+export { RESTART_MS };
 
 // The way in, and the way out. The unlock veil draws the same controls inert, so nothing pops as it dissolves.
 export function LockActions({ inert = false }: { inert?: boolean }) {

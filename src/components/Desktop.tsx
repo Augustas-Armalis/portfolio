@@ -1,6 +1,6 @@
 "use client";
 
-import { MenuMark } from "./Mark";
+import { SystemMenuMark } from "./Mark";
 import {
   AnimatePresence,
   Reorder,
@@ -461,7 +461,7 @@ function MenuBar() {
       <div className="relative flex items-center gap-px">
         <div className="relative">
           <button type="button" aria-label="Augustas OS menu" className={btn(menu === "a")} {...item("a")}>
-            <MenuMark className="text-ink" />
+            <SystemMenuMark className="text-ink" />
           </button>
           <Pop open={menu === "a"}>
             <MenuItem onClick={run(() => open("about"))}>About Augustas</MenuItem>

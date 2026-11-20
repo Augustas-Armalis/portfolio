@@ -25,6 +25,8 @@ type OS = {
   // power states
   sleeping: boolean;
   restarting: boolean;
+  // when the restart began (ms): the boot frame runs on this clock, whichever screen is under it
+  restartAt: number;
   locked: boolean;
   // how the desktop was reached: from the lock screen (its face dissolves over the desktop) or straight from the intro
   entry: "lock" | "boot";
@@ -109,6 +111,7 @@ export const useOS = create<OS>((set, get) => ({
   seamless: false,
   sleeping: false,
   restarting: false,
+  restartAt: 0,
   locked: false,
   entry: "boot",
   introOff: false,
@@ -168,9 +171,10 @@ export const useOS = create<OS>((set, get) => ({
   lockScreen: () => set({ phase: "login", locked: true, palette: false, phoneApp: null, seamless: false }),
   sleep: (on) => set({ sleeping: on }),
   restart: () => {
-    set({ restarting: true, user: null, windows: [], phoneApp: null, palette: false, playing: null, locked: false, seamless: false });
-    window.setTimeout(() => set({ phase: "login" }), 900);
-    window.setTimeout(() => set({ restarting: false }), 2600);
+    // black first (250ms), then the session ends under it; the windows are only dropped once nothing can be seen
+    set({ restarting: true, restartAt: Date.now(), palette: false, playing: null, overlay: null });
+    window.setTimeout(() => set({ user: null, windows: [], phoneApp: null, locked: false, seamless: false, phase: "login" }), 500);
+    window.setTimeout(() => set({ restarting: false }), 3300);
   },
   shutdown: () =>
     set({ user: null, phase: "room", windows: [], phoneApp: null, palette: false, playing: null, seamless: false, locked: false, introOff: true }),
