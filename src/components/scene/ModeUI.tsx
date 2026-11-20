@@ -1000,8 +1000,9 @@ function WorldsList({ current, pending, onPick, mobile }: { current: WorldId; pe
   // tapped is remembered here, so it is the one seen lit as the list goes)
   const [tapped, setTapped] = useState<WorldId | null>(null);
   const going = tapped ?? pending;
+  // (a phone on its side is shorter than the list: there it scrolls inside its own glass, opened on the world that is lit)
+  useEffect(() => document.querySelector('[data-flight="worlds"] .lg-on')?.scrollIntoView({ block: "nearest" }), []);
   return (
-    // (a phone on its side is shorter than the list: there it scrolls inside its own glass)
     <Glass radius={22} panel className={`pointer-events-auto flex max-h-[calc(100dvh-124px)] origin-bottom flex-col gap-0.5 overflow-y-auto overscroll-contain p-1.5 [scrollbar-width:none] ${mobile ? "w-[236px]" : "w-[228px]"}`} initial={{ opacity: 0, y: 14, scale: 0.86 }} animate={GLASS_ON} exit={{ opacity: 0, y: 10, scale: 0.9 }} transition={GLASS_SPRING} data-flight="worlds">
       {WORLD_ORDER.map((id) => {
         const t = thumbOf(id);
