@@ -7,8 +7,8 @@ import { MT, PEAKS, ROAD, WARDS, footOf, peakRadius, rhoOf, rimOf, roadT, terrac
 // and towers go on up the ridge to the very point. Every window is lit. Measured, like the mountain, from the
 // mountain's own foot.
 
-const STONE: V3 = [0.3, 0.17, 0.31];
-const STONE_LIT: V3 = [0.86, 0.46, 0.3];
+const STONE: V3 = [0.25, 0.13, 0.25];
+const STONE_LIT: V3 = [0.9, 0.5, 0.22];
 const DARK: V3 = [0.15, 0.1, 0.22];
 // roofs: red going to gold, violet, and the green of old copper
 const ROOFS: [V3, V3][] = [
@@ -50,7 +50,7 @@ export function buildCastle(mobile: boolean, r: () => number) {
       ],
       [x, y, z],
       STONE,
-      { top: STONE_LIT, seg, glow: 0.1 },
+      { top: STONE_LIT, seg, glow: 0.14 },
     );
     const rh = o.rh ?? R * (3.8 + r() * 1.4);
     const [lo, hi] = ROOFS[o.roof ?? 0];

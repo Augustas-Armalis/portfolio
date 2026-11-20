@@ -261,7 +261,7 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       puffs.push({ p: [Math.cos(a) * d, 18 + r() * 20, Math.sin(a) * d], size: 200 + r() * 200, a: 0.45 });
     }
     return {
-      base: { ...props, grass: props.grass * 0.7 },
+      base: props,
       set: k.build(),
       wings: wings.build(),
       wingMat: makeWingMaterial(),

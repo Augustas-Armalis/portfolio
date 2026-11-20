@@ -45,8 +45,8 @@ export const terraceAt = (u: number, t: number) => {
 const FLOOR: V3 = [0.035, 0.075, 0.04];
 const VERGE: V3 = [0.11, 0.17, 0.055];
 const WAY: V3 = [0.8, 0.72, 0.56];
-const STONE_HI: V3 = [0.27, 0.15, 0.28];
-const STONE_LO: V3 = [0.085, 0.06, 0.17];
+const STONE_HI: V3 = [0.2, 0.125, 0.3];
+const STONE_LO: V3 = [0.055, 0.045, 0.17];
 const COPING: V3 = [0.6, 0.36, 0.33];
 
 export function buildMountain(mobile: boolean, ground: (x: number, z: number) => number) {

@@ -254,16 +254,17 @@ export function makeHeapMaterial(o: { lit?: V3; shade?: V3; rim?: number; drift?
         float w = smoothstep(-0.7, 0.8, sun * 0.6 + n.y * 0.55 + (dab - 0.5) * 0.4 * near);
         vec3 lit = uCloudLit * uLitK;
         vec3 shade = uCloudShade * uShadeK;
-        vec3 col = mix(shade, lit, w);
+        // (cloud is full of its own light: even its shade is warmed from within)
+        vec3 col = mix(shade, lit, 0.22 + 0.78 * w);
         // the belly: cooler and deeper, but never hard
-        col = mix(col, shade * vec3(0.8, 0.84, 1.0), smoothstep(0.3, -0.9, n.y) * 0.5);
+        col = mix(col, shade * vec3(0.8, 0.84, 1.0), smoothstep(0.3, -0.9, n.y) * 0.36);
         float ndv = max(dot(n, V), 0.0);
         float edge = pow(clamp(1.0 - ndv, 0.0, 1.0), 1.8);
         vec3 dir = dv / dist;
         // cloud between the eye and the sun is lit through: gold all over, brightest in its thin edges
         float through = pow(max(dot(dir, uSunDir), 0.0), 2.5);
-        col += lit * through * (0.3 + 0.9 * edge) * uRimK;
-        col += uGlow * edge * (0.1 + 0.9 * pow(through, 2.0)) * uRimK;
+        col += lit * vec3(1.0, 0.8, 0.46) * through * (0.3 + 0.7 * edge) * uRimK;
+        col += uGlow * vec3(1.0, 0.86, 0.6) * edge * (0.08 + 0.7 * pow(through, 2.0)) * uRimK;
         // far off they go into the air's own colour, ranks of them, paler and paler
         col = mix(col, airCol(dir) + uGlow * pow(max(dot(dir, uSunDir), 0.0), 8.0) * 0.25, clamp(airAmt(vWorld) * 0.9 + smoothstep(1500.0, 2900.0, dist) * 0.5, 0.0, 1.0));
         gl_FragColor = vec4(col, 1.0);

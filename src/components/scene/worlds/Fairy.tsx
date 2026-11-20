@@ -186,7 +186,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       for (const pk of PEAKS) if (Math.hypot(p.x - pk.x, p.z - pk.z) < peakRadius(pk, p.y) + 4) return true;
       return false;
     };
-    const wood = makeCrownMaterial({ a: [0.085, 0.17, 0.045], b: [0.19, 0.25, 0.055], shade: [0.018, 0.055, 0.05] });
+    const wood = makeCrownMaterial({ a: [0.055, 0.125, 0.035], b: [0.13, 0.18, 0.04], shade: [0.012, 0.04, 0.046] });
     const slopes = crownMesh(mountainCrowns(Math.round(7000 * few), r, rel, skip), wood, true);
 
     // ---- the woods of the plain: thick near the way and round the mountain's foot, bigger and fewer far off
@@ -358,9 +358,9 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const heaps: Heap[] = [];
     const far: Heap[] = [];
     const reach = 2500 * Math.min(1.1, Math.max(0.7, props.far + 0.2));
-    for (let z = 1500; z > -reach; z -= 250) {
-      const row = Math.round((1500 - z) / 250);
-      for (let x = -reach + (row % 2) * 160; x < reach; x += 320) {
+    for (let z = 1700; z > -reach; z -= 215) {
+      const row = Math.round((1700 - z) / 215);
+      for (let x = -reach + (row % 2) * 140; x < reach; x += 280) {
         const cx = x + (r() - 0.5) * 190;
         const cz = z + (r() - 0.5) * 150;
         const dm = Math.hypot(cx - MT.x, cz - MT.z);
@@ -440,7 +440,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       flocks,
       road,
       way,
-      masonry: makeMasonry({ bay: 27, amb: 0.62, key: 0.5 }),
+      masonry: makeMasonry({ bay: 27, amb: 0.6, key: 0.5, niche: [0.03, 0.03, 0.11], foot: [0.05, 0.17, 0.24] }),
       tempera: makeTempera({ amb: 0.78, key: 0.6, dab: 1.3, grain: 1.1, ao: 0.4, aoH: 30, wrap: 0.8, rim: [0.95, 0.5, 0.22], rimPow: 3 }),
       rock: makeTempera({ amb: 0.8, key: 0.62, dab: 1.4, strata: 0.9, grain: 1.2, wrap: 0.9, rim: [1.0, 0.56, 0.3], rimPow: 3.2 }),
       stone: makeTempera({ amb: 0.7, key: 0.6, dab: 1.2, strata: 0.75, grain: 1.2, wrap: 0.9, gold: 0.5, rim: [1.0, 0.56, 0.26], rimPow: 2.6 }),
