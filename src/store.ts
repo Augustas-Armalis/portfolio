@@ -88,6 +88,9 @@ type OS = {
   setPlaying: (what: string | null) => void;
   setPalette: (open: boolean) => void;
   openPhoneApp: (id: AppId | null, origin?: Origin) => void;
+  // a page to show in the Browser (desktop); a phone opens it in a new tab instead
+  browserUrl: { url: string; t: number } | null;
+  openUrl: (url: string) => void;
   setWallpaper: (i: number) => void;
 };
 
@@ -219,6 +222,15 @@ export const useOS = create<OS>((set, get) => ({
   setPlaying: (what) => set({ playing: what }),
   setPalette: (open) => set({ palette: open }),
   openPhoneApp: (id, origin) => set(origin ? { phoneApp: id, phoneOrigin: origin } : { phoneApp: id }),
+  browserUrl: null,
+  openUrl: (url) => {
+    if (get().isMobile) {
+      window.open(url, "_blank", "noopener");
+      return;
+    }
+    set({ browserUrl: { url, t: Date.now() } });
+    get().open("browser");
+  },
   setWallpaper: (i) => set({ wallpaper: i }),
 }));
 

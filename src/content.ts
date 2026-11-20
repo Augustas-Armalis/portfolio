@@ -9,12 +9,12 @@ export type UserId = "engineer" | "founder" | "art";
 export type AppId =
   // Finder folders, and the apps that stand on their own
   | "projects" | "games" | "shots" | "taste" | "kit"
-  // Work (case studies)
-  | "sellify" | "kaching"
-  // Ventures
+  // Projects: what he founded and runs
   | "larpo" | "lunor" | "capto" | "contles" | "filzy" | "filzymovie"
-  // Lab
-  | "rug" | "slideskipper" | "musicengine" | "trackpad" | "reel" | "openwhip"
+  // Lab: small tools, each a folder that opens into its own store page
+  | "rug" | "slidepad" | "openwhip"
+  // Coming soon (greyed out, not opened)
+  | "cortex"
   // Games
   | "doom" | "blocks"
   // Music, writing, pictures
@@ -62,13 +62,16 @@ export const deskSharedApps: AppId[] = ["browser", ...sharedApps];
 export const allApps: AppId[] = [...dockApps, "doom", "blocks", "taste", "kit", ...deskSharedApps, "about"];
 
 // The Projects folder, in its groups.
-export const projectGroups: { id: string; title: string; apps: AppId[] }[] = [
-  { id: "work", title: "Work", apps: ["sellify", "kaching"] },
-  { id: "ventures", title: "Ventures", apps: ["larpo", "lunor", "capto", "contles", "filzy", "filzymovie"] },
-  { id: "lab", title: "Lab", apps: ["rug", "slideskipper", "musicengine", "reel", "openwhip"] },
+export const projectGroups: { id: "now" | "ventures" | "lab" | "soon"; title: string; apps: AppId[] }[] = [
+  { id: "now", title: "Now", apps: ["larpo"] },
+  { id: "ventures", title: "Ventures", apps: ["contles", "lunor", "filzy", "capto", "filzymovie"] },
+  { id: "lab", title: "Lab", apps: ["rug", "slidepad", "openwhip"] },
+  { id: "soon", title: "Coming soon", apps: ["cortex"] },
 ];
 export const labApps: AppId[] = projectGroups[2].apps;
-export const projectApps: AppId[] = projectGroups.flatMap((g) => g.apps);
+export const soonApps: AppId[] = projectGroups[3].apps;
+// everything in the folder that opens (Coming soon doesn't yet)
+export const projectApps: AppId[] = projectGroups.filter((g) => g.id !== "soon").flatMap((g) => g.apps);
 export const gameApps: AppId[] = ["doom", "blocks"];
 
 type Size = { w: number; h: number };
@@ -81,7 +84,7 @@ const MIN_SIZE: Partial<Record<AppId, Size>> = {
   records: { w: 400, h: 540 },
   novel: { w: 420, h: 440 },
   shots: { w: 600, h: 440 },
-  gallery: { w: 560, h: 420 },
+  gallery: { w: 560, h: 440 },
   settings: { w: 440, h: 420 },
   contact: { w: 420, h: 500 },
   taste: { w: 380, h: 340 },
@@ -98,10 +101,7 @@ const MIN_SIZE: Partial<Record<AppId, Size>> = {
 export function minSize(id: AppId): Size {
   const own = MIN_SIZE[id];
   if (own) return own;
-  // projects: a live site or a story needs room for its inspector or its screenshot; a repository a little less
-  const p = projects[id];
-  if (p) return p.kind === "code" ? { w: 420, h: 420 } : { w: 480, h: 440 };
-  return { w: 480, h: 360 };
+  return projects[id] ? { w: 440, h: 440 } : { w: 480, h: 360 };
 }
 
 export const apps: Record<AppId, { title: string; size: Size }> = {
@@ -110,26 +110,22 @@ export const apps: Record<AppId, { title: string; size: Size }> = {
   shots: { title: "Shots", size: { w: 1000, h: 660 } },
   taste: { title: "Taste", size: { w: 700, h: 430 } },
   kit: { title: "Kit", size: { w: 480, h: 400 } },
-  sellify: { title: "Sellify", size: { w: 960, h: 700 } },
-  kaching: { title: "Kaching", size: { w: 960, h: 700 } },
-  larpo: { title: "Larpo", size: { w: 1100, h: 700 } },
-  lunor: { title: "Lunor", size: { w: 900, h: 680 } },
-  capto: { title: "Capto", size: { w: 900, h: 680 } },
-  contles: { title: "Contles", size: { w: 900, h: 680 } },
-  filzy: { title: "Filzy", size: { w: 1100, h: 700 } },
-  filzymovie: { title: "Filzy Movie", size: { w: 1100, h: 700 } },
-  rug: { title: "Road Rug", size: { w: 900, h: 640 } },
-  slideskipper: { title: "Slide Skipper", size: { w: 820, h: 440 } },
-  musicengine: { title: "Music Engine", size: { w: 820, h: 440 } },
-  trackpad: { title: "Trackpad Test", size: { w: 560, h: 420 } },
-  reel: { title: "Reel", size: { w: 820, h: 440 } },
-  openwhip: { title: "OpenWhip", size: { w: 820, h: 440 } },
+  larpo: { title: "Larpo", size: { w: 900, h: 720 } },
+  lunor: { title: "Lunor", size: { w: 900, h: 720 } },
+  capto: { title: "Capto", size: { w: 900, h: 720 } },
+  contles: { title: "Contles", size: { w: 900, h: 720 } },
+  filzy: { title: "Filzy", size: { w: 900, h: 720 } },
+  filzymovie: { title: "AFilm", size: { w: 900, h: 720 } },
+  rug: { title: "Rug", size: { w: 860, h: 700 } },
+  slidepad: { title: "Slidepad", size: { w: 860, h: 700 } },
+  openwhip: { title: "Open Whip", size: { w: 860, h: 680 } },
+  cortex: { title: "Cortex", size: { w: 600, h: 400 } },
   doom: { title: "DOOM", size: { w: 800, h: 560 } },
-  blocks: { title: "Blocks", size: { w: 920, h: 620 } },
+  blocks: { title: "Minecruft", size: { w: 920, h: 620 } },
   records: { title: "Records", size: { w: 920, h: 600 } },
   piano: { title: "Piano", size: { w: 760, h: 320 } },
   novel: { title: "Novel", size: { w: 1040, h: 700 } },
-  gallery: { title: "Gallery", size: { w: 760, h: 540 } },
+  gallery: { title: "Gallery", size: { w: 1040, h: 700 } },
   about: { title: "About Augustas", size: { w: 320, h: 610 } },
   notes: { title: "Notes", size: { w: 760, h: 520 } },
   contact: { title: "Get in Touch", size: { w: 720, h: 640 } },
@@ -141,54 +137,37 @@ export const apps: Record<AppId, { title: string; size: Size }> = {
   launchpad: { title: "Apps", size: { w: 0, h: 0 } },
 };
 
-// One template for every project.
+// One template for every project page: an App Store-style page with its logo, a button, pictures, the story and
+// the facts. Add a project by adding one of these.
 export type Project = {
   id: string;
   name: string;
+  // one line under the name
   what?: string;
+  // the explanation, a paragraph each
+  story?: string[];
   role?: string;
   years?: string;
   stack?: string;
   status?: string;
+  // the hero picture, then more (screenshots or photos, shown in a row and opened in Quick Look)
   image?: string;
   images?: string[];
+  // a film of it working (a file of ours, with its first frame as the poster)
+  video?: { src: string; poster: string };
   numbers: { label: string; value: string }[];
   link?: { label: string; href: string };
-  // the live site may be shown inside the window (it allows framing); false or missing shows the story instead
+  // the big button: "Get" (a download or a repository), "Open" (a web app) or "Visit" (a website)
+  get?: { label: string; href: string; sub?: string };
+  // the live site may be shown inside the window (it allows framing)
   embeddable?: boolean;
-  // how it opens from the Projects folder: a case study (the story page), a website (the live site beside its
-  // explanation) or code (a repository view). Left out, it follows from the fields above.
-  kind?: "case" | "site" | "code";
-  // code projects: the repository, when it's public
+  // "store": a Lab tool (an App Store page with a Get button); left out, a project of his own
+  kind?: "store";
+  // code projects: the public repository, whose files are listed from GitHub
   repo?: string;
+  // a line under the facts, e.g. a credit
+  footnote?: string;
 };
-
-// ---------- Work: case studies ----------
-
-export const mainWork: Project = {
-  id: "sellify",
-  name: "Sellify",
-  what: "AI tools for finding, making and running ads.",
-  role: "Product designer",
-  years: "2025 – now",
-  image: "/img/work-sellify.webp",
-  images: ["/img/work-sellify-2.webp"],
-  numbers: [{ label: "Kit components", value: "45" }],
-  kind: "case",
-};
-
-export const otherWork: Project[] = [
-  {
-    id: "kaching",
-    name: "Kaching",
-    what: "Website for Kaching's Shopify apps.",
-    role: "Design and build",
-    years: "2026",
-    image: "/img/work-kaching.webp",
-    numbers: [{ label: "App sections", value: "6" }],
-    kind: "case",
-  },
-];
 
 export const shots = {
   handle: "@augustasdesign",
@@ -214,123 +193,221 @@ export const taste = {
   rated: ["Marcel", "rico", "Basit", "Adrian Kuleszo", "Emil Kowalski"],
 };
 
-// ---------- Projects: one app each ----------
+// ---------- Projects: one page each ----------
+
+const larpo: Project = {
+  id: "larpo",
+  name: "Larpo",
+  what: "A full-stack website and product design studio for SaaS and AI teams.",
+  story: [
+    "Larpo is my design studio, and it was my first business. We design and build websites, product interfaces and brands for SaaS and AI teams. Strategy, design, motion and code sit in one team, so a launch takes weeks, not months.",
+    "It has earned over six figures, keeps growing, and is now run by a team of four. What you see today is its fourth brand. Each one got sharper as the work did.",
+    "Teams come to us for one thing and stay for the rest: Acquisity came for product design and left with a rebrand, a website and a front end, and still works with us.",
+  ],
+  role: "Founder, head of design",
+  years: "Now",
+  status: "Taking projects",
+  stack: "Figma, React, Next.js, Motion, Three.js",
+  image: "/img/p/larpo-1.webp",
+  images: ["/img/p/larpo-2.webp"],
+  numbers: [
+    { label: "Revenue", value: "6 figures" },
+    { label: "Team", value: "4" },
+    { label: "Brand", value: "4th" },
+  ],
+  link: { label: "larpo.studio", href: "https://larpo.studio" },
+  get: { label: "Visit", href: "https://larpo.studio" },
+  embeddable: true,
+};
 
 export const projects: Partial<Record<AppId, Project>> = {
-  sellify: mainWork,
-  kaching: otherWork[0],
-  larpo: {
-    id: "larpo",
-    name: "Larpo",
-    what: "Design studio in Kaunas. Brand, product and content.",
-    role: "Founder",
-    years: "2026 – now",
-    image: "/img/larpo-og.webp",
-    numbers: [
-      { label: "Posts a day", value: "2" },
-      { label: "New site", value: "14 Nov" },
+  larpo,
+  contles: {
+    id: "contles",
+    name: "Contles",
+    what: "Where brands found creators and ran whole campaigns with them.",
+    story: [
+      "Contles was my biggest startup. Brands found content creators on it and worked with them in one place, from the first application to the finished content and the payment. Some of the biggest Lithuanian and international brands used it.",
+      "We built it ourselves, from zero and without investment. It started in the ISM entrepreneurship club and won it. Then Kickstart Lab, where it picked up several wins, three minutes on the main stage of Startup Fair at Litexpo, and the big one: Rykliai, Lithuania's Shark Tank.",
+      "Building it was intense and exciting: a team locked in for months, more mistakes than I can count, and more learned than anywhere else. In the autumn of 2026 we decided to stop and take everything we learned into bigger things.",
     ],
-    link: { label: "larpo.studio", href: "https://larpo.studio" },
-    embeddable: true,
+    role: "CEO, product and design",
+    years: "Dec 2025 – Sep 2026",
+    status: "Closed",
+    image: "/img/p/contles-stage.webp",
+    images: ["/img/p/contles-ism.webp", "/img/p/contles-team.webp", "/img/p/contles-kickstart.webp", "/img/p/contles-hoodie.webp"],
+    numbers: [
+      { label: "ISM club", value: "1st" },
+      { label: "Idea to main stage", value: "< 6 mo" },
+      { label: "Investment", value: "None" },
+    ],
+    link: { label: "contles.com", href: "https://contles.com" },
+    get: { label: "Visit", href: "https://contles.com" },
+    footnote: "Photos from contles.com, by the Contles team.",
   },
   lunor: {
     id: "lunor",
     name: "Lunor",
-    what: "A design library. Free, Premium and Lifetime plans.",
-    role: "Founder",
-    status: "Live",
-    stack: "Next.js, Supabase, Stripe",
-    numbers: [{ label: "Lifetime", value: "€29.99" }],
-  },
-  capto: {
-    id: "capto",
-    name: "Capto",
-    what: "Captions for video, in the browser. Your video never leaves your device.",
-    role: "Founder",
-    status: "Live",
-    years: "2026",
-    stack: "Next.js, Cloudflare, Whisper",
-    image: "/img/venture-capto.webp",
-    numbers: [
-      { label: "Caption styles", value: "9" },
-      { label: "Free exports a month", value: "3" },
+    what: "A library of real Figma designs and coded components.",
+    story: [
+      "Lunor began with me sharing my own designs. People bought them and used loads of them, which made it a small success of mine and then a proper library: real Figma files and coded components, straight from the workspaces of verified designers.",
+      "Over 300 designs so far, from full product screens down to single components, every one editable. Open it, see exactly how it's built, and drop it into your own work.",
+      "I'm rebuilding it right now, and it's going to be huge. More to come.",
     ],
-  },
-  contles: {
-    id: "contles",
-    name: "Contles",
-    what: "Brands book creators for paid campaigns.",
-    role: "Design and front end",
-    status: "Closed",
-    years: "2025 – 2026",
-    numbers: [],
+    role: "Founder",
+    years: "Oct 2025 – now",
+    status: "Being rebuilt",
+    stack: "Figma, Next.js, Supabase, Stripe",
+    image: "/img/p/lunor-1.webp",
+    images: ["/img/p/lunor-2.webp"],
+    numbers: [{ label: "Designs", value: "300+" }],
+    link: { label: "lunor.design", href: "https://lunor.design" },
+    get: { label: "Visit", href: "https://lunor.design" },
+    embeddable: true,
   },
   filzy: {
     id: "filzy",
     name: "Filzy",
-    what: "Send files between devices. Drop to the cloud, or beam peer to peer.",
+    what: "Send any file to any device. Free, with no size limit.",
+    story: [
+      "I got tired of sending big files, so I engineered my own way of moving them between devices. All it needs is an internet connection, and there's no limit on how big a file can be.",
+      "It grew into a better WeTransfer, and then into much more: converting, compressing and extracting, the small file jobs everyone runs into.",
+      "It's a passion project for everyone's needs, which is why it's completely free.",
+    ],
     role: "Founder",
+    years: "2026",
     status: "Live",
     stack: "Vite, WebRTC, Cloudflare Workers",
-    numbers: [],
-    link: { label: "Open Filzy", href: "https://augustas-armalis.github.io/filzy/" },
+    image: "/img/p/filzy-1.webp",
+    images: ["/img/p/filzy-2.webp"],
+    numbers: [
+      { label: "File size limit", value: "None" },
+      { label: "Price", value: "Free" },
+    ],
+    link: { label: "filzy.site", href: "https://filzy.site" },
+    get: { label: "Open", href: "https://filzy.site" },
+    embeddable: true,
+  },
+  capto: {
+    id: "capto",
+    name: "Capto",
+    what: "Captions for short videos, timed to every word.",
+    story: [
+      "Capto was an evening project that took an unexpected turn into a real product. People needed captions on their videos, so I built a tool that makes them well, free to start.",
+      "I trained my own model and engineered custom solutions around it: word-level timing synced to speech, captions sized to read on mute, lossless 4K export and no watermark, in fourteen languages.",
+      "It's a fully working tool, open to everyone.",
+    ],
+    role: "Founder",
+    years: "2026",
+    status: "Live",
+    stack: "Next.js, Cloudflare, own speech model",
+    image: "/img/p/capto-1.webp",
+    images: ["/img/p/capto-2.webp"],
+    numbers: [
+      { label: "Languages", value: "14" },
+      { label: "Watermark", value: "Never" },
+    ],
+    link: { label: "capto.video", href: "https://capto.video" },
+    get: { label: "Open", href: "https://capto.video" },
     embeddable: true,
   },
   filzymovie: {
     id: "filzymovie",
-    name: "Filzy Movie",
-    what: "Search for a film or a series and open it in the player. Your progress stays on your device.",
+    name: "AFilm",
+    what: "A film and series streaming site with a beautiful interface.",
+    story: [
+      "AFilm is a little project of mine: find a film or a series and watch it, in an interface I'd want to come back to every evening. Made for everyone to enjoy.",
+    ],
     role: "Founder",
+    years: "2026",
     status: "Live",
+    image: "/img/p/afilm-1.webp",
+    images: ["/img/p/afilm-2.webp"],
     numbers: [],
     link: { label: "filzy.site/movie", href: "https://filzy.site/movie" },
+    get: { label: "Open", href: "https://filzy.site/movie" },
     embeddable: true,
   },
   // Lab
   rug: {
     id: "rug",
-    name: "Road Rug",
-    what: "A physics rug for your desktop. Sweep your mess under it.",
-    stack: "macOS, Swift",
-    numbers: [],
-    kind: "code",
+    name: "Rug",
+    what: "Tired of your files? Hide them under a rug.",
+    story: [
+      "Rug lays a real rug on your desktop, above your icons and below every window. It's a true cloth simulation: grab it, drag it around, peel up a corner, fold it over itself.",
+      "Lay it over your icons, or drop files onto it, and they're under the rug, leaving little lumps. A pile of files makes a bigger mound. Lift a corner and everything is right where you left it, and it remembers it all after a restart.",
+      "Native on macOS (Swift and Metal) and Windows (C# and .NET), with the same physics on both.",
+    ],
+    stack: "Swift, Metal, C#",
+    status: "v1.2.2",
+    video: { src: "/lab/rug/demo.mp4", poster: "/lab/rug/poster.webp" },
+    numbers: [
+      { label: "Runs on", value: "Mac, PC" },
+      { label: "Price", value: "Free" },
+    ],
+    get: { label: "Get", href: "https://github.com/augustas-rug/road-rug", sub: "GitHub" },
+    kind: "store",
     repo: "https://github.com/augustas-rug/road-rug",
   },
-  slideskipper: { id: "slideskipper", name: "Slide Skipper", numbers: [], kind: "code" },
-  musicengine: {
-    id: "musicengine",
-    kind: "code",
-    name: "Music Engine",
-    what: "A composing engine built from studied scores: a notation language, music21 and rule checks.",
-    stack: "Python, music21",
-    numbers: [{ label: "Scores studied", value: "21" }],
-  },
-  trackpad: { id: "trackpad", name: "Trackpad Test", numbers: [], kind: "code" },
-  reel: {
-    id: "reel",
-    kind: "code",
-    name: "Reel",
-    what: "Frame-exact recorder for web animations. Records load-ins to 4K video.",
-    stack: "TypeScript, Playwright, ffmpeg",
-    numbers: [{ label: "Max output", value: "4K 60" }],
+  slidepad: {
+    id: "slidepad",
+    name: "Slidepad",
+    what: "Your phone is the clicker.",
+    story: [
+      "Presentation clickers never work when you need them. With Slidepad your phone is all it takes: a laser pointer, your speaker notes, the next slide and the last one.",
+      "Share the room and everyone in a group follows along together, each on their own phone. No app, no login, no server: open the site on the computer, scan the code, and present from absolutely anywhere.",
+    ],
+    stack: "Web, peer to peer",
+    status: "Live",
+    image: "/img/p/slidepad-1.webp",
+    images: ["/img/p/slidepad-phone.webp"],
+    numbers: [
+      { label: "App to install", value: "None" },
+      { label: "Price", value: "Free" },
+    ],
+    link: { label: "Slidepad", href: "https://armaugustas.github.io/slidepad/" },
+    get: { label: "Get", href: "https://armaugustas.github.io/slidepad/", sub: "Web app" },
+    kind: "store",
   },
   openwhip: {
     id: "openwhip",
-    kind: "code",
-    name: "OpenWhip",
-    what: "Whip Claude into shape. A tray app.",
+    name: "Open Whip",
+    what: "For when your AI refuses to work with you.",
+    story: [
+      "Sometimes your AI just stops cooperating. Open Whip puts a whip in your menu bar: crack it, and your coding agent gets an interrupt and a few words of encouragement, and goes back to work.",
+      "My version of OpenWhip, with a new whip and sounds of its own. On Mac and Windows.",
+    ],
     stack: "Electron, npm",
-    numbers: [],
+    status: "Lab",
+    image: "/img/p/openwhip-1.webp",
+    numbers: [{ label: "Install", value: "npm" }],
+    get: { label: "Get", href: "https://github.com/GitFrog1111/OpenWhip", sub: "GitHub" },
+    kind: "store",
+    footnote: "Built on OpenWhip by GitFrog1111.",
   },
 };
 
-// ---------- Art ----------
+// Coming soon: a greyed folder with a small popover, nothing to open yet.
+export const comingSoon: Partial<Record<AppId, { name: string; line: string; hint: string }>> = {
+  cortex: {
+    name: "Cortex",
+    line: "A brain for your design. It turns any AI-slop design into a beautiful masterpiece.",
+    hint: "It might be the biggest thing I've made yet.",
+  },
+};
+
+// What he is working on now: the widgets and the lock screen show this.
+export const mainWork: Project = larpo;
+
+
+// ---------- Music ----------
 
 export type Track = {
   id: string;
   title: string;
   artist: string;
-  file: string;
+  // our own audio file; a song without one plays from YouTube
+  file?: string;
   cover: string;
   duration: number;
   durationLabel: string;
@@ -338,20 +415,26 @@ export type Track = {
   // false until he confirms it's his and shareable; hide those with .filter((t) => t.confirmed)
   confirmed: boolean;
   note?: string;
+  // where it lives elsewhere
+  youtube?: string;
+  spotify?: string;
+  // newest release, marked in the list
+  isNew?: boolean;
 };
 
 const allTracks: Track[] = [
   {
-    id: "nocturne-for-absent-things",
-    title: "Nocturne for Absent Things",
+    id: "kiss-me",
+    title: "Kiss Me",
     artist: "Augustas Armalis",
-    file: "/content/music/nocturne-for-absent-things.mp3",
-    cover: "/content/music/nocturne-for-absent-things.webp",
-    duration: 191,
-    durationLabel: "3:11",
+    cover: "/content/music/kiss-me.webp",
+    duration: 77,
+    durationLabel: "1:17",
     year: 2026,
     confirmed: true,
-    note: "Orchestral nocturne, written for the novel",
+    note: "New song. A first preview, November 2026",
+    youtube: "fUTEPMo2qsk",
+    isNew: true,
   },
   {
     id: "afterlight",
@@ -362,23 +445,57 @@ const allTracks: Track[] = [
     duration: 403,
     durationLabel: "6:43",
     year: 2026,
-    confirmed: false,
-    note: "The novel's ending piece",
+    confirmed: true,
+    note: "Piano and strings, October 2026",
+    youtube: "qdfV5Or6A5c",
+    spotify: "https://open.spotify.com/track/44ESD1HONDX4kyEf57XerQ",
+  },
+  {
+    id: "nocturne-for-absent-things",
+    title: "Nocturne for Absent Things",
+    artist: "Augustas Armalis",
+    file: "/content/music/nocturne-for-absent-things.mp3",
+    cover: "/content/music/nocturne-for-absent-things.webp",
+    duration: 191,
+    durationLabel: "3:11",
+    year: 2026,
+    confirmed: true,
+    note: "Orchestral nocturne, his first release, August 2026",
+    youtube: "8Wnvs_JZqw8",
+    spotify: "https://open.spotify.com/track/09ryPwNdhROHzMEDm7On7G",
   },
 ];
-// To hide unconfirmed pieces: allTracks.filter((t) => t.confirmed)
-export const tracks: Track[] = allTracks;
+export const tracks: Track[] = allTracks.filter((t) => t.confirmed);
+// the ones the player can play itself (Kiss Me plays from YouTube)
+export const playableTracks: Track[] = tracks.filter((t) => t.file);
 
-export const art = {
-  // null until the real link is in: the Spotify button stays hidden
-  spotify: { label: "Spotify", href: null as string | null },
+export const music = {
+  spotify: { label: "Spotify", name: "Augustas Armalis", href: "https://open.spotify.com/artist/1caZzY2xlQW23Xe1DWtw6H" },
+  youtube: { label: "YouTube", name: "hollow kid", href: "https://www.youtube.com/@hollowkidsongs" },
+  // the note in Records, his own words
+  note: [
+    "I've played the piano for over twelve years and finished music school. For a long time I kept it to myself.",
+    "Now I'm getting serious about it. I compose and write my own scores, and I'm making songs with a singer, played by hand on real instruments. I strip everything back to the simplest notes, the ones that hurt the most.",
+  ],
 };
+
+// kept for the parts that still read art.spotify
+export const art = { spotify: { label: "Spotify", href: music.spotify.href as string | null } };
+
+// ---------- The novel ----------
 
 export const novel = {
   title: "Žiemos naktys šviesesnės",
+  // what the title means, for the English pages
+  english: "Winter Nights Are Brighter",
   author: "Augustas Armalis",
   illustrator: "Motiejus Varnauskas",
   years: "2025–2027",
+  // the short introduction shown before the book opens
+  intro: [
+    "A novel about growing up. Karolis is fourteen when it begins and eighteen when it ends: an empty house on a rainy evening, a sister leaving for the capital, a best friend, a girl he draws from memory, and a cat that sees him through all of it.",
+    "I wrote it out of passion, while I was growing up myself, not after. Most of what happens in it happened. Twenty chapters, illustrated by Motiejus Varnauskas, in Lithuanian.",
+  ],
   // the cover as the book shows it (336 px wide, for a 168 pt cover) and as Quick Look opens it; the file to keep is cover.jpg
   cover: "/content/novel/cover-thumb.webp",
   coverFull: "/content/novel/cover.webp",
@@ -394,26 +511,28 @@ export const novel = {
 
 export const spec: { label: string; value: string }[] = [
   { label: "Based in", value: "Kaunas, Lithuania" },
-  { label: "Work", value: "Sellify, Kaching" },
   { label: "Studio", value: "Larpo" },
-  { label: "Piano", value: "11 years" },
+  { label: "Design", value: "Acquisity" },
+  { label: "Piano", value: "12+ years" },
   { label: "X", value: "@augustasdesign" },
 ];
 
-// The longer About ("More Info"). Facts only, from the content dossier; nothing private (no age, school, email).
+// The longer About ("More Info"). Facts only; nothing private (no age, school, email).
 export const about = {
   name: "Augustas Armalis",
-  intro: "I design and build products for SaaS and AI teams, and run Larpo, a design studio. I also play the piano and write: one novel so far, and music to go with it.",
+  intro: "I'm a design engineer and founder. I design websites and products and build them in code, I run Larpo, a design studio, and I write music.",
+  story: "I started in art and drawing. Drawing turned into design, design turned into business, and now I'm finding my way back to music.",
+  goals: "To build something really big and really good, and to work out how to live a happy, wonderful life.",
   facts: [
     { label: "Based in", value: "Kaunas, Lithuania" },
-    { label: "Does", value: "Product design, front end, brand" },
+    { label: "Does", value: "Product design, websites, front end" },
     { label: "Studio", value: "Larpo" },
-    { label: "Clients", value: "Sellify, Acquisity, Kaching" },
-    { label: "Piano", value: "11 years" },
+    { label: "Design lead", value: "Acquisity" },
+    { label: "Piano", value: "12+ years" },
     { label: "Novel", value: "Žiemos naktys šviesesnės" },
   ],
   tools: [
-    { label: "Design", value: "Figma, design systems, brand identity" },
+    { label: "Design", value: "Figma, design systems, brand, motion" },
     { label: "Code", value: "React, Next.js, Tailwind, Motion, Three.js" },
     { label: "Ships on", value: "Cloudflare, Vercel, Supabase" },
     { label: "Music", value: "MuseScore 4, Logic Pro" },
@@ -421,24 +540,60 @@ export const about = {
   ],
 };
 
-// The timeline, oldest first. `when` is shown as written; dates come from the dossier.
-// TODO(Augustas): Capto has only a year (month unknown). The start dates of the Sellify and Acquisity work are
-// unknown beyond "2025" for Sellify, so they share one undated-by-month entry. Add the Shark Tank LT line once
-// the episode has aired.
+// The Résumé (Quick Look on the desktop and in Documents). Add a role or a section by adding a line.
+export type ResumeRow = { when: string; title: string; org: string; body: string; app?: AppId };
+export const resume = {
+  name: "Augustas Armalis",
+  title: "Design engineer and founder",
+  city: "Kaunas, Lithuania",
+  links: [
+    { label: "larpo.studio", href: "https://larpo.studio" },
+    { label: "x.com/augustasdesign", href: "https://x.com/augustasdesign" },
+    { label: "linkedin.com/in/armaugustas", href: "https://www.linkedin.com/in/armaugustas" },
+  ],
+  summary:
+    "I design websites and products and build them in code, from the first sketch to launch night. Over two years of design work, a studio of four that I founded, and a startup taken to Lithuania's biggest stages.",
+  sections: [
+    {
+      title: "Experience",
+      rows: [
+        { when: "Now", title: "Founder, head of design", org: "Larpo Studio", body: "A full-stack website and product design studio for SaaS and AI teams. My first business: over six figures earned, a team of four, now on its fourth brand.", app: "larpo" },
+        { when: "2025 – now", title: "Lead product designer", org: "Acquisity", body: "Over a year leading product design for Acquisity's AI acquisition platform: product, rebrand, website and front end." },
+        { when: "2025 – 2026", title: "CEO, product and design", org: "Contles", body: "A creator-marketing platform, built from zero without investment. First at the ISM entrepreneurship club, Kickstart Lab, Startup Fair, Rykliai (Shark Tank Lithuania).", app: "contles" },
+      ] as ResumeRow[],
+    },
+    {
+      title: "Products",
+      rows: [
+        { when: "2025 – now", title: "Lunor", org: "Founder", body: "A library of real Figma designs and coded components. 300+ designs.", app: "lunor" },
+        { when: "2026", title: "Filzy", org: "Founder", body: "Free file sending between devices, with no size limit, plus converters and tools.", app: "filzy" },
+        { when: "2026", title: "Capto", org: "Founder", body: "Word-timed captions for short video, on a speech model of my own.", app: "capto" },
+      ] as ResumeRow[],
+    },
+  ],
+  skills: [
+    { label: "Design", value: "Product and interface design, websites, brand, motion, design systems" },
+    { label: "Code", value: "TypeScript, React, Next.js, Tailwind, Motion, Three.js, Swift" },
+    { label: "Ships on", value: "Cloudflare, Vercel, Supabase, Stripe" },
+    { label: "Music", value: "Piano for 12+ years, music school, composing and scoring" },
+    { label: "Languages", value: "Lithuanian, English" },
+  ],
+};
+
+// The timeline, oldest first. `when` is shown as written.
 export type Milestone = { when: string; title: string; body: string; app?: AppId; key?: boolean };
 export const timeline: Milestone[] = [
-  { when: "May 2025", title: "First portfolio site", body: "" },
-  { when: "2025", title: "Sellify and Acquisity", body: "Product design and front end for AI and SaaS teams, as a freelance design engineer.", app: "sellify" },
-  { when: "Oct 2025", title: "Lunor", body: "A library of editable designs.", app: "lunor" },
-  { when: "Dec 2025", title: "Contles begins", body: "A platform where brands book creators. Public launch on 21 April 2026; closed that autumn.", app: "contles", key: true },
-  { when: "2026", title: "Capto", body: "Captions for short video, made in the browser.", app: "capto" },
-  { when: "11 Aug 2026", title: "The novel is finished", body: "Žiemos naktys šviesesnės: twenty chapters, illustrated by Motiejus Varnauskas.", app: "novel", key: true },
-  { when: "12 Aug 2026", title: "Nocturne for Absent Things", body: "The first release: an orchestral nocturne written for the novel.", app: "records", key: true },
-  { when: "22 Aug 2026", title: "Larpo launches", body: "The studio's site goes live: brand and website, from zero to launch.", app: "larpo", key: true },
-  { when: "Oct 2026", title: "The Larpo design engine", body: "Taste written down as rules a machine can follow. A home studio, and a first song." },
+  { when: "Jun 2025", title: "Acquisity", body: "Product design for an AI acquisition platform. Now leading it." },
+  { when: "Oct 2025", title: "Lunor", body: "My designs, shared. People bought and used loads of them.", app: "lunor" },
+  { when: "Dec 2025", title: "Contles begins", body: "Brands and creators in one place. First at the ISM club, then Kickstart Lab, Startup Fair and Rykliai.", app: "contles", key: true },
+  { when: "2026", title: "Capto and Filzy", body: "An evening project that became a product, and a better way to send files.", app: "capto" },
+  { when: "Aug 2026", title: "The novel, and a first release", body: "Žiemos naktys šviesesnės is finished. Nocturne for Absent Things comes out on Spotify.", app: "novel", key: true },
+  { when: "Aug 2026", title: "Larpo, fourth brand", body: "The studio's new site goes live. A team of four.", app: "larpo", key: true },
+  { when: "Oct 2026", title: "Rug and Afterlight", body: "A rug for your desktop, and a second release.", app: "rug" },
+  { when: "Nov 2026", title: "Kiss Me", body: "A first song, made with a singer.", app: "records", key: true },
 ];
 
-// Notes: short, his own voice. Facts from the dossier and from the rules above.
+// Notes: short, his own voice.
 export type Note = { id: string; title: string; date: string; blocks: ({ h: string } | { p: string } | { list: string[] })[] };
 export const notes: Note[] = [
   {
@@ -446,10 +601,10 @@ export const notes: Note[] = [
     title: "Now",
     date: "November 2026",
     blocks: [
-      { p: "Larpo is the main thing. Brand and website for SaaS and AI teams, built from zero to launch." },
-      { p: "Product design for Sellify, most weeks." },
+      { p: "Larpo is the main thing: websites, product and brand for SaaS and AI teams, from zero to launch." },
+      { p: "Leading product design at Acquisity." },
       { h: "On the side" },
-      { list: ["Writing songs: a voice, a piano, very light strings.", "Learning Logic Pro.", "Teaching the Larpo engine my taste, one rule at a time."] },
+      { list: ["Making songs with a singer. Kiss Me is the first.", "Rebuilding Lunor. It's going to be huge.", "Cortex, a brain for design. Soon."] },
     ],
   },
   {
@@ -541,9 +696,11 @@ export type DeskItem = {
   art?: string;
   // a small copy of an image file for its icon (the icon is 60 px; the file can be megabytes)
   thumb?: string;
-  // what opens on double-click: an app, or a Quick Look of a document or image
-  open: { app: AppId } | { look: "resume" | "image"; src?: string };
+  // what opens on double-click: an app, a Quick Look of a document or image, or a page in the Browser
+  open: { app: AppId } | { look: "resume" | "image"; src?: string } | { url: string };
 };
+// The Easter egg document opens this in the Browser. You know the one.
+export const EASTER_EGG = "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0";
 // Projects leads the column: it's the way into the work.
 export const desktopItems: DeskItem[] = [
   { id: "projects", name: "Projects", kind: "folder", open: { app: "projects" } },
@@ -551,6 +708,7 @@ export const desktopItems: DeskItem[] = [
   { id: "resume", name: "Résumé.pdf", kind: "doc", open: { look: "resume" } },
   { id: "novel", name: "Žiemos naktys šviesesnės", kind: "app", art: "/content/novel/logo.webp", open: { app: "novel" } },
   { id: "cover", name: "Cover.jpg", kind: "image", thumb: "/content/novel/cover-thumb.webp", open: { look: "image", src: "/content/novel/cover.webp" } },
+  { id: "easter", name: "Easter egg", kind: "doc", open: { url: EASTER_EGG } },
 ];
 
 // ---------- Finder: the folders, the same everywhere (Finder windows, Spotlight, the phone's Files) ----------
@@ -571,18 +729,22 @@ export type FinderItem = {
   ext?: string;
   // artwork in place of an app icon
   art?: string;
+  // drawn as a folder (Lab tools), or greyed with a popover and nothing to open (Coming soon)
+  folder?: boolean;
+  soon?: boolean;
 };
 export type PlaceId = "projects" | "games" | "music" | "photos" | "documents";
 const kindOf = (a: AppId) => {
   const p = projects[a];
   if (!p) return "Application";
-  if (p.kind === "case") return "Case study";
-  if (p.kind === "code") return "Repository";
+  if (p.kind === "store") return p.repo ? "Folder, on GitHub" : "Folder";
   return p.link ? "Website" : "Venture";
 };
 const appItem = (a: AppId, kind = kindOf(a)): FinderItem => ({ id: a, name: apps[a].title, kind, app: a });
+const projectItem = (a: AppId): FinderItem =>
+  soonApps.includes(a) ? { id: a, name: apps[a].title, kind: "Coming soon", soon: true, folder: true } : { ...appItem(a), folder: labApps.includes(a) || undefined };
 export const places: { id: PlaceId; title: string; groups: { title?: string; items: FinderItem[] }[] }[] = [
-  { id: "projects", title: "Projects", groups: projectGroups.map((g) => ({ title: g.title, items: g.apps.map((a) => appItem(a)) })) },
+  { id: "projects", title: "Projects", groups: projectGroups.map((g) => ({ title: g.title, items: g.apps.map(projectItem) })) },
   { id: "games", title: "Games", groups: [{ items: gameApps.map((a) => appItem(a, "Game")) }] },
   {
     id: "music",

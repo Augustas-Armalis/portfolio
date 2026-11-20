@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, Clapperboard, Film, GitBranch, Layers, MousePointerClick, Presentation, Zap, type LucideIcon } from "lucide-react";
+import { Brain, GitBranch, Zap, type LucideIcon } from "lucide-react";
 import { useId, type ReactNode } from "react";
 import type { AppId } from "@/content";
 import { Sym } from "./symbols";
@@ -79,8 +79,87 @@ function Base({ u, a, b }: { u: string; a: string; b: string }) {
   );
 }
 
+
+// A grass block in isometric pixels: each face is an 8 by 8 grid mapped onto the cube with a matrix, the colours
+// picked by a small fixed hash so every block icon is the same.
+const hash = (x: number, y: number, k: number) => {
+  const n = Math.sin(x * 12.9898 + y * 78.233 + k * 37.719) * 43758.5453;
+  return n - Math.floor(n);
+};
+const pick = (pal: string[], x: number, y: number, k: number) => pal[Math.floor(hash(x, y, k) * pal.length)];
+const GRASS = ["#6cc644", "#5db83a", "#79d050", "#57ad35"];
+const DIRT = ["#8b5a34", "#7a4d2b", "#96653d", "#6f4527"];
+function Face({ m, k, shade }: { m: string; k: number; shade: number }) {
+  const px: ReactNode[] = [];
+  for (let y = 0; y < 8; y++)
+    for (let x = 0; x < 8; x++) {
+      // the top is all grass; on the sides grass hangs over the dirt for a pixel or two
+      const grass = k === 0 || y < 2 || (y === 2 && hash(x, 0, k) > 0.5);
+      px.push(<rect key={`${x}-${y}`} x={x} y={y} width="1.04" height="1.04" fill={pick(grass ? GRASS : DIRT, x, y, k)} />);
+    }
+  return (
+    <g transform={`matrix(${m})`}>
+      {px}
+      <rect width="8" height="8" fill="#000" opacity={shade} />
+    </g>
+  );
+}
+function Cube({ u }: { u: string }) {
+  return (
+    <>
+      <Base u={u} a="#8fd3ff" b="#3c86ee" />
+      <g fill="#fff" opacity=".9">
+        <rect x="45" y="9" width="6" height="6" />
+        <rect x="44" y="10" width="8" height="4" />
+      </g>
+      <ellipse cx="32" cy="57" rx="19" ry="4" fill="#0b2a5c" opacity=".25" />
+      <Face m="2.5 1.375 -2.5 1.375 32 13" k={0} shade={0} />
+      <Face m="2.5 1.375 0 2.5 12 24" k={1} shade={0.12} />
+      <Face m="2.5 -1.375 0 2.5 32 35" k={2} shade={0.28} />
+    </>
+  );
+}
+
 type Art = (u: string) => ReactNode;
 const ART: Partial<Record<AppId, Art>> = {
+
+  // Slidepad: the presentation board from its own mark, with the laser dot
+  slidepad: (u) => (
+    <>
+      <Base u={u} a="#30333b" b="#0c0d10" />
+      <g fill="none" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M13 17h38" />
+        <path d="M48 17v20a3.5 3.5 0 0 1-3.5 3.5h-25A3.5 3.5 0 0 1 16 37V17" />
+        <path d="m23 51 9-9 9 9" />
+      </g>
+      <circle cx="38.5" cy="28" r="7.5" fill="#ff4d2e" opacity=".22" />
+      <circle cx="38.5" cy="28" r="3.6" fill="#ff4d2e" />
+    </>
+  ),
+  // AFilm: its own mark, a serif A under a warm light, between two film edges
+  filzymovie: (u) => (
+    <>
+      <Base u={u} a="#2a2522" b="#070607" />
+      <defs>
+        <radialGradient id={`${u}l`} cx="50%" cy="42%" r="50%">
+          <stop offset="0" stopColor="#f3c27a" stopOpacity=".42" />
+          <stop offset="1" stopColor="#f3c27a" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect width="64" height="64" fill={`url(#${u}l)`} />
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+        <g key={i} fill="#e9c88f" opacity=".55">
+          <rect x={6.5 + i * 7.8} y="6" width="3.6" height="4.4" rx="1" />
+          <rect x={6.5 + i * 7.8} y="53.6" width="3.6" height="4.4" rx="1" />
+        </g>
+      ))}
+      <text x="32" y="44.5" textAnchor="middle" fontFamily="'Iowan Old Style', 'Times New Roman', Georgia, serif" fontSize="37" fontStyle="italic" fontWeight="600" fill="#fff">
+        A
+      </text>
+    </>
+  ),
+  // Minecruft: one block of its own world, drawn pixel by pixel on its three faces
+  blocks: (u) => <Cube u={u} />,
   // Piano: three ivory keys under the felt
   piano: (u) => (
     <>
@@ -106,18 +185,17 @@ const ART: Partial<Record<AppId, Art>> = {
 };
 
 // Projects wear their real logo (public/logos: each project's own official icon), never a drawn stand-in.
-// Most are already app icons and fill the squircle; Sellify's is a bare mark, so it sits centred on a plain
-// ground. A project with no logo of its own uses its parent's (Filzy Movie) or a plain folder (the Lab).
+// Most are already app icons and fill the squircle; a bare mark (mark: true) sits centred on a plain
+// ground.
 type Logo = { src: string; bg: string; mark?: boolean };
 export const LOGOS: Partial<Record<AppId, Logo>> = {
   larpo: { src: "/logos/larpo.png", bg: "#f2f2f2" },
   capto: { src: "/logos/capto.webp", bg: "#000000" },
   contles: { src: "/logos/contles.png", bg: "#030303" },
   filzy: { src: "/logos/filzy.png", bg: "#050505" },
-  filzymovie: { src: "/logos/filzy.png", bg: "#050505" },
-  kaching: { src: "/logos/kaching.png", bg: "#ffffff" },
   lunor: { src: "/logos/lunor.webp", bg: "#161617" },
-  sellify: { src: "/logos/sellify.svg", bg: "linear-gradient(180deg, #ffffff 0%, #fff0e4 100%)", mark: true },
+  // his own app icon, cropped to the rug inside its frame
+  rug: { src: "/lab/rug/icon.webp", bg: "#4a4d52" },
 };
 function LogoImg({ logo, size }: { logo: Logo; size: number | string }) {
   const full = typeof size === "string";
@@ -142,7 +220,7 @@ function LogoImg({ logo, size }: { logo: Logo; size: number | string }) {
 
 // ---------- badges and repositories ----------
 // A badge sits on an icon's bottom right corner, outside its squircle: a language on a repository, a film on
-// Filzy Movie (which shares Filzy's logo). Language colours are GitHub's.
+// Language colours are GitHub's.
 type BadgeSpec = { text?: string; glyph?: LucideIcon; bg: string; ink?: string };
 const LANG = {
   swift: { text: "SW", bg: "#F05138" },
@@ -151,19 +229,14 @@ const LANG = {
   js: { text: "JS", bg: "#F1E05A", ink: "#1f1f1f" },
   git: { glyph: GitBranch, bg: "#57606A" },
 } satisfies Record<string, BadgeSpec>;
-type Repo = { glyph: LucideIcon; a: string; b: string; badge: BadgeSpec };
+type Repo = { glyph: LucideIcon; a: string; b: string; badge?: BadgeSpec };
 export const REPOS: Partial<Record<AppId, Repo>> = {
-  rug: { glyph: Layers, a: "#F58A5B", b: "#C8431F", badge: LANG.swift },
-  slideskipper: { glyph: Presentation, a: "#3CCFC0", b: "#108C86", badge: LANG.git },
-  musicengine: { glyph: AudioLines, a: "#9A8CFF", b: "#5A3FD9", badge: LANG.python },
-  reel: { glyph: Film, a: "#FF6B63", b: "#C9252D", badge: LANG.ts },
-  openwhip: { glyph: Zap, a: "#FFC94A", b: "#E58A07", badge: LANG.js },
-  trackpad: { glyph: MousePointerClick, a: "#8E96A6", b: "#4B5262", badge: LANG.git },
+  openwhip: { glyph: Zap, a: "#FFC94A", b: "#E58A07" },
+  cortex: { glyph: Brain, a: "#A4AAB6", b: "#5E6472" },
 };
-export const BADGES: Partial<Record<AppId, BadgeSpec>> = {
-  filzymovie: { glyph: Clapperboard, bg: "#FF453A" },
-};
-// too small to read under 34 px: a list row or a menu shows the icon alone
+export const BADGES: Partial<Record<AppId, BadgeSpec>> = {};
+// kept for a repository tile that wants one
+export const LANGS = LANG;
 function IconBadge({ spec, size }: { spec: BadgeSpec; size: number }) {
   if (size < 34) return null;
   const h = Math.round(size * 0.34);

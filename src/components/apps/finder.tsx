@@ -5,17 +5,33 @@
 import { ArrowDownToLine, ArrowDownUp, ChevronRight } from "lucide-react";
 import { Sym, type PartName } from "../symbols";
 import { useState } from "react";
-import { owner, places, type AppId, type FinderItem, type PlaceId } from "@/content";
+import { comingSoon, owner, places, type AppId, type FinderItem, type PlaceId } from "@/content";
 import { Resume } from "../shell";
 import { useOS } from "@/store";
 import { AppIcon, DocArt, FolderArt } from "../icons";
-import { Btn, GlassMenu, TabBar, List, ListRow, SectionHeader, QuickLook, SearchField, Segmented, SplitView, Toolbar, useChrome, type LookItem } from "../ui";
+import { Btn, glass, GlassMenu, TabBar, List, ListRow, SectionHeader, QuickLook, SearchField, Segmented, SplitView, Toolbar, useChrome, type LookItem } from "../ui";
 import { player } from "./player";
 
 // SF's sidebar symbols, from Lucide: folder, gamecontroller, music.note, photo, doc.text
 const PLACE_SYM: Record<PlaceId, PartName> = { projects: "folder", games: "gamepad", music: "note", photos: "photo", documents: "doc" };
 
 function FinderIcon({ it, size }: { it: FinderItem; size: number }) {
+  // Coming soon: a folder that isn't ready, greyed. The Lab: a folder carrying its tool's icon, like an app folder.
+  if (it.soon)
+    return (
+      <span className="block opacity-45 grayscale" aria-hidden>
+        <FolderArt size={size} />
+      </span>
+    );
+  if (it.folder && it.app)
+    return (
+      <span className="relative block" style={{ width: size, height: size }} aria-hidden>
+        <FolderArt size={size} />
+        <span className="absolute" style={{ right: -size * 0.04, bottom: size * 0.02 }}>
+          <AppIcon id={it.app} size={Math.round(size * 0.46)} />
+        </span>
+      </span>
+    );
   if (it.look?.type === "resume") return <DocArt size={size} />;
   if (it.ext) return <DocArt size={size} label={it.ext} />;
   if (it.art)
@@ -23,6 +39,22 @@ function FinderIcon({ it, size }: { it: FinderItem; size: number }) {
     return <img src={it.art} alt="" draggable={false} data-sq="" className="object-cover shadow-[0_0_0_0.5px_rgb(0_0_0/0.12),0_2px_6px_rgb(0_0_0/0.14)]" style={{ width: size * 0.86, height: size * 0.86, borderRadius: size * 0.16 }} />;
   if (it.app) return <AppIcon id={it.app} size={size} />;
   return <FolderArt size={size} />;
+}
+
+// The small card a Coming soon folder shows on hover (a tap on the phone): what it is, and a hint.
+function SoonCard({ id, className = "" }: { id: AppId; className?: string }) {
+  const c = comingSoon[id];
+  if (!c) return null;
+  return (
+    <div role="tooltip" data-glass="" className={`${glass("pop")} sq-panel w-[248px] rounded-[18px] p-3.5 text-left ${className}`}>
+      <div className="flex items-center gap-2">
+        <span className="m-headline text-ink">{c.name}</span>
+        <span className="rounded-full bg-[var(--fill)] px-2 py-px text-[11px] font-semibold text-[var(--label-2)]">Coming soon</span>
+      </div>
+      <p className="m-body mt-1.5 text-ink [text-wrap:pretty]">{c.line}</p>
+      <p className="m-sub mt-1.5 text-ink-2 [text-wrap:pretty]">{c.hint}</p>
+    </div>
+  );
 }
 
 const openAny = (id: AppId) => {
@@ -51,8 +83,10 @@ export function Finder({ start }: { start: PlaceId }) {
     .filter((g) => g.items.length);
   const count = groups.reduce((a, g) => a + g.items.length, 0);
   const picked = groups.flatMap((g) => g.items).find((it) => it.id === sel) ?? null;
+  const [soon, setSoon] = useState<string | null>(null);
   const run = (it: FinderItem) => {
-    if (it.track) {
+    if (it.soon) setSoon((s) => (s === it.id ? null : it.id));
+    else if (it.track) {
       openAny("records");
       player.play(it.track);
     } else if (it.note) {
@@ -81,9 +115,10 @@ export function Finder({ start }: { start: PlaceId }) {
           {g.title && <SectionHeader>{g.title}</SectionHeader>}
           <List>
             {g.items.map((it) => (
-              <ListRow key={it.id} onClick={() => run(it)} icon={<span className="my-1.5 flex h-11 w-11 shrink-0 items-center justify-center"><FinderIcon it={it} size={44} /></span>} title={it.name} sub={it.kind} chevron={!it.download} detail={it.download ? <Sym icon={ArrowDownToLine} size={20} weight="medium" className="text-[var(--accent-text)]" /> : undefined} />
+              <ListRow key={it.id} onClick={() => run(it)} icon={<span className="my-1.5 flex h-11 w-11 shrink-0 items-center justify-center"><FinderIcon it={it} size={44} /></span>} title={<span className={it.soon ? "text-[var(--label-2)]" : ""}>{it.name}</span>} sub={it.kind} chevron={!it.download && !it.soon} detail={it.download ? <Sym icon={ArrowDownToLine} size={20} weight="medium" className="text-[var(--accent-text)]" /> : undefined} />
             ))}
           </List>
+          {g.items.some((it) => it.soon && it.id === soon) && <SoonCard id={soon as AppId} className="mt-2 !w-full" />}
         </div>
       ))}
       {!count && empty}
@@ -130,13 +165,18 @@ export function Finder({ start }: { start: PlaceId }) {
                       onPointerDown={(e) => (e.stopPropagation(), setSel(it.id))}
                       onDoubleClick={() => run(it)}
                       onKeyDown={(e) => e.key === "Enter" && run(it)}
-                      className="group flex flex-col items-center gap-1.5 rounded-[12px] px-1 py-2 outline-none"
+                      onMouseEnter={it.soon ? () => setSoon(it.id) : undefined}
+                      onMouseLeave={it.soon ? () => setSoon(null) : undefined}
+                      onFocus={it.soon ? () => setSoon(it.id) : undefined}
+                      onBlur={it.soon ? () => setSoon(null) : undefined}
+                      className={`group relative flex flex-col items-center gap-1.5 rounded-[12px] px-1 py-2 outline-none ${it.soon ? "cursor-default" : ""}`}
                     >
+                      {it.soon && soon === it.id && <SoonCard id={it.id as AppId} className="pointer-events-none absolute left-[calc(100%-14px)] top-1 z-20" />}
                       <span className={`flex h-[78px] w-[78px] items-center justify-center rounded-[16px] transition-colors duration-100 ${on ? "bg-[var(--selection)]" : "hov:group-hover:bg-[var(--hover)]"}`} data-sq="">
                         <FinderIcon it={it} size={60} />
                       </span>
                       <span className={`line-clamp-2 max-w-[108px] rounded-[7px] px-[6px] py-px text-center text-[12px] font-medium leading-[15px] ${on ? "bg-[var(--accent)] text-white" : "text-ink group-focus-visible:bg-[var(--accent)] group-focus-visible:text-white"}`}>{it.name}</span>
-                      <span className="m-sub -mt-1 text-ink-3">{it.kind}</span>
+                      <span className={`m-sub -mt-1 ${it.soon ? "text-ink-3/80" : "text-ink-3"}`}>{it.kind}</span>
                     </button>
                   );
                 })}
@@ -181,7 +221,7 @@ export function Finder({ start }: { start: PlaceId }) {
           </>
         )}
         <span className="flex-1" />
-        {picked ? (
+        {picked && !picked.soon ? (
           <Btn size="sm" variant="tinted" capsule onClick={() => run(picked)}>
             {picked.download ? "Download" : "Open"}
           </Btn>

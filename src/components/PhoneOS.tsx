@@ -464,7 +464,7 @@ function WorkingWidget({ onOpen }: { onOpen: Open }) {
       <span>
         <span className="block text-[20px] font-semibold leading-6 tracking-[-0.025em]">{mainWork.name}</span>
         <span className="block truncate text-[13px] leading-[17px] text-white/65">{mainWork.role}</span>
-        <span className="block truncate text-[13px] leading-[17px] text-white/45">{mainWork.years}</span>
+        <span className="block truncate text-[13px] leading-[17px] text-white/45">A team of four</span>
       </span>
     </Widget>
   );
@@ -714,7 +714,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
   const [detail, setDetail] = useState<PhoneDetail>(null);
   // a story opens on a picture that runs to the top edge, under the status bar (which turns white over it)
   const p = projects[id];
-  const story = !!p && !(p.link && p.embeddable) && p.kind !== "code";
+  const story = false as boolean;
   const [hero] = useState(() => (story ? window.innerWidth * 1.25 : 0));
   // the bar comes in as the large title leaves: a pushed screen's title sits a row lower, a story's under its picture
   const from = story ? hero - 60 : detail ? 74 : 24;
@@ -772,7 +772,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
       <div ref={ref} className="absolute inset-0 overflow-y-auto overscroll-contain pb-[calc(var(--phone-bottom)+14px)]">
         {/* a contact card and an About sheet carry their own big name, so no large title over them */}
         {id === "contact" || id === "about" || id === "blocks" || id === "doom" || id === "projects" || id === "games" || projects[id] ? (
-          <div className={story ? "" : id === "contact" || id === "about" || p?.kind === "code" ? "h-[calc(var(--phone-top)+50px)]" : "h-[calc(var(--phone-top)+4px)]"} />
+          <div className={story || p ? "" : id === "contact" || id === "about" ? "h-[calc(var(--phone-top)+50px)]" : "h-[calc(var(--phone-top)+4px)]"} />
         ) : (
         <motion.h2
           style={{ opacity: big }}
@@ -877,7 +877,7 @@ function AppWindow({ id, origin, onClosed, onLeaving }: { id: AppId; origin: Ori
 
   const darkApp = id === "terminal" || id === "doom" || id === "blocks";
   // sidebar apps become iOS grouped lists: grey ground, title on the same ground
-  const grouped = ["projects", "games", "taste", "kit", "settings", "contact", "records"].includes(id) || projects[id]?.kind === "code";
+  const grouped = ["projects", "games", "taste", "kit", "settings", "contact", "records"].includes(id);
   const ground = darkApp ? "bg-[#1C1D20] text-white" : grouped ? "bg-[#F2F2F7] text-ink" : "bg-white text-ink";
   return (
     <motion.div className="phone-app absolute inset-0 z-[60] will-change-transform" style={{ x, y, scale, clipPath }}>

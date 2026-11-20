@@ -5,13 +5,18 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, ChevronLeft, ListMusic, Pause, Play, Rewind, FastForward } from "lucide-react";
 import { Sym } from "../symbols";
-import { useEffect, useState } from "react";
-import { art, novel, tracks } from "@/content";
+import { createContext, useContext, useEffect, useState } from "react";
+import { music, playableTracks, tracks, type Track } from "@/content";
 import { Bars } from "../shell";
 import { useOS } from "@/store";
 import { Btn, glass, List, ListRow, M, useChrome } from "../ui";
 import { trackOf, player, usePlayer } from "./player";
 import { LiveWallpaper } from "../Apps";
+
+// A song without a file of ours (Kiss Me) plays from YouTube inside Records. Picking one stops the player, so only
+// one thing ever plays.
+const VideoCtx = createContext<{ video: Track | null; pick: (t: Track) => void; back: () => void }>({ video: null, pick: () => {}, back: () => {} });
+const useVideo = () => useContext(VideoCtx);
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
@@ -21,7 +26,7 @@ function Scrubber({ dark = true }: { dark?: boolean }) {
   const p = usePlayer();
   const cur = trackOf(p.id);
   const [scrub, setScrub] = useState<number | null>(null);
-  const total = p.dur || cur?.duration || tracks[0]?.duration || 0;
+  const total = p.dur || cur?.duration || playableTracks[0]?.duration || 0;
   const shown = scrub ?? p.t;
   const commit = () => {
     if (scrub !== null) player.seek(scrub);
@@ -73,7 +78,8 @@ function Transport({ size = 1 }: { size?: number }) {
 // the artwork's own colours, blurred, behind everything; the shader joins in while music plays
 function MusicBackdrop() {
   const p = usePlayer();
-  const lead = trackOf(p.id) ?? tracks[0];
+  const { video } = useVideo();
+  const lead = video ?? trackOf(p.id) ?? playableTracks[0];
   return (
     <div className="absolute inset-0 overflow-hidden bg-[#0b0c10]">
       <AnimatePresence initial={false}>
@@ -82,17 +88,61 @@ function MusicBackdrop() {
           <img src={lead.cover} alt="" className="absolute inset-[-20%] h-[140%] w-[140%] object-cover blur-[70px] saturate-[1.7]" />
         </motion.div>
       </AnimatePresence>
-      <motion.div className="absolute inset-0 mix-blend-screen" animate={{ opacity: p.playing ? 0.55 : 0 }} transition={{ duration: 0.8 }}>
-        {p.playing && <LiveWallpaper fallback={lead.cover} />}
+      <motion.div className="absolute inset-0 mix-blend-screen" animate={{ opacity: p.playing && !video ? 0.55 : 0 }} transition={{ duration: 0.8 }}>
+        {p.playing && !video && <LiveWallpaper fallback={lead.cover} />}
       </motion.div>
       <div className="absolute inset-0 bg-black/40" />
     </div>
   );
 }
 
+// Kiss Me: the YouTube player where the artwork stands, its title and a way back to the recordings
+function VideoPlaying({ t, compact }: { t: Track; compact: boolean }) {
+  const { back } = useVideo();
+  return (
+    <div className={`relative flex flex-1 flex-col ${compact ? "px-5 pb-24 pt-[calc(var(--phone-top)+30px)]" : "justify-center px-8 py-8"}`}>
+      <div className="sq-card mx-auto w-full max-w-[520px] overflow-hidden rounded-[18px] bg-black shadow-[0_30px_60px_-20px_rgb(0_0_0/0.6)]" data-sq="">
+        <iframe
+          title={`${t.title}, on YouTube`}
+          src={`https://www.youtube-nocookie.com/embed/${t.youtube}?autoplay=1&rel=0&playsinline=1&modestbranding=1`}
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allowFullScreen
+          className="block aspect-video w-full border-0"
+        />
+      </div>
+      <div className="mx-auto mt-6 w-full max-w-[520px]">
+        <div className="flex items-center gap-2">
+          <div className="text-[20px] font-semibold leading-6 tracking-[-0.02em]">{t.title}</div>
+          {t.isNew && <span className="rounded-full bg-white/20 px-2 py-px text-[11px] font-semibold uppercase tracking-[0.04em] text-white">New</span>}
+        </div>
+        <div className="text-[15px] text-white/60">{t.artist}</div>
+        {t.note && <p className="mt-3 text-[15px] leading-[1.4] text-white/75">{t.note}.</p>}
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Btn variant="glass-dark" capsule href={`https://www.youtube.com/watch?v=${t.youtube}`} icon={<Sym icon={ArrowUpRight} size={14} weight="medium" />}>
+            Watch on YouTube
+          </Btn>
+          {!compact && (
+            <Btn variant="glass-dark" capsule onClick={back}>
+              Recordings
+            </Btn>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NowPlaying({ compact }: { compact: boolean }) {
   const p = usePlayer();
-  const lead = trackOf(p.id) ?? tracks[0];
+  const { video } = useVideo();
+  const lead = trackOf(p.id) ?? playableTracks[0];
+  if (video)
+    return (
+      <div className="relative flex h-full flex-col overflow-hidden text-white">
+        {compact && <MusicBackdrop />}
+        <VideoPlaying t={video} compact={compact} />
+      </div>
+    );
   return (
     <div className="relative flex h-full flex-col overflow-hidden text-white" style={compact ? undefined : { containerType: "size" }}>
       {compact && <MusicBackdrop />}
@@ -152,19 +202,46 @@ function VolumeSlider() {
 }
 
 // Up Next on the same surface: large type on a translucent material, the current piece lit
+// his note and where to find the music elsewhere
+function MusicNote({ dark }: { dark: boolean }) {
+  return (
+    <div>
+      <div className={`space-y-2 ${dark ? "text-white/70" : "text-ink-2"}`}>
+        {music.note.map((x) => (
+          <p key={x} className="text-[15px] leading-[1.45] [text-wrap:pretty]">
+            {x}
+          </p>
+        ))}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {[music.spotify, music.youtube].map((l) => (
+          <Btn key={l.href} variant={dark ? "glass-dark" : "bordered"} size={dark ? "md" : "sm"} capsule href={l.href} icon={<Sym icon={ArrowUpRight} size={14} weight="medium" />}>
+            {l.label === "YouTube" ? `YouTube, ${l.name}` : l.label}
+          </Btn>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const NewPill = ({ dark }: { dark?: boolean }) => (
+  <span className={`ml-1.5 inline-block translate-y-[-1px] rounded-full px-1.5 py-px align-middle text-[10px] font-bold uppercase tracking-[0.04em] ${dark ? "bg-white/20 text-white" : "bg-[var(--accent)] text-white"}`}>New</span>
+);
+
 function GlassQueue() {
   const p = usePlayer();
+  const { video, pick } = useVideo();
   return (
     <div data-drag className="on-dark relative flex h-full flex-col overflow-auto border-l border-white/10 bg-white/[0.07] px-6 pb-6 pt-[60px] text-white [backdrop-filter:blur(30px)_saturate(1.6)]">
       <div className="eyebrow mb-3 text-white/50">Up Next</div>
       <div className="space-y-1">
         {tracks.map((t) => {
-          const on = p.id === t.id;
+          const on = video ? video.id === t.id : p.id === t.id;
           return (
             <button
               type="button"
               key={t.id}
-              onClick={() => player.toggle(t.id)}
+              onClick={() => pick(t)}
               className={`press group flex w-full items-center gap-3.5 rounded-[18px] p-2.5 text-left transition-colors duration-150 ${on ? "bg-white/[0.14]" : "hov:hover:bg-white/[0.08]"}`}
               data-sq=""
             >
@@ -178,7 +255,10 @@ function GlassQueue() {
                 )}
               </span>
               <span className="min-w-0 flex-1">
-                <span className={`line-clamp-2 text-[17px] leading-[22px] tracking-[-0.02em] [text-wrap:balance] ${on ? "font-semibold" : "font-medium text-white/90"}`}>{t.title}</span>
+                <span className={`line-clamp-2 text-[17px] leading-[22px] tracking-[-0.02em] [text-wrap:balance] ${on ? "font-semibold" : "font-medium text-white/90"}`}>
+                  {t.title}
+                  {t.isNew && <NewPill dark />}
+                </span>
                 <span className="line-clamp-2 text-[13px] leading-[18px] text-white/55">{t.note}</span>
               </span>
               <span className="text-[13px] tabular-nums text-white/50">{t.durationLabel}</span>
@@ -186,33 +266,27 @@ function GlassQueue() {
           );
         })}
       </div>
-      <p className="mt-auto pt-8 text-[22px] font-semibold leading-[1.25] tracking-[-0.02em] text-white/35 [text-wrap:balance]">
-        Music written for the novel <span className="text-white/70">{novel.title}</span>.
-      </p>
-      {art.spotify.href && (
-        <div className="mt-4">
-          <Btn variant="glass-dark" capsule href={art.spotify.href} icon={<Sym icon={ArrowUpRight} size={14} weight="medium" />}>
-            Spotify
-          </Btn>
-        </div>
-      )}
+      <div className="mt-auto pt-8">
+        <MusicNote dark />
+      </div>
     </div>
   );
 }
 
 function Queue({ compact }: { compact: boolean }) {
   const p = usePlayer();
+  const { video, pick } = useVideo();
   return (
     <div className={compact ? "" : "h-full overflow-auto bg-[var(--bg)] px-3 pb-4 pt-[52px]"} data-drag={compact ? undefined : ""}>
       {!compact && <div className="m-headline px-2 pb-2 text-ink">Up Next</div>}
       <List mac={!compact}>
         {tracks.map((t, i) => {
-          const on = p.id === t.id;
+          const on = video ? video.id === t.id : p.id === t.id;
           return (
             <ListRow
               key={t.id}
               mac={!compact}
-              onClick={() => player.toggle(t.id)}
+              onClick={() => pick(t)}
               icon={
                 <span className={`relative block shrink-0 overflow-hidden shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)] ${compact ? "my-2 h-12 w-12 rounded-[10px]" : "h-9 w-9 rounded-[8px]"}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -224,20 +298,21 @@ function Queue({ compact }: { compact: boolean }) {
                   )}
                 </span>
               }
-              title={<span className={on ? "font-semibold text-[var(--accent-text)]" : ""}>{t.title}</span>}
+              title={
+                <span className={on ? "font-semibold text-[var(--accent-text)]" : ""}>
+                  {t.title}
+                  {t.isNew && <NewPill />}
+                </span>
+              }
               sub={t.note}
               detail={<span className="tabular-nums">{t.durationLabel}</span>}
             />
           );
         })}
       </List>
-      {art.spotify.href && (
-        <div className="mt-3 px-1">
-          <Btn size="sm" href={art.spotify.href} icon={<Sym icon={ArrowUpRight} size={14} weight="medium" />}>
-            Spotify
-          </Btn>
-        </div>
-      )}
+      <div className="mt-6 px-1">
+        <MusicNote dark={false} />
+      </div>
     </div>
   );
 }
@@ -248,6 +323,21 @@ export function Records() {
   const cur = trackOf(p.id);
   const [full, setFull] = useState(false);
   const [queue, setQueue] = useState(false);
+  const [video, setVideo] = useState<Track | null>(null);
+  const ctx = {
+    video,
+    back: () => setVideo(null),
+    pick: (t: Track) => {
+      if (t.file) {
+        setVideo(null);
+        player.toggle(t.id);
+      } else {
+        player.stop();
+        setVideo(t);
+        if (compact) setFull(true);
+      }
+    },
+  };
   // closing the window quits the app, like Music; on the phone it keeps playing under the Dynamic Island
   useEffect(() => () => void (!useOS.getState().isMobile && player.stop()), []);
   // Now Playing is dark to the top edge: the status bar turns white over it
@@ -258,6 +348,7 @@ export function Records() {
   }, [compact, full]);
   if (!compact)
     return (
+      <VideoCtx.Provider value={ctx}>
       <div className="@container/rec relative h-full min-h-0">
         <MusicBackdrop />
         <div className="relative grid h-full min-h-0 grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] @max-[659px]/rec:grid-cols-1">
@@ -272,8 +363,10 @@ export function Records() {
         </div>
         <Btn variant="glass-dark" capsule iconOnly size="md" label={queue ? "Hide Up Next" : "Up Next"} icon={<Sym icon={ListMusic} size={16} weight="medium" />} onClick={() => setQueue((v) => !v)} className="!absolute right-3 top-2.5 z-[11] !hidden @max-[659px]/rec:!inline-flex" />
       </div>
+      </VideoCtx.Provider>
     );
   return (
+    <VideoCtx.Provider value={ctx}>
     <div className="px-4 pb-28">
       <Queue compact />
       {/* the mini player; tap it for Now Playing */}
@@ -285,7 +378,7 @@ export function Records() {
         className={`${glass("pop")} fixed inset-x-3 bottom-[calc(var(--phone-bottom)+6px)] z-[30] flex h-14 items-center gap-3 rounded-[20px] px-2 text-left`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={(cur ?? tracks[0]).cover} alt="" className="h-10 w-10 rounded-[10px] object-cover" />
+        <img src={(cur ?? playableTracks[0]).cover} alt="" className="h-10 w-10 rounded-[10px] object-cover" />
         <span className="t-sub min-w-0 flex-1 truncate font-medium text-ink">{cur?.title ?? "Not Playing"}</span>
         <span
           role="button"
@@ -310,7 +403,7 @@ export function Records() {
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
-            onDragEnd={(_, info) => (info.offset.y > 120 || info.velocity.y > 700) && setFull(false)}
+            onDragEnd={(_, info) => (info.offset.y > 120 || info.velocity.y > 700) && (setFull(false), setVideo(null))}
             className="fixed inset-0 z-[45] overflow-hidden rounded-t-[28px]"
           >
             <span className="absolute left-1/2 top-[var(--phone-top)] z-10 h-[5px] w-9 -translate-x-1/2 rounded-full bg-white/40" />
@@ -318,7 +411,7 @@ export function Records() {
             <button
               type="button"
               aria-label="Close Now Playing"
-              onClick={() => setFull(false)}
+              onClick={() => (setFull(false), setVideo(null))}
               data-glass=""
               className={`${glass("btn-dark")} glass-press absolute bottom-[calc(var(--phone-bottom)+6px)] left-1/2 z-10 -ml-[22px] flex h-11 w-11 items-center justify-center rounded-full text-white/90`}
             >
@@ -328,6 +421,7 @@ export function Records() {
         )}
       </AnimatePresence>
     </div>
+    </VideoCtx.Provider>
   );
 }
 

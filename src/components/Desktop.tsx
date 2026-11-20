@@ -16,7 +16,7 @@ import { AppWindow, Eye, Info, LayoutGrid, List, Minus, Moon, Power, RotateCcw, 
 import { Sym, type SymIcon } from "./symbols";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { about, allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, deskSharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
+import { about, allApps, apps, minSize, desktopItems, dockApps, mainWork, owner, places, projectApps, projectGroups, projects, deskSharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
 import { focusedApp, isUp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
@@ -210,16 +210,14 @@ function NotificationCenter({ close }: { close: () => void }) {
           </div>
         </Widget>
       </div>
-      <Widget onClick={go("sellify")}>
+      <Widget onClick={go("larpo")}>
         <div className="eyebrow !text-[11px] text-ink-3">Currently working on</div>
         <div className="mt-2 flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={mainWork.image} alt="" className="h-12 w-[76px] rounded-[10px] object-cover object-top shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" />
           <div className="min-w-0">
             <div className="t-headline truncate text-ink">{mainWork.name}</div>
-            <div className="m-body truncate text-ink-2">
-              {mainWork.role}, {mainWork.years}
-            </div>
+            <div className="m-body truncate text-ink-2">{mainWork.role}</div>
           </div>
         </div>
       </Widget>
@@ -1181,6 +1179,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
 
   const run = (it: DeskItem) => {
     if ("app" in it.open) open(it.open.app);
+    else if ("url" in it.open) useOS.getState().openUrl(it.open.url);
     else if (it.open.look === "resume") setLook({ title: it.name, node: <Resume /> });
     else setLook({ title: it.name, src: it.open.src });
   };
