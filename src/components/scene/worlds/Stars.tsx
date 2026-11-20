@@ -298,7 +298,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       orbMat: makeSoftMaterial({ shade: [0.35, 0.4, 0.7], under: [0.4, 0.4, 0.6], rim: 1.4, dab: 0.8, amb: 1.2, key: 0.9 }),
       giantMat: makeSoftMaterial({ shade: [0.3, 0.4, 0.7], under: [0.4, 0.4, 0.6], rim: 1.2, dab: 1, amb: 1.1, key: 0.7, fade: [1500, 3000] }),
       clouds: softGeometry(clouds, fine ? 2 : 1),
-      cloudMat: makeSoftMaterial({ shade: [0.3, 0.46, 0.8], under: [0.2, 0.34, 0.6], rim: 2.4, dab: 1.5, amb: 0.9, key: 1.0, flat: 0.3, sway: 2.5, fade: [1300, 2600] }),
+      cloudMat: makeSoftMaterial({ shade: [0.3, 0.46, 0.8], under: [0.2, 0.34, 0.6], rim: 2.4, dab: 1.5, amb: 0.9, key: 1.0, flat: 0.3, sway: 2.5, fade: [1300, 2600], soft: 0.7 }),
       globeGeo: new THREE.SphereGeometry(GLOBE.r, 72, 48),
       globeMat: makeGlobeGlass(GLOBE.r),
       gy,

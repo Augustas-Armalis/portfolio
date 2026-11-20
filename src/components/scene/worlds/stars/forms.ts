@@ -47,7 +47,8 @@ export function softGeometry(list: Soft[], detail = 1) {
 // shade: the colour the unlit side is turned toward. under: the colour of the underside. rim: light caught round
 // the edge. flat: how far the underside is pressed flat (clouds). self: light of its own. fade: [from, to] metres
 // over which it melts wholly into the sky behind it.
-export function makeSoftMaterial(o: { shade?: V3; under?: V3; rim?: number; dab?: number; amb?: number; key?: number; flat?: number; sway?: number; self?: number; air?: number; fade?: [number, number]; ao?: number } = {}) {
+// soft: how far its edges melt into the sky behind (cloud).
+export function makeSoftMaterial(o: { shade?: V3; under?: V3; rim?: number; dab?: number; amb?: number; key?: number; flat?: number; sway?: number; self?: number; air?: number; fade?: [number, number]; ao?: number; soft?: number } = {}) {
   return new THREE.ShaderMaterial({
     uniforms: {
       ...SKY_U,
@@ -64,6 +65,7 @@ export function makeSoftMaterial(o: { shade?: V3; under?: V3; rim?: number; dab?
       uAirK: { value: o.air ?? 1 },
       uFade: { value: new THREE.Vector2(...(o.fade ?? [1e6, 2e6])) },
       uAO: { value: o.ao ?? 0 },
+      uSoft: { value: o.soft ?? 0 },
     },
     vertexShader: /* glsl */ `
       attribute vec4 aPos; attribute vec4 aCol; attribute vec2 aPar;
@@ -83,7 +85,7 @@ export function makeSoftMaterial(o: { shade?: V3; under?: V3; rim?: number; dab?
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uShade; uniform vec3 uUnder; uniform float uRim; uniform float uDab; uniform float uAmb; uniform float uKey;
-      uniform float uSelf; uniform float uAirK; uniform vec2 uFade; uniform float uAO;
+      uniform float uSelf; uniform float uAirK; uniform vec2 uFade; uniform float uAO; uniform float uSoft;
       varying vec3 vWorld; varying vec3 vN; varying vec4 vCol; varying vec3 vO; varying float vSeed;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -108,6 +110,7 @@ export function makeSoftMaterial(o: { shade?: V3; under?: V3; rim?: number; dab?
         col += mix(uGlow, uKeyCol, 0.4) * fr * (0.12 + 1.5 * back) * uRim * (0.4 + 0.6 * w);
         vec3 sky = airCol(-V);
         col = mix(col, sky, airAmt(vWorld) * uAirK);
+        col = mix(col, sky + (col - sky) * 0.25, pow(1.0 - max(dot(n, V), 0.0), 1.6) * uSoft);
         col += vCol.rgb * (uSelf + vCol.a) * glowK() * (1.0 - 0.5 * airAmt(vWorld));
         col = mix(col, sky, smoothstep(uFade.x, uFade.y, dist));
         gl_FragColor = vec4(col, 1.0);
@@ -117,7 +120,7 @@ export function makeSoftMaterial(o: { shade?: V3; under?: V3; rim?: number; dab?
 }
 // A painted cloud: a row of round lobes on a flat base and a few smaller ones heaped on top of them.
 // `long`: drawn out into a band of many small lobes, as he drew cloud in the Sonatas
-export function cumulus(out: Soft[], p: V3, s: number, col: V3, r: () => number, o: { lobes?: number; yaw?: number; glow?: number; long?: number } = {}) {
+export function cumulus(out: Soft[], p: V3, s: number, col: V3, r: () => number, o: { lobes?: number; yaw?: number; glow?: number; long?: number; sy?: number } = {}) {
   const long = o.long ?? 1;
   const n = o.lobes ?? Math.round((5 + Math.floor(r() * 4)) * (0.5 + 0.5 * long));
   const yaw = o.yaw ?? r() * Math.PI;
@@ -132,7 +135,7 @@ export function cumulus(out: Soft[], p: V3, s: number, col: V3, r: () => number,
     const rad = s * (top ? 0.4 + r() * 0.2 : 0.48 + r() * 0.3) * (1 - (0.22 * Math.abs(u)) / long);
     const y = top ? s * (0.36 + r() * 0.24) : s * (r() - 0.5) * 0.12;
     const k = 0.92 + r() * 0.16;
-    out.push({ p: [p[0] + (c * u + sn * w) * s, p[1] + y, p[2] + (-sn * u + c * w) * s], r: rad, col: [col[0] * k, col[1] * k, col[2] * k], seed, sy: 0.82, glow: o.glow });
+    out.push({ p: [p[0] + (c * u + sn * w) * s, p[1] + y, p[2] + (-sn * u + c * w) * s], r: rad, col: [col[0] * k, col[1] * k, col[2] * k], seed, sy: o.sy ?? 0.82, glow: o.glow });
   }
 }
 
