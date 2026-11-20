@@ -437,10 +437,11 @@ function Level({ label, sub, value, onChange, muted, onMute, compact }: { label:
   );
 }
 
-// Output, the field (its sounds, its music, its ambience) and the Music app. Every level goes through
-// apps/sound.ts, the one file that knows where each of them lives.
+// Output, the field (its music and its ambience) and the Music app, with a way back to the levels the site was
+// mixed at. Every level goes through apps/sound.ts, the one file that knows where each of them lives.
 function SoundPane({ compact }: { compact: boolean }) {
   const s = useSound();
+  const note = `mt-2 text-ink-3 ${compact ? "t-foot px-4" : "m-sub px-1"}`;
   return (
     <div className="space-y-6">
       <div>
@@ -448,22 +449,27 @@ function SoundPane({ compact }: { compact: boolean }) {
         <List mac={!compact}>
           <Level compact={compact} label="Output volume" value={s.output} onChange={s.setOutput} muted={s.muted} onMute={s.setMuted} />
         </List>
-        <p className={`mt-2 text-ink-3 ${compact ? "t-foot px-4" : "m-sub px-1"}`}>Everything this site plays: the field, the flight, the piano and the Music app.</p>
+        <p className={note}>Everything this site plays: the field, the flight, the piano and the Music app.</p>
       </div>
       <div>
         <SectionHeader mac={!compact}>The field</SectionHeader>
         <List mac={!compact}>
-          <ListRow mac={!compact} title="Sounds of the field" sub="The desk in the meadow and the flight" detail={<Switch on={s.field && !s.muted} onChange={s.setField} label="Sounds of the field" />} />
-          <Level compact={compact} label="Music" sub="At the desk and in flight" value={s.music} onChange={s.setMusic} muted={s.musicMuted} onMute={s.setMusicMuted} />
-          <Level compact={compact} label="Ambience" sub="Wind, birds and water" value={s.ambience} onChange={s.setAmbience} />
+          <Level compact={compact} label="Field music" sub="At the desk in the meadow" value={s.music} onChange={s.setMusic} />
+          <Level compact={compact} label="Ambience" sub="Wind, waves and birds" value={s.ambience} onChange={s.setAmbience} />
         </List>
+        <p className={note}>70% is how they were mixed; above it they are a little louder.</p>
       </div>
       <div>
         <SectionHeader mac={!compact}>Music app</SectionHeader>
         <List mac={!compact}>
           <Level compact={compact} label="Records" sub="His recordings" value={s.player} onChange={s.setPlayer} />
         </List>
-        <p className={`mt-2 text-ink-3 ${compact ? "t-foot px-4" : "m-sub px-1"}`}>The interface itself is silent: no clicks, no alerts.</p>
+      </div>
+      <div className={`flex items-center justify-between gap-4 ${compact ? "px-4" : "px-1"}`}>
+        <p className={`text-ink-3 ${compact ? "t-foot" : "m-sub"}`}>The interface itself is silent: no clicks, no alerts.</p>
+        <Btn size={compact ? "md" : "sm"} disabled={!s.changed} onClick={s.reset}>
+          Reset
+        </Btn>
       </div>
     </div>
   );
