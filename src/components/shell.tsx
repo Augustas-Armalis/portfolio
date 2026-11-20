@@ -95,7 +95,7 @@ export function DeskArt({ item }: { item: DeskItem }) {
       </span>
     );
   if (item.kind === "folder") return <FolderArt size={64} glyph={item.id === "projects" || item.id === "games" || item.id === "documents" ? item.id : undefined} />;
-  if (item.kind === "doc") return <DocArt size={64} />;
+  if (item.kind === "doc") return <DocArt size={64} label={item.ext} />;
   if (item.kind === "image" && "src" in item.open)
     return (
       <span className="flex h-16 w-16 items-center justify-center">

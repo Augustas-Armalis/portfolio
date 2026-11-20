@@ -322,7 +322,7 @@ export function FolderArt({ size = 64, glyph }: { size?: number | string; glyph?
 }
 
 const SYS_FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif";
-const DOC_TONE: Record<string, string> = { PDF: "#e5484d", EPUB: "#f08a00", TXT: "#8e95a3" };
+const DOC_TONE: Record<string, string> = { PDF: "#e5484d", EPUB: "#f08a00", TXT: "#8e95a3", MOV: "#8e5cf6" };
 export function DocArt({ size = 64, label = "PDF" }: { size?: number; label?: string }) {
   const w = label.length > 3 ? 21 : 17;
   return (

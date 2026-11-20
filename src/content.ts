@@ -791,6 +791,8 @@ export type DeskItem = {
   art?: string;
   // a small copy of an image file for its icon (the icon is 60 px; the file can be megabytes)
   thumb?: string;
+  // the badge on a document icon (PDF when left out)
+  ext?: string;
   // what opens on double-click: an app, a Quick Look of a document or image, or a page in the Browser
   open: { app: AppId } | { look: "resume" | "image"; src?: string } | { url: string };
 };
@@ -803,7 +805,7 @@ export const desktopItems: DeskItem[] = [
   { id: "resume", name: "Résumé.pdf", kind: "doc", open: { look: "resume" } },
   { id: "novel", name: "Žiemos naktys šviesesnės", kind: "app", art: "/content/novel/logo.webp", open: { app: "novel" } },
   { id: "cover", name: "Cover.jpg", kind: "image", thumb: "/content/novel/cover-thumb.webp", open: { look: "image", src: "/content/novel/cover.webp" } },
-  { id: "easter", name: "Easter egg", kind: "doc", open: { url: EASTER_EGG } },
+  { id: "easter", name: "Easter egg", kind: "doc", ext: "MOV", open: { url: EASTER_EGG } },
 ];
 
 // ---------- Finder: the folders, the same everywhere (Finder windows, Spotlight, the phone's Files) ----------
