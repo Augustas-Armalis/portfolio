@@ -59,7 +59,8 @@ export function detectPreset(): Preset {
   if (weak || mem <= 2 || cores <= 2) return "low";
   if (mobile) return mem >= 6 && cores >= 6 ? "medium" : "low";
   if (strong && mem >= 8 && cores >= 8) return "high";
-  return mem >= 8 && cores >= 4 ? "high" : "medium";
+  // (anything not known to be strong starts at Medium: Auto steps it up within a quarter of a minute if frames are short)
+  return "medium";
 }
 
 function load(): State {

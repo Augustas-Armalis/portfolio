@@ -87,8 +87,64 @@ export function landH(x: number, z: number) {
   h = h + (SEA - 8 - h) * (1 - sstep(-60, 4, c));
   // the lake's bed
   h += (HLAKE.y - 1.2 - h) * (1 - sstep(0.86, 1.1, lk));
+  h -= 0.5 * (1 - sstep(0.3, 1.7, streamD(x, z)));
   return h;
 }
+
+// The brook: out of the wood east of the road, under the footbridge, into the lake's east end. z of its bed at x,
+// and how far a point is from it (a large number where it does not run).
+export const streamZ = (x: number) => -57 + 5 * Math.sin(x * 0.07 + 0.5) - 0.12 * x;
+export function streamD(x: number, z: number) {
+  if (x < -9 || x > 140) return 99;
+  return Math.abs(z - streamZ(x)) + Math.max(0, x - 110) * 0.05 + Math.max(0, -5 - x) * 0.3;
+}
+
+// ---------- the places of the map ----------
+// Things that stand in the land (made in Props): where they are is decided here, because the woods keep clear of
+// them, they shade the grass, and the sounds of the place are hung on them.
+function lakeRim(tx: number, tz: number) {
+  // the point of the lake's rim on the way from its middle toward (tx, tz)
+  const dx = tx - HLAKE.x;
+  const dz = tz - HLAKE.z;
+  const L = Math.hypot(dx, dz);
+  let lo = 0;
+  let hi = L;
+  for (let i = 0; i < 20; i++) {
+    const m = (lo + hi) / 2;
+    if (hLakeK(HLAKE.x + (dx / L) * m, HLAKE.z + (dz / L) * m) < 1) lo = m;
+    else hi = m;
+  }
+  return { x: HLAKE.x + (dx / L) * lo, z: HLAKE.z + (dz / L) * lo, ux: -dx / L, uz: -dz / L };
+}
+function shoreZ(x: number) {
+  return coastZ(x);
+}
+export const PLACES = (() => {
+  const pierX = 1.45 + 0.85 * Math.sin(170 * 0.15 + 0.35) + 0.6 * Math.sin(170 * 0.043 - 1.1);
+  return {
+    // the pier at the end of the footpath behind the desk, the boat moored to it, the lantern at its head
+    pier: { x: pierX, z0: shoreZ(pierX) - 7, z1: shoreZ(pierX) + 21 },
+    // a short jetty on the lake's near shore
+    jetty: lakeRim(-6, -30),
+    bridge: { x: roadX(streamZ(1.5)), z: streamZ(1.5) },
+    shrine: { x: 4.6, z: -27 },
+    hay: [[-33, -15], [-44, -21], [-39.5, -28.5], [-57, -11], [-52, -30]] as [number, number][],
+    village: { x: -64, z: -420 },
+    lighthouse: { x: 150, z: shoreZ(150) - 16 },
+    tower: { x: -282, z: -318 },
+    fences: [
+      [[9, -16], [10.5, -30], [10, -44], [12, -53]],
+      [[-70, -2], [-52, -4], [-36, -1], [-24, -6]],
+      [[14, 40], [26, 58], [30, 78]],
+    ] as [number, number][][],
+  };
+})();
+// the middles of the sea, the lake and the nearest woods, for whoever hangs sounds on the map
+export const SOUNDS = {
+  sea: { x: 0, z: 185, line: (x: number) => coastZ(x) },
+  lake: { x: HLAKE.x, z: HLAKE.z, r: HLAKE.rx },
+  woods: [[-58, -24], [34, -40], [-110, -150], [60, -160]] as [number, number][],
+};
 
 // ---------- geography (GLSL: the same lines) ----------
 const f1 = (n: number) => (Number.isInteger(n) ? n.toFixed(1) : String(n));
@@ -103,6 +159,10 @@ float hLakeK(vec2 p){
 }
 float coastZ(float x){ return 150.0 - 0.0001 * x * x + 24.0 * sin(x * 0.0041 + 0.9) + 8.0 * sin(x * 0.0127 + 2.0); }
 float inland(vec2 p){ return coastZ(p.x) - p.y; }
+float streamD(vec2 p){
+  if (p.x < -9.0 || p.x > 140.0) return 99.0;
+  return abs(p.y - (-57.0 + 5.0 * sin(p.x * 0.07 + 0.5) - 0.12 * p.x)) + max(0.0, p.x - 110.0) * 0.05 + max(0.0, -5.0 - p.x) * 0.3;
+}
 float landFree(vec2 p){
   float r = length(p);
   float f = smoothstep(70.0, 210.0, r);
@@ -135,6 +195,7 @@ float landH(vec2 p){
   h = mix(beach, h, smoothstep(40.0, 118.0, c));
   h = mix(SEA - 8.0, h, smoothstep(-60.0, 4.0, c));
   h = mix(LAKE_Y - 1.2, h, smoothstep(0.86, 1.1, lk));
+  h -= 0.5 * (1.0 - smoothstep(0.3, 1.7, streamD(p)));
   return h;
 }
 vec3 landN(vec2 p){
@@ -233,7 +294,7 @@ export const GLSL_FIELD = /* glsl */ `
 // drifts of wildflowers: where they grow thick (0..1) and which colour leads there
 float flowerDrift(vec2 p){
   float a = vnoise(p * 0.035 + 17.0) * 0.65 + vnoise(p * 0.11 + 5.0) * 0.35;
-  return smoothstep(0.52, 0.74, a);
+  return smoothstep(0.44, 0.7, a);
 }
 vec3 flowerHue(vec2 p){
   float k = vnoise(p * 0.021 + 31.0);
@@ -258,6 +319,9 @@ vec3 fieldAlbK(vec2 m){
   return c * mix(0.74, 1.12, m.y);
 }
 vec3 fieldAlb(vec2 p){ return fieldAlbK(fieldMix(p)); }
+// seen from far off a meadow is the tops of its grass: lighter and yellower than the blade's body. The blades and
+// the ground under them both take this, so the field is one colour from the desk to the tree line
+vec3 fieldFar(vec3 c, float dist){ return c * mix(vec3(1.0), vec3(1.16, 1.09, 0.82), smoothstep(6.0, 45.0, dist)); }
 // the light of open ground (sh: 1 in the sun)
 vec3 fieldLight(float sh){
   return uSkyCol * 0.62 + uKeyCol * (0.25 + 0.75 * max(uKeyDir.y, 0.0)) * sh * smoothstep(-0.02, 0.08, uKeyDir.y);
@@ -337,6 +401,7 @@ export function forestD(x: number, z: number) {
     d = Math.max(d, (1 - sstep(26, 70, rd)) * sstep(7.5, 10, rd) * sstep(-30, -70, z) * (0.55 + 0.45 * vnoise(x * 0.05, z * 0.03)));
   }
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
+  d *= sstep(34, 70, Math.hypot(x - PLACES.village.x, z - PLACES.village.z)) * sstep(10, 26, Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z)) * sstep(1.5, 5, streamD(x, z));
   return Math.min(1, d);
 }
 
@@ -473,6 +538,20 @@ export function bakeCrownMap(trees: HomeTree[]) {
         acc[k] = 1 - (1 - acc[k]) * (1 - a);
       }
   }
+  // the haystacks, the shrine and the bridge lay their shade too
+  const blot = (x: number, z: number, rad: number, a: number) => {
+    const R = rad * px;
+    const cx = (x + CROWN_SPAN) * px;
+    const cz = (z + CROWN_SPAN) * px;
+    for (let j = Math.max(0, Math.floor(cz - R)); j <= Math.min(n - 1, Math.ceil(cz + R)); j++)
+      for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(n - 1, Math.ceil(cx + R)); i++) {
+        const d = Math.hypot(i + 0.5 - cx, j + 0.5 - cz) / R;
+        if (d < 1) acc[j * n + i] = 1 - (1 - acc[j * n + i]) * (1 - a * (1 - d * d));
+      }
+  };
+  for (const [x, z] of PLACES.hay) blot(x, z, 2.1, 0.95);
+  blot(PLACES.shrine.x, PLACES.shrine.z, 0.7, 0.8);
+  blot(PLACES.bridge.x, PLACES.bridge.z, 1.6, 0.7);
   const data = new Uint8Array(n * n * 4);
   for (let k = 0; k < n * n; k++) {
     data[k * 4] = Math.round(255 * acc[k]);

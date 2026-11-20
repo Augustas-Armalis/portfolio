@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Environment, Html, Sparkles } from "@react-three/drei";
+import { Environment, Html } from "@react-three/drei";
 import { AnimatePresence, motion } from "motion/react";
 import { BookOpen, Camera as CameraIcon, Headphones as Headphones2, PenLine, Piano, Power, Send, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import * as THREE from "three";
@@ -22,7 +22,8 @@ import { Flowers, Grass } from "./scene/Grass";
 import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone, setBlobStrength } from "./scene/models";
 import { ContactShadows } from "./scene/home/Contact";
 import { Clouds } from "./scene/home/Clouds";
-import { Butterflies, Skein } from "./scene/home/Life";
+import { Butterflies, Flock, Motes, Skein } from "./scene/home/Life";
+import { PropLights, Props } from "./scene/home/Props";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
 import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
@@ -57,8 +58,8 @@ import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
 import { Forest } from "./scene/home/Forest";
 import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
-import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
-import { Birds, Sky, makeSkyMaterial } from "./scene/World";
+import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, useWorld, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
+import { Sky, makeSkyMaterial } from "./scene/World";
 import { HomeMountains } from "./scene/home/Mountains";
 import { Land } from "./scene/home/Terrain";
 import { LakeMirror, Reeds } from "./scene/home/Water";
@@ -1599,7 +1600,9 @@ function Scene({
         {!mobile && q.effects > 0.5 && <LakeMirror quality={q.effects} />}
         <Grass mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} density={q.grass} />
         <Flowers mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} />
-        <Birds />
+        <Flock />
+        <Props />
+        <PropLights />
         {q.effects > 0.2 && <Butterflies count={mobile ? 20 : 46} />}
         <Skein />
       </HomeWorld>
@@ -1746,20 +1749,11 @@ function SkyEnvironment({ envSky }: { envSky: THREE.Material }) {
   );
 }
 
-// Pollen drifting in daylight, fireflies after dusk.
+// Pollen drifting in daylight, fireflies after dusk (see scene/home/Life: soft round motes that the scene can hide).
 function SkyLife({ reduced, amount }: { reduced: boolean; amount: number }) {
-  const [night, setNight] = useState(false);
-  useFrame(() => {
-    // (the fireflies come out with the dusk, before the night has fully fallen)
-    const n = SKY_U.uNight.value > 0.22;
-    if (n !== night) setNight(n);
-  });
-  // keyed by their number too: a change of graphics quality remakes them whole (drei's Sparkles left with a new count draws nothing)
-  return night ? (
-    <Sparkles key={`n${amount}`} count={Math.round(60 + 200 * amount)} scale={[26, 1.5, 26]} position={[0, 0.7, -3]} size={3.4} speed={reduced ? 0 : 0.35} opacity={0.9} color="#e4ff8f" noise={1.4} />
-  ) : (
-    <Sparkles key={`d${amount}`} count={Math.round(30 + 60 * amount)} scale={[4, 1.4, 3]} position={[0, 1.05, 0.2]} size={1.5} speed={reduced ? 0 : 0.18} opacity={0.5} color="#ffe2b0" noise={0.6} />
-  );
+  const id = useWorld();
+  if (id !== "home") return null;
+  return <Motes count={Math.round(70 + 170 * amount)} still={reduced} />;
 }
 
 // ---------- room (DOM shell) ----------

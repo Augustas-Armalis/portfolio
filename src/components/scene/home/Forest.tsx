@@ -267,13 +267,14 @@ export function Forest({ amount, mobile }: { amount: number; mobile: boolean }) 
       // a little further: the coarse cut, a quarter of the compass at a time
       const coarse = buildTree(kind, 0, 0);
       geos.push(coarse);
-      for (let qd = 0; qd < 4; qd++) whole(trees.filter((t) => t.kind === kind && t.lod === 1 && quarter(t) === qd), coarse);
+      // (north and south of the desk apart: the half behind the eye is not drawn)
+      for (let qd = 0; qd < 2; qd++) whole(trees.filter((t) => t.kind === kind && t.lod === 1 && (quarter(t) >> 1) === qd), coarse);
     }
-    // the far woods, in blocks 400 m on a side
+    // the far woods, in blocks 640 m on a side
     const far = trees.filter((t) => t.lod === 2);
     const blocks = new Map<string, HomeTree[]>();
     for (const t of far) {
-      const key = `${Math.floor(t.x / 400)},${Math.floor(t.z / 400)}`;
+      const key = `${Math.floor(t.x / 640)},${Math.floor(t.z / 640)}`;
       let b = blocks.get(key);
       if (!b) blocks.set(key, (b = []));
       b.push(t);
