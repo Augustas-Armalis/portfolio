@@ -8,7 +8,7 @@ import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voi
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { play } from "@/lib/sfx";
 import { setMusicOpen, useMusic } from "@/lib/musicDirector";
-import { WORLDS, WORLD_ORDER, setFlight, setGuide, travelStep, travelTo, useFlightFlags, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
+import { WORLDS, WORLD_ORDER, markEntered, setFlight, setGuide, travelStep, travelTo, useFlightFlags, useTravel, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
 import { photoCtl, postCtl, type Capture } from "./Post";
 
@@ -992,20 +992,30 @@ const WORLD_NAMES: Partial<Record<WorldId, string>> = {
 };
 export const worldName = (id: WorldId) => WORLD_NAMES[id] ?? WORLDS[id].title;
 // The worlds, as a small glass list of their paintings: one tap and the cloud closes and opens on that world.
+// The row tapped lights at once and carries a breathing bead until the plane is there (the list itself closes on
+// the tap; opened again mid-crossing it shows where the plane is going, and another tap leads there instead).
 const thumbOf = (id: WorldId) => (id === "home" ? null : `/assets/ciurlionis/${WORLDS[id].canvases[0]?.painting ?? id}.jpg`);
-function WorldsList({ current, onPick, mobile }: { current: WorldId; onPick: (id: WorldId) => void; mobile: boolean }) {
+function WorldsList({ current, pending, onPick, mobile }: { current: WorldId; pending: WorldId | null; onPick: (id: WorldId) => void; mobile: boolean }) {
+  // (the list is on its way out from the moment of the tap, and a leaving list no longer hears from above: the row
+  // tapped is remembered here, so it is the one seen lit as the list goes)
+  const [tapped, setTapped] = useState<WorldId | null>(null);
+  const going = tapped ?? pending;
   return (
-    <Glass radius={22} panel className={`pointer-events-auto flex origin-bottom flex-col gap-0.5 p-1.5 ${mobile ? "w-[236px]" : "w-[228px]"}`} initial={{ opacity: 0, y: 14, scale: 0.86 }} animate={GLASS_ON} exit={{ opacity: 0, y: 10, scale: 0.9 }} transition={GLASS_SPRING} data-flight="worlds">
+    // (a phone on its side is shorter than the list: there it scrolls inside its own glass)
+    <Glass radius={22} panel className={`pointer-events-auto flex max-h-[calc(100dvh-124px)] origin-bottom flex-col gap-0.5 overflow-y-auto overscroll-contain p-1.5 [scrollbar-width:none] ${mobile ? "w-[236px]" : "w-[228px]"}`} initial={{ opacity: 0, y: 14, scale: 0.86 }} animate={GLASS_ON} exit={{ opacity: 0, y: 10, scale: 0.9 }} transition={GLASS_SPRING} data-flight="worlds">
       {WORLD_ORDER.map((id) => {
         const t = thumbOf(id);
-        const on = id === current;
+        const on = id === (going ?? current);
         return (
           <button
             key={id}
             type="button"
-            className={`lg-btn flex items-center gap-2.5 !rounded-[15px] px-1.5 text-left ${mobile ? "h-11" : "h-9"} ${on ? "lg-on" : "text-white/95"}`}
+            aria-current={id === current ? "true" : undefined}
+            data-pending={id === going && id !== current ? "" : undefined}
+            className={`lg-btn flex shrink-0 items-center gap-2.5 !rounded-[15px] px-1.5 text-left ${mobile ? "h-11" : "h-9"} ${on ? "lg-on" : "text-white/95"}`}
             onClick={(e) => {
               e.stopPropagation();
+              setTapped(id);
               onPick(id);
             }}
           >
@@ -1013,6 +1023,7 @@ function WorldsList({ current, onPick, mobile }: { current: WorldId; onPick: (id
               {t ? <img src={t} alt="" className="h-full w-full object-cover" decoding="async" /> : null}
             </span>
             <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium tracking-[-0.01em]">{worldName(id)}</span>
+            {id === going && id !== current && <span aria-hidden className="mr-1.5 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-black/60" />}
           </button>
         );
       })}
@@ -1180,20 +1191,34 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const chrome = useChrome(flying);
   // the Worlds list, and [ / ] to step through the worlds with a keyboard
   const [panel, setPanel] = useState<"worlds" | null>(null);
+  const pending = useTravel();
+  // Every pick is answered. Somewhere else: the cloud closes for it, whatever the cloud was doing (voyage.ts
+  // travelTo: the last pick wins). Where the plane already is, or past either end of the list with the keys: the
+  // world's name is shown again.
+  const soon = useRef(false);
+  const answer = (went: boolean) => {
+    if (went || voyage.phase !== "open") return;
+    soon.current = true;
+    markEntered();
+  };
   const pick = (id: WorldId) => {
-    travelTo(id);
     setPanel(null);
+    if (flying) answer(travelTo(id));
   };
   useEffect(() => {
     if (!flying || mobile) return;
     const k = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement | null)?.tagName === "INPUT") return;
-      if (e.key === "[") travelStep(-1);
-      else if (e.key === "]") travelStep(1);
+      if (e.key === "[") answer(travelStep(-1));
+      else if (e.key === "]") answer(travelStep(1));
     };
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [flying, mobile]);
+  // coming in to land there is nowhere else to go: the list closes and its button rests
+  useEffect(() => {
+    if (!flying) setPanel(null);
+  }, [flying]);
   // a panel closes when the view itself is touched
   useEffect(() => {
     if (!panel) return;
@@ -1226,8 +1251,11 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
       setCard(false);
       return;
     }
-    const a = window.setTimeout(() => setCard(true), entered ? 1900 : 900);
-    const b = window.setTimeout(() => setCard(false), (entered ? 1900 : 900) + 6000);
+    // (after a crossing the cloud is still opening; asked for by a tap on the world already flown, it comes at once)
+    const wait = soon.current ? 120 : entered ? 1900 : 900;
+    soon.current = false;
+    const a = window.setTimeout(() => setCard(true), wait);
+    const b = window.setTimeout(() => setCard(false), wait + 6000);
     return () => {
       window.clearTimeout(a);
       window.clearTimeout(b);
@@ -1278,8 +1306,10 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const bar = (
     <Glass layout className={`pointer-events-auto flex items-center p-1 ${mobile ? "" : "gap-0.5"}`} initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={{ ...GLASS_SPRING, delay: 0.06 }} data-flight="bar" {...stop}>
       <FlightMusicButton className={ib} size={isz} />
-      <button type="button" aria-pressed={panel === "worlds"} aria-label="Worlds" data-tip={mobile ? undefined : "Worlds  [ ]"} className={ib(panel === "worlds")} onClick={() => setPanel(panel === "worlds" ? null : "worlds")}>
+      <button type="button" aria-pressed={panel === "worlds"} aria-label="Worlds" data-tip={mobile ? undefined : "Worlds  [ ]"} className={`${ib(panel === "worlds")} transition-opacity disabled:opacity-40`} disabled={!flying} onClick={() => setPanel(panel === "worlds" ? null : "worlds")}>
         <LayoutGrid size={isz} strokeWidth={sw} />
+        {/* lit while the plane is on its way to a world picked from the list */}
+        <span className={`absolute right-[5px] top-[5px] h-[5px] w-[5px] rounded-full transition-opacity duration-300 ${panel === "worlds" ? "bg-black/60" : "bg-white"} ${pending ? "animate-pulse opacity-90" : "opacity-0"}`} />
       </button>
       <button type="button" aria-pressed={guide} aria-label="Follow the path" data-tip={guide ? "Following the path" : "Follow the path"} data-flight="auto" className={ib(guide)} onClick={() => setGuide(!guide)}>
         <Route size={isz} strokeWidth={sw} />
@@ -1318,7 +1348,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   );
   const panels = (
     <AnimatePresence>
-      {panel === "worlds" && <WorldsList key="worlds" current={world} onPick={pick} mobile={mobile} />}
+      {panel === "worlds" && <WorldsList key="worlds" current={world} pending={pending} onPick={pick} mobile={mobile} />}
     </AnimatePresence>
   );
   // faint when left alone; whole again under the pointer

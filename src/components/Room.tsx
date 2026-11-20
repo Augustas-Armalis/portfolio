@@ -58,6 +58,7 @@ import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
 import { Forest } from "./scene/home/Forest";
 import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
+import { makeArrival } from "./scene/worlds/arrive";
 import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, useWorld, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
 import { Sky, makeSkyMaterial } from "./scene/World";
 import { HomeMountains } from "./scene/home/Mountains";
@@ -485,6 +486,8 @@ function Scene({
   const introAt = useRef<number | null>(null);
   const instant = reduced || skipIntro;
   const planeApi = useRef<PlaneApi | null>(null);
+  // a world jumped to from the Worlds list is finished under the closed cloud before it opens (worlds/arrive.ts)
+  const arrival = useMemo(() => makeArrival(gl, scene, camera, () => loads.busy), [gl, scene, camera]);
   const reader = useRef<ReaderApi | null>(null);
   const sketch = useRef<SketchApi | null>(null);
   const [reading, setReading] = useState(false);
@@ -872,6 +875,10 @@ function Scene({
         if (stage.current === "fly") flightMusicTo(WORLDS[id].music);
       };
       gatePhase.current = "open";
+      // (a flight starts in open air, with nowhere picked)
+      voyage.landing = false;
+      voyage.next = null;
+      voyage.phase = "open";
       // flying into the kings' little world is the landing
       voyage.onHome = () => exitRef.current?.();
       planeApi.current?.launch(cam);
@@ -898,6 +905,8 @@ function Scene({
       input.current.jx = input.current.jy = 0;
       voyage.onEnter = null;
       voyage.onHome = null;
+      // (from here the way is down to the desk: the Worlds list takes no more picks)
+      voyage.landing = true;
       planeApi.current?.beginLand(cam);
       if (voyage.homing) {
         // coming home out of the light, the music comes back up, and only then lets go
@@ -1465,6 +1474,7 @@ function Scene({
       fi.look!.dy = inp.dy / W;
       fi.look!.held = inp.dragging;
       fi.gyro = g;
+      arrival();
       planeApi.current?.fly(dt, fi, cam);
       inp.zoom = inp.dx = inp.dy = 0;
       return;
