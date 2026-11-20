@@ -20,7 +20,7 @@ import { focusedApp, isUp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
 import { Monogram } from "./Login";
-import { Btn, Chrome, EASE_OUT, FILE_MIME, QuickLook, SPRING_GLASS, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useMorph, type LookItem, type MenuAction } from "./ui";
+import { Btn, Chrome, EASE_OUT, FILE_MIME, M, QuickLook, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useMorph, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
 import { EDGES, EDGE_CURSOR, EDGE_ZONE, clampMove, pointerGesture, resizeRect, type Bounds, type Edge } from "./windowFrame";
 
@@ -46,7 +46,9 @@ function useOutside(open: boolean, close: () => void) {
 function Pop({ open, align = "left", width = 220, panel = false, children }: { open: boolean; align?: "left" | "right"; width?: number; panel?: boolean; children: ReactNode }) {
   const morph = useMorph<HTMLDivElement>();
   const reduce = reducedMotion();
-  const from = reduce ? 1 : panel ? 0.3 : 0.72;
+  // a menu is opened all day: it only settles the last few percent from its title. A panel is a drop of glass
+  // let out of its icon, and may travel further.
+  const from = reduce ? 1 : panel ? 0.5 : 0.96;
   return (
     <AnimatePresence>
       {open && (
@@ -54,8 +56,8 @@ function Pop({ open, align = "left", width = 220, panel = false, children }: { o
           {...morph}
           initial={{ opacity: 0, scale: from }}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: reduce ? 1 : panel ? 0.6 : 0.86, transition: { duration: 0.14, ease: EASE_OUT } }}
-          transition={panel ? SPRING_GLASS : { type: "spring", bounce: 0.22, duration: 0.3 }}
+          exit={{ opacity: 0, scale: reduce ? 1 : panel ? 0.8 : 0.98, transition: M.out }}
+          transition={panel ? M.glass : M.pop}
           onPointerDown={(e) => e.stopPropagation()}
           data-glass=""
           style={{ width, transformOrigin: align === "left" ? "18px -11px" : "calc(100% - 18px) -11px" }}
@@ -272,12 +274,12 @@ function AppsOverlay() {
           key="apps"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.16 } }}
-          transition={{ duration: 0.22 }}
+          exit={{ opacity: 0, transition: M.out }}
+          transition={M.fade}
           onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}
           className="absolute inset-0 z-[1800] flex flex-col items-center bg-black/25 pt-[11vh] [backdrop-filter:blur(36px)_saturate(1.6)]"
         >
-          <motion.div initial={{ scale: 1.08 }} animate={{ scale: 1 }} exit={{ scale: 1.04 }} transition={{ type: "spring", bounce: 0, duration: 0.4 }} className="flex w-full flex-col items-center" onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}>
+          <motion.div initial={{ scale: reducedMotion() ? 1 : 1.08 }} animate={{ scale: 1 }} exit={{ scale: reducedMotion() ? 1 : 1.04 }} transition={M.ui} className="flex w-full flex-col items-center" onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}>
             <label htmlFor="apps-search" className="flex h-9 w-[260px] items-center gap-2 rounded-full bg-white/15 px-3 text-white/70 shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.25)]">
               <Search size={14} />
               <input id="apps-search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" autoComplete="off" className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/55" />
@@ -287,10 +289,8 @@ function AppsOverlay() {
                 <motion.button
                   type="button"
                   key={id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, ease: EASE_OUT, delay: Math.min(i * 0.015, 0.2) }}
-                  whileTap={{ scale: 0.94 }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={M.pop}
                   onClick={() => {
                     setOverlay(null);
                     open(id);
@@ -385,15 +385,15 @@ function MissionControl() {
           key="mission"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.16 } }}
-          transition={{ duration: 0.22 }}
+          exit={{ opacity: 0, transition: M.out }}
+          transition={M.fade}
           onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}
           className="absolute inset-0 z-[1800] flex flex-col items-center bg-black/30 px-10 pt-[8vh] [backdrop-filter:blur(30px)_saturate(1.5)]"
         >
           <div className="eyebrow text-white/65">{live.length ? `${live.length} open window${live.length > 1 ? "s" : ""}` : "No open windows"}</div>
           <div className="mt-8 flex w-full max-w-[1320px] flex-wrap items-start justify-center gap-x-8 gap-y-9" onPointerDown={(e) => e.target === e.currentTarget && setOverlay(null)}>
             {live.map((w, i) => (
-              <motion.div key={w.id} initial={{ opacity: 0, scale: 1.1 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", bounce: 0, duration: 0.45, delay: i * 0.03 }} className="group relative flex flex-col items-center gap-3">
+              <motion.div key={w.id} initial={{ scale: reducedMotion() ? 1 : 1.08 }} animate={{ scale: 1 }} transition={M.ui} className="group relative flex flex-col items-center gap-3">
                 <button
                   type="button"
                   aria-label={`Show ${apps[w.id].title}`}
@@ -453,7 +453,7 @@ function MenuBar() {
     <motion.div
       initial={{ y: -30 }}
       animate={{ y: 0 }}
-      transition={{ duration: 0.45, ease: EASE_OUT, delay: 0.1 }}
+      transition={{ ...M.arrive, delay: 0.1 }}
       className="relative z-[2000] flex h-[24px] items-center justify-between px-2.5 text-[13px] tracking-[-0.003em] text-ink"
     >
       {/* the material is its own layer: a glass parent would cut the menus' blur off from the desktop */}
@@ -505,8 +505,8 @@ function MenuBar() {
             <motion.span
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.16 }}
+              exit={{ opacity: 0, transition: M.out }}
+              transition={M.fade}
               className="mr-1 flex items-center gap-1.5 px-2 text-[13px]"
             >
               <Bars /> {playing}
@@ -544,16 +544,13 @@ function MenuBar() {
   );
 }
 
+// Now-playing bars. A CSS animation on transform only: it runs on the compositor for as long as music plays,
+// instead of a script laying three bars out again every frame.
 export function Bars({ light = false }: { light?: boolean }) {
   return (
     <span className="flex h-3 items-end gap-[2px]" aria-hidden>
       {[0, 1, 2].map((i) => (
-        <motion.span
-          key={i}
-          className={`w-[2px] rounded-full ${light ? "bg-white" : "bg-ink"}`}
-          animate={{ height: ["30%", "100%", "45%", "80%", "30%"] }}
-          transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
-        />
+        <span key={i} className={`eq-bar h-full w-[2px] rounded-full ${light ? "bg-white" : "bg-ink"}`} style={{ animationDelay: `${i * -0.37}s` }} />
       ))}
     </span>
   );
@@ -605,12 +602,19 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
     const { W, H } = areaSize();
     // the designed size, never more than 88% of the space; the first window sits dead centre (a touch above, like
     // macOS), later ones cascade down-right from it
-    const w = Math.round(Math.min(size.w, (W - 24) * 0.88));
+    let w = Math.round(Math.min(size.w, (W - 24) * 0.88));
     const h = Math.round(Math.min(size.h, (H - DOCK_SPACE - 16) * 0.94));
     const step = index % 6;
-    // the window the desktop opens with sits beside the note, not over it
-    const beside = index === 0 && win.id === "records" && W - (NOTE_W + 48) - 140 >= w;
-    const x0 = beside ? NOTE_W + 48 + (W - (NOTE_W + 48) - 132 - w) / 2 : (W - w) / 2;
+    // The window the desktop opens with sits beside the note, never over it: between the note and the column of
+    // icons where there is room, between the note and the edge on a smaller screen (it gives up some width for
+    // that, down to its two-column layout). Only a screen too narrow for both lets it take the middle.
+    const first = index === 0 && win.id === "records";
+    const room = W - (NOTE_W + 48) - 24;
+    const clear = room - (CELL_W + 8);
+    const beside = first && room >= 640;
+    const span = clear >= 640 ? clear : room;
+    if (beside) w = Math.min(w, span);
+    const x0 = beside ? NOTE_W + 48 + (span - w) / 2 : (W - w) / 2;
     return clampRect({ left: Math.round(x0 + step * 28), top: Math.round((H - DOCK_SPACE - h) * 0.42 + step * 24), w, h }, W, H, min);
   });
   const [hidden, setHidden] = useState(false);
@@ -644,7 +648,7 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
     fy.set(a.top - b.top);
     fsx.set(a.width / b.width);
     fsy.set(a.height / b.height);
-    const spring = { type: "spring", bounce: 0, duration: 0.36 } as const;
+    const spring = M.ui;
     animate(fx, 0, spring);
     animate(fy, 0, spring);
     animate(fsx, 1, spring);
@@ -782,10 +786,10 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
         initial={{ x: from.x, y: from.y, scaleX: 0.16, scaleY: 0.1, opacity: 0 }}
         animate={
           live
-            ? { x: 0, y: 0, scaleX: 1, scaleY: 1, opacity: 1, transition: { type: "spring", bounce: 0, duration: 0.42 } }
-            : { x: minTo.x, y: minTo.y, scaleX: 0.14, scaleY: 0.06, opacity: 0, transition: { duration: 0.38, ease: [0.77, 0, 0.175, 1] } }
+            ? { x: 0, y: 0, scaleX: 1, scaleY: 1, opacity: 1, transition: M.ui }
+            : { x: minTo.x, y: minTo.y, scaleX: 0.14, scaleY: 0.06, opacity: 0, transition: M.move }
         }
-        exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.14, ease: EASE_OUT } }}
+        exit={{ opacity: 0, scale: 0.97, transition: M.out }}
         onAnimationComplete={() => win.min && setHidden(true)}
         data-win={win.id}
         className={`win relative flex h-full w-full flex-col overflow-hidden ${focused ? "is-focused" : ""} ${win.max ? "is-max" : ""}`}
@@ -917,7 +921,7 @@ function DockIcon({ id, mouseX, running, front = false, dark, dragging }: { id: 
         aria-hidden
         initial={false}
         animate={{ opacity: running ? 1 : 0, scaleX: running ? (front ? 3 : 1) : 0.3, scaleY: running ? 1 : 0.3 }}
-        transition={SPRING_GLASS}
+        transition={M.glass}
         className={`mt-[3px] h-1 w-1 rounded-full ${dark ? "bg-white/85" : "bg-ink/75"}`}
       />
     </div>
@@ -938,7 +942,7 @@ function Dock() {
     <motion.div
       initial={{ y: 90 }}
       animate={{ y: 0 }}
-      transition={{ duration: 0.55, ease: EASE_OUT, delay: 0.2 }}
+      transition={{ ...M.arrive, delay: 0.2 }}
       className="absolute bottom-[6px] left-1/2 z-[1900] -translate-x-1/2"
     >
       <div
@@ -1086,7 +1090,8 @@ function Spotlight() {
 // ---------- desktop icons: a right-hand column like files on a Mac desktop ----------
 
 const CELL_W = 108;
-const CELL_H = 106;
+// tall enough for the artwork and a two-line name, with air before the next icon
+const CELL_H = 116;
 const EDGE = 10;
 type Cell = { c: number; r: number };
 const cellKey = (p: Cell) => `${p.c}:${p.r}`;
@@ -1199,8 +1204,44 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
   const band = useRef<HTMLDivElement>(null);
   const layer = useRef<HTMLDivElement>(null);
   const width = () => layer.current?.clientWidth ?? window.innerWidth;
+  // where a cell is, for hit tests. The icons themselves are placed from the right edge in CSS, so they stay on
+  // the desktop's right-hand side whatever the window does.
   const at = (p: Cell) => ({ left: width() - EDGE - (p.c + 1) * CELL_W, top: EDGE + p.r * CELL_H });
   useOutside(menu !== null, () => setMenu(null));
+  // Keep every icon on the desktop: when it gets shorter or narrower, an icon whose row or column no longer fits
+  // moves to the nearest free cell (down the column, then the next column in), like Clean Up would put it.
+  useLayoutEffect(() => {
+    const fit = () => {
+      const W = width();
+      const H = (area.current?.clientHeight ?? window.innerHeight - 24) - DOCK_SPACE;
+      const maxC = Math.max(0, Math.floor((W - EDGE * 2) / CELL_W) - 1);
+      const maxR = Math.max(0, Math.floor((H - EDGE) / CELL_H) - 1);
+      setPos((p) => {
+        const ids = Object.keys(p);
+        if (ids.every((id) => p[id].r <= maxR && p[id].c <= maxC)) return p;
+        const next: Record<string, Cell> = {};
+        const taken = new Set<string>();
+        for (const id of ids) {
+          if (p[id].r <= maxR && p[id].c <= maxC) {
+            next[id] = p[id];
+            taken.add(cellKey(p[id]));
+          }
+        }
+        for (const id of ids) {
+          if (next[id]) continue;
+          let cell = { c: Math.min(p[id].c, maxC), r: Math.min(p[id].r, maxR) };
+          for (let i = 0; taken.has(cellKey(cell)) && i < 400; i++) cell = cell.r < maxR ? { c: cell.c, r: cell.r + 1 } : { c: cell.c < maxC ? cell.c + 1 : 0, r: 0 };
+          taken.add(cellKey(cell));
+          next[id] = cell;
+        }
+        return next;
+      });
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length]);
 
   const run = (it: DeskItem) => {
     if ("app" in it.open) open(it.open.app);
@@ -1355,7 +1396,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
     >
       {items.map((it) => {
         const on = sel.includes(it.id);
-        const p = at(pos[it.id] ?? { c: 1, r: 0 });
+        const cell = pos[it.id] ?? { c: 1, r: 0 };
         return (
           <motion.button
             type="button"
@@ -1370,7 +1411,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
               const b = layer.current!.getBoundingClientRect();
               setMenu({ x: e.clientX - b.left, y: e.clientY - b.top, id: it.id });
             }}
-            style={{ left: p.left, top: p.top, x: on ? dx : 0, y: on ? dy : 0 }}
+            style={{ right: EDGE + cell.c * CELL_W, top: EDGE + cell.r * CELL_H, x: on ? dx : 0, y: on ? dy : 0 }}
             className="absolute flex w-[108px] flex-col items-center gap-[3px] pt-1 outline-none"
           >
             <span className={`flex h-[72px] w-[72px] items-center justify-center rounded-[8px] ${on ? "bg-black/[0.22] shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]" : ""}`}>
@@ -1392,7 +1433,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
           <motion.div
             key="ctx"
             initial={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.12 } }}
+            exit={{ opacity: 0, transition: M.out }}
             onPointerDown={(e) => e.stopPropagation()}
             data-glass=""
             style={{ left: menu.x, top: menu.y }}
@@ -1467,8 +1508,8 @@ function Welcome() {
         <motion.aside
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.16 } }}
-          transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.35 }}
+          exit={{ opacity: 0, scale: 0.97, transition: M.out }}
+          transition={{ ...M.arrive, delay: 0.35 }}
           aria-label="Welcome note"
           data-glass=""
           style={{ width: NOTE_W }}
