@@ -58,7 +58,7 @@ export function DeskDust({ apiRef }: { apiRef: MutableRefObject<DustApi | null> 
         varying float vA;
         void main(){
           vec2 c = gl_PointCoord - 0.5;
-          float a = exp(-dot(c, c) * 14.0) * vA;
+          float a = exp(-dot(c, c) * 14.0) * smoothstep(0.5, 0.34, length(c)) * vA;
           vec3 col = vec3(0.86, 0.8, 0.7) * (uSkyCol * 0.7 + uKeyCol * 0.35);
           gl_FragColor = vec4(col, a);
           #include <tonemapping_fragment>

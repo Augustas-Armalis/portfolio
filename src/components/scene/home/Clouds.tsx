@@ -4,7 +4,6 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { MIRROR_LAYER } from "./Forest";
 import { GLSL_HOME_AIR, HOME_U, rng } from "./land";
 
 // The heaped clouds of the home sky, as he painted them and as the film of
@@ -147,7 +146,9 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
     const R = rng(2024);
     // two cuts: the great ones in fine pieces, the many small and far ones in coarser
     const total = Math.round((mobile ? 90 : 250) * amount);
-    const geos = mobile ? [buildCloud(101, 2), buildCloud(138, 2)] : [buildCloud(101, 3), buildCloud(138, 3), buildCloud(175, 2), buildCloud(212, 2)];
+    // (the great clouds are cut finest only on a machine with room to spare)
+    const fine = amount >= 1 ? 3 : 2;
+    const geos = mobile ? [buildCloud(101, 2), buildCloud(138, 2)] : [buildCloud(101, fine), buildCloud(138, fine), buildCloud(175, 2), buildCloud(212, 2)];
     const kinds = geos.length;
     const meshes = geos.map((src, k) => {
       const great = !mobile && k < 2;
@@ -179,7 +180,6 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
       const m = new THREE.Mesh(g, mat);
       m.frustumCulled = false;
       m.renderOrder = -7;
-      m.layers.enable(MIRROR_LAYER);
       void k;
       return m;
     });

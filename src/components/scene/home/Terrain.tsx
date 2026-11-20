@@ -69,11 +69,15 @@ export function makeLandMaterial() {
     uniforms: { ...SKY_U, ...HOME_U, ...REFLECT_U, uCenter: { value: new THREE.Vector2() }, uSoilTex: { value: soil } },
     vertexShader: /* glsl */ `
       uniform vec2 uCenter;
-      varying vec3 vWorld; varying vec3 vN;
+      varying vec3 vWorld; varying vec3 vN; varying float vCav;
       ${GLSL_LAND}
       void main(){
         vec2 p = position.xz + uCenter;
         float h = landH(p);
+        // how hollow the ground is here (the mean of the land round about, less this point): creases and the feet of
+        // slopes gather a soft shade, brows and crests stay open to the sky
+        float e = 7.0 + length(position.xz) * 0.02;
+        vCav = ((landH(p + vec2(e, 0.0)) + landH(p - vec2(e, 0.0)) + landH(p + vec2(0.0, e)) + landH(p - vec2(0.0, e))) * 0.25 - h) / e;
         float level = hLakeK(p) < 1.15 ? LAKE_Y : SEA;
         vWorld = vec3(p.x, max(h, level), p.y);
         vN = landN(p);
@@ -81,7 +85,7 @@ export function makeLandMaterial() {
       }`,
     fragmentShader: /* glsl */ `
       uniform sampler2D uSoilTex; uniform sampler2D uReflTex; uniform mat4 uReflMat; uniform float uReflOn;
-      varying vec3 vWorld; varying vec3 vN;
+      varying vec3 vWorld; varying vec3 vN; varying float vCav;
       ${GLSL_NOISE}
       ${GLSL_SKY}
       ${GLSL_DESK_SHADOW}
@@ -151,7 +155,7 @@ export function makeLandMaterial() {
           float speck = dotK * on * smoothstep(9.0, 20.0, dist) * (1.0 - smoothstep(0.1, 0.34, fw * 2.7));
           alb = mix(alb, hue * 0.8, speck * 0.9);
           vec3 fh = flowerHue(p);
-          alb += fh * fh * vec3(0.07, 0.06, 0.035) * fd * smoothstep(30.0, 150.0, dist);
+          alb = mix(alb, alb * 0.6 + fh * fh * vec3(0.2, 0.18, 0.12), fd * 0.36 * smoothstep(24.0, 120.0, dist));
         }
         // under the trees: leaf litter and moss, and far off the canopy itself
         float woods = forestAt(p);
@@ -162,11 +166,12 @@ export function makeLandMaterial() {
         }
         // the footpath: worn sandy earth, a little paler down the middle, grass closing in softly from both sides
         float onPath = 0.0;
+        float c0p = inland(p);
         {
           float pw = pathW(p.y);
           float px = abs(p.x - pathX(p.y)) / pw;
           float n2 = vnoise(p * 0.9);
-          float along = p.y > 0.0 ? 1.0 - smoothstep(22.0, 46.0, p.y) : 1.0 - smoothstep(${(-HOME_GATE_Z + 6).toFixed(1)}, ${(-HOME_GATE_Z + 34).toFixed(1)}, -p.y);
+          float along = p.y > 0.0 ? smoothstep(2.0, 14.0, c0p) : 1.0 - smoothstep(${(-HOME_GATE_Z + 6).toFixed(1)}, ${(-HOME_GATE_Z + 34).toFixed(1)}, -p.y);
           onPath = (1.0 - smoothstep(0.42 + n2 * 0.3, 1.02 + n2 * 0.34, px)) * along;
           float fine = vnoise(p * 9.0) * 0.6 + vnoise(p * 31.0) * 0.4;
           vec3 earth = vec3(0.37, 0.32, 0.235) * (0.9 + 0.2 * fine);
@@ -181,16 +186,34 @@ export function makeLandMaterial() {
           float near = (1.0 - smoothstep(2.5, 15.0, dist)) * (1.0 - onPath);
           alb = mix(alb, texture2D(uSoilTex, p * 0.45).rgb * 0.36, near * 0.8);
         }
+        // the brook: a ribbon of bright water over pebbles, dark wet earth either side
+        float brook = 0.0;
+        {
+          float sdB = streamD(p);
+          if (sdB < 3.0) {
+            alb = mix(alb, vec3(0.1, 0.085, 0.06), (1.0 - smoothstep(0.7, 1.7, sdB)) * 0.85);
+            brook = 1.0 - smoothstep(0.42, 0.72, sdB + (vnoise(p * 1.3) - 0.5) * 0.3);
+          }
+        }
         // sand: the dunes, the beach, and the lake's rim
-        float c = coastZ(p.x) - p.y;
+        float c = inland(p);
         float sandK = 1.0 - smoothstep(34.0, 104.0, c + (vnoise(p * 0.035) - 0.5) * 46.0);
         sandK = max(sandK, (1.0 - smoothstep(0.02, 0.4, h - LAKE_Y)) * step(lk, 1.6) * 0.7);
         vec3 sand = mix(vec3(0.36, 0.3, 0.2), vec3(0.47, 0.41, 0.29), vnoise(p * 0.21) * 0.6 + vnoise(p * 2.3) * 0.4);
         sand *= mix(0.62, 1.0, smoothstep(level, level + 0.7, h));
         alb = mix(alb, sand, sandK);
 
+        // far off, the field is the tops of its grass, and reads as grass: fine strokes standing along the line of sight
+        {
+          float grassK = (1.0 - sandK) * (1.0 - onPath) * (1.0 - smoothstep(0.3, 0.8, woods));
+          vec2 vd = normalize(p - cameraPosition.xz + 1e-4);
+          float sc = 5.0 / (1.0 + dist * 0.035);
+          float streak = vnoise(vec2(dot(p, vec2(-vd.y, vd.x)) * sc * 2.6, dot(p, vd) * sc * 0.42));
+          float streak2 = vnoise(vec2(dot(p, vec2(-vd.y, vd.x)) * sc * 6.5 + 9.0, dot(p, vd) * sc * 1.1));
+          alb = mix(alb, fieldFar(alb, dist) * (1.0 + ((streak - 0.5) * 0.26 + (streak2 - 0.5) * 0.16) * smoothstep(14.0, 60.0, dist) * (1.0 - smoothstep(500.0, 1500.0, dist))), grassK);
+        }
         float sh = deskShadow(vWorld) * treeShade(vWorld) * cloudShade(vWorld);
-        float ao = deskAO(vWorld);
+        float ao = deskAO(vWorld) * (1.0 - 0.34 * smoothstep(0.0, 0.07, vCav)) * (1.0 + 0.08 * smoothstep(0.0, 0.06, -vCav));
         float ndl = max(dot(N, uKeyDir), 0.0);
         vec3 light = uSkyCol * (0.62 * ao) * (0.75 + 0.25 * N.y) + uKeyCol * (0.25 + 0.75 * ndl) * sh * sunUp * mix(0.6, 1.0, ao);
         col = alb * light;
@@ -202,59 +225,90 @@ export function makeLandMaterial() {
           float depth = level - h;
           float seaK = isLake ? 0.0 : 1.0;
           vec3 P = vec3(p.x, level, p.y);
-          float calm = 1.0 / (1.0 + dist * mix(0.02, 0.0045, seaK));
-          float e = 0.5;
-          float r0 = ripple(p, seaK);
-          float rx = ripple(p + vec2(e, 0.0), seaK);
-          float rz = ripple(p + vec2(0.0, e), seaK);
-          float amp = mix(0.07, 0.42, seaK) * (0.25 + 0.75 * calm);
-          vec3 n = normalize(vec3((r0 - rx) * amp / e, 1.0, (r0 - rz) * amp / e));
+          // how much of the wave pattern a pixel can still carry: beyond that it is averaged, never sampled (no sparkle of
+          // aliasing, no crawling), so the water is still at any distance and from any height
+          float keep1 = 1.0 - smoothstep(0.6, 3.5, fw);   // ripples (metres)
+          float keep2 = 1.0 - smoothstep(4.0, 22.0, fw);  // chop and swell
+          // two scales of travelling waves, and on the sea a long swell coming in to the beach
+          vec2 w1 = p / 3.1 + vec2(uTime * 0.021, uTime * 0.013);
+          vec2 w2 = p / 11.0 - vec2(uTime * 0.012, -uTime * 0.008);
+          vec2 w3 = p / 47.0 + vec2(uTime * 0.006, uTime * 0.004);
+          const float E = 0.012;
+          float a0 = texture2D(uCloudTex, w1).b, b0 = texture2D(uCloudTex, w2).b, c0 = texture2D(uCloudTex, w3).b;
+          vec2 g1 = vec2(texture2D(uCloudTex, w1 + vec2(E, 0.0)).b - a0, texture2D(uCloudTex, w1 + vec2(0.0, E)).b - a0);
+          vec2 g2 = vec2(texture2D(uCloudTex, w2 + vec2(E, 0.0)).b - b0, texture2D(uCloudTex, w2 + vec2(0.0, E)).b - b0);
+          vec2 g3 = vec2(texture2D(uCloudTex, w3 + vec2(E, 0.0)).b - c0, texture2D(uCloudTex, w3 + vec2(0.0, E)).b - c0);
+          vec2 slope = g1 * mix(1.4, 3.2, seaK) * keep1 + g2 * mix(0.8, 4.2, seaK) * keep2 + g3 * 5.0 * seaK * keep2;
+          float cst = coastZ(p.x) - p.y; // (negative out at sea)
+          float swell = sin(cst * 0.21 + uTime * 0.55 + c0 * 5.0) * seaK * keep2 * smoothstep(-260.0, -8.0, cst);
+          slope += vec2(0.0, 1.0) * swell * 0.05;
+          vec3 n = normalize(vec3(-slope.x, 1.0, -slope.y));
           vec3 r = reflect(-V, n);
-          r.y = abs(r.y) + 0.003;
+          // a rough sea does not mirror the horizon: at a grazing look its facets show the sky higher up, so it is
+          // darker and bluer than the air above it
+          r.y = abs(r.y) + 0.003 + 0.16 * seaK * (1.0 - keep1 * 0.5);
           r = normalize(r);
           vec3 mirror = skyMirror(P, r);
           if (isLake && uReflOn > 0.5) {
-            // the trees, the hills and the clouds standing in it, loosened by the ripples
+            // the trees and the mountains standing in it, loosened by the ripples
             vec4 rc = uReflMat * vec4(P, 1.0);
-            vec2 uv = rc.xy / rc.w + n.xz * 0.9 * (0.3 + 0.7 * calm);
-            vec3 tex = texture2D(uReflTex, clamp(uv, 0.002, 0.998)).rgb;
-            mirror = mix(mirror, tex, 0.92);
+            vec2 uv = rc.xy / rc.w + slope * 0.035;
+            vec4 tex = texture2D(uReflTex, clamp(uv, 0.002, 0.998));
+            mirror = mix(mirror, tex.rgb, tex.a * 0.94);
           }
-          // the sun on the water: a path of light, breaking into glitter
+          // the sun on the water: a path of light, breaking into glitter near by (the glitter is a slow pattern that
+          // fades before its grains are smaller than a pixel)
           float sunVis = smoothstep(-0.03, 0.03, uSunDir.y);
-          float sd = max(dot(r, uSunDir), 0.0);
-          float rough = mix(900.0, 90.0, smoothstep(0.0, 900.0, dist) * seaK);
+          vec3 flatR = normalize(reflect(-V, vec3(0.0, 1.0, 0.0)) + vec3(0.0, 0.004, 0.0));
           vec3 sunC = mix(uGlow, vec3(1.0), 0.45);
-          float glint = pow(sd, rough) * mix(26.0, 5.0, smoothstep(0.0, 900.0, dist) * seaK);
-          float zone = pow(max(dot(normalize(reflect(-V, vec3(0.0, 1.0, 0.0)) + vec3(0.0, 0.004, 0.0)), uSunDir), 0.0), mix(18.0, 60.0, 1.0 - seaK));
-          float tw = texture2D(uCloudTex, p / 2.3 + vec2(uTime * 0.06, -uTime * 0.04)).g * texture2D(uCloudTex, p / 0.9 - vec2(uTime * 0.05, uTime * 0.08)).b;
-          float spark = smoothstep(0.33, 0.5, tw) * (1.0 - smoothstep(0.2, 1.4, fw));
-          float farSpark = texture2D(uCloudTex, p / 26.0 + vec2(uTime * 0.02, 0.0)).g * (0.6 + 0.4 * sin(uTime * 3.0 + p.x * 0.7));
-          mirror += sunC * (glint + zone * (spark * 9.0 + smoothstep(0.55, 0.8, farSpark) * 2.2 * seaK)) * sunVis * cloudShade(P);
-          mirror += vec3(0.8, 0.85, 1.0) * (pow(max(dot(r, uMoonDir), 0.0), 700.0) * 9.0 + pow(max(dot(normalize(reflect(-V, vec3(0.0, 1.0, 0.0))), uMoonDir), 0.0), 40.0) * spark * 1.6) * uNight;
+          float lobeW = mix(140.0, 26.0, seaK);
+          float sunPath = pow(max(dot(flatR, uSunDir), 0.0), lobeW);
+          float moonPath = pow(max(dot(flatR, uMoonDir), 0.0), lobeW * 1.4);
+          float gl = texture2D(uCloudTex, p / 2.6 + vec2(uTime * 0.03, -uTime * 0.02)).g * texture2D(uCloudTex, p / 1.1 - vec2(uTime * 0.025, uTime * 0.04)).b;
+          float spark = smoothstep(0.3, 0.46, gl) * (1.0 - smoothstep(0.15, 0.9, fw));
+          float glintN = pow(max(dot(r, uSunDir), 0.0), mix(600.0, 120.0, seaK)) * mix(18.0, 5.0, seaK) * keep1;
+          mirror += sunC * (glintN + sunPath * (0.7 + spark * 7.0 + (b0 - 0.4) * 1.6 * keep2)) * sunVis * cloudShade(P);
+          mirror += vec3(0.8, 0.86, 1.0) * moonPath * (0.5 + spark * 4.0 + (b0 - 0.4) * 1.2 * keep2) * uNight;
 
           float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
-          vec3 wl = uSkyCol * 0.9 + uKeyCol * 0.35 * sunUp;
-          vec3 deep = mix(vec3(0.012, 0.022, 0.018), vec3(0.008, 0.035, 0.055), seaK) * wl;
-          vec3 shallow = mix(vec3(0.05, 0.07, 0.04), vec3(0.05, 0.19, 0.18), seaK) * wl;
-          vec3 body = mix(shallow, deep, 1.0 - exp(-depth * mix(1.6, 0.42, seaK)));
+          fres = mix(fres, min(fres, 0.72), seaK);
+          vec3 wl = uSkyCol * 0.9 + uKeyCol * 0.4 * sunUp;
+          // clear over the sand, turquoise in the shallows, deep blue beyond
+          vec3 deep = mix(vec3(0.012, 0.024, 0.02), vec3(0.006, 0.03, 0.062), seaK) * wl;
+          vec3 shallow = mix(vec3(0.05, 0.075, 0.045), vec3(0.03, 0.2, 0.2), seaK) * wl;
+          vec3 body = mix(shallow, deep, 1.0 - exp(-depth * mix(1.5, 0.3, seaK)));
           // the bed shows through the first hand of water
-          body = mix(body, col * 0.7, exp(-depth * 4.5) * 0.8);
+          body = mix(body, col * mix(vec3(0.7), vec3(0.62, 0.86, 0.8), seaK), exp(-depth * mix(4.5, 1.6, seaK)) * 0.85);
           vec3 wcol = mix(body, mirror, clamp(fres * 0.94 + 0.05, 0.0, 1.0));
+          // the swell's backs are a little lighter, its troughs darker
+          wcol *= 1.0 + swell * 0.07;
           if (seaK > 0.5) {
-            // surf: a line of foam at the sand that comes and goes, and one or two soft lines further out
+            // surf: a line of foam at the sand that comes and goes, and two soft lines of breaking swell further out
             float wob = vnoise(p * 0.05 + vec2(0.0, uTime * 0.05)) * 6.2832;
             float wash = 0.5 + 0.5 * sin(uTime * 0.7 + wob);
             float lace = vnoise(p * 1.7 + vec2(uTime * 0.2, 0.0)) * 0.6 + vnoise(p * 5.0 - vec2(0.0, uTime * 0.3)) * 0.4;
+            lace = mix(0.5, lace, 1.0 - smoothstep(0.1, 0.5, fw));
             float foam = (1.0 - smoothstep(0.0, 0.16 + 0.3 * wash, depth)) * smoothstep(0.25, 0.6, lace + 0.35 * wash);
             float roll = smoothstep(0.75, 1.0, sin(depth * 3.6 - uTime * 0.9 + wob)) * smoothstep(0.3, 0.7, depth) * (1.0 - smoothstep(1.4, 2.6, depth));
             foam = max(foam, roll * smoothstep(0.35, 0.7, lace) * 0.75);
-            wcol = mix(wcol, vec3(0.92, 0.95, 0.96) * (uSkyCol * 0.9 + uKeyCol * 0.6 * sunUp), clamp(foam, 0.0, 1.0) * (1.0 - smoothstep(0.3, 2.0, fw)));
+            wcol = mix(wcol, vec3(0.92, 0.95, 0.96) * (uSkyCol * 0.9 + uKeyCol * 0.6 * sunUp), clamp(foam, 0.0, 1.0) * (1.0 - smoothstep(0.8, 5.0, fw)));
           }
-          // a soft edge where water meets land
-          col = mix(col, wcol, smoothstep(0.0, isLake ? 0.035 : 0.05, depth));
+          // a soft edge where water meets land, and the sand dark with wet beside it
+          col = mix(col * mix(0.72, 1.0, smoothstep(0.0, 0.12, -depth + 0.12)), wcol, smoothstep(0.0, isLake ? 0.035 : 0.06, depth));
+        } else {
+          // wet sand and earth along any waterline
+          col *= mix(0.74, 1.0, smoothstep(0.0, 0.22, h - level));
         }
 
+        if (brook > 0.001) {
+          float run = texture2D(uCloudTex, vec2(p.x * 0.31 - uTime * 0.22, p.y * 0.9)).g;
+          vec3 rB = reflect(-V, normalize(vec3((run - 0.5) * 0.5, 1.0, 0.0)));
+          rB.y = abs(rB.y) + 0.02;
+          float fB = 0.04 + 0.96 * pow(1.0 - max(V.y, 0.0), 5.0);
+          vec3 wB = mix(vec3(0.05, 0.07, 0.05) * (uSkyCol + uKeyCol * 0.4 * sunUp), skyBase(normalize(rB)), clamp(fB + 0.25, 0.0, 1.0));
+          wB += vec3(1.0, 0.95, 0.85) * uKeyCol * smoothstep(0.62, 0.8, run) * 0.25 * sunUp * (1.0 - smoothstep(0.2, 1.2, fw));
+          col = mix(col, wB, brook);
+        }
         col = homeAir(col, vWorld);
         // the last of the sea goes into the sky before the surface ends
         col = mix(col, homeAirCol(-V), smoothstep(${(LAND_FAR * 0.42).toFixed(1)}, ${(LAND_FAR * 0.94).toFixed(1)}, dist));
