@@ -73,11 +73,14 @@ function OnceHint({ id, children, at = "top-[60px]" }: { id: string; children: R
 // What every focus mode shares: one small glass capsule in the corner, the way out and the name of what you
 // are holding. No bar across the top and no standing explanation: a mode's hint is one line, shown once.
 export function TopBar({ title, hint, hintId, exitLabel = "Put down", onExit }: { title: string; hint?: string; hintId?: string; exitLabel?: string; onExit: () => void }) {
+  // On a touch screen the music's pill stands beside this corner (scene/music/MusicDock, 52 px in: room for one
+  // round button). While it is there the capsule is only its way out; the name would lie under the pill.
+  const dock = useMusic().place !== null;
   return (
     <>
       <div className="pointer-events-none absolute z-30" style={{ top: SAFE.t, left: SAFE.l }}>
         <Glass
-          className="flex min-w-0 items-center gap-1 p-0.5 pr-3.5"
+          className={`flex min-w-0 items-center gap-1 p-0.5 pr-3.5 ${dock ? "[@media(pointer:coarse)]:pr-0.5" : ""}`}
           initial={{ ...GLASS_IN, y: -10 }}
           animate={GLASS_ON}
           exit={{ ...GLASS_IN, y: -10 }}
@@ -94,7 +97,7 @@ export function TopBar({ title, hint, hintId, exitLabel = "Put down", onExit }: 
           >
             <X size={15} strokeWidth={2.2} />
           </button>
-          <span className="min-w-0 max-w-[46vw] truncate text-[13px] font-semibold tracking-[-0.02em]">{title}</span>
+          <span className={`min-w-0 max-w-[46vw] truncate text-[13px] font-semibold tracking-[-0.02em] ${dock ? "[@media(pointer:coarse)]:hidden" : ""}`}>{title}</span>
         </Glass>
       </div>
       {hint && hintId && <OnceHint id={hintId}>{hint}</OnceHint>}
@@ -1036,7 +1039,10 @@ function WorldsList({ current, pending, onPick, mobile }: { current: WorldId; pe
   const [tapped, setTapped] = useState<WorldId | null>(null);
   const going = tapped ?? pending;
   // (a phone on its side is shorter than the list: there it scrolls inside its own glass, opened on the world that is lit)
-  useEffect(() => document.querySelector('[data-flight="worlds"] .lg-on')?.scrollIntoView({ block: "nearest" }), []);
+  // (in braces: newer browsers return a promise from scrollIntoView, and an effect may only return its clean-up)
+  useEffect(() => {
+    document.querySelector('[data-flight="worlds"] .lg-on')?.scrollIntoView({ block: "nearest" });
+  }, []);
   return (
     <Glass radius={22} panel className={`pointer-events-auto flex max-h-[calc(100dvh-124px)] origin-bottom flex-col gap-0.5 overflow-y-auto overscroll-contain p-1.5 [scrollbar-width:none] ${mobile ? "w-[236px]" : "w-[228px]"}`} initial={{ opacity: 0, y: 14, scale: 0.86 }} animate={GLASS_ON} exit={{ opacity: 0, y: 10, scale: 0.9 }} transition={GLASS_SPRING} data-flight="worlds">
       {WORLD_ORDER.map((id) => {
