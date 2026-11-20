@@ -20,7 +20,9 @@ import { FINALE_ENTRY, FINALE_GATE, FINALE_PATH, FINALE_TERRAIN } from "./seafin
 // enough that 32-bit floats still resolve a quarter of a millimetre.
 
 export type WorldId = "home" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "seafinale" | "funeral" | "kings";
-export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "sea", "seafinale", "funeral", "kings"];
+// (after the gate of Offering: the storm wave of the Finale, out of its curl into the calm of Tranquility, through the
+// grotto between the island's eyes and out of a cave mouth into the night of the Funeral Symphony)
+export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "seafinale", "sea", "funeral", "kings"];
 // Fairy Tale of the Kings: where the two kings stand, and the small lit world they hold between their hands
 export const KINGS = { z: -170, domeY: 70, domeR: 30 };
 export const ORIGIN = new THREE.Vector3(-2500, 0, -2700);
@@ -242,7 +244,7 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // Sonata of the Sea, Finale: a pale warm sky in level bands, ochre and amber; the sun low and straight ahead,
   // behind the great wave, so the water is lit through
   seafinale: {
-    label: "Sonata of the Sea. Finale",
+    label: "Sonata of the Sea: Finale",
     zenith: [0.15, 0.1, 0.05],
     upper: [0.36, 0.26, 0.12],
     horizon: [0.62, 0.47, 0.22],
@@ -782,7 +784,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
   },
   seafinale: {
     id: "seafinale",
-    title: "Jūros sonata. Finale",
+    title: "Sonata of the Sea: Finale",
     year: "1908",
     music: "seafinale",
     place: "sea",
@@ -804,7 +806,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
   },
   funeral: {
     id: "funeral",
-    title: "Laidotuvių simfonija VI",
+    title: "Funeral Symphony VI",
     year: "1903",
     music: "funeral",
     place: "none",
