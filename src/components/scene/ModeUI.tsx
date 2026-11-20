@@ -932,6 +932,40 @@ function WorldsList({ current, onPick, mobile }: { current: WorldId; onPick: (id
 // The flight's controls. On a phone: a stick under the left thumb while you fly it yourself, a throttle under the
 // right, one small pill of switches at the foot, and Land at the top; a drag anywhere else turns the eye. With a
 // mouse: the same switches in one bar. On entering a world its name is shown for a while, quietly.
+// Once, on the first take-off of a visit (remembered in the browser): how to fly, in one quiet line over the
+// middle of the view, gone after a few seconds. With a mouse the keys fly and the mouse only looks.
+const FIRST_KEY = "ag-flown";
+function FirstFlightHint() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    let seen = false;
+    try {
+      seen = window.localStorage.getItem(FIRST_KEY) === "1";
+      window.localStorage.setItem(FIRST_KEY, "1");
+    } catch {
+      /* storage blocked: show it this once */
+    }
+    if (seen) return;
+    const a = window.setTimeout(() => setShow(true), 1400);
+    const b = window.setTimeout(() => setShow(false), 6400);
+    return () => {
+      window.clearTimeout(a);
+      window.clearTimeout(b);
+    };
+  }, []);
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div key="first" className="pointer-events-none absolute inset-x-0 top-[38%] z-30 flex justify-center" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}>
+          <Glass radius={999} lens={false} className="px-4 py-2 text-[13px] font-medium text-white/90">
+            W A S D to fly · drag to look · scroll to zoom
+          </Glass>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => void; mobile: boolean; flying: boolean; onStick: (x: number, y: number) => void }) {
   const world = useWorld();
   const entered = useVoyageTick();
@@ -1118,7 +1152,8 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const chip = (on: boolean) => `lg-btn pointer-events-auto flex h-7 items-center gap-1.5 whitespace-nowrap px-3 text-[12.5px] font-medium ${on ? "lg-on" : "lg-chip text-white/90"}`;
   return (
     <>
-      <TopBar title="Paper plane" hint={guide ? "Following the path · A D to nudge · W S climb and dive · Shift faster, Ctrl slower · drag to look" : "Mouse steers · W S climb and dive · Shift faster, Ctrl slower · drag to look · scroll to zoom"} exitLabel="Land" onExit={onLand} />
+      <TopBar title="Paper plane" hint={guide ? "Following the path · A D to nudge · W S climb and dive · Shift faster, Ctrl slower · drag to look" : "W A S D to fly · Shift faster, Ctrl slower · drag to look · scroll to zoom"} exitLabel="Land" onExit={onLand} />
+      <FirstFlightHint />
       <Bottom>
         <Glass className="pointer-events-auto flex items-center gap-1.5 p-1 pl-4" {...stop}>
           <label className="mr-1 flex items-center gap-2.5">
@@ -1135,7 +1170,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
               aria-valuetext={thr < 0.2 ? "Slow glide" : thr < 0.6 ? "Cruise" : "Fast"}
             />
           </label>
-          <button type="button" aria-pressed={guide} title="The plane flies the path of light through every gate on its own; turn it off to steer with the mouse" className={chip(guide)} onClick={() => setGuide(!guide)}>
+          <button type="button" aria-pressed={guide} title="The plane flies the path of light through every gate on its own; turn it off to fly it yourself with W A S D" className={chip(guide)} onClick={() => setGuide(!guide)}>
             {/* lit while the quiet hand has the plane */}
             {dot}
             Follow the path

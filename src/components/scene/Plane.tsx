@@ -228,7 +228,13 @@ export function Plane({
     if (want.y < floor) want.y = floor;
     if (blend < 1) cam.position.lerpVectors(st.camFrom, want, blend);
     else cam.position.copy(want);
-    st.tmp.copy(st.pos).addScaledVector(st.nose, 2.4);
+    // Once in the air the eye lifts to look ahead rather than down at the paper: it aims well beyond the plane at
+    // a point a few degrees under level, so the plane rides low in the frame with the world and the sky before it
+    // (eased in over the first seconds of the flight; a turned eye keeps its own line).
+    const rise = smooth01((st.t - 0.8) / 2.6) * (1 - lw);
+    const ahead = 2.4 + 6 * rise;
+    st.tmp.copy(st.pos).addScaledVector(st.nose, ahead);
+    st.tmp.y += rise * (0.44 * Math.sqrt(st.zoom) - (dist + ahead) * 0.06);
     // before the kings the eye is lifted to the whole picture, and the lens opens to hold it
     const kv = id === "kings" && !voyage.homing ? kingsView(st.pos.y, st.pos.z - o.z - KINGS.z) : null;
     if (kv) st.tmp.y += (cam.position.y + Math.tan(kv.elev) * Math.hypot(st.tmp.x - cam.position.x, st.tmp.z - cam.position.z) - st.tmp.y) * kv.w;
@@ -345,15 +351,19 @@ export function Plane({
     const stale = !input.keys && performance.now() - (input.moved ?? 0) > 7000;
     // every input is low-passed on its way to the plane (a mouse's jitter, a key's on and off, a quick thumb), so
     // nothing reaches the springs as a step; let go and the stick drifts back to the middle, slower still
-    const inSx = stale ? 0 : input.sx;
-    const inSy = stale ? 0 : input.sy;
+    // With a mouse the keyboard flies the plane and the mouse only looks: the pointer never steers. (The keys' bank
+    // arrives as a full stick, -1 or 1; anything in between is the pointer, and is ignored.) A thumb on the glass
+    // stick (soft) still steers.
+    const kbOnly = !input.soft;
+    const inSx = stale ? 0 : kbOnly && Math.abs(input.sx) !== 1 ? 0 : input.sx;
+    const inSy = stale || kbOnly ? 0 : input.sy;
     st.sx = damp(st.sx, inSx, inSx === 0 ? 2.2 : input.soft ? 5 : 6, dt);
     st.sy = damp(st.sy, inSy, inSy === 0 ? 2.2 : input.soft ? 5 : 6, dt);
     st.climbF = damp(st.climbF, input.climb ?? 0, 4, dt);
     let sx = shape(st.sx);
     let sy = shape(st.sy);
     const climb = st.climbF;
-    const touching = Math.abs(input.sx) > 0.03 || Math.abs(input.sy) > 0.03 || (input.climb ?? 0) !== 0;
+    const touching = Math.abs(inSx) > 0.03 || Math.abs(inSy) > 0.03 || (input.climb ?? 0) !== 0;
     if (touching && !stale && !opts.hands) st.idle = 0;
     else st.idle += dt;
     const want = opts.hands || opts.launching || (voyage.guide && (st.idle > 3.2 || (input.auto && !touching))) ? 1 : 0;
