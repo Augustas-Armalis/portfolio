@@ -138,7 +138,7 @@ export function makeRangeMaterial(rg: Range) {
       ${GLSL_SKY}
       ${GLSL_HOME_AIR}
       void main(){
-        vec3 n = normalize(vN);
+        vec3 n = dot(vN, vN) > 1e-10 ? normalize(vN) : vec3(0.0, 1.0, 0.0);
         if (n.y < 0.0) n = -n;
         // the rock's own grain: small ribs and gullies the mesh is too coarse to carry
         float fq = 14.0 / uTop;

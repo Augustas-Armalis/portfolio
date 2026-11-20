@@ -152,15 +152,17 @@ function buildCliff() {
   // rows: the fine ones, then fractions toward the top edge (one lattice: no cracks)
   const rows: ((i: number) => number)[] = ys.map((y) => (i: number) => Math.min(y, top[i]));
   for (let k = 1; k <= 12; k++) rows.push((i: number) => Math.min(44 + (k / 12) * (top[i] - 44), top[i]));
-  const ids: number[][] = rows.map((row) =>
-    us.map((u, i) => {
-      const y = row(i);
-      return vert(b, u, y, cliffA(u, y), 0);
-    }),
-  );
+  // where rows run into the top edge they share one vertex per column, and squashed quads are left out
+  const topId: (number | undefined)[] = [];
+  const at = (u: number, y: number, i: number) => {
+    if (y >= top[i] - 1e-4) return (topId[i] ??= vert(b, u, top[i], cliffA(u, top[i]), 0));
+    return vert(b, u, y, cliffA(u, y), 0);
+  };
+  const ids: number[][] = rows.map((row) => us.map((u, i) => at(u, row(i), i)));
   for (let j = 0; j < rows.length - 1; j++)
     for (let i = 0; i < us.length - 1; i++) {
       if (top[i] < -4 && top[i + 1] < -4) continue;
+      if (ids[j][i] === ids[j + 1][i] && ids[j][i + 1] === ids[j + 1][i + 1]) continue;
       // the mouth (the rock lip round it covers the cut's ragged edge)
       const cu = (us[i] + us[i + 1]) / 2;
       const cy = (rows[j](i) + rows[j + 1](i)) / 2;
@@ -367,7 +369,8 @@ function makeStoneMaterial() {
       ${GLSL_SKY}
       ${GLSL_HOME_AIR}
       void main(){
-        vec3 n = normalize(vN);
+        // (a squashed triangle has no normal: normalize(0) is NaN and drew as black)
+        vec3 n = dot(vN, vN) > 1e-10 ? normalize(vN) : vec3(0.0, 0.0, -1.0);
         if (!gl_FrontFacing) n = -n;
         float kind = vKind;
         vec3 L = vLoc;
@@ -382,7 +385,10 @@ function makeStoneMaterial() {
         vec3 rock = mix(vec3(0.075, 0.07, 0.085), vec3(0.2, 0.165, 0.135), strata) * (0.75 + 0.5 * grain);
         // out in the daylight the cliff is the pale weathered rock of the ranges seen across the land (as a sheer
         // face turned from the low sun it otherwise read as a black cut-out); in the cave it stays dark
-        rock *= mix(2.4, 1.0, smoothstep(-2.0, 6.0, L.z));
+        // (the cliff face and the lip round the mouth are kind 0: always out in the land's light and air, however far
+        // back the rock leans; only the cave's own walls, floor and carving are inside)
+        float caveIn = kind < 0.5 ? 0.0 : smoothstep(-2.0, 6.0, L.z);
+        rock *= mix(2.4, 1.0, caveIn);
         vec3 alb = rock;
         if (kind > 1.5 && kind < 2.95) {
           // the carved orders: pale stone, cut clean, a little paler outward, worn
@@ -399,7 +405,7 @@ function makeStoneMaterial() {
         vec3 toSrc = normalize(src - L);
         float lam = 0.35 + 0.65 * max(dot(n, toSrc), 0.0);
         // (in the cave the land's coordinates: L.z over 0 is inside; outside only a spill near the mouth)
-        float inside = smoothstep(-2.0, 6.0, L.z);
+        float inside = caveIn;
         float portal = (1.8 / (1.0 + dl * dl / 420.0)) * lam * mix(0.25, 1.0, fromFront);
         float spill = exp(-max(length(L.xy - vec2(0.0, 14.0)) - 18.0, 0.0) / 8.0) * smoothstep(-14.0, 0.0, L.z) * (1.0 - inside);
         float ndl = max(dot(n, uKeyDir), 0.0);
