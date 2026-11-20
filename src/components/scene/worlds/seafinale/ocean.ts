@@ -3,7 +3,7 @@ import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
 import { GLSL_AIR, WORLD_U, noise2, rng } from "../kit";
 import { heightGLSL } from "../voyage";
-import { FINALE_TERRAIN, SWELL_GLSL, WAVE, bodyAt, ridgeN, ridgeZ } from "./shape";
+import { FINALE_TERRAIN, SWELL_GLSL, WAVE, WK, bodyAt, ridgeN, ridgeZ } from "./shape";
 
 // The water of the Finale. One sheet for the whole sea, raised into the great wave by the world's own height
 // field and moved by the swell (both in the vertex shader); over the wave's shoulder a second sheet, the crest,
@@ -17,7 +17,15 @@ const END = /* glsl */ `
 
 // how far the great wave has risen (it stands a third lower when the plane arrives and rears to its full height as
 // it comes: the drawn water is never above the height field the plane flies by)
-export const FINALE_U = { uRise: { value: 1 } };
+export const FINALE_U = {
+  uRise: { value: 1 },
+  // how hard the sea runs (1: as in a fresh breeze; under 1 a quiet sea, over it a storm's)
+  uSwell: { value: 1 },
+  // the end: the crest comes down over the plane (0..1)
+  uCrash: { value: 0 },
+  // how far the storm has come (0 gentle weather .. 1 the height of it)
+  uStorm: { value: 0 },
+};
 
 const WAVE_GLSL = /* glsl */ `
   const float W_BASE = ${WAVE.base.toFixed(1)};
@@ -68,8 +76,8 @@ const LACE_GLSL = /* glsl */ `
 // ---------- the sea, and the wave's face ----------
 export function buildSea(mobile: boolean) {
   const SEG = mobile ? 200 : 330;
-  const INNER = 980;
-  const OUTER = 3300;
+  const INNER = 1560;
+  const OUTER = 4600;
   const warp = (u: number) => {
     const a = Math.abs(u);
     const k = 0.76;
@@ -114,11 +122,12 @@ export function makeSeaMaterial(sign: THREE.Texture) {
       varying vec3 vWorld; varying vec3 vLocal; varying vec3 vN; varying vec3 vW;
       ${heightGLSL(FINALE_TERRAIN, "fieldH")}
       ${SWELL_GLSL}
-      float surf(vec2 p){ float b = (fieldH(p) - ${WAVE.base.toFixed(1)}) * uRise; return b + swellH(p, uTime) * swellDamp(b); }
+      uniform float uSwell;
+      float surf(vec2 p){ float b = (fieldH(p) - ${WAVE.base.toFixed(1)}) * uRise; return b + swellH(p, uTime) * swellDamp(b) * uSwell; }
       void main(){
         vec2 p = position.xz;
         float b = (fieldH(p) - ${WAVE.base.toFixed(1)}) * uRise;
-        float sw = swellH(p, uTime) * swellDamp(b);
+        float sw = swellH(p, uTime) * swellDamp(b) * uSwell;
         float y = b + sw;
         float e = 2.5;
         vec3 n = normalize(vec3(y - surf(p + vec2(e, 0.0)), e, y - surf(p + vec2(0.0, e))));
@@ -172,7 +181,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         float line = vnoise(vec2((s + f * 110.0) * 0.3, up * 2.6 - uTime * 0.1)) * 0.55 + vnoise(vec2((s - f * 40.0) * 0.9, up * 6.0 - uTime * 0.16)) * 0.45;
         col *= 1.0 + (line - 0.5) * 1.2 * onWave * front;
         // under the overhanging crest the face stands in the wave's own shade: umber, as he painted the hollow
-        float hollow = smoothstep(0.5, 0.72, up + (line - 0.5) * 0.16) * (1.0 - smoothstep(0.88, 0.99, up)) * onWave * front * smoothstep(900.0, 700.0, abs(s));
+        float hollow = smoothstep(0.5, 0.72, up + (line - 0.5) * 0.16) * (1.0 - smoothstep(0.88, 0.99, up)) * onWave * front * smoothstep(${(900 * WK).toFixed(1)}, ${(700 * WK).toFixed(1)}, abs(s));
         col = mix(col, vec3(0.062, 0.036, 0.015) * (0.45 + 1.1 * line) * (uSkyCol * 1.05 + uKeyCol * 0.1), hollow * 0.93);
         // the sky in it: strongly at a grazing eye on the open sea, hardly at all on the lit face
         vec3 r = reflect(-V, n); r.y = abs(r.y) + 0.002; r = normalize(r);
@@ -201,7 +210,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         // on the swell: on the crests and streaming down their backs
         float crest = smoothstep(1.6, 4.8, sw + (c0 - 0.8) * 2.4) * (1.0 - onWave) * (0.35 + 0.65 * ragged);
         // the broad band of lace at the wave's foot, where the ships ride
-        float band = smoothstep(2.9, 2.3, f) * smoothstep(1.35, 1.9, f) * smoothstep(1050.0, 600.0, abs(s)) * front * (0.45 + 0.55 * ragged);
+        float band = smoothstep(2.9, 2.3, f) * smoothstep(1.35, 1.9, f) * smoothstep(${(1050 * WK).toFixed(1)}, ${(600 * WK).toFixed(1)}, abs(s)) * front * (0.45 + 0.55 * ragged);
         // drawn up the face in long ragged tongues, thinning as they climb
         vec3 l3 = lace(vec2(s * 0.24, body * 0.24 - uTime * 0.15), uTime * 0.05);
         float tongue = smoothstep(0.52, 0.76, vnoise(vec2(s * 0.02 + up * 2.6 + 2.0, up * 3.4 - uTime * 0.03)) * 0.7 + vnoise(vec2(s * 0.07 - up * 3.0, up * 8.0 - uTime * 0.05)) * 0.3) * smoothstep(0.02, 0.2, up) * (1.0 - smoothstep(0.5, 0.86, up)) * onWave * front;
@@ -217,7 +226,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         vec3 l4 = lace(bp, uTime * 0.1);
         float bead = beads(bp, l4.x) * smoothstep(0.1, 0.26, up) * (1.0 - smoothstep(0.62, 0.84, up)) * onWave * front * (1.0 - smoothstep(90.0, 520.0, dist) * 0.85) * smoothstep(8.0, 36.0, dist);
         // ---- his initials, in beads, on the face (as on the picture) ----
-        vec2 sg = vec2((s - 150.0) / 84.0, (up - 0.36) / 0.125);
+        vec2 sg = vec2((s - 150.0) / 150.0, (up - 0.3) / 0.11);
         float sign = 0.0;
         if (sg.x > 0.0 && sg.x < 1.0 && sg.y > 0.0 && sg.y < 1.0) {
           float m = texture2D(uSign, sg).r;
@@ -283,26 +292,26 @@ function lipAt(v: number): [number, number] {
 }
 export const LIP_FINGERS = TIP_ROW / (LIP.length - 1);
 // how far the fingers hang at a place along the crest (longest where the plane goes out through them)
-const fingerLen = (s: number) => 0.75 + 0.45 * noise2(s * 0.012, 3.3) + 0.9 * Math.exp(-(((s + 635) / 70) ** 2));
+const fingerLen = (s: number) => 0.75 + 0.45 * noise2(s * 0.012, 3.3) + 0.9 * Math.exp(-(((s + 635 * WK) / (70 * WK)) ** 2));
 
 export function buildCrest(mobile: boolean) {
-  const STEP = mobile ? 14 : 7;
+  const STEP = mobile ? 20 : 10;
   const ROWS = mobile ? 26 : 40;
   const pos: number[] = [];
   const uv: number[] = [];
   const idx: number[] = [];
   const tips: { p: THREE.Vector3; n: [number, number]; h: number }[] = [];
   let cols = 0;
-  for (let s = -900; s <= 900; s += STEP, cols++) {
+  for (let s = -900 * WK; s <= 900 * WK; s += STEP, cols++) {
     const n = ridgeN(s);
     const rx = s;
     const rz = ridgeZ(s);
     const hc = bodyAt(rx, rz);
     // where the face is at the shoulder's height: the crest springs from there
     let d = 0;
-    while (d < 400 && bodyAt(rx + n[0] * d, rz + n[1] * d) > 0.82 * hc) d += 2;
+    while (d < 900 && bodyAt(rx + n[0] * d, rz + n[1] * d) > 0.82 * hc) d += 2;
     const rho = d / 0.445;
-    const end = Math.min(1, Math.max(0, (880 - Math.abs(s)) / 200));
+    const end = Math.min(1, Math.max(0, (880 * WK - Math.abs(s)) / (200 * WK)));
     const k = end * end * (3 - 2 * end);
     const fl = fingerLen(s);
     for (let r = 0; r <= ROWS; r++) {
@@ -345,11 +354,15 @@ export function makeCrestMaterial() {
     uniforms: { ...SKY_U, ...WORLD_U, ...FINALE_U },
     vertexShader: /* glsl */ `
       attribute vec4 aUv;
-      uniform float uTime; uniform float uRise;
+      uniform float uTime; uniform float uRise; uniform float uCrash;
       varying vec3 vWorld; varying vec3 vN; varying vec4 vUv;
       void main(){
         vec3 p = position;
         p.y *= uRise;
+        // the end: the whole overhang comes down and forward over whoever is under it
+        float fall = smoothstep(0.3, 1.0, aUv.y) * aUv.w * uCrash;
+        p.y -= fall * aUv.z * 0.55;
+        p.xz += normalize(vec2(-2.0 * ${WAVE.bend.toFixed(6)} * aUv.x, 1.0)) * fall * aUv.z * 0.2;
         // the hanging part is never still: it sways along the crest and breathes up and down
         float hang = smoothstep(0.45, 1.0, aUv.y) * aUv.w;
         p.x += sin(uTime * 0.5 + aUv.x * 0.021) * 5.0 * hang * hang;
@@ -383,9 +396,8 @@ export function makeCrestMaterial() {
         vec3 l1 = lace(vec2(s * 0.06, v * 20.0 - uTime * 0.05), uTime * 0.06);
         vec3 l2 = lace(vec2(s * 0.19 + 5.0, v * 62.0 - uTime * 0.11), uTime * 0.08);
         // (whole cells of the lace are open: a net, not a sieve; none near the shoulder, most at the fingers' ends)
-        float open = smoothstep(0.72, 1.0, v);
-        float hole = step(l1.x, 0.45) * step(l1.y, open * 0.4);
-        if (inF < 0.5 || (hole > 0.5 && edgeD > 2.5)) discard;
+        // (the sheet is whole: no holes torn in it, no specks; the lace is drawn on it, and only the fingers' own outline cuts it)
+        if (inF < 0.5) discard;
         vec3 n = normalize(vN);
         vec3 V = normalize(cameraPosition - vWorld);
         float under = step(dot(n, V), 0.0) * step(0.0, vN.y) + step(0.0, dot(n, V)) * step(vN.y, 0.0);
@@ -489,6 +501,72 @@ export function makeSprayMaterial() {
         vec3 col = mix(vec3(0.98, 0.9, 0.7), vec3(1.0, 0.72, 0.26), vK * 0.7) * (uSkyCol * 0.85 + uKeyCol * (0.3 + 0.9 * toSun));
         col *= 0.8 + 0.4 * smoothstep(0.2, -0.6, c.y);
         gl_FragColor = vec4(applyAir(col, vWorld), body * vA * 0.85);
+        ${END}
+      }`,
+  });
+}
+
+// ---------- the storm's rain ----------
+// Rain as he would have drawn it: long soft slanting strokes, never dots. One open cylinder that goes with the
+// eye; the strokes are noise drawn out long down the sheet and carried down it, faded where a pixel could not
+// hold one, so nothing crawls. How much of it there is follows the storm (FINALE_U.uStorm).
+export function makeRainMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.BackSide,
+    uniforms: { ...SKY_U, ...FINALE_U },
+    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform float uStorm;
+      varying vec2 vUv;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      void main(){
+        float k = smoothstep(0.45, 0.95, uStorm);
+        if (k < 0.004) discard;
+        // metres round the sheet and up it; the strokes lean with the wind
+        float x = vUv.x * 440.0 + vUv.y * 46.0; float y = vUv.y * 170.0;
+        float w = fwidth(x);
+        float keep = 1.0 - smoothstep(0.25, 0.8, w * 1.4);
+        float a1 = smoothstep(0.6, 0.92, vnoise(vec2(x * 1.4, y * 0.045 + uTime * 1.25)));
+        float a2 = smoothstep(0.66, 0.95, vnoise(vec2(x * 0.5 + 9.0, y * 0.02 + uTime * 0.8)));
+        float a = (a1 * 0.5 * keep + a2 * 0.5) * smoothstep(0.0, 0.2, vUv.y) * (1.0 - smoothstep(0.75, 1.0, vUv.y));
+        vec3 col = uHorizon * 1.15 + uSkyCol * 0.5 + 0.03;
+        gl_FragColor = vec4(col, a * k * 0.3);
+        ${END}
+      }`,
+  });
+}
+
+// ---------- the end ----------
+// The crest comes down: foam and light over the whole eye, the lace of the wave itself, growing until nothing
+// else is seen (FINALE_U.uCrash); the cloud between the worlds closes over that. A small shell round the eye.
+export function makeCrashMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    side: THREE.BackSide,
+    uniforms: { ...SKY_U, ...FINALE_U },
+    vertexShader: /* glsl */ `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform float uCrash;
+      varying vec3 vDir;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${LACE_GLSL}
+      void main(){
+        if (uCrash < 0.004) discard;
+        vec3 d = normalize(vDir);
+        // it comes from above and ahead: the top of the view goes first
+        float front = smoothstep(-0.9, 0.7, d.y + (uCrash * 2.2 - 1.2));
+        vec2 q = vec2(atan(d.x, -d.z) * 3.0, d.y * 3.0 + uTime * 0.5 + uCrash * 2.0);
+        vec3 l1 = lace(q * 1.6, uTime * 0.2);
+        float fall = vnoise(vec2(q.x * 5.0, q.y * 0.6 + uTime * 1.2));
+        vec3 foam = W_FOAM * (uSkyCol * 0.8 + uKeyCol * 0.45 + 0.25) * (0.8 + 0.2 * l1.x) * (0.9 + 0.2 * fall);
+        float a = clamp(front * uCrash * 1.3 + uCrash * uCrash * uCrash, 0.0, 1.0);
+        gl_FragColor = vec4(foam, a);
         ${END}
       }`,
   });

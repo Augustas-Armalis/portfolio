@@ -1,15 +1,18 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
-import { Kit, makeTempera, rng, type GroundPalette, type Puff, type V3 } from "./kit";
-import { Birds, GreatSun, PaintedClouds, type Flock, type PaintedCloud } from "./life";
-import { SKY_U } from "../sky";
-import { ORIGIN, WORLDS, voyage } from "./voyage";
+import { Kit, WORLD_U, makeTempera, rng, type GroundPalette, type Puff, type V3 } from "./kit";
+import { Birds, type Flock } from "./life";
+import { greatSunMaterial } from "./sun/life";
+import { useMoment } from "./moments";
+import { makeCloudPaint, paintedCloudGeometry, type PCloud } from "./stars/forms";
+import { SKY_U, airState, mixSky, type SkyState } from "../sky";
+import { ORIGIN, WORLDS, pathOf, voyage } from "./voyage";
 import { useDeepLens } from "./fairy/shared";
-import { FINALE_U, buildCrest, buildSea, buildSpray, makeCrestMaterial, makeSeaMaterial, makeSprayMaterial, signTexture } from "./seafinale/ocean";
+import { FINALE_U, buildCrest, buildSea, buildSpray, makeCrashMaterial, makeCrestMaterial, makeRainMaterial, makeSeaMaterial, makeSprayMaterial, signTexture } from "./seafinale/ocean";
 import { SHIPS, bodyAt, onFace, swellAt, swellDamp } from "./seafinale/shape";
 
 // Sonata of the Sea. Finale (Jūros sonata. Finale, 1908). One colossal green wave rearing over the whole
@@ -23,7 +26,35 @@ import { SHIPS, bodyAt, onFace, swellAt, swellDamp } from "./seafinale/shape";
 // left and along the face, climbing, the crest curling overhead and its fingers hanging between the plane and
 // the open sea; and at the wave's far end goes out through that hanging lace into calm.
 
+// The whole flight is one build: the plane comes out over a quiet sea in gentle weather; far off the water begins
+// to stand up, and it keeps coming, higher and higher, until it is a wall seven hundred metres tall with its crest
+// curling over; as it builds the weather turns: dark cloud rolls in over it, the sea begins to run, rain comes in
+// long slanting strokes, the cloud is lit from within; and at the end, under the curl, the crest comes down on the
+// plane in foam and light, and that is the way on. Everything is driven by how far along its way the plane has
+// come (never back), so the drawn wave is at its full height before the way reaches its face.
 const def = WORLDS.seafinale;
+// the height of the storm: umber-black cloud, a low band of sick gold under it, the wave still lit through from behind
+const STORM = airState({
+  label: "Sonata of the Sea: Finale",
+  zenith: [0.016, 0.015, 0.02],
+  upper: [0.06, 0.052, 0.05],
+  horizon: [0.2, 0.16, 0.09],
+  glow: [0.95, 0.7, 0.3],
+  amb: [0.2, 0.21, 0.17],
+  key: [1.0, 0.84, 0.5],
+  keyI: 1.05,
+  sunAz: -4,
+  sunEl: 10,
+  keyAz: -4,
+  keyEl: 16,
+  cloudLit: [0.3, 0.26, 0.2],
+  cloudShade: [0.06, 0.06, 0.07],
+  night: 0.15,
+  exposure: 0.92,
+  fx: [0.0, 0.3, 0.0, 0],
+});
+const storm = { k: 0, keyK: -1, sky: null as SkyState | null };
+const sm = (x: number, a: number, b: number) => THREE.MathUtils.smoothstep(x, a, b);
 export const FINALE_PAL: GroundPalette = { a: [0.1, 0.2, 0.1], b: [0.2, 0.22, 0.1], c: [0.08, 0.16, 0.1] };
 
 // a small ship as he drew them: a dark hull, a mast, two pale sails with a drawn edge, a pennant
@@ -125,17 +156,22 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       const d = 1700 + r() * 600;
       puffs.push({ p: [Math.cos(a) * d, 10 + r() * 20, 100 + Math.sin(a) * d], size: 280 + r() * 240, a: 0.25 });
     }
-    // the sky's level rows of small rounded cloud, going off to the horizon behind the wave and to either side
-    const clouds: PaintedCloud[] = [];
-    const rows = props.mobile ? 5 : 8;
-    for (let row = 0; row < rows; row++) {
-      const d = 1500 + row * 150;
-      const y = 300 + row * 115 + r() * 30;
-      const per = props.mobile ? 9 : 16;
+    // gentle weather: a few soft painted cumulus far off in level rows (each one soft form, lit on the sun's side)
+    const calm: PCloud[] = [];
+    for (let row = 0; row < (props.mobile ? 3 : 5); row++) {
+      const d = 2300 + row * 420;
+      const per = props.mobile ? 6 : 9;
       for (let i = 0; i < per; i++) {
-        const a = -Math.PI * 0.5 + ((i + r() * 0.7) / per - 0.5) * Math.PI * 1.7;
-        clouds.push({ p: [Math.cos(a) * d, y + r() * 50, -200 + Math.sin(a) * d], w: 130 + r() * 150 + row * 14, seed: r() });
+        const a = -Math.PI * 0.5 + ((i + r() * 0.7) / per - 0.5) * Math.PI * 1.8;
+        calm.push({ p: [Math.cos(a) * d, 520 + row * 190 + r() * 90, -300 + Math.sin(a) * d], w: 260 + r() * 300 + row * 40, seed: r() });
       }
+    }
+    // the storm: a deck of dark cloud, great banks of it, that rolls in over the wave from behind as it rears
+    const deck: PCloud[] = [];
+    for (let i = 0; i < (props.mobile ? 40 : 84); i++) {
+      const x = (r() - 0.5) * 6400;
+      const z = 1900 - r() * 5200;
+      deck.push({ p: [x, 1120 + r() * r() * 620 + Math.abs(x) * 0.03, z], w: 520 + r() * 700, seed: r() });
     }
     // white birds low over the swell, and a skein high over the crest
     const flocks: Flock[] = [
@@ -157,15 +193,45 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       ship: shipGeometry(),
       shipMat: makeTempera({ amb: 1.0, key: 0.45, rim: [0.5, 0.4, 0.16], rimPow: 3, wrap: 0.5 }),
       puffs,
-      clouds,
+      calm: paintedCloudGeometry(calm, [300, 20, 1360]),
+      calmMat: makeCloudPaint({ lit: [1.5, 1.32, 0.98], shade: [1.25, 1.05, 0.8], under: [0.95, 0.84, 0.78], rim: 0.8, amb: 1.6, key: 0.6, air: 0.6, fade: [3600, 5200], near: [200, 600] }),
+      deck: paintedCloudGeometry(deck, [0, 20, 300]),
+      deckMat: makeCloudPaint({ lit: [0.36, 0.31, 0.27], shade: [0.17, 0.155, 0.17], under: [0.075, 0.07, 0.09], rim: 0.5, amb: 1.0, key: 0.35, air: 0.5, fade: [3000, 4300], near: [200, 700] }),
+      rain: new THREE.CylinderGeometry(70, 70, 170, 48, 1, true),
+      rainMat: makeRainMaterial(),
+      sunMat: greatSunMaterial({ size: 0.46, tint: [1, 0.78, 0.34], rays: 26, gain: 0.38 }),
+      crashGeo: new THREE.SphereGeometry(6, 24, 16),
+      crashMat: makeCrashMaterial(),
       flocks,
     };
   }, [props.mobile, props.effects > 0.5]);
   const tmp = useRef({ up: new THREE.Vector3(), fwd: new THREE.Vector3(), right: new THREE.Vector3(), m: new THREE.Matrix4() });
-  // The journey's two events: the wave rears as the plane comes (a third lower at first, full height by the time
-  // the way turns along its face); and once it stands, one ship works her way right up the face to the foam under
-  // the crest, hangs there, and slips back.
-  const ev = useRef({ on: false, rise: 0, crestT: -1 });
+  // The timeline. p: how far along its way the plane has come (0..1, never back).
+  const ev = useRef({ on: false, p: 0, flash: 0 });
+  const deckRef = useRef<THREE.Group>(null);
+  const rainRef = useRef<THREE.Mesh>(null);
+  const crashRef = useRef<THREE.Mesh>(null);
+  // sheet lightning: now and then, once the storm is up, the cloud is lit from within (a moment that comes again)
+  const bolt = useMoment("seafinale", { id: "finale-lightning", after: 14, ease: 0.12, hold: 0.1, out: 0.9, again: 6.5 });
+  useEffect(() => {
+    voyage.skyMod = (sky) => {
+      if (voyage.cur !== "seafinale" || storm.k <= 0.004) return sky;
+      const q = Math.round(storm.k * 120) / 120;
+      if (q !== storm.keyK || !storm.sky) {
+        storm.keyK = q;
+        storm.sky = mixSky(sky, STORM, q * q * (3 - 2 * q));
+      }
+      return storm.sky;
+    };
+    return () => {
+      voyage.skyMod = null;
+      Object.assign(storm, { k: 0, keyK: -1, sky: null });
+      Object.assign(FINALE_U.uRise, { value: 1 });
+      FINALE_U.uSwell.value = 1;
+      FINALE_U.uCrash.value = 0;
+      FINALE_U.uStorm.value = 0;
+    };
+  }, []);
   useFrame(({ camera }) => {
     const e = ev.current;
     if (voyage.cur !== "seafinale") {
@@ -175,23 +241,56 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     const t = SKY_U.uTime.value;
     if (!e.on) {
       e.on = true;
-      e.rise = 0;
-      e.crestT = -1;
+      e.p = 0;
     }
-    const lz = camera.position.z - ORIGIN.z;
-    e.rise = Math.max(e.rise, THREE.MathUtils.smoothstep(600 - lz, 0, 430));
-    const rise = 0.66 + 0.34 * e.rise;
+    // where on its way the eye is: the nearest of the path's own points
+    {
+      const pts = pathOf("seafinale").pts;
+      const x = camera.position.x - ORIGIN.x;
+      const z = camera.position.z - ORIGIN.z;
+      let best = 0;
+      let bd = 1e12;
+      for (let i = 0; i < pts.length; i += 2) {
+        const d = (pts[i].x - x) ** 2 + (pts[i].z - z) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = i;
+        }
+      }
+      if (bd < 400 * 400) e.p = Math.max(e.p, best / (pts.length - 1));
+    }
+    const p = e.p;
+    // the wave: nothing but a long low swell on the horizon, then rearing all the way in; full before the face
+    const rise = 0.035 + 0.965 * Math.pow(sm(p, 0.07, 0.42), 1.5);
+    // the weather: gentle, then turning as the wave stands up, at its height along the face
+    const k = sm(p, 0.1, 0.5);
+    // the end: the crest comes down over the last of the way
+    const crash = sm(p, 0.9, 0.985);
+    storm.k = k;
     FINALE_U.uRise.value = rise;
-    if (e.crestT < 0 && e.rise > 0.9) e.crestT = t;
-    const cu = e.crestT < 0 ? 0 : t - e.crestT;
-    // (up over twenty-five seconds, a hold, and back)
-    const crestK = THREE.MathUtils.smoothstep(cu, 0, 25) * (1 - THREE.MathUtils.smoothstep(cu, 38, 62));
+    FINALE_U.uStorm.value = k;
+    FINALE_U.uSwell.value = 0.4 + 1.5 * k;
+    FINALE_U.uCrash.value = crash;
+    WORLD_U.uFogD.value = def.fog[0] * (1 + 2.2 * k);
+    // the deck of cloud rolls in from behind the wave and comes down a little
+    if (deckRef.current) deckRef.current.position.set(0, 260 * (1 - k), -5600 * (1 - sm(k, 0, 0.85)));
+    // lit from within, softly, and never bright
+    b.deckMat.uniforms.uSelf.value = 0.26 * bolt.k.value * sm(k, 0.5, 0.8);
+    // (the sun goes in behind the weather)
+    b.sunMat.uniforms.uGain.value = 0.26 * (1 - 0.8 * k);
+    const eye: V3 = [camera.position.x - ORIGIN.x, camera.position.y - ORIGIN.y, camera.position.z - ORIGIN.z];
+    rainRef.current?.position.set(eye[0], eye[1] + 20, eye[2]);
+    crashRef.current?.position.set(eye[0], eye[1], eye[2]);
+    const cu = 0;
+    void cu;
+    // one ship works her way right up the face as the wave stands, hangs under the crest, and is thrown back
+    const crestK = sm(p, 0.42, 0.62) * (1 - sm(p, 0.74, 0.9));
     const { up, fwd, right, m } = tmp.current;
     // the ships ride the water that is drawn: lifted and tilted by the swell and by the slope of the wave, each
     // working slowly up the face and slipping back
     const h = (x: number, z: number) => {
       const body = bodyAt(x, z);
-      return body * rise + swellAt(x, z, t) * swellDamp(body * rise);
+      return body * rise + swellAt(x, z, t) * swellDamp(body * rise) * FINALE_U.uSwell.value;
     };
     SHIPS.forEach(([s0, f0, yaw, size], i) => {
       const mesh = ships.current[i];
@@ -211,7 +310,9 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       fwd.crossVectors(up, right).normalize();
       m.makeBasis(fwd, up, right);
       mesh.quaternion.setFromRotationMatrix(m);
-      mesh.rotateX(Math.sin(t * 0.7 + i * 1.3) * 0.07 + 0.1);
+      // (tossed harder as the storm comes up)
+      mesh.rotateX(Math.sin(t * 0.7 + i * 1.3) * (0.07 + 0.2 * k) + 0.1);
+      mesh.rotateZ(Math.sin(t * 0.53 + i * 2.2) * 0.16 * k);
       mesh.position.set(x, y - 0.5 * size, z);
       mesh.scale.setScalar(size);
     });
@@ -219,8 +320,14 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
   return (
     <>
       <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.9, 0.6]} pathGain={0.3} angels={false} marks={false} />
-      <GreatSun size={0.46} tint={[1, 0.78, 0.34]} rays={26} gain={0.38} />
-      <PaintedClouds list={b.clouds} warm={[0.95, 0.8, 0.5]} shade={[0.5, 0.36, 0.2]} hi={[1.3, 1.12, 0.7]} order={-3} />
+      {/* (hung beyond the wave, which is further off than the shared sun stands) */}
+      <mesh material={b.sunMat} frustumCulled={false} renderOrder={-4}>
+        <planeGeometry args={[2, 2]} />
+      </mesh>
+      <mesh geometry={b.calm} material={b.calmMat} frustumCulled={false} renderOrder={-3} />
+      <group ref={deckRef}>
+        <mesh geometry={b.deck} material={b.deckMat} frustumCulled={false} renderOrder={-3} />
+      </group>
       <mesh geometry={b.sea} material={b.seaMat} frustumCulled={false} renderOrder={-4} />
       <mesh geometry={b.crest} material={b.crestMat} />
       <points geometry={b.spray} material={b.sprayMat} renderOrder={4} />
@@ -236,6 +343,8 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       ))}
       <Birds flocks={b.flocks} tint={[0.95, 0.9, 0.78]} seed={8} lit />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
+      <mesh ref={rainRef} geometry={b.rain} material={b.rainMat} frustumCulled={false} renderOrder={8} />
+      <mesh ref={crashRef} geometry={b.crashGeo} material={b.crashMat} frustumCulled={false} renderOrder={30} />
     </>
   );
 }
