@@ -99,12 +99,12 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // gold round every edge and its rays pour through them
   sun: {
     label: "Sonata of the Sun",
-    zenith: [0.33, 0.36, 0.22],
-    upper: [0.47, 0.44, 0.19],
-    horizon: [0.66, 0.53, 0.2],
-    glow: [1.0, 0.7, 0.24],
-    amb: [0.4, 0.44, 0.5],
-    key: [1.0, 0.8, 0.46],
+    zenith: [0.3, 0.35, 0.36],
+    upper: [0.56, 0.5, 0.27],
+    horizon: [0.72, 0.56, 0.22],
+    glow: [1.0, 0.72, 0.26],
+    amb: [0.42, 0.44, 0.56],
+    key: [1.0, 0.82, 0.5],
     keyI: 2.1,
     sunAz: 12,
     sunEl: 13,
@@ -113,7 +113,7 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
     cloudLit: [0.7, 0.6, 0.3],
     cloudShade: [0.4, 0.4, 0.26],
     night: 0,
-    exposure: 0.95,
+    exposure: 0.86,
     fx: [0.0, 0.55, 0.0, 0],
   },
   // Sonata of the Stars: a deep blue-green night; the light is gold and white, and comes from the pyramid's point

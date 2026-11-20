@@ -502,7 +502,7 @@ export default function RexWorld({ props }: { props: WorldProps }) {
       sky: sk.build(),
       skyHalos,
       skyGlows,
-      clouds: softGeometry(clouds, props.mobile ? 1 : 2),
+      clouds: softGeometry(clouds, 1),
       cloudMat: makeSoftMaterial({ shade: [0.62, 0.56, 0.8], under: [0.5, 0.44, 0.62], rim: 2.2, dab: 1.4, amb: 1.5, key: 0.9, flat: 0.25, sway: 3, fade: [1900, 2900], soft: 1 }),
       windows,
       windowMat: makePoints({ a: [1, 0.72, 0.36], b: [1, 0.86, 0.6], scale: 420, gain: 1.6, max: 6 }),

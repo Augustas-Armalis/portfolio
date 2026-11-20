@@ -122,7 +122,7 @@ export function makeSoftMaterial(o: { shade?: V3; under?: V3; rim?: number; dab?
 // `long`: drawn out into a band of many small lobes, as he drew cloud in the Sonatas
 export function cumulus(out: Soft[], p: V3, s: number, col: V3, r: () => number, o: { lobes?: number; yaw?: number; glow?: number; long?: number; sy?: number } = {}) {
   const long = o.long ?? 1;
-  const n = o.lobes ?? Math.round((5 + Math.floor(r() * 4)) * (0.5 + 0.5 * long));
+  const n = o.lobes ?? Math.round((5 + Math.floor(r() * 4)) * Math.max(1, long * 0.9));
   const yaw = o.yaw ?? r() * Math.PI;
   const seed = r();
   const c = Math.cos(yaw);
@@ -132,7 +132,7 @@ export function cumulus(out: Soft[], p: V3, s: number, col: V3, r: () => number,
     const top = i >= low;
     const u = (top ? (r() - 0.5) * 1.2 : (i / (low - 1) - 0.5) * 2.2 + (r() - 0.5) * 0.3) * long;
     const w = (r() - 0.5) * 0.7;
-    const rad = s * (top ? 0.4 + r() * 0.2 : 0.48 + r() * 0.3) * (1 - (0.22 * Math.abs(u)) / long);
+    const rad = s * (top ? 0.42 + r() * 0.22 : 0.58 + r() * 0.3) * (1 - (0.22 * Math.abs(u)) / long);
     const y = top ? s * (0.36 + r() * 0.24) : s * (r() - 0.5) * 0.12;
     const k = 0.92 + r() * 0.16;
     out.push({ p: [p[0] + (c * u + sn * w) * s, p[1] + y, p[2] + (-sn * u + c * w) * s], r: rad, col: [col[0] * k, col[1] * k, col[2] * k], seed, sy: o.sy ?? 0.82, glow: o.glow });
