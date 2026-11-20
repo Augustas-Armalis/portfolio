@@ -20,14 +20,18 @@ export const BOOT = {
   markH: 42,
   markW: 34,
   stroke: 4.2,
-  sunR: 19,
-  sunY: -22,
-  gap: 6,
-  lineH: 5.6,
-  lineHalf: 29.5,
-  barY: 46,
-  barW: 156,
-  barH: 4,
+  // a Mac starting up: the logo 84px tall at the very centre, and 60px under it a 200 by 3 bar
+  // (Login.tsx BOOT_UI holds the same numbers for the restart screen)
+  logoH: 84,
+  // the half-sun, where the Apple glyph does not exist: the same drawing, the size of the logo's box
+  sunR: 34.2,
+  sunY: 6.7,
+  gap: 10.8,
+  lineH: 10.1,
+  lineHalf: 53.1,
+  barY: 103.5,
+  barW: 200,
+  barH: 3,
 };
 
 // Monotonic seconds. R3F resets its clock when the frameloop is paused and

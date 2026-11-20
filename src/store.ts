@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { wallpapers, type AppId, type UserId } from "@/content";
 
+// "room": the 3D desk. "login": the OS is on the display, either its lock screen or its desktop (isUp says which).
+// The OS never sets "os": going from the lock screen to the desktop is the OS's own move, on one screen, so nothing
+// outside it is told to swap pages.
 export type Phase = "room" | "login" | "os";
 export type Win = { id: AppId; z: number; min: boolean; max: boolean };
 type Origin = { x: number; y: number; w: number; h: number };
@@ -25,6 +28,8 @@ type OS = {
   // power states
   sleeping: boolean;
   restarting: boolean;
+  // when the restart began (ms): the boot frame runs on this clock, whichever screen is under it
+  restartAt: number;
   locked: boolean;
   // how the desktop was reached: from the lock screen (its face dissolves over the desktop) or straight from the intro
   entry: "lock" | "boot";
@@ -109,6 +114,7 @@ export const useOS = create<OS>((set, get) => ({
   seamless: false,
   sleeping: false,
   restarting: false,
+  restartAt: 0,
   locked: false,
   entry: "boot",
   introOff: false,
@@ -162,15 +168,16 @@ export const useOS = create<OS>((set, get) => ({
     const { locked, user, phase } = get();
     const entry = phase === "login" ? "lock" : "boot";
     // unlocking brings the windows back as they were
-    if (locked && user) return set({ phase: "os", locked: false, entry });
-    set({ user: "engineer", phase: "os", locked: false, entry, phoneApp: null, topZ: 11, windows: firstWindows() });
+    if (locked && user) return set({ phase: "login", locked: false, entry });
+    set({ user: "engineer", phase: "login", locked: false, entry, phoneApp: null, topZ: 11, windows: firstWindows() });
   },
-  lockScreen: () => set({ phase: "login", locked: true, palette: false, phoneApp: null, seamless: false }),
+  lockScreen: () => set({ phase: "login", locked: true, palette: false, overlay: null, phoneApp: null, seamless: false }),
   sleep: (on) => set({ sleeping: on }),
   restart: () => {
-    set({ restarting: true, user: null, windows: [], phoneApp: null, palette: false, playing: null, locked: false, seamless: false });
-    window.setTimeout(() => set({ phase: "login" }), 900);
-    window.setTimeout(() => set({ restarting: false }), 2600);
+    // black first (250ms), then the session ends under it; the windows are only dropped once nothing can be seen
+    set({ restarting: true, restartAt: Date.now(), palette: false, playing: null, overlay: null });
+    window.setTimeout(() => set({ user: null, windows: [], phoneApp: null, locked: false, seamless: false, phase: "login" }), 500);
+    window.setTimeout(() => set({ restarting: false }), 3300);
   },
   shutdown: () =>
     set({ user: null, phase: "room", windows: [], phoneApp: null, palette: false, playing: null, seamless: false, locked: false, introOff: true }),
@@ -214,6 +221,9 @@ export const useOS = create<OS>((set, get) => ({
   openPhoneApp: (id, origin) => set(origin ? { phoneApp: id, phoneOrigin: origin } : { phoneApp: id }),
   setWallpaper: (i) => set({ wallpaper: i }),
 }));
+
+// The session is up: signed in and not locked (the desktop on a Mac, the home screen on a phone).
+export const isUp = (s: { phase: Phase; user: UserId | null; locked: boolean }) => s.phase !== "room" && !!s.user && !s.locked;
 
 // The app that is focused right now (top of the stack, not minimised).
 export function focusedApp(windows: Win[]): AppId | null {

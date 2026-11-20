@@ -55,6 +55,7 @@ export const FLIGHT_TRACKS: Record<string, FlightTrack> = {
   paradise: { part: "andante", gain: 0.92 },
   gate: { part: "allegro", gain: 0.85 }, // the Allegro is the loudest of the three: held back a little
   sea: { part: "allegro", gain: 0.8 },
+  seafinale: { part: "allegro", gain: 0.9 }, // the storm of the Finale: the Allegro at its fullest
   funeral: { part: "andante", gain: 0.62 }, // the procession: the Andante from far off
   kings: { part: "andante", gain: 0.8 },
   home: { part: "home", gain: 0.9 },
