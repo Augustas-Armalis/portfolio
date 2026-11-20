@@ -297,10 +297,11 @@ function PagedReader({ book, ch, setCh, start, onPos, onClose }: { book: Book; c
       transition={{ type: "spring", bounce: 0, duration: 0.42 }}
       className="fixed inset-0 z-[70] flex flex-col bg-white"
     >
-      <div className="flex h-[calc(env(safe-area-inset-top)+100px)] shrink-0 items-end justify-between px-4 pb-2">
-        <span className="text-[13px] font-semibold text-ink-3">{c.title}</span>
-        <button type="button" onClick={onClose} aria-label="Close book" data-glass="" className={`${glass("btn")} flex h-9 w-9 items-center justify-center rounded-full text-[#3C3C43]/75`}>
-          <X size={18} className="bold" />
+      {/* the same row as every app's Close: 44pt under the status bar */}
+      <div className="flex h-[calc(var(--phone-top)+52px)] shrink-0 items-center justify-between gap-3 px-4 pb-1 pt-[calc(var(--phone-top)+4px)]">
+        <span className="min-w-0 truncate text-[13px] font-semibold text-ink-3">{c.title}</span>
+        <button type="button" onClick={onClose} aria-label="Close book" data-glass="" className={`${glass("btn")} glass-press flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#3C3C43]/75`}>
+          <X size={20} className="bold" />
         </button>
       </div>
       <div
@@ -322,7 +323,7 @@ function PagedReader({ book, ch, setCh, start, onPos, onClose }: { book: Book; c
           <ChapterBody c={c} />
         </article>
       </div>
-      <div className="flex h-[54px] shrink-0 items-start justify-center pt-2 text-[12px] tabular-nums text-ink-3">
+      <div className="flex h-[calc(var(--phone-bottom)+20px)] shrink-0 items-start justify-center pt-2 text-[12px] tabular-nums text-ink-3">
         {page + 1} of {pages}
       </div>
     </motion.div>

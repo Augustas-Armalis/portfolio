@@ -24,14 +24,15 @@ function CardFace({ it, big, open }: { it: StoryItem; big?: boolean; open?: bool
       </motion.div>
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgb(0_0_0/0.42)_0%,rgb(0_0_0/0.08)_38%,rgb(0_0_0/0)_55%,rgb(0_0_0/0.5)_100%)]" />
       {shot && (
-        <div className={`absolute inset-x-0 bottom-0 flex justify-center ${CROP[storyImage(it)] ? "items-center pb-[6%]" : "items-start"} ${open ? (compact ? "top-[40%]" : "top-[190px]") : "top-[38%]"}`}>
+        <div className={`absolute inset-x-0 bottom-0 flex justify-center ${CROP[storyImage(it)] ? "items-center pb-[6%]" : "items-start"} ${open ? (compact ? "top-[calc(var(--phone-top)+172px)]" : "top-[190px]") : "top-[38%]"}`}>
           <Squircle radius={16} className="w-[84%] overflow-hidden shadow-[0_24px_60px_-20px_rgb(0_0_0/0.7),0_0_0_0.5px_rgb(255_255_255/0.2)]">
             <ShotImg src={storyImage(it)} alt="" draggable={false} />
           </Squircle>
         </div>
       )}
-      {/* in a window the headline starts under the traffic lights */}
-      <motion.div layoutId={`head-${it.key}`} className={`absolute inset-x-0 top-0 ${pad} ${open ? (compact ? "pt-[calc(env(safe-area-inset-top)+64px)]" : "pt-[56px]") : ""}`}>
+      {/* in a window the headline starts under the traffic lights; on the phone the picture runs to the top edge and
+          the headline starts under the status bar and the Close row */}
+      <motion.div layoutId={`head-${it.key}`} className={`absolute inset-x-0 top-0 ${pad} ${open ? (compact ? "pt-[calc(var(--phone-top)+60px)]" : "pt-[56px]") : ""}`}>
         <div className="eyebrow text-white/75">{it.eyebrow}</div>
         <div className={`mt-1 max-w-[18ch] font-bold leading-[1.05] tracking-[-0.025em] text-white [text-wrap:balance] ${open ? (compact ? "text-[34px]" : "text-[40px]") : big ? "text-[34px]" : "text-[26px]"}`}>
           {it.p.name}
@@ -75,7 +76,7 @@ function Story({ it, standalone }: { it: StoryItem; standalone?: boolean }) {
   const pad = compact ? "px-5" : "px-10 @max-[559px]:px-6";
   return (
     <article className="@container bg-white pb-12">
-      <div data-drag={standalone && !compact ? "" : undefined} className={`relative w-full overflow-hidden ${compact ? "aspect-[4/5]" : "h-[420px]"}`}>
+      <div data-drag={standalone && !compact ? "" : undefined} className={`relative w-full overflow-hidden ${compact ? "h-[calc(125vw+var(--phone-top))]" : "h-[420px]"}`}>
         <CardFace it={it} big open />
       </div>
       <div className={`${pad} flex items-center gap-3.5 border-b border-black/[0.08] py-5`}>
@@ -442,11 +443,11 @@ function LiveSite({ it }: { it: StoryItem }) {
   );
   if (compact)
     return (
-      <div className="fixed inset-x-0 bottom-0 top-[calc(env(safe-area-inset-top)+108px)] flex flex-col">
+      <div className="fixed inset-x-0 bottom-0 top-[calc(var(--phone-top)+52px)] flex flex-col">
         {/* a navigation row of its own, so the close button never sits on the site's header */}
-        <div className="t-headline absolute inset-x-16 -top-[50px] flex h-11 items-center justify-center truncate text-ink">{it.p.name}</div>
+        <div className="t-headline absolute inset-x-[68px] -top-12 flex h-11 items-center justify-center truncate text-ink">{it.p.name}</div>
         {frame}
-        <div data-glass="" className={`${glass("pop")} absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+36px)] flex h-12 items-center gap-1 rounded-[20px] px-1.5`}>
+        <div data-glass="" className={`${glass("pop")} absolute inset-x-3 bottom-[calc(var(--phone-bottom)+2px)] flex h-12 items-center gap-1 rounded-[20px] px-1.5`}>
           <Btn variant="plain" size="md" iconOnly label="Info" onClick={() => setInfo(true)} icon={<Info size={18} />} />
           <span className="t-sub min-w-0 flex-1 truncate text-center font-medium text-ink">{domain}</span>
           <Btn variant="plain" size="md" iconOnly label="Open in Safari" href={href} icon={<ArrowUpRight size={18} />} />
@@ -465,7 +466,7 @@ function LiveSite({ it }: { it: StoryItem }) {
                 dragConstraints={{ top: 0, bottom: 0 }}
                 dragElastic={{ top: 0, bottom: 0.6 }}
                 onDragEnd={(_, i) => (i.offset.y > 90 || i.velocity.y > 600) && setInfo(false)}
-                className="sq-panel fixed inset-x-0 bottom-0 z-[51] max-h-[75%] overflow-auto rounded-t-[28px] bg-[var(--bg-elevated)] px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-3"
+                className="sq-panel fixed inset-x-0 bottom-0 z-[51] max-h-[75%] overflow-auto rounded-t-[28px] bg-[var(--bg-elevated)] px-5 pb-[calc(var(--phone-bottom)-10px)] pt-3"
               >
                 <div className="mx-auto mb-4 h-[5px] w-9 rounded-full bg-[var(--fill)]" />
                 <Inspector it={it} />

@@ -325,7 +325,7 @@ export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[
             transition={{ duration: 0.16 }}
             className="fixed inset-0 z-[2400] flex flex-col bg-black"
           >
-            <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={onClose} icon={<X size={17} className="bold" />} className="absolute right-4 top-[calc(env(safe-area-inset-top)+58px)] z-10 !h-11 !w-11" />
+            <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={onClose} icon={<X size={17} className="bold" />} className="absolute right-4 top-[calc(var(--phone-top)+4px)] z-10 !h-11 !w-11" />
             <motion.div
               drag={many && !zoomed ? "x" : false}
               dragConstraints={{ left: 0, right: 0 }}
@@ -339,7 +339,7 @@ export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[
             >
               {it.node ?? (it.src && <ZoomImage key={it.src} src={it.src} alt={it.title} onZoom={setZoomed} />)}
             </motion.div>
-            <div className="pb-[calc(env(safe-area-inset-bottom)+44px)] pt-3 text-center text-[15px] font-semibold text-white">
+            <div className="pb-[calc(var(--phone-bottom)+10px)] pt-3 text-center text-[15px] font-semibold text-white">
               {it.title}
               {many && <span className="ml-2 font-normal text-white/50">{`${index + 1} of ${items.length}`}</span>}
             </div>
@@ -1242,7 +1242,7 @@ export function TabBar<T extends string>({ id, value, onChange, items }: { id: s
     <nav
       aria-label="Sections"
       data-glass=""
-      className="glass glass-pop fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+36px)] z-[30] flex h-[60px] items-stretch rounded-full p-1"
+      className="glass glass-pop fixed inset-x-3 bottom-[calc(var(--phone-bottom)+2px)] z-[30] flex h-[60px] items-stretch rounded-full p-1"
     >
       <GlassThumb index={items.findIndex((it) => it.value === value)} className="inset-y-1 rounded-full bg-[var(--fill)]" />
       {items.map((it) => {

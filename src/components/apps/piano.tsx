@@ -121,7 +121,7 @@ export function PianoApp() {
 
   if (compact)
     return (
-      <div className="flex flex-col" style={{ height: "calc(100dvh - env(safe-area-inset-top, 0px) - 160px)" }}>
+      <div className="flex flex-col" style={{ height: "calc(100dvh - var(--phone-top) - var(--phone-bottom) - 72px)" }}>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
           <div className="text-[72px] font-semibold leading-none tracking-[-0.03em] tabular-nums text-ink" aria-live="polite">
             {last !== null ? noteName(last) : "♪"}

@@ -292,7 +292,7 @@ export function Terminal() {
       </div>
       {/* on the phone the commands are one tap away, above the home indicator */}
       {compact && (
-        <div data-glass="" className="glass glass-btn-dark no-scrollbar fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+36px)] z-[30] flex h-[52px] items-center gap-1.5 overflow-x-auto overscroll-contain rounded-full px-2">
+        <div data-glass="" className="glass glass-btn-dark no-scrollbar fixed inset-x-3 bottom-[calc(var(--phone-bottom)+2px)] z-[30] flex h-[52px] items-center gap-1.5 overflow-x-auto overscroll-contain rounded-full px-2">
           {["help", "whoami", "ls", "open projects", "open records", "sound", "clear"].map((c) => (
             <button
               type="button"

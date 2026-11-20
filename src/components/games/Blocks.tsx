@@ -188,9 +188,11 @@ export default function Blocks({ compact = false }: { compact?: boolean }) {
   };
 
   // Everything sits above the iOS home indicator on touch devices.
-  const hotbarBottom = touch ? "calc(env(safe-area-inset-bottom, 0px) + 40px)" : "16px";
-  const controlsBottom = "calc(env(safe-area-inset-bottom, 0px) + 108px)";
-  const nameBottom = touch ? "calc(env(safe-area-inset-bottom, 0px) + 104px)" : "80px";
+  // (on the phone that strip is --phone-bottom; a touch screen with a desktop window has only the safe area)
+  const indicator = "var(--phone-bottom, calc(env(safe-area-inset-bottom, 0px) + 34px))";
+  const hotbarBottom = touch ? `calc(${indicator} + 6px)` : "16px";
+  const controlsBottom = `calc(${indicator} + 74px)`;
+  const nameBottom = touch ? `calc(${indicator} + 70px)` : "80px";
 
   return (
     <div
@@ -253,7 +255,7 @@ export default function Blocks({ compact = false }: { compact?: boolean }) {
             aria-label="Pause"
             onClick={() => gameRef.current?.pause()}
             className={`absolute z-20 flex h-9 w-9 items-center justify-center gap-[4px] rounded-full bg-black/35 backdrop-blur-xl transition-opacity duration-200 active:bg-black/50 ${GLASS_RING} ${
-              compact ? "left-4 top-[calc(env(safe-area-inset-top,0px)+60px)]" : "right-3 top-3"
+              compact ? "left-4 top-[calc(var(--phone-top)+8px)]" : "right-3 top-3"
             } ${playing ? "opacity-100" : "pointer-events-none opacity-0"}`}
           >
             <span className="h-3 w-[3px] rounded-full bg-white/90" />

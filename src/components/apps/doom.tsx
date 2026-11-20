@@ -159,14 +159,14 @@ export function Doom() {
 
   if (compact)
     return (
-      <div className="on-dark fixed inset-0 flex flex-col bg-black pt-[calc(env(safe-area-inset-top)+110px)]">
+      <div className="on-dark fixed inset-0 flex flex-col bg-black pt-[calc(var(--phone-top)+56px)]">
         {/* the screen: 4:3 like the original, full width */}
         <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-black">
           <div ref={ref} className="jsdos-host absolute inset-0" />
           {status}
         </div>
         {started && (
-          <div className="relative flex min-h-0 flex-1 flex-col justify-end px-5 pb-[calc(env(safe-area-inset-bottom)+48px)]">
+          <div className="relative flex min-h-0 flex-1 flex-col justify-end px-5 pb-[calc(var(--phone-bottom)+14px)]">
             <div className="mb-auto flex justify-center gap-2 pt-4">
               {(
                 [

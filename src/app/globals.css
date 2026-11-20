@@ -304,6 +304,37 @@ input:focus-visible {
   outline: none;
 }
 
+/* The phone's insets: the one place that knows about the status bar, the island and the home indicator.
+   --phone-top is where a screen's own content may begin: its navigation row (Close, Back, the title) starts 4px
+   under it. In a desktop window the phone draws a status bar of its own, 54px. On a real touch phone the bar is
+   the system's: the safe area and a little air (in a browser tab the safe area is 0 and the browser's bar is
+   above the page; on the home screen it is the notch), and one row more while our pill for live activity shows.
+   --phone-bottom is the home indicator's strip: bars float above it, scrolling ends above it.
+   Nothing else on the phone reads env(safe-area-inset-*) or carries a status bar height of its own. */
+@property --phone-top {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+.phone-root {
+  --phone-top: 54px;
+  --phone-island: 11px;
+  --phone-bottom: calc(max(8px, env(safe-area-inset-bottom, 0px)) + 26px);
+  transition: --phone-top 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.phone-root[data-real="1"] {
+  --phone-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  --phone-island: calc(env(safe-area-inset-top, 0px) + 6px);
+}
+.phone-root[data-real="1"][data-pill="1"] {
+  --phone-top: calc(env(safe-area-inset-top, 0px) + 52px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone-root {
+    transition: none;
+  }
+}
+
 /* iOS nav bar material: the strip under the status bar and the Dynamic Island once content scrolls under it */
 .ios-bar {
   --g-fill: rgb(249 249 251 / 0.78);

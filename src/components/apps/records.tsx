@@ -95,7 +95,7 @@ function NowPlaying({ compact }: { compact: boolean }) {
   return (
     <div className="relative flex h-full flex-col overflow-hidden text-white" style={compact ? undefined : { containerType: "size" }}>
       {compact && <MusicBackdrop />}
-      <div className={`relative flex flex-1 flex-col ${compact ? "px-7 pb-10 pt-[calc(env(safe-area-inset-top)+70px)]" : "justify-center px-10 py-8"}`}>
+      <div className={`relative flex flex-1 flex-col ${compact ? "px-7 pb-10 pt-[calc(var(--phone-top)+18px)]" : "justify-center px-10 py-8"}`}>
         <motion.img
           key={lead.id}
           src={lead.cover}
@@ -284,7 +284,7 @@ export function Records() {
         layoutId="np"
         onClick={() => setFull(true)}
         data-glass=""
-        className={`${glass("pop")} fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+40px)] z-[30] flex h-14 items-center gap-3 rounded-[20px] px-2 text-left`}
+        className={`${glass("pop")} fixed inset-x-3 bottom-[calc(var(--phone-bottom)+6px)] z-[30] flex h-14 items-center gap-3 rounded-[20px] px-2 text-left`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={(cur ?? tracks[0]).cover} alt="" className="h-10 w-10 rounded-[10px] object-cover" />
@@ -315,14 +315,14 @@ export function Records() {
             onDragEnd={(_, info) => (info.offset.y > 120 || info.velocity.y > 700) && setFull(false)}
             className="fixed inset-0 z-[45] overflow-hidden rounded-t-[28px]"
           >
-            <span className="absolute left-1/2 top-[calc(env(safe-area-inset-top)+52px)] z-10 h-[5px] w-9 -translate-x-1/2 rounded-full bg-white/40" />
+            <span className="absolute left-1/2 top-[var(--phone-top)] z-10 h-[5px] w-9 -translate-x-1/2 rounded-full bg-white/40" />
             <NowPlaying compact />
             <button
               type="button"
               aria-label="Close Now Playing"
               onClick={() => setFull(false)}
               data-glass=""
-              className={`${glass("btn-dark")} glass-press absolute bottom-[calc(env(safe-area-inset-bottom)+40px)] left-1/2 z-10 -ml-[22px] flex h-11 w-11 items-center justify-center rounded-full text-white/90`}
+              className={`${glass("btn-dark")} glass-press absolute bottom-[calc(var(--phone-bottom)+6px)] left-1/2 z-10 -ml-[22px] flex h-11 w-11 items-center justify-center rounded-full text-white/90`}
             >
               <ChevronLeft size={22} strokeWidth={2.4} className="-rotate-90" />
             </button>

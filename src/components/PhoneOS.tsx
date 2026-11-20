@@ -48,7 +48,7 @@ function Island({ real }: { real: boolean }) {
   return (
     // on a real phone there is a real island above this: ours is only a pill that appears, under the safe area,
     // while something is going on (music, a copied address)
-    <div className={`pointer-events-none absolute inset-x-0 z-[90] flex justify-center ${real ? "top-[calc(env(safe-area-inset-top)+6px)]" : "top-[max(11px,env(safe-area-inset-top))]"}`} data-island={mode}>
+    <div className={`pointer-events-none absolute inset-x-0 z-[90] flex justify-center top-[var(--phone-island)]`} data-island={mode}>
       <motion.div
         initial={false}
         animate={{ width: size[0], height: size[1], borderRadius: size[2], opacity: real && mode === "idle" ? 0 : 1, scale: real && mode === "idle" ? 0.6 : 1 }}
@@ -124,7 +124,7 @@ function StatusBar({ light }: { light?: boolean }) {
   const time = useClock(false);
   const c = light ? "text-white" : "text-ink";
   return (
-    <div className={`pointer-events-none absolute inset-x-0 top-0 z-[80] flex h-[54px] items-center pt-[max(4px,var(--sat))] text-[17px] font-semibold tracking-[-0.02em] tabular-nums ${c}`}>
+    <div className={`pointer-events-none absolute inset-x-0 top-0 z-[80] flex h-[var(--phone-top)] items-center pt-1 text-[17px] font-semibold tracking-[-0.02em] tabular-nums ${c}`}>
       {/* the time and the icons are each centred in the "ears" either side of the Dynamic Island */}
       <span className="flex flex-1 justify-center pl-3">{time}</span>
       <span className="w-[126px]" />
@@ -181,12 +181,12 @@ function Lock({ onPower }: { onPower: () => void }) {
         initial={{ opacity: 0, y: -10, filter: "blur(8px)" }}
         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
         transition={{ duration: 0.7, ease: EASE_OUT, delay: seamless ? 0.35 : 0.2 }}
-        className="relative mt-[calc(var(--sat)+84px)] text-center [text-shadow:0_1px_12px_rgb(0_0_0/0.25)]"
+        className="relative mt-[calc(var(--phone-top)+30px)] text-center [text-shadow:0_1px_12px_rgb(0_0_0/0.25)]"
       >
         <div className="text-[20px] font-medium leading-6 tracking-[-0.01em] text-white/85">{date || "\u00a0"}</div>
         <div className="mt-1 min-h-[96px] text-[96px] font-light leading-none tracking-[-0.05em] tabular-nums text-white/95">{time}</div>
       </motion.div>
-      <div className="relative mt-auto flex w-full flex-col items-center px-4 pb-[max(10px,env(safe-area-inset-bottom))]">
+      <div className="relative mt-auto flex w-full flex-col items-center px-4 pb-[calc(var(--phone-bottom)-24px)]">
         {/* lock screen widgets, at the bottom like iOS 26: what he's working on, and the studio */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -601,7 +601,7 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
   };
   // (from inside a folder its own tile opens the app itself: the Files-style view)
   const openFromFolder: Open = (id, o) => onOpen(id, o);
-  const pageCls = "flex h-full shrink-0 flex-col gap-[14px] px-[27px] pt-[calc(var(--sat)+64px)]";
+  const pageCls = "flex h-full shrink-0 flex-col gap-[14px] px-[27px] pt-[calc(var(--phone-top)+10px)]";
   return (
     <div className="wp-photo absolute inset-0 flex touch-none flex-col overflow-hidden" style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}>
       {wp.src.startsWith("live:") && <LiveWallpaper />}
@@ -652,7 +652,7 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
           <TimelineWidget onOpen={open} />
         </div>
       </motion.div>
-      <div className="relative px-[13px] pb-[max(10px,env(safe-area-inset-bottom))]">
+      <div className="relative px-[13px] pb-[calc(var(--phone-bottom)-24px)]">
         <div className="flex justify-center gap-[9px] py-3" role="tablist" aria-label="Home screen pages">
           {Array.from({ length: PAGES }, (_, i) => (
             <button key={i} type="button" role="tab" aria-selected={page === i} aria-label={`Page ${i + 1}`} onClick={() => go(i)} className="grid h-5 w-4 place-items-center" data-page-dot={i}>
@@ -677,7 +677,7 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
 function PowerSheet({ onClose }: { onClose: () => void }) {
   const shutdown = useOS((s) => s.shutdown);
   return (
-    <motion.div className="absolute inset-0 z-[95] flex flex-col justify-end px-3 pb-[max(14px,env(safe-area-inset-bottom))]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }} onClick={onClose} role="dialog" aria-label="Power" data-power-sheet="">
+    <motion.div className="absolute inset-0 z-[95] flex flex-col justify-end px-3 pb-[calc(var(--phone-bottom)-20px)]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }} onClick={onClose} role="dialog" aria-label="Power" data-power-sheet="">
       <div aria-hidden className="absolute inset-0 bg-black/45 backdrop-blur-[18px]" />
       <motion.div className="relative flex flex-col gap-2" initial={{ y: 40 }} animate={{ y: 0 }} exit={{ y: 30 }} transition={{ type: "spring", bounce: 0.12, duration: 0.42 }} onClick={(e) => e.stopPropagation()}>
         <div data-glass="" className={`${glass("widget-dark")} flex flex-col items-center rounded-[30px] px-6 pb-3 pt-6 text-center text-white`}>
@@ -712,10 +712,26 @@ function PowerSheet({ onClose }: { onClose: () => void }) {
 function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; dark: boolean; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll({ container: ref });
-  const bar = useTransform(scrollY, [24, 44], [0, 1]);
-  const big = useTransform(scrollY, [0, 36], [1, 0]);
   // a pushed screen (a Settings pane, a Taste list): Back top-left, and the large title names it
   const [detail, setDetail] = useState<PhoneDetail>(null);
+  // a story opens on a picture that runs to the top edge, under the status bar (which turns white over it)
+  const p = projects[id];
+  const story = !!p && !(p.link && p.embeddable) && p.kind !== "code";
+  const [hero] = useState(() => (story ? window.innerWidth * 1.25 : 0));
+  // the bar comes in as the large title leaves: a pushed screen's title sits a row lower, a story's under its picture
+  const from = story ? hero - 60 : detail ? 74 : 24;
+  const bar = useTransform(scrollY, (v) => Math.min(1, Math.max(0, (v - from) / 20)));
+  const big = useTransform(scrollY, (v) => Math.min(1, Math.max(0, 1 - (v - from + 24) / 36)));
+  useEffect(() => {
+    if (!story) return;
+    const set = (v: number) => useOS.getState().setHeroDark(v < hero - 30);
+    set(scrollY.get());
+    const off = scrollY.on("change", set);
+    return () => {
+      off();
+      useOS.getState().setHeroDark(false);
+    };
+  }, [story, hero, scrollY]);
   const title = detail?.title ?? phoneTitle(id);
   const btn = dark ? `${glass("btn-dark")} text-white/90` : `${glass("btn")} text-[#3C3C43]/75`;
   return (
@@ -723,16 +739,17 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
       <motion.div
         style={{ opacity: bar }}
         data-glass=""
-        className={`glass pointer-events-none absolute inset-x-0 top-0 z-20 flex h-[calc(var(--sat)+98px)] items-end justify-center pb-[12px] ${dark ? "ios-bar-dark" : "ios-bar"}`}
+        className={`glass pointer-events-none absolute inset-x-0 top-0 z-20 flex h-[calc(var(--phone-top)+52px)] items-center justify-center px-[68px] pb-1 pt-[calc(var(--phone-top)+4px)] ${dark ? "ios-bar-dark" : "ios-bar"}`}
       >
-        <span className={`text-[17px] font-semibold tracking-[-0.02em] ${dark ? "text-white" : "text-ink"}`}>{title}</span>
+        {/* one row with Close and Back: 44pt, centred on them */}
+        <span className={`truncate text-[17px] font-semibold tracking-[-0.02em] ${dark ? "text-white" : "text-ink"}`}>{title}</span>
       </motion.div>
       <button
         type="button"
         onClick={onClose}
         aria-label={`Close ${phoneTitle(id)}`}
         data-glass=""
-        className={`glass-press absolute right-4 top-[calc(var(--sat)+58px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
+        className={`glass-press absolute right-4 top-[calc(var(--phone-top)+4px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
       >
         <X size={20} className="bold" />
       </button>
@@ -748,20 +765,20 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.12 } }}
             transition={{ type: "spring", bounce: 0.2, duration: 0.35 }}
-            className={`absolute left-4 top-[calc(var(--sat)+58px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
+            className={`absolute left-4 top-[calc(var(--phone-top)+4px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
           >
             <ChevronLeft size={24} strokeWidth={2.4} className="-ml-0.5" />
           </motion.button>
         )}
       </AnimatePresence>
-      <div ref={ref} className="absolute inset-0 overflow-y-auto overscroll-contain pb-12">
+      <div ref={ref} className="absolute inset-0 overflow-y-auto overscroll-contain pb-[calc(var(--phone-bottom)+14px)]">
         {/* a contact card and an About sheet carry their own big name, so no large title over them */}
         {id === "contact" || id === "about" || id === "blocks" || id === "doom" || id === "projects" || id === "games" || projects[id] ? (
-          <div className={id === "contact" || id === "about" || (projects[id]?.kind === "code") ? "h-[calc(var(--sat)+104px)]" : "h-[calc(var(--sat)+58px)]"} />
+          <div className={story ? "" : id === "contact" || id === "about" || p?.kind === "code" ? "h-[calc(var(--phone-top)+50px)]" : "h-[calc(var(--phone-top)+4px)]"} />
         ) : (
         <motion.h1
           style={{ opacity: big }}
-          className={`pb-2 pl-4 pr-16 text-[34px] font-bold leading-[41px] tracking-[0.011em] ${detail ? "pt-[calc(var(--sat)+110px)]" : "pt-[calc(var(--sat)+60px)]"}`}
+          className={`pb-2 pl-4 pr-16 text-[34px] font-bold leading-[41px] tracking-[0.011em] ${detail ? "pt-[calc(var(--phone-top)+56px)]" : "pt-[calc(var(--phone-top)+6px)]"}`}
         >
           {title}
         </motion.h1>
@@ -872,7 +889,7 @@ function AppWindow({ id, origin, onClosed }: { id: AppId; origin: Origin | null;
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
-        className="absolute inset-x-0 bottom-0 z-10 flex h-[34px] touch-none items-end justify-center pb-[max(8px,env(safe-area-inset-bottom))]"
+        className="absolute inset-x-0 bottom-0 z-10 flex h-[var(--phone-bottom)] touch-none items-end justify-center pb-[calc(var(--phone-bottom)-26px)]"
         aria-label="Swipe up to go home"
         role="button"
       >
@@ -909,9 +926,8 @@ export default function PhoneOS() {
   const playing = usePlayer().playing;
   const activity = useOS((s) => s.activity);
   const pill = real && (playing || !!activity);
-  // --sat is "the top of the screen" for everything here. With our own status bar it is the safe area; without
-  // it, 46px higher (the bar is not there to make room for), and 44px lower again while the pill is showing.
-  const sat = real ? `calc(env(safe-area-inset-top) - ${pill ? 2 : 46}px)` : "env(safe-area-inset-top)";
+  // Where every screen starts and ends is --phone-top and --phone-bottom (globals.css, .phone-root): they follow
+  // data-real and data-pill here, and nothing on the phone measures the status bar or the home indicator itself.
   // the Fly shortcut: the tap wakes the music, the phone goes dark, and the desk sends the plane off
   const fly = () => {
     flightMusicPrime();
@@ -920,8 +936,7 @@ export default function PhoneOS() {
   };
 
   return (
-    <div className="phone-root no-callout absolute inset-0 overflow-hidden bg-page" style={{ "--sat": sat } as React.CSSProperties} data-real={real ? "1" : "0"}>
-      <style>{`@property --sat{syntax:"<length>";inherits:true;initial-value:0px}.phone-root{transition:--sat .42s cubic-bezier(.22,1,.36,1)}`}</style>
+    <div className="phone-root no-callout absolute inset-0 overflow-hidden bg-page" data-real={real ? "1" : "0"} data-pill={pill ? "1" : "0"}>
       {!real && <StatusBar light={lightBar} />}
       <Island real={real} />
       <AnimatePresence initial={false}>
