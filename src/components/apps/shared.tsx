@@ -3,7 +3,7 @@
 // Pieces more than one app uses: the story item, screenshot helpers, small hooks.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type AppId, type Project } from "@/content";
+import { type AppId } from "@/content";
 import { useOS } from "@/store";
 
 export function Empty({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
@@ -15,49 +15,6 @@ export function Empty({ icon, title, body }: { icon: React.ReactNode; title: str
     </div>
   );
 }
-
-// ---------- App Store "Today": story cards that open into full stories ----------
-
-export type StoryItem = { key: string; p: Project; app?: AppId; eyebrow: string; status?: string; action?: { label: string; run: () => void } };
-
-// Real imagery for projects without a screenshot of their own: one of the OS wallpapers, with the app's icon on it
-const STORY_ART: Record<string, string> = {
-  lunor: "/wallpapers/founder-foggy-sunrise.webp",
-  contles: "/wallpapers/founder-farnaz-kohankhaki.webp",
-  filzy: "/wallpapers/art-bernd-dittrich.webp",
-  rug: "/wallpapers/founder-mountain-glow.webp",
-  slideskipper: "/wallpapers/art-thom-milkovic.webp",
-  musicengine: "/wallpapers/art-tinky-rain-blue.webp",
-  reel: "/wallpapers/art-satyajit-rain.webp",
-  openwhip: "/wallpapers/founder-mountain-sunset.webp",
-  doom: "/wallpapers/founder-uran-wang.webp",
-};
-
-// screenshots whose lower part is empty page: show only the top share
-export const CROP: Record<string, number> = { "/img/work-kaching.webp": 0.6 };
-
-export function ShotImg({ src, alt, className = "", ...rest }: { src: string; alt: string; className?: string } & React.ImgHTMLAttributes<HTMLImageElement>) {
-  const crop = CROP[src];
-  return (
-    <div className={`overflow-hidden ${className}`} style={{ aspectRatio: crop ? `16 / ${10 * crop}` : "16 / 10" }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} {...rest} className={crop ? "block h-auto w-full" : "block h-full w-full object-cover object-top"} />
-    </div>
-  );
-}
-
-export const storyImage = (it: StoryItem) => it.p.image ?? STORY_ART[it.key] ?? "/wallpapers/founder-uran-wang.webp";
-
-// a screenshot of a light UI needs a deeper scrim than a photo
-export const isShot = (it: StoryItem) => !!it.p.image;
-
-// Behind a screenshot: a wallpaper photo, so the title sits on picture, not on UI text
-export const SHOT_BG: Record<string, string> = {
-  sellify: "/wallpapers/founder-mountain-glow.webp",
-  kaching: "/wallpapers/art-tinky-rain-blue.webp",
-  larpo: "/wallpapers/founder-uran-wang.webp",
-  capto: "/wallpapers/founder-mountain-sunset.webp",
-};
 
 export type Photo = { title: string; src: string };
 

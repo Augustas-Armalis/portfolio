@@ -1,8 +1,9 @@
 "use client";
 
-// Blocks: a small voxel sandbox. This file is the DOM HUD (hotbar, crosshair,
+// Minecruft: a small voxel sandbox. This file is the DOM HUD (hotbar, crosshair,
 // start/pause card, touch controls); the game itself lives in ./engine.
 
+import { Wordmark } from "./Wordmark";
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { BLOCKS, PLACEABLE } from "./blockTypes";
 import { BlocksGame } from "./engine";
@@ -307,10 +308,11 @@ export default function Blocks({ compact = false }: { compact?: boolean }) {
           onClick={(e) => e.stopPropagation()}
           className={`flex w-full max-w-[380px] flex-col items-center rounded-[28px] bg-black/30 px-8 pb-7 pt-9 text-center backdrop-blur-2xl ${GLASS_RING}`}
         >
-          <h2 className="text-[34px] font-bold leading-[41px] tracking-[-0.02em] text-white">Blocks</h2>
+          <h2 className="sr-only">Minecruft</h2>
+          <Wordmark cell={compact ? 5 : 6} className="max-w-full drop-shadow-[0_6px_18px_rgb(0_0_0/0.35)]" />
           <p className="mt-1 text-[15px] leading-5 text-white/70">A small world to build in.</p>
           {failed ? (
-            <p className="mt-6 text-[13px] leading-[18px] text-white/60">This device could not start WebGL, which Blocks needs.</p>
+            <p className="mt-6 text-[13px] leading-[18px] text-white/60">This device could not start WebGL, which Minecruft needs.</p>
           ) : (
             <>
               <button

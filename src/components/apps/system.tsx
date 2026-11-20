@@ -152,6 +152,15 @@ function AboutPane() {
         </p>
         <p className={`mt-3 max-w-[52ch] text-ink-2 [text-wrap:pretty] ${compact ? "t-sub" : "text-[13px] leading-[19px]"}`}>{about.intro}</p>
       </div>
+      {[
+        { k: "Story", v: about.story },
+        { k: "Goals", v: about.goals },
+      ].map((x) => (
+        <div key={x.k}>
+          <SectionHeader mac={!compact}>{x.k}</SectionHeader>
+          <p className={`max-w-[56ch] px-1 text-ink [text-wrap:pretty] ${compact ? "t-sub" : "text-[13px] leading-[19px]"}`}>{x.v}</p>
+        </div>
+      ))}
       {rows(about.facts)}
       <div>
         <SectionHeader mac={!compact}>Tools</SectionHeader>

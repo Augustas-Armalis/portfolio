@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-inter" 
 const SITE = "https://augustasarmalis.com";
 const TITLE = "Augustas Armalis";
 const DESCRIPTION =
-  "Design engineer and founder from Kaunas, Lithuania. Product design at Sellify, Larpo studio, Lunor, Capto, Contles, Filzy, music and a novel, all inside a little operating system.";
+  "Design engineer and founder from Kaunas, Lithuania. Larpo studio, Contles, Lunor, Filzy, Capto, music and a novel, all inside a little operating system.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),

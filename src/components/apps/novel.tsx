@@ -3,7 +3,7 @@
 // Novel: a Books-style library and reader.
 
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { Sym } from "../symbols";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { novel } from "@/content";
@@ -88,8 +88,9 @@ export function Novel() {
         <img src={novel.cover} alt={novel.title} draggable={false} data-sq="" className="book-cover aspect-[2/3] w-[168px] shrink-0 rounded-[12px] bg-[#0b0d12] object-cover" />
         <div className={`min-w-0 ${compact ? "" : "pt-1"}`}>
           <h2 className={`${SERIF} text-[28px] font-semibold leading-[1.12] tracking-[-0.015em] text-ink [text-wrap:balance]`}>{novel.title}</h2>
+          <p className="t-foot mt-1 italic text-ink-3">{novel.english}</p>
           <p className="t-sub mt-2 text-ink-2">{novel.author}</p>
-          <p className="t-foot text-ink-3">Iliustracijos: {novel.illustrator}</p>
+          <p className="t-foot text-ink-3">Illustrated by {novel.illustrator}</p>
           <div className={`mt-4 flex items-center gap-3 ${compact ? "justify-center" : "@max-[459px]:justify-center"}`}>
             <Btn variant="prominent" capsule size="md" onClick={() => book && setCh(saved?.ch ?? 0)} icon={<Sym icon={BookOpen} size={14} weight="medium" />} className="!px-4">
               {saved ? "Continue" : "Read"}
@@ -98,10 +99,32 @@ export function Novel() {
           </div>
         </div>
       </div>
+      {/* his introduction, then the back cover in the book's own language */}
+      <section className="mt-8 text-left">
+        <h3 className="m-headline text-ink">About the book</h3>
+        <div className="mt-1.5 space-y-2.5">
+          {novel.intro.map((x) => (
+            <p key={x} className="t-sub leading-[1.55] text-ink [text-wrap:pretty]">
+              {x}
+            </p>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Btn size="sm" capsule href={novel.epub} icon={<Sym icon={Download} size={13} weight="medium" />}>
+            EPUB
+          </Btn>
+          <Btn size="sm" capsule href={novel.pdf} icon={<Sym icon={Download} size={13} weight="medium" />}>
+            PDF
+          </Btn>
+        </div>
+      </section>
       {book ? (
-        <p className={`mt-7 ${SERIF} text-[15px] leading-[1.6] text-ink-2 ${compact ? "text-left" : ""}`} lang="lt">
-          {book.blurb}
-        </p>
+        <section className="mt-7 text-left">
+          <h3 className="m-headline text-ink">From the back cover</h3>
+          <p className={`mt-1.5 ${SERIF} text-[15px] leading-[1.6] text-ink-2`} lang="lt">
+            {book.blurb}
+          </p>
+        </section>
       ) : (
         <div className="mt-7 space-y-2.5" aria-hidden>
           {[100, 96, 98, 72].map((w, i) => (
@@ -111,11 +134,11 @@ export function Novel() {
       )}
       {compact && book && (
         <>
-          <div className="mb-[7px] mt-8 px-4 text-left text-[13px] uppercase tracking-[-0.005em] text-[#6D6D72]">Contents</div>
-          <div className="sq-list overflow-hidden rounded-[12px] bg-white text-left">
+          <div className="mb-[7px] mt-8 px-4 text-left text-[13px] uppercase tracking-[-0.005em] text-[var(--label-3s)]">Contents</div>
+          <div className="sq-list overflow-hidden rounded-[12px] bg-[var(--bg-elevated)] text-left">
             {book.chapters.map((c, i) => (
               <button type="button" key={c.id} onClick={() => setCh(i)} className="press-row flex min-h-[44px] w-full items-center pl-4">
-                <span className={`flex min-h-[44px] flex-1 items-center gap-2 pr-4 ${i ? "border-t-[0.5px] border-[#C6C6C8]" : ""}`}>
+                <span className={`flex min-h-[44px] flex-1 items-center gap-2 pr-4 ${i ? "border-t-[0.5px] border-[var(--separator-opaque)]" : ""}`}>
                   <span className="flex-1 text-[17px] tracking-[-0.02em] text-ink">{c.title}</span>
                   {saved?.ch === i && <span className="h-2 w-2 rounded-full bg-[#0A84FF]" />}
                   <span className="text-[15px] tabular-nums text-ink-3">{minutes(c.words)}</span>

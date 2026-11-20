@@ -88,13 +88,16 @@ type OS = {
   setPlaying: (what: string | null) => void;
   setPalette: (open: boolean) => void;
   openPhoneApp: (id: AppId | null, origin?: Origin) => void;
+  // a page to show in the Browser (desktop); a phone opens it in a new tab instead
+  browserUrl: { url: string; t: number } | null;
+  openUrl: (url: string) => void;
   setWallpaper: (i: number) => void;
 };
 
 // The pictures a new visitor gets. The Mac's is the one the 3D display shows on its lock face (scene/lock.ts), so
 // the push-in, the lock screen and the desktop are one picture; the phone's is calmer still, for the icon labels.
 const MAC_WALLPAPER = Math.max(0, wallpapers.findIndex((w) => w.src.includes("foggy-sunrise")));
-const PHONE_WALLPAPER = Math.max(0, wallpapers.findIndex((w) => w.src.includes("mountain-glow")));
+const PHONE_WALLPAPER = Math.max(0, wallpapers.findIndex((w) => w.src.includes("golden-peaks")));
 
 // the desktop opens already in use: his music is up
 const firstWindows = (): Win[] => [{ id: "records", z: 11, min: false, max: false }];
@@ -219,6 +222,15 @@ export const useOS = create<OS>((set, get) => ({
   setPlaying: (what) => set({ playing: what }),
   setPalette: (open) => set({ palette: open }),
   openPhoneApp: (id, origin) => set(origin ? { phoneApp: id, phoneOrigin: origin } : { phoneApp: id }),
+  browserUrl: null,
+  openUrl: (url) => {
+    if (get().isMobile) {
+      window.open(url, "_blank", "noopener");
+      return;
+    }
+    set({ browserUrl: { url, t: Date.now() } });
+    get().open("browser");
+  },
   setWallpaper: (i) => set({ wallpaper: i }),
 }));
 
@@ -240,7 +252,10 @@ export function useWallpaperIndex() {
   return wallpapers[i] ? i : mobile ? PHONE_WALLPAPER : MAC_WALLPAPER;
 }
 export function useWallpaper() {
-  return wallpapers[useWallpaperIndex()];
+  const w = wallpapers[useWallpaperIndex()];
+  // a phone shows the portrait crop of the same picture
+  const mobile = useOS((s) => s.isMobile);
+  return mobile && w.phone ? { ...w, src: w.phone } : w;
 }
 
 // dev only: lets the QA pass drive the OS from the console

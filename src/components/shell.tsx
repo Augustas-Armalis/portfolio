@@ -7,7 +7,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { about, mainWork, otherWork, owner, projectGroups, projects, type DeskItem } from "@/content";
+import { owner, resume, type AppId, type DeskItem } from "@/content";
 import { useOS } from "@/store";
 import { AppIcon, DocArt, FolderArt } from "./icons";
 import { SystemBootMark } from "./Mark";
@@ -25,43 +25,62 @@ export function Bars({ light = false }: { light?: boolean }) {
   );
 }
 
+// The Résumé: a real CV on a page, from content.ts (resume). A row that has a page in the OS opens it.
 export function Resume() {
-  const founder = projectGroups[1].apps.filter((a) => projects[a]);
+  const isMobile = useOS((s) => s.isMobile);
+  const go = (id: AppId) => (isMobile ? useOS.getState().openPhoneApp(id) : useOS.getState().open(id));
+  const head = "mt-7 border-b border-black/[0.08] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3";
   return (
     <div className="flex justify-center bg-[#E9EAED] p-6 max-[520px]:p-3">
-      <article className="w-full max-w-[560px] bg-white px-12 py-11 text-ink shadow-[0_1px_3px_rgb(0_0_0/0.12)] max-[520px]:px-6 max-[520px]:py-7">
-        <h2 className="text-[26px] font-semibold tracking-[-0.022em]">{about.name}</h2>
-        <p className="mt-1 text-[13px] text-ink-2">
-          {owner.role}. {owner.city}.
-        </p>
-        <h2 className="mt-8 border-b border-black/[0.08] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">Work</h2>
-        {[mainWork, ...otherWork].map((p) => (
-          <div key={p.id} className="mt-3 flex gap-4 text-[13px]">
-            <span className="w-24 shrink-0 tabular-nums text-ink-3">{p.years}</span>
-            <span>
-              <span className="font-semibold">{p.name}</span>
-              {p.role && <span className="text-ink-2">, {p.role.toLowerCase()}</span>}
-              {p.what && <span className="block text-ink-2">{p.what}</span>}
-            </span>
+      <article className="w-full max-w-[600px] bg-white px-12 py-11 text-ink shadow-[0_1px_3px_rgb(0_0_0/0.12)] max-[520px]:px-6 max-[520px]:py-7">
+        <div className="flex items-start gap-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/img/augustas-96.webp" alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-full object-cover" />
+          <div className="min-w-0">
+            <h2 className="text-[26px] font-semibold leading-[1.1] tracking-[-0.022em]">{resume.name}</h2>
+            <p className="mt-1 text-[13px] text-ink-2">
+              {resume.title}. {resume.city}.
+            </p>
           </div>
-        ))}
-        <h2 className="mt-7 border-b border-black/[0.08] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">Founder</h2>
-        {founder.map((a) => {
-          const p = projects[a]!;
-          return (
-            <div key={a} className="mt-3 flex gap-4 text-[13px]">
-              <span className="w-24 shrink-0 tabular-nums text-ink-3">{p.years ?? p.status}</span>
-              <span>
-                <span className="font-semibold">{p.name}</span>
-                {p.what && <span className="block text-ink-2">{p.what}</span>}
-              </span>
-            </div>
-          );
-        })}
-        <h2 className="mt-7 border-b border-black/[0.08] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3">Elsewhere</h2>
-        <p className="mt-3 text-[13px] text-ink-2">
-          {owner.studio.label}, {owner.x.label} on X
+        </div>
+        <p className="mt-5 text-[13px] leading-[1.55] text-ink [text-wrap:pretty]">{resume.summary}</p>
+        <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+          {resume.links.map((l) => (
+            <a key={l.href} href={l.href} target="_blank" rel="noreferrer" className="text-[var(--accent-text)] hover:underline">
+              {l.label}
+            </a>
+          ))}
         </p>
+        {resume.sections.map((sec) => (
+          <section key={sec.title}>
+            <h3 className={head}>{sec.title}</h3>
+            {sec.rows.map((r) => (
+              <div key={r.org + r.title} className="mt-3.5 flex gap-4 text-[13px] leading-[1.45] max-[520px]:flex-col max-[520px]:gap-0.5">
+                <span className="w-24 shrink-0 tabular-nums text-ink-3">{r.when}</span>
+                <span className="min-w-0">
+                  {r.app ? (
+                    <button type="button" onClick={() => go(r.app!)} className="text-left font-semibold hover:text-[var(--accent-text)]">
+                      {r.title}
+                    </button>
+                  ) : (
+                    <span className="font-semibold">{r.title}</span>
+                  )}
+                  <span className="text-ink-2">, {r.org}</span>
+                  <span className="mt-0.5 block text-ink-2 [text-wrap:pretty]">{r.body}</span>
+                </span>
+              </div>
+            ))}
+          </section>
+        ))}
+        <h3 className={head}>Skills</h3>
+        <dl className="mt-1">
+          {resume.skills.map((k) => (
+            <div key={k.label} className="mt-2.5 flex gap-4 text-[13px] leading-[1.45] max-[520px]:flex-col max-[520px]:gap-0.5">
+              <dt className="w-24 shrink-0 text-ink-3">{k.label}</dt>
+              <dd className="min-w-0 text-ink">{k.value}</dd>
+            </div>
+          ))}
+        </dl>
       </article>
     </div>
   );
@@ -76,7 +95,7 @@ export function DeskArt({ item }: { item: DeskItem }) {
       </span>
     );
   if (item.kind === "folder") return <FolderArt size={64} glyph={item.id === "projects" || item.id === "games" || item.id === "documents" ? item.id : undefined} />;
-  if (item.kind === "doc") return <DocArt size={64} />;
+  if (item.kind === "doc") return <DocArt size={64} label={item.ext} />;
   if (item.kind === "image" && "src" in item.open)
     return (
       <span className="flex h-16 w-16 items-center justify-center">

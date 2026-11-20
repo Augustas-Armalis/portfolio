@@ -12,6 +12,7 @@ import { bookCall, contactList, projects, type AppId, type Channel } from "@/con
 import { AppIcon } from "../icons";
 import { Btn, List, ListRow, SectionHeader, useChrome } from "../ui";
 import { XMark } from "./shared";
+import { useOS } from "@/store";
 
 // Searches go to Bing: it is the one large engine that lets itself be shown in a frame (Google, DuckDuckGo, Brave,
 // Qwant, Ecosia and Startpage all send X-Frame-Options or frame-ancestors).
@@ -290,6 +291,8 @@ export function Browser({ start = null, title, lead, end, side }: { start?: stri
               title={first ? title : host}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
               referrerPolicy="strict-origin-when-cross-origin"
+              allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+              allowFullScreen
               onLoad={() => setState((s) => (s === "loading" ? "done" : s))}
               className={`absolute inset-0 h-full w-full border-0 bg-white transition-opacity duration-300 ${state === "done" ? "opacity-100" : "opacity-0"}`}
             />
@@ -341,5 +344,7 @@ export function BrowserApp() {
         ))}
       </div>
     );
-  return <Browser title="Browser" />;
+  // a page sent from elsewhere (a project's Visit button, the Easter egg) opens in a fresh browser
+  const sent = useOS((st) => st.browserUrl);
+  return <Browser key={sent?.t ?? 0} start={sent?.url ?? null} title="Browser" />;
 }

@@ -68,3 +68,26 @@ Played through the YouTube IFrame player on youtube-nocookie.com (src/lib/stream
 - Jūra (The Sea): https://www.youtube.com/watch?v=3kGTf5yXW1g . Same album and performers, with Evelina Staniulytė, organ.
 - Jūra, live in Vilnius: https://www.youtube.com/watch?v=89o4wK16g3E . Lithuanian National Symphony Orchestra, Mirga Gražinytė-Tyla; the Lithuanian National Philharmonic's own channel.
 - Spring Fields Ambience and Music: https://www.youtube.com/watch?v=6ksK2rqrjZk . Martia's Muses (their own channel). Their page asks that their music not be used in projects without a licence (https://www.martiasmuses.com/licensing/): ask before launch.
+
+## Added 20 Nov (OS content round)
+
+Wallpapers (Unsplash Licence), each with a portrait crop for the phone (`*-phone.webp`):
+
+| File | Photographer | Source |
+|---|---|---|
+| public/wallpapers/golden-peaks.webp | Daniil Silantev | https://unsplash.com/photos/ou_9KZ6BJ-0 |
+| public/wallpapers/davos-mist.webp | Dario Jud | https://unsplash.com/photos/8xXFONfEUtA |
+| public/wallpapers/braies.webp | Intricate Explorer | https://unsplash.com/photos/gjI-YoxuFys |
+| public/wallpapers/shoreline.webp | Hameen Reynolds | https://unsplash.com/photos/zWFa7mlQAYk |
+| public/wallpapers/ocean-wave.webp | Ivan Bandura | https://unsplash.com/photos/_cyiEwMnGM4 |
+| public/wallpapers/sagres.webp | Bernd Dittrich | https://unsplash.com/photos/ELGDJBMKNMI |
+| public/wallpapers/dunes-night.webp | Tim de Groot | https://unsplash.com/photos/yNGQ830uFB4 |
+
+Gallery placeholders (until his own photos and films arrive): Unsplash photos are linked from images.unsplash.com and
+Mixkit films from assets.mixkit.co (Mixkit Stock Video Free License); every credit is in src/content.ts (gallery)
+and shown in the viewer. Only the film posters are stored: public/gallery/mixkit-*.webp.
+
+His own: public/img/p/* (screenshots of his live sites larpo.studio, lunor.design, filzy.site, filzy.site/movie,
+capto.video, armaugustas.github.io/slidepad; Contles photos from contles.com by the Contles team; Open Whip rendered
+from his own OpenWhip code), public/lab/rug/* (from his repository augustas-rug/road-rug), public/content/music/kiss-me.webp
+(the cover of his "kiss me" video on YouTube, hollow kid).

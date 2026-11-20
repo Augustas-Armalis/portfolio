@@ -3,7 +3,7 @@
 // Get in Touch.
 
 import { AnimatePresence, motion } from "motion/react";
-import { Aperture, CalendarDays, Check, Copy, Github, Instagram, Linkedin, Mail, MessageCircle, Music2, Send } from "lucide-react";
+import { Aperture, CalendarDays, Check, Copy, Github, Instagram, Linkedin, Mail, MessageCircle, Music2, Send, Youtube } from "lucide-react";
 import { Sym } from "../symbols";
 import { useState } from "react";
 import { bookCall, CONTACT_EMAIL, CONTACTS, contactList, type Channel, owner } from "@/content";
@@ -21,6 +21,7 @@ const channelIcon: Record<Channel["id"], React.ReactNode> = {
   instagramStudio: <Sym icon={Instagram} size={16} weight="medium" />,
   github: <Sym icon={Github} size={16} weight="medium" />,
   spotify: <Sym icon={Music2} size={16} weight="medium" />,
+  youtube: <Sym icon={Youtube} size={16} weight="medium" />,
 };
 
 // a channel without its real link yet points at "#" so it still looks and behaves finished

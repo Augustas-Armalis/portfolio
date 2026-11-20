@@ -16,7 +16,7 @@ import { AppWindow, Eye, Info, LayoutGrid, List, Minus, Moon, Power, RotateCcw, 
 import { Sym, type SymIcon } from "./symbols";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { about, allApps, apps, minSize, desktopItems, dockApps, mainWork, otherWork, owner, places, projectApps, projectGroups, projects, deskSharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
+import { about, allApps, apps, minSize, desktopItems, dockApps, gallery, mainWork, owner, places, projectApps, projectGroups, projects, deskSharedApps, timeline, type AppId, type DeskItem, type UserId } from "@/content";
 import { focusedApp, isUp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
@@ -210,16 +210,14 @@ function NotificationCenter({ close }: { close: () => void }) {
           </div>
         </Widget>
       </div>
-      <Widget onClick={go("sellify")}>
+      <Widget onClick={go("larpo")}>
         <div className="eyebrow !text-[11px] text-ink-3">Currently working on</div>
         <div className="mt-2 flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={mainWork.image} alt="" className="h-12 w-[76px] rounded-[10px] object-cover object-top shadow-[0_0_0_0.5px_rgb(0_0_0/0.12)]" />
           <div className="min-w-0">
             <div className="t-headline truncate text-ink">{mainWork.name}</div>
-            <div className="m-body truncate text-ink-2">
-              {mainWork.role}, {mainWork.years}
-            </div>
+            <div className="m-body truncate text-ink-2">{mainWork.role}</div>
           </div>
         </div>
       </Widget>
@@ -602,7 +600,15 @@ function Window({ win, index, area, focused }: { win: Win; index: number; area: 
     // the designed size, never more than 88% of the space; the first window sits dead centre (a touch above, like
     // macOS), later ones cascade down-right from it
     let w = Math.round(Math.min(size.w, (W - 24) * 0.88));
-    const h = Math.round(Math.min(size.h, (H - DOCK_SPACE - 16) * 0.94));
+    let h = Math.round(Math.min(size.h, (H - DOCK_SPACE - 16) * 0.94));
+    // a touch tablet (iPadOS): an app opens nearly full screen, as iPad apps do, and can still be resized into a
+    // window; the games and small tools keep their own size
+    const tablet = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches && Math.min(window.innerWidth, window.innerHeight) >= 700;
+    if (tablet && !(index === 0 && win.id === "records") && !["piano", "about", "terminal", "game", "trash", "doom"].includes(win.id)) {
+      w = Math.round(W - 32);
+      h = Math.round(H - DOCK_SPACE - 20);
+      return clampRect({ left: 16, top: 8, w, h }, W, H, min);
+    }
     const step = index % 6;
     // The window the desktop opens with sits beside the note, never over it: between the note and the column of
     // icons where there is room, between the note and the edge on a smaller screen (it gives up some width for
@@ -1181,6 +1187,7 @@ function DesktopIcons({ area }: { area: RefObject<HTMLDivElement | null> }) {
 
   const run = (it: DeskItem) => {
     if ("app" in it.open) open(it.open.app);
+    else if ("url" in it.open) useOS.getState().openUrl(it.open.url);
     else if (it.open.look === "resume") setLook({ title: it.name, node: <Resume /> });
     else setLook({ title: it.name, src: it.open.src });
   };
@@ -1443,6 +1450,7 @@ function Welcome() {
   const dark = useWallpaper().dark;
   const [gone, setGone] = useState(false);
   return (
+    <div className="pointer-events-none absolute left-6 top-6 flex flex-col gap-2.5" style={{ width: NOTE_W }}>
     <AnimatePresence>
       {!gone && (
         <motion.aside
@@ -1453,7 +1461,7 @@ function Welcome() {
           aria-label="Welcome note"
           data-glass=""
           style={{ width: NOTE_W }}
-          className={`${glass(dark ? "widget-dark" : "widget")} sq-panel group absolute left-6 top-6 rounded-[26px] p-5 ${dark ? "text-white" : "text-ink"}`}
+          className={`${glass(dark ? "widget-dark" : "widget")} sq-panel group pointer-events-auto relative rounded-[26px] p-5 ${dark ? "text-white" : "text-ink"}`}
         >
           <button
             type="button"
@@ -1471,7 +1479,7 @@ function Welcome() {
             {owner.role} from {owner.city}.
           </p>
           <p className={`t-sub mt-3 [text-wrap:pretty] ${dark ? "text-white/75" : "text-ink-2"}`}>
-            This is my portfolio, built as a small operating system. The music in Records is mine. The work is in the Projects folder.
+            This is my portfolio, built as a small operating system. My work is in Projects, my music in Records.
           </p>
           <div className="mt-4 flex gap-2">
             <Btn variant="prominent" capsule onClick={() => open("projects")}>
@@ -1485,6 +1493,61 @@ function Welcome() {
         </motion.aside>
       )}
     </AnimatePresence>
+    <DeskWidgets dark={dark} />
+    </div>
+  );
+}
+
+// Desktop widgets under the note, macOS style: what he is working on now, one featured project, and a few photos.
+// They only show where the screen is tall enough to hold them under the note.
+function DeskWidgets({ dark }: { dark: boolean }) {
+  const open = useOS((s) => s.open);
+  const best = useMemo(() => {
+    const ids = gallery.albums.find((a) => a.id === "best")?.items ?? [];
+    return ids.map((id) => gallery.media.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m && m.kind === "photo");
+  }, []);
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (best.length < 2 || reducedMotion()) return;
+    const t = window.setInterval(() => setI((n) => (n + 1) % best.length), 7000);
+    return () => window.clearInterval(t);
+  }, [best.length]);
+  const featured = projects.contles;
+  const shell = `${glass(dark ? "widget-dark" : "widget")} sq-panel press pointer-events-auto relative overflow-hidden rounded-[22px] text-left`;
+  const sub = dark ? "text-white/65" : "text-ink-2";
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ ...M.arrive, delay: 0.5 }} className="hidden flex-col gap-2.5 [@media(min-height:820px)]:flex">
+      <div className="grid grid-cols-2 gap-2.5">
+        <button type="button" data-glass="" onClick={() => open("larpo")} className={`${shell} flex aspect-square flex-col justify-between p-4 ${dark ? "text-white" : "text-ink"}`}>
+          <AppIcon id="larpo" size={40} />
+          <span>
+            <span className={`block text-[11px] font-semibold uppercase tracking-[0.04em] ${dark ? "text-white/55" : "text-ink-3"}`}>Working on</span>
+            <span className="t-headline block">{mainWork.name}</span>
+            <span className={`block text-[12px] leading-4 ${sub}`}>A team of four</span>
+          </span>
+        </button>
+        <button type="button" onClick={() => open("gallery")} aria-label="Open Gallery" className="sq-panel press pointer-events-auto relative aspect-square overflow-hidden rounded-[22px] bg-black shadow-[0_10px_30px_-12px_rgb(0_0_0/0.5)]">
+          <AnimatePresence initial={false}>
+            {best[i] && (
+              <motion.img key={best[i].id} src={best[i].thumb} alt="" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 1.2 }} className="absolute inset-0 h-full w-full object-cover" />
+            )}
+          </AnimatePresence>
+          <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-3.5 pb-3 pt-8 text-left text-[13px] font-semibold text-white">Gallery</span>
+        </button>
+      </div>
+      {featured && (
+        <button type="button" onClick={() => open("contles")} className="sq-panel press pointer-events-auto relative h-[148px] overflow-hidden rounded-[22px] bg-black text-left shadow-[0_10px_30px_-12px_rgb(0_0_0/0.5)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={featured.image} alt="" className="absolute inset-0 h-full w-full object-cover object-[50%_30%]" />
+          <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+          <span className="absolute inset-x-0 bottom-0 p-4 text-white">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.04em] text-white/65">Featured</span>
+            <span className="t-headline block">{featured.name}</span>
+            <span className="block text-[12px] leading-4 text-white/75">From an idea to Lithuania&apos;s biggest stages</span>
+          </span>
+        </button>
+      )}
+    </motion.div>
   );
 }
 

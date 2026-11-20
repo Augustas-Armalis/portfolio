@@ -12,6 +12,7 @@ import { useChrome } from "./ui";
 const loaders = {
   projects: () => import("./apps/projects"),
   photos: () => import("./apps/photos"),
+  gallery: () => import("./apps/gallery"),
   taste: () => import("./apps/taste"),
   doom: () => import("./apps/doom"),
   piano: () => import("./apps/piano"),
@@ -37,7 +38,7 @@ export function warmApps() {
 const lazy = <P extends object>(load: () => Promise<React.ComponentType<P>>) => dynamic(load, { ssr: false, loading: () => null });
 const ProjectApp = lazy(() => loaders.projects().then((x) => x.ProjectApp));
 const Shots = lazy(() => loaders.photos().then((x) => x.Shots));
-const Gallery = lazy(() => loaders.photos().then((x) => x.Gallery));
+const Gallery = lazy(() => loaders.gallery().then((x) => x.Gallery));
 const Taste = lazy(() => loaders.taste().then((x) => x.Taste));
 const Kit = lazy(() => loaders.taste().then((x) => x.Kit));
 const Doom = lazy(() => loaders.doom().then((x) => x.Doom));

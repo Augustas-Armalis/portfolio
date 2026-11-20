@@ -4,7 +4,7 @@
 // Island and the live wallpaper all read it.
 
 import { useSyncExternalStore } from "react";
-import { tracks } from "@/content";
+import { playableTracks as tracks } from "@/content";
 import { getAnalyser, tapMediaElement } from "@/lib/audio";
 import { useOS } from "@/store";
 
@@ -63,7 +63,7 @@ export const player = {
   play(id: string) {
     const el = audioEl();
     const t = trackOf(id);
-    if (!t) return;
+    if (!t?.file) return;
     void (getAnalyser()?.context as AudioContext | undefined)?.resume();
     if (pstate.id !== id) {
       el.src = t.file;

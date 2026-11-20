@@ -1,8 +1,8 @@
 "use client";
 
 import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransform, type AnimationPlaybackControls } from "motion/react";
-import { useEffect, useRef, useState } from "react";
-import { apps, bookCall, dockApps, gameApps, mainWork, owner, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { apps, bookCall, dockApps, gallery, gameApps, mainWork, owner, playableTracks, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
 import { flightMusicPrime } from "@/lib/flightMusic";
 import { handoff } from "@/lib/handoff";
 import { isUp, useOS, useWallpaper } from "@/store";
@@ -125,10 +125,11 @@ function StatusBar({ light }: { light?: boolean }) {
   const c = light ? "text-white" : "text-ink";
   return (
     <div className={`pointer-events-none absolute inset-x-0 top-0 z-[80] flex h-[var(--phone-top)] items-center pt-1 text-[17px] font-semibold tracking-[-0.02em] tabular-nums ${c}`}>
-      {/* the time and the icons are each centred in the "ears" either side of the Dynamic Island */}
-      <span className="flex flex-1 justify-center pl-3">{time}</span>
-      <span className="w-[126px]" />
-      <span className="flex flex-1 items-center justify-center gap-[5px] pr-3">
+      {/* the time at the far left and the signal, Wi-Fi and battery at the far right, at every width: the island
+          stays in the middle and only the space between them grows */}
+      <span className="flex flex-1 justify-start pl-[max(24px,env(safe-area-inset-left))]">{time}</span>
+      <span className="w-[126px] shrink-0" />
+      <span className="flex flex-1 items-center justify-end gap-[5px] pr-[max(20px,env(safe-area-inset-right))]">
         <span className="flex h-[10px] items-end gap-[2px]">
           {[4, 6, 8, 10].map((h) => (
             <span key={h} className={`w-[3px] rounded-[1px] ${light ? "bg-white" : "bg-ink"}`} style={{ height: h }} />
@@ -336,7 +337,7 @@ function Widget({ app, onOpen, className = "", children, label }: { app: AppId; 
 // Now playing: the artwork, what it is, and a play button that works without opening Music.
 function PlayingWidget({ onOpen }: { onOpen: Open }) {
   const p = usePlayer();
-  const track = tracks.find((t) => t.id === p.id) ?? tracks[0];
+  const track = tracks.find((t) => t.id === p.id) ?? playableTracks[0];
   if (!track) return null;
   const on = p.playing && p.id === track.id;
   return (
@@ -432,23 +433,26 @@ function ProjectsWidget({ onOpen }: { onOpen: Open }) {
   );
 }
 
-// A large picture from Shots, changing slowly.
+// A large picture from the Gallery, changing slowly.
 function PhotoWidget({ onOpen }: { onOpen: Open }) {
+  // a few of his photographs: the Gallery's Best of, one after another
+  const best = useMemo(() => (gallery.albums.find((x) => x.id === "best")?.items ?? []).map((id) => gallery.media.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m && m.kind === "photo"), []);
   const [i, setI] = useState(0);
   useEffect(() => {
-    const iv = window.setInterval(() => setI((n) => (n + 1) % shots.items.length), 6000);
+    const iv = window.setInterval(() => setI((n) => (n + 1) % best.length), 6000);
     return () => window.clearInterval(iv);
-  }, []);
-  const s = shots.items[i];
+  }, [best.length]);
+  const s = best[i];
+  if (!s) return null;
   return (
-    <Widget app="shots" onOpen={onOpen} label="Open Shots" className="block h-[clamp(132px,24dvh,206px)] w-full">
+    <Widget app="gallery" onOpen={onOpen} label="Open Gallery" className="block h-[clamp(132px,24dvh,206px)] w-full">
       <AnimatePresence initial={false}>
-        <motion.img key={s.src} src={s.src} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: EASE_OUT }} />
+        <motion.img key={s.id} src={s.src.replace(/w=\d+/, "w=900")} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: EASE_OUT }} />
       </AnimatePresence>
       <span aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgb(0_0_0/0.55))]" />
-      <span className="absolute inset-x-4 bottom-3 flex items-baseline justify-between">
-        <span className="text-[17px] font-semibold tracking-[-0.022em]">Shots</span>
-        <span className="text-[13px] text-white/75">{s.title}</span>
+      <span className="absolute inset-x-4 bottom-3 flex items-baseline justify-between gap-3">
+        <span className="text-[17px] font-semibold tracking-[-0.022em]">Gallery</span>
+        <span className="truncate text-[13px] text-white/75">{s.title}</span>
       </span>
     </Widget>
   );
@@ -464,7 +468,7 @@ function WorkingWidget({ onOpen }: { onOpen: Open }) {
       <span>
         <span className="block text-[20px] font-semibold leading-6 tracking-[-0.025em]">{mainWork.name}</span>
         <span className="block truncate text-[13px] leading-[17px] text-white/65">{mainWork.role}</span>
-        <span className="block truncate text-[13px] leading-[17px] text-white/45">{mainWork.years}</span>
+        <span className="block truncate text-[13px] leading-[17px] text-white/45">A team of four</span>
       </span>
     </Widget>
   );
@@ -714,7 +718,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
   const [detail, setDetail] = useState<PhoneDetail>(null);
   // a story opens on a picture that runs to the top edge, under the status bar (which turns white over it)
   const p = projects[id];
-  const story = !!p && !(p.link && p.embeddable) && p.kind !== "code";
+  const story = false as boolean;
   const [hero] = useState(() => (story ? window.innerWidth * 1.25 : 0));
   // the bar comes in as the large title leaves: a pushed screen's title sits a row lower, a story's under its picture
   const from = story ? hero - 60 : detail ? 74 : 24;
@@ -772,7 +776,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
       <div ref={ref} className="absolute inset-0 overflow-y-auto overscroll-contain pb-[calc(var(--phone-bottom)+14px)]">
         {/* a contact card and an About sheet carry their own big name, so no large title over them */}
         {id === "contact" || id === "about" || id === "blocks" || id === "doom" || id === "projects" || id === "games" || projects[id] ? (
-          <div className={story ? "" : id === "contact" || id === "about" || p?.kind === "code" ? "h-[calc(var(--phone-top)+50px)]" : "h-[calc(var(--phone-top)+4px)]"} />
+          <div className={story || p ? "" : id === "contact" || id === "about" ? "h-[calc(var(--phone-top)+50px)]" : "h-[calc(var(--phone-top)+4px)]"} />
         ) : (
         <motion.h2
           style={{ opacity: big }}
@@ -877,7 +881,7 @@ function AppWindow({ id, origin, onClosed, onLeaving }: { id: AppId; origin: Ori
 
   const darkApp = id === "terminal" || id === "doom" || id === "blocks";
   // sidebar apps become iOS grouped lists: grey ground, title on the same ground
-  const grouped = ["projects", "games", "taste", "kit", "settings", "contact", "records"].includes(id) || projects[id]?.kind === "code";
+  const grouped = ["projects", "games", "taste", "kit", "settings", "contact", "records"].includes(id);
   const ground = darkApp ? "bg-[#1C1D20] text-white" : grouped ? "bg-[#F2F2F7] text-ink" : "bg-white text-ink";
   return (
     <motion.div className="phone-app absolute inset-0 z-[60] will-change-transform" style={{ x, y, scale, clipPath }}>
