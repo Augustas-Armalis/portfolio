@@ -55,3 +55,9 @@ public/assets/ciurlionis/*.jpg, from Wikimedia Commons; each source page is list
 
 ## System app icons (GPL-3.0), added 20 Nov
 public/icons/system/*.svg: from WhiteSur icon theme by vinceliuice, https://github.com/vinceliuice/WhiteSur-icon-theme (GPL-3.0). Unmodified files, renamed.
+- public/assets/ambience/wind-woods.mp3: "TedEllis binaural wind sounds birds woods" (CC0, excerpt), https://archive.org/details/soundica-fs-447408-tedellis-binaural-wind-sounds-birds-woods-mp3
+- public/assets/ambience/sea-waves.mp3: "Binaural Beach Waves 4" (CC0, excerpt), https://archive.org/details/soundica-fs-457149-binaural-beach-waves-4-wav
+
+## Čiurlionis recording (CC BY 4.0), added 20 Nov
+- public/content/music/ciurlionis-jura-dube.mp3: M. K. Čiurlionis, The Sea (Jūra), VL 317, piano. Performed by Jean Dubé. Creative Commons Attribution 4.0, via IMSLP: https://imslp.org/wiki/The_Sea,_Op.28_(%C4%8Ciurlionis,_Mikalojus_Konstantinas)
+- public/content/music/ciurlionis-prelude-vl268-dube.mp3: M. K. Čiurlionis, Prelude in D minor, VL 268, piano. Performed by Jean Dubé. Creative Commons Attribution 4.0, via IMSLP: https://imslp.org/wiki/Prelude_in_D_minor,_VL_268_(%C4%8Ciurlionis,_Mikalojus_Konstantinas)
