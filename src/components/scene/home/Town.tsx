@@ -167,6 +167,57 @@ const PAINTED: V3[] = [
 ];
 
 const ground = (x: number, z: number) => landH(x, z);
+// the fine things of each house (frames, sills, shutters, doors, lamps) go in a mesh of their own, drawn only near
+let DET: TB = new TB();
+let LAMPS: number[][] = [];
+const ACCENT: V3[] = [
+  [0.08, 0.2, 0.42],
+  [0.1, 0.26, 0.16],
+  [0.42, 0.26, 0.06],
+  [0.36, 0.08, 0.06],
+];
+// the windows of a wall, built as the shader places them: frames, sill, carved head, shutters
+function windowsOn(b: TB, x0: number, z0: number, x1: number, z1: number, win: number, accent: number, y0 = 0) {
+  if (win <= 0) return;
+  const len = Math.hypot(x1 - x0, z1 - z0);
+  const one = win > 50;
+  const n = one ? 1 : Math.max(1, Math.floor((len - 0.8) / win));
+  const first = one ? len / 2 : (len - (n - 1) * win) / 2;
+  const dx = (x1 - x0) / len;
+  const dz = (z1 - z0) / len;
+  // (outward: the wall's right hand, walking from 0 to 1)
+  const ox = -dz;
+  const oz = dx;
+  const at = (u: number, v: number, out: number): V3 => [x0 + dx * u + ox * out, y0 + v, z0 + dz * u + oz * out];
+  // a slab lying in the wall's plane: centre (u, v), half sizes, standing out from `o0` to `o1`
+  const slab = (u: number, v: number, hu: number, hv: number, o0: number, o1: number, col: V3, kind: number = K.paint) => {
+    const m: M4 = [kind, 0, 0, 0];
+    const a = at(u - hu, v - hv, o1);
+    const bq = at(u + hu, v - hv, o1);
+    const c = at(u + hu, v + hv, o1);
+    const d = at(u - hu, v + hv, o1);
+    DET.quad(a, bq, c, d, col, m);
+    DET.quad(at(u - hu, v + hv, o0), d, c, at(u + hu, v + hv, o0), col, m);
+    DET.quad(at(u - hu, v - hv, o0), at(u + hu, v - hv, o0), bq, a, col, m);
+    DET.quad(at(u - hu, v - hv, o0), a, d, at(u - hu, v + hv, o0), col, m);
+    DET.quad(at(u + hu, v - hv, o0), at(u + hu, v + hv, o0), c, bq, col, m);
+  };
+  for (let i = 0; i < n; i++) {
+    const u = first + i * win;
+    const v = 1.55;
+    // the white frame, its sill, a carved head over it
+    slab(u, v + 0.655, 0.53, 0.055, 0, 0.09, WHITE, K.trim);
+    slab(u, v - 0.655, 0.53, 0.055, 0, 0.09, WHITE, K.trim);
+    slab(u - 0.475, v, 0.055, 0.6, 0, 0.09, WHITE, K.trim);
+    slab(u + 0.475, v, 0.055, 0.6, 0, 0.09, WHITE, K.trim);
+    slab(u, v - 0.74, 0.62, 0.035, 0, 0.17, WHITE, K.trim);
+    slab(u, v + 0.8, 0.64, 0.09, 0, 0.12, WHITE, K.trim);
+    const top = at(u, v + 1.12, 0.06);
+    DET.tri(at(u - 0.6, v + 0.89, 0.06), at(u + 0.6, v + 0.89, 0.06), top, WHITE, [K.trim, 0, 0, 0], [[0, 0], [1.2, 0], [0.6, 0.23]]);
+    // the shutters, open, in the house's colour
+    if (!one) for (const s of [-1, 1]) slab(u + s * 0.79, v, 0.23, 0.6, 0.02, 0.07, ACCENT[accent % 4], K.boards);
+  }
+}
 // the lowest and highest ground under a footprint (a local box round the builder's origin)
 function footRange(b: TB, hx: number, hz: number) {
   let lo = 1e9;
@@ -212,6 +263,28 @@ function house(b: TB, x: number, z: number, rot: number, L: number, D: number, h
   b.wall(hx, -hz, -hx, -hz, 0, H, wallCol, wk, 2.9, o.accent);
   b.wall(hx, hz, hx, -hz, 0, H, wallCol, wk, D > 6.5 ? 2.6 : 99, o.accent);
   b.wall(-hx, -hz, -hx, hz, 0, H, wallCol, wk, 99, o.accent);
+  DET.at(x, floor, z, rot);
+  windowsOn(DET, -hx, hz, hx, hz, 2.4, o.accent);
+  windowsOn(DET, hx, -hz, -hx, -hz, 2.9, o.accent);
+  windowsOn(DET, hx, hz, hx, -hz, D > 6.5 ? 2.6 : 99, o.accent);
+  windowsOn(DET, -hx, -hz, -hx, hz, 99, o.accent);
+  // the ridge board, and under the eaves at each gable a pair of carved brackets
+  DET.box(0, H + D * (o.roof === "thatch" ? 0.8 : 0.7) + 0.06, 0, L + (o.roof === "thatch" ? 1.5 : 1.0), 0.14, 0.22, o.roof === "thatch" ? [0.22, 0.18, 0.1] : DARK, K.boards);
+  // a door in the front, with its frame, a step and a lamp beside it (kindled as the plane goes by, lit after dusk)
+  if (!o.porch) {
+    const du = hx * 0.45;
+    DET.box(du, 1.05, hz + 0.05, 1.1, 2.1, 0.08, [0.16, 0.1, 0.06], K.boards);
+    DET.box(du, 2.18, hz + 0.08, 1.35, 0.14, 0.14, WHITE, K.trim);
+    for (const s of [-1, 1]) DET.box(du + s * 0.62, 1.05, hz + 0.08, 0.12, 2.15, 0.14, WHITE, K.trim);
+    DET.box(du, -0.12, hz + 0.45, 1.5, 0.3, 0.8, STONE, K.stone);
+    if (o.accent !== 1) {
+      DET.box(du + 0.95, 2.05, hz + 0.18, 0.22, 0.3, 0.22, [1.0, 0.72, 0.36], K.lamp);
+      DET.box(du + 0.95, 2.25, hz + 0.18, 0.3, 0.08, 0.3, DARK);
+      const p = DET.w([du + 0.95, 2.05, hz + 0.3]);
+      LAMPS.push([...p, 0.45, p[0] + 24]);
+      // (the glass kindles with the plane's progress: its key is in the lamp's own aMat.y)
+    }
+  }
   // log ends standing out at the corners
   if (wk === K.logs)
     for (const [cx, cz] of [
@@ -324,8 +397,8 @@ function boat(b: TB, x: number, z: number, rot: number) {
     const u1 = (i + 1) / N;
     const zA = (u0 - 0.5) * L;
     const zB = (u1 - 0.5) * L;
-    for (const s of [-1, 1]) b.quad([s * wAt(u0), 0.35, zA], [s * wAt(u1), 0.35, zB], [s * wAt(u1) * 0.55, -0.12, zB], [s * wAt(u0) * 0.55, -0.12, zA], [0.12, 0.09, 0.07], [K.boards, 0, 0, 0]);
-    b.quad([-wAt(u0) * 0.55, -0.1, zA], [wAt(u0) * 0.55, -0.1, zA], [wAt(u1) * 0.55, -0.1, zB], [-wAt(u1) * 0.55, -0.1, zB], [0.3, 0.24, 0.16], [K.boards, 0, 0, 0]);
+    for (const s of [-1, 1]) b.quad([s * wAt(u0), 0.35, zA], [s * wAt(u1), 0.35, zB], [s * wAt(u1) * 0.55, -0.12, zB], [s * wAt(u0) * 0.55, -0.12, zA], [0.26, 0.19, 0.12], [K.boards, 0, 0, 0]);
+    b.quad([-wAt(u0) * 0.55, -0.1, zA], [wAt(u0) * 0.55, -0.1, zA], [wAt(u1) * 0.55, -0.1, zB], [-wAt(u1) * 0.55, -0.1, zB], [0.42, 0.33, 0.22], [K.boards, 0, 0, 0]);
   }
   b.box(0, 0.12, 0.2, W * 1.6, 0.05, 0.28, [0.35, 0.28, 0.19], K.boards);
 }
@@ -335,8 +408,10 @@ const MILL_X = -132;
 
 function buildTown() {
   const b = new TB();
+  DET = new TB();
+  LAMPS = [];
   const r = rng(9157);
-  const lamps: number[][] = [];
+  const lamps: number[][] = LAMPS;
   const smoke: number[][] = [];
   const nests: V3[] = [];
   const gardens: [number, number, TreeKind, number][] = [];
@@ -512,7 +587,7 @@ function buildTown() {
       if (Math.abs(cx - MILL_X) < 18) continue;
       for (let row = 0; row < 3; row++) {
         const deep = gableOn ? L : D;
-        const off = riverW(cx) + 12 + deep / 2 + row * (deep + 10) + r() * 2;
+        const off = riverW(cx) + 9.5 + deep / 2 + row * (deep + 8) + r() * 1.5;
         const [hx, hz] = bankPt(cx, side, off);
         if (Math.hypot(hx - TOWN.x, hz - TOWN.z) > TOWN.r + 14) continue;
         if (row > 0 && r() < 0.25) continue;
@@ -544,7 +619,7 @@ function buildTown() {
       }
       // lanterns along the quay
       if (r() < 0.6) {
-        const [lx, lz] = bankPt(cx + along / 2 + 1, side, riverW(cx) + 7.5);
+        const [lx, lz] = bankPt(cx + along / 2 + 1, side, riverW(cx) + 7.8);
         lantern(b, lx, lz, lamps, lx + 26);
       }
     }
@@ -737,7 +812,7 @@ function buildTown() {
     b.box(-0.07, 0.42, 0, 0.03, 0.5, 0.03, RED);
   }
 
-  return { geo: b.geometry(), lamps, smoke, mill, gardens };
+  return { geo: b.geometry(), det: DET.geometry(), lamps, smoke, mill, gardens };
 }
 
 // ---------- the shader ----------
@@ -836,7 +911,8 @@ function makeTownMaterial() {
           alb *= 1.0 - 0.2 * smoothstep(0.5, 0.8, vnoise(vec2(uv.x * 0.7, uv.y * 0.08)));
         } else if (kind == 5.0) {
           // a lamp's glass: kindled ahead of the plane, and after dusk
-          float on = max(dusk, smoothstep(vMat.y, vMat.y - 22.0, uFront));
+          float key = vMat.y != 0.0 ? vMat.y : vWorld.x + 24.0;
+          float on = max(dusk, smoothstep(key, key - 22.0, uFront));
           glow = on * (0.85 + 0.15 * sin(uTime * 6.0 + vWorld.x));
           alb = vec3(0.3, 0.26, 0.2);
         }
@@ -867,7 +943,7 @@ function makeTownMaterial() {
           vec3 V = normalize(cameraPosition - vWorld);
           vec3 glass = skyBase(reflect(-V, n)) * 0.3 + vec3(0.02, 0.025, 0.03);
           float someone = step(0.35, hash12(vec2(wi + 3.0, floor(vWorld.x * 0.3) + floor(vWorld.z * 0.3) * 17.0)));
-          float on = dusk * someone;
+          float on = max(dusk, 0.55 * smoothstep(vWorld.x + 12.0, vWorld.x - 16.0, uFront)) * someone;
           vec3 wc = mix(glass, vec3(1.0, 0.62, 0.28) * 0.5, on);
           wc = mix(wc, vec3(0.8, 0.78, 0.72), bars * fine * (1.0 - on * 0.6));
           glow = max(glow, inner * on * 0.75 * mid);
@@ -1106,7 +1182,7 @@ export function Town({ mobile = false }: { mobile?: boolean }) {
   }, [mobile]);
   useEffect(
     () => () => {
-      for (const x of [t.geo, t.mat, t.halos.g, t.halos.m, t.smoke.g, t.smoke.m, t.storks.g, t.storks.m, t.storks.geo, t.wheel, t.garden.mat, t.garden.leaves]) x.dispose();
+      for (const x of [t.geo, t.det, t.mat, t.halos.g, t.halos.m, t.smoke.g, t.smoke.m, t.storks.g, t.storks.m, t.storks.geo, t.wheel, t.garden.mat, t.garden.leaves]) x.dispose();
       t.garden.meshes.forEach((m) => {
         m.geometry.dispose();
         m.dispose();
@@ -1115,8 +1191,11 @@ export function Town({ mobile = false }: { mobile?: boolean }) {
     [t],
   );
   const wheel = useRef<THREE.Mesh>(null);
+  const det = useRef<THREE.Mesh>(null);
   const front = useRef(1e4);
-  useFrame((_, dt) => {
+  useFrame(({ camera }, dt) => {
+    // (the houses' fine things only near: from the desk they would be a few pixels fighting the walls for depth)
+    if (det.current) det.current.visible = Math.hypot(camera.position.x - TOWN.x, camera.position.z - TOWN.z) < 190;
     // the plane's furthest progress down the river (west), for the lamps; reset while it is not flying at home
     const flying = voyage.cur === "home" && voyage.flying && voyage.planePos.y > -100;
     front.current = flying ? Math.min(front.current, voyage.planePos.x) : 1e4;
@@ -1127,6 +1206,7 @@ export function Town({ mobile = false }: { mobile?: boolean }) {
   return (
     <>
       <mesh geometry={t.geo} material={t.mat} />
+      <mesh ref={det} geometry={t.det} material={t.mat} />
       <group position={[t.mill.x, t.mill.y, t.mill.z]} rotation={[0, t.mill.rot + Math.PI / 2, 0]}>
         <mesh ref={wheel} geometry={t.wheel} material={t.mat} />
       </group>
