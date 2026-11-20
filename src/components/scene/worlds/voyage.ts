@@ -146,14 +146,14 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
     amb: [0.25, 0.225, 0.165],
     key: [1.0, 0.8, 0.52],
     keyI: 1.25,
-    sunAz: -38,
-    sunEl: -8,
+    sunAz: -40,
+    sunEl: 26,
     keyAz: -30,
     keyEl: 36,
     cloudLit: [0.5, 0.36, 0.24],
     cloudShade: [0.08, 0.065, 0.05],
     night: 0.5,
-    exposure: 1.15,
+    exposure: 1.0,
     fx: [0.25, 0.6, 0.0, 0.5],
   },
   // Fairy Tale: a high clear afternoon, turquoise, the sun low in a fan of rays
@@ -396,7 +396,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "rex",
     place: "sea",
     air: AIR.rex,
-    fog: [0.00014, 0.005],
+    fog: [0.00032, 0.004],
     terrain: {
       base: -7,
       sines: [
@@ -440,9 +440,10 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [290, -500, 34],
       [298, -538, 34],
     ],
+    // the dark sphere and the king, built twice the sketch's size (worlds/Rex.tsx KS)
     obstacles: [
-      { x: 0, z: -260, r: 92, h: 92, bell: true },
-      { x: 0, z: -260, r: 66, h: 262 },
+      { x: 0, z: -260, r: 168, h: 168, bell: true },
+      { x: 0, z: -260, r: 124, h: 524 },
     ],
     canvases: [{ painting: "rex", x: -72, z: 372, yaw: 0.72 }],
   },
