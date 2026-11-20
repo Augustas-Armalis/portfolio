@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { DESK, clamp01, easeInOutCubic, nowS, spring } from "./shared";
+import { ambienceListener } from "@/lib/ambience";
 import { postCtl } from "./Post";
 import { arriveGolden } from "./sky";
 import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
@@ -229,6 +230,8 @@ export function Plane({
     g.rotation.z = -st.roll;
     voyage.planePos.copy(st.pos);
     voyage.planeSpeed = st.speed;
+    // (what sounds near the plane grows as it comes: lib/ambience.ts)
+    ambienceListener(st.pos.x, st.pos.y, st.pos.z);
   };
   const updateNose = () => st.nose.set(-Math.sin(st.yaw) * Math.cos(st.pitch), Math.sin(st.pitch), -Math.cos(st.yaw) * Math.cos(st.pitch));
 

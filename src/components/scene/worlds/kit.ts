@@ -193,6 +193,12 @@ export class Kit {
 //   gold   leaf laid in patches: metal, catching the key light and the sky's glow as the eye moves
 //   irid   a pearl sheen at grazing angles, the colour turning with the angle
 //   wrap   light that comes through the edges of a form lit from behind (a soft back light)
+// Earth banked up against a base (see "grounding" in common.tsx): a low flaring skirt, `r` metres across at its
+// top and half as wide again at its foot, `h` high, sunk a fifth of that into the ground at p (p[1] = the ground's
+// height there). `col` is the ground's colour at its foot, `top` (default col) where it meets the thing.
+export function bank(k: Kit, p: V3, r: number, h: number, col: V3, top?: V3) {
+  return k.add(new THREE.CylinderGeometry(r, r * 1.5, h * 1.2, 28, 2, true), [p[0], p[1] + h * 0.4, p[2]], col, { top: top ?? col });
+}
 export function makeTempera(o: { rim?: V3; rimPow?: number; amb?: number; key?: number; dab?: number; strata?: number; grain?: number; ao?: number; aoH?: number; gold?: number; goldCol?: V3; irid?: number; wrap?: number } = {}) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,

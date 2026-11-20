@@ -11,7 +11,8 @@ import { useQuality } from "@/lib/quality";
 // that picture like a lens (an SVG displacement map shaped to the element,
 // Chromium only); one thin hairline of light on the rim that wanders slowly
 // round it; no border, no inner shadow, no drop shadow. A press gives and
-// springs back. Safari and Firefox get the same piece without the refraction.
+// springs back. There is exactly one of it: every piece of the scene's UI,
+// small or large, is this same glass (same blur, same tint, same edge). Safari and Firefox get the same piece without the refraction.
 
 // (a little under critical: a morph settles with one small breath past its mark)
 export const GLASS_SPRING = { type: "spring", stiffness: 400, damping: 27, mass: 0.9 } as const;
@@ -25,9 +26,6 @@ const CSS = `
   -webkit-backdrop-filter:blur(3px) saturate(1.7) brightness(1.06);backdrop-filter:blur(3px) saturate(1.7) brightness(1.06);
   box-shadow:0 0 0 .5px rgb(0 0 0/.16);
   text-shadow:0 1px 7px rgb(0 0 0/.36);transition:filter .5s cubic-bezier(.22,1,.36,1)}
-/* a larger piece that carries words (a list, a player, a panel of dials) has a little more body, so type reads over anything */
-.lg-panel{background:linear-gradient(180deg,rgb(255 255 255/.12),rgb(255 255 255/.02) 40%,rgb(255 255 255/.05)),rgb(16 20 26/.3);
-  -webkit-backdrop-filter:blur(9px) saturate(1.7) brightness(1.04);backdrop-filter:blur(9px) saturate(1.7) brightness(1.04)}
 .lg svg{filter:drop-shadow(0 1px 2.5px rgb(0 0 0/.3))}
 .lg .lg-on svg{filter:none}
 /* the rim: one hairline of light, brightest where the sky would catch it, wandering slowly round the edge */
@@ -140,9 +138,11 @@ function lensMap(w: number, h: number, r: number, bezel: number) {
   return c.toDataURL("image/png");
 }
 
+// (`panel` is accepted and ignored: there is one glass, the same for a pill, a bar, a popover and the player)
 type GlassProps = Omit<HTMLMotionProps<"div">, "children"> & { radius?: number; lens?: boolean; panel?: boolean; children?: ReactNode };
 
-export function Glass({ radius = 999, lens = true, panel = false, className = "", style, children, ...rest }: GlassProps) {
+export function Glass({ radius = 999, lens = true, panel: _one, className = "", style, children, ...rest }: GlassProps) {
+  void _one;
   const ref = useRef<HTMLDivElement>(null);
   const id = `lg${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const [map, setMap] = useState<{ url: string; w: number; h: number; scale: number } | null>(null);
@@ -166,9 +166,9 @@ export function Glass({ radius = 999, lens = true, panel = false, className = ""
     ro.observe(el);
     return () => ro.disconnect();
   }, [lens, radius]);
-  const bf = map ? `url(#${id}) blur(${panel ? 7 : 1.1}px) saturate(1.7) brightness(${panel ? 1.04 : 1.06})` : undefined;
+  const bf = map ? `url(#${id}) blur(1.1px) saturate(1.7) brightness(1.06)` : undefined;
   return (
-    <motion.div ref={ref} className={`lg ${panel ? "lg-panel " : ""}relative ${className}`} style={{ borderRadius: radius, ...(bf ? { backdropFilter: bf } : null), ...style }} {...rest}>
+    <motion.div ref={ref} className={`lg relative ${className}`} style={{ borderRadius: radius, ...(bf ? { backdropFilter: bf } : null), ...style }} {...rest}>
       {map && (
         <svg width="0" height="0" className="pointer-events-none absolute" aria-hidden>
           <filter id={id} x="0" y="0" width={map.w} height={map.h} filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">

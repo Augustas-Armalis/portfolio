@@ -9,7 +9,7 @@ import { WorldGrass } from "../Grass";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { GLSL_AIR, Kit, WORLD_U, angel, haloGeometry, makeCanvasMaterial, makeHaloMaterial, makePoints, makePuffMaterial, makeTempera, makeTerrainMaterial, pointsGeometry, puffGeometry, rng, terrainGeometry, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
-import { WORLDS, WORLD_ORDER, gateOf, groundAt, originOf, pathOf, voyage, type WorldDef, type WorldId } from "./voyage";
+import { WORLDS, WORLD_ORDER, gateOf, groundAt, heightGLSL, originOf, pathOf, voyage, type WorldDef, type WorldId } from "./voyage";
 
 // What every world shares: its ground and grass, the path of light with its
 // waymarks and angels, the gate onward, and the painting it was made from,
@@ -466,6 +466,76 @@ export function Mist({ puffs }: { puffs: Puff[] }) {
 export function Halos({ list, kind = 0 }: { list: Halo[]; kind?: 0 | 1 | 2 | 3 }) {
   const b = useDisposable(() => ({ geo: haloGeometry(list), mat: makeHaloMaterial(kind) }), [list, kind]);
   return <mesh geometry={b.geo} material={b.mat} renderOrder={6} />;
+}
+
+// ---------- grounding ----------
+// Nothing should simply stick out of the ground. Two helpers for where a thing meets the land:
+//
+//   <ContactShade def={def} spots={[{ x, z, r, k? }, ...]} />
+//       a soft shade lying on the terrain round the foot of anything standing on it (a tower, a figure, a rock):
+//       one instanced decal per spot that follows the ground's own relief, darkest hard against the thing and
+//       gone by `r` metres (give r about one and a half times the thing's own radius at the ground; k is its
+//       strength, default 0.5). Cool, never black; it thins with distance into the air like everything else.
+//   bank(kit, [x, groundY, z], r, h, col, top?)   (kit.ts)
+//       earth banked up against a base: a low, flaring skirt of the ground's own colour, r metres across at its
+//       top and half as wide again at its foot, h metres high, sunk a little into the ground. Put one under every
+//       wall, pier, plinth and trunk, and the join is a slope instead of a line.
+//
+// Together: the bank makes the form meet the land, the shade makes it sit on it.
+export type ShadeSpot = { x: number; z: number; r: number; k?: number };
+export function ContactShade({ def, spots }: { def: WorldDef; spots: ShadeSpot[] }) {
+  const b = useDisposable(() => {
+    const g = new THREE.InstancedBufferGeometry();
+    const base = new THREE.CircleGeometry(1, 28);
+    base.rotateX(-Math.PI / 2);
+    g.index = base.index;
+    g.setAttribute("position", base.attributes.position);
+    const at = new Float32Array(spots.length * 4);
+    const box = new THREE.Box3();
+    spots.forEach((sp, i) => {
+      at.set([sp.x, sp.z, sp.r, sp.k ?? 0.5], i * 4);
+      box.expandByPoint(new THREE.Vector3(sp.x, groundAt(def, sp.x, sp.z), sp.z));
+    });
+    g.setAttribute("aAt", new THREE.InstancedBufferAttribute(at, 4));
+    g.instanceCount = spots.length;
+    g.boundingSphere = spots.length ? box.getBoundingSphere(new THREE.Sphere()) : new THREE.Sphere();
+    g.boundingSphere.radius += 60;
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -60,
+      uniforms: { ...SKY_U, ...WORLD_U },
+      vertexShader: /* glsl */ `
+        attribute vec4 aAt;
+        varying float vR; varying float vK; varying vec3 vWorld;
+        ${heightGLSL(def.terrain)}
+        void main(){
+          vec2 q = aAt.xy + position.xz * aAt.z;
+          vR = length(position.xz); vK = aAt.w;
+          // it lies on the land itself, a hand above it
+          vec4 wp = modelMatrix * vec4(q.x, max(terrainH(q), ${(def.water ?? -1e5).toFixed(2)}) + 0.06, q.y, 1.0);
+          vWorld = wp.xyz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }`,
+      fragmentShader: /* glsl */ `
+        varying float vR; varying float vK; varying vec3 vWorld;
+        ${GLSL_SKY}
+        ${GLSL_AIR}
+        void main(){
+          // darkest against the thing, a long soft edge, nothing at the rim
+          float a = (1.0 - smoothstep(0.0, 1.0, vR)); a = a * a * vK;
+          a *= 1.0 - airAmt(vWorld);
+          // a cool shade taken from the sky, so it belongs to the hour
+          gl_FragColor = vec4(uSkyCol * 0.07 + vec3(0.012, 0.014, 0.03), a);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    return { g, mat };
+  }, [def, spots]);
+  return <mesh geometry={b.g} material={b.mat} renderOrder={-3} />;
 }
 
 // ---------- the paintings ----------

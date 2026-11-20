@@ -225,9 +225,12 @@ function targets(s: Scene) {
   const home = key === "desk" || key === "avenue";
   // (every bed is taken well down from the figures in the table: see CUT)
   const cut = home ? CUT.desk : CUT.world;
-  let wind = b.wind;
-  let waves = Math.max(b.waves, b.shore * clamp01(s.water));
-  let birds = b.birds * day * (1 - 0.4 * fly);
+  // (what stands near the listener is added to the place's own air)
+  const near = nearSources();
+  let wind = b.wind + near.wind;
+  let waves = Math.max(b.waves, b.shore * clamp01(s.water)) + near.waves;
+  let birds = (b.birds + near.birds) * day * (1 - 0.4 * fly);
+  const birdShare = b.birds + near.birds;
   if (s.minimal) {
     // a phone: one bed at a time
     if (waves > wind) wind = 0;
@@ -240,9 +243,9 @@ function targets(s: Scene) {
     key,
     day,
     // (the place's own levels: these move only when the place does)
-    bed: { wind: wind * REC.wind.gain * cut, waves: waves * REC.waves.gain * cut, birds: birds > 0.02 ? REC.birds.gain * b.birds * cut : 0 },
+    bed: { wind: wind * REC.wind.gain * cut, waves: waves * REC.waves.gain * cut, birds: birds > 0.02 ? REC.birds.gain * birdShare * cut : 0 },
     // the wind settles after dark; in the air it rises a little with speed
-    lean: { wind: (1 - 0.3 * night * (home ? 1 : 0)) * (1 + 0.45 * fly * fly), waves: 1 - 0.25 * fly, birds: b.birds > 0 ? birds / b.birds : 0 },
+    lean: { wind: (1 - 0.3 * night * (home ? 1 : 0)) * (1 + 0.45 * fly * fly), waves: 1 - 0.25 * fly, birds: birdShare > 0 ? birds / birdShare : 0 },
     // at home the night wind is darker and loses its birds; a fast plane hears a little more of the top
     hp: b.hp,
     lp: Math.min(WIND_CEIL, b.lp * (home ? 1 - 0.3 * smooth(0.25, 0.7, night) : 1) * (1 + 0.25 * fly)),
@@ -499,6 +502,44 @@ if (typeof window !== "undefined") {
   w.__ambDispose = dispose;
   // hot reload: the gesture has already happened, so pick up where it left off
   if (was) window.setTimeout(startAmbience, 0);
+}
+
+// ---- sources: sound that grows as the plane comes near ----
+// A place in the world can have a sound of its own, from the recordings there already are: surf by a shore, wind in
+// a wood, the forest's birds by a lake. It is heard from `radius` metres off, barely, and grows smoothly to its
+// level (a share of that recording's calibrated bed, about 1 for "as loud as a world's own bed"; it is cut with
+// everything else) as the listener reaches it; it is added to whatever the place itself sounds like and moves with
+// the same slow fades. Register it when the thing is mounted and take it away when it goes:
+//
+//   useEffect(() => ambienceSource("home-lake", { kind: "waves", at: [-17, 0, -34], radius: 120, level: 0.5 }), []);
+//
+// (ambienceSource returns the function that removes it.) `at` is in world space. The listener is the plane in
+// flight (Plane.tsx tells us where it is) and the eye otherwise.
+export type SoundSource = { kind: "wind" | "waves" | "birds"; at: [number, number, number]; radius: number; level: number };
+const sources = new Map<string, SoundSource>();
+const ear = { x: 0, y: 0, z: 0, set: false };
+export function ambienceSource(id: string, src: SoundSource) {
+  sources.set(id, src);
+  return () => {
+    if (sources.get(id) === src) sources.delete(id);
+  };
+}
+export function ambienceListener(x: number, y: number, z: number) {
+  ear.x = x;
+  ear.y = y;
+  ear.z = z;
+  ear.set = true;
+}
+function nearSources() {
+  const out = { wind: 0, waves: 0, birds: 0 };
+  if (!ear.set) return out;
+  sources.forEach((s) => {
+    const d = Math.hypot(s.at[0] - ear.x, s.at[1] - ear.y, s.at[2] - ear.z);
+    const k = clamp01(1 - d / Math.max(s.radius, 1));
+    // (slow at the rim, fuller close in: it is noticed late and never jumps)
+    out[s.kind] += s.level * k * k * (3 - 2 * k) * k;
+  });
+  return out;
 }
 
 // What the scene is doing, written once a frame (cheap: plain numbers).
