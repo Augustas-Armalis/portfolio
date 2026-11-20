@@ -75,6 +75,7 @@ export type WorldDef = {
   centre: [number, number];
   radius: number; // beyond this the air turns the plane back
   ceil: number;
+  pace?: number; // a world built several times larger than the rest is flown this many times faster (default 1)
   entry: { x: number; z: number; above: number; yaw: number };
   gate: { x: number; z: number; above: number; yaw: number } | null; // the way onward; the last world has none
   path: [x: number, z: number, above: number][]; // the path of light, from the entry to the gate
@@ -384,6 +385,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, -150],
     radius: 1000,
     ceil: 760,
+    pace: 2.4,
     entry: { x: 0, z: 760, above: 34, yaw: 0 },
     // at the pyramid's point, in the pale disc behind the angel (worlds/Stars.tsx)
     gate: { x: 90, z: -520, above: 850, yaw: 0.0555 },
@@ -453,6 +455,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, -400],
     radius: 1750,
     ceil: 720,
+    pace: 2.8,
     entry: { x: 0, z: 1150, above: 22, yaw: 0 },
     // high beyond his crown, where the path leaves through the upper shells
     gate: { x: -380, z: -1380, above: 740, yaw: 0.611 },

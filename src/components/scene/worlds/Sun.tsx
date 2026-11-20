@@ -496,6 +496,7 @@ export default function SunWorld({ props }: { props: WorldProps }) {
 
     // ----- thousands of small round trees over the plain, in groves and rows: the measure of everything -----
     const trees: Soft[] = [];
+    const treesFar: Soft[] = [];
     const nTr = props.mobile ? 1300 : Math.round(2400 + 3200 * props.trees);
     let gx = 0;
     let gz = 0;
@@ -520,7 +521,8 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       const rad = (tall ? 0.7 + r() * 0.6 : 1.0 + r() * 1.4) * far2;
       const sy = tall ? 3.2 + r() * 1.8 : 0.9 + r() * 0.4;
       const col: V3 = tall ? (pick < 0.6 ? [0.3, 0.33, 0.1] : [0.38, 0.3, 0.08]) : pick < 0.45 ? [0.52, 0.44, 0.1] : pick < 0.75 ? [0.6, 0.38, 0.08] : [0.78, 0.56, 0.14];
-      trees.push({ p: [x, g(x, z) + rad * sy * 0.85, z], r: rad, col, sy, seed: r() });
+      // (those far from the way are drawn with a fifth of the triangles)
+      (pts.some((q, j) => j % 8 === 0 && Math.hypot(q.x - x, q.z - z) < 230) ? trees : treesFar).push({ p: [x, g(x, z) + rad * sy * 0.85, z], r: rad, col, sy, seed: r() });
     }
 
     // ----- shafts of sunlight: through every arch of the aqueducts, and broad ones between the bells -----
@@ -569,6 +571,7 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       cloudsFar: softGeometry(cloudsFar, 1),
       cloudMat: makeSoftMaterial({ shade: [1.0, 0.92, 0.84], under: [0.74, 0.68, 0.94], rim: 3, dab: 1.3, amb: 1.2, key: 0.5, flat: 0.3, sway: 3, soft: 0.8, fade: [2000, 2900], air: 0.5 }),
       trees: softGeometry(trees, 1),
+      treesFar: softGeometry(treesFar, 0),
       treeMat: makeSoftMaterial({ shade: [0.72, 0.7, 0.96], under: [0.6, 0.56, 0.7], rim: 2.6, dab: 1.5, amb: 1.15, key: 0.45, ao: 0.4 }),
       beams: beamGeometry(beams, SUN_DIR),
       beamMat: makeBeamMaterial([1, 0.84, 0.5]),
@@ -598,6 +601,7 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       <mesh geometry={b.city} material={b.tempera} />
       <mesh geometry={b.far} material={b.farMat} />
       <mesh geometry={b.trees} material={b.treeMat} frustumCulled={false} />
+      <mesh geometry={b.treesFar} material={b.treeMat} frustumCulled={false} />
       <mesh geometry={b.cloudsFar} material={b.cloudMat} frustumCulled={false} />
       <mesh geometry={b.cloudsNear} material={b.cloudMat} frustumCulled={false} />
       <points geometry={b.windows} material={b.windowMat} />
