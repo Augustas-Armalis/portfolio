@@ -5,6 +5,7 @@ import { airState, arrivalHours, mixSky, skyState, type Air, type SkyState } fro
 import { funeralLand } from "./funeral/land";
 import { GROTTO } from "./sea/shape";
 import { FINALE_ENTRY, FINALE_GATE, FINALE_PATH, FINALE_TERRAIN } from "./seafinale/shape";
+import { SUN_CANVAS, SUN_ENTRY, SUN_GATE, SUN_OBSTACLES, SUN_PATH, SUN_SKY, SUN_TERRAIN } from "./sun/shape";
 
 // Angelų takas, the path of angels. The paper plane's flight is a pilgrimage
 // along a path of light between worlds, and every world is one painting by
@@ -93,34 +94,27 @@ const T0: Terrain = { base: 0, sines: [], bumps: [], rim: [1, 2, 0] };
 const FUNERAL = funeralLand();
 
 // Colours below are scene-linear, written before the lens (ACES and the grade) sees them.
-// The Sonata of the Sun's aqueducts: each crosses the path of light at `c`, an arch centred on it; `u` runs along
-// the bridge, `n` arches of `w` metres, `H` high. Their piers by the path are obstacles (below); worlds/Sun.tsx builds them.
-export const SUN_BRIDGES: { c: [number, number]; u: [number, number]; n: number; w: number; H: number; tiers: number }[] = [
-  { c: [8, 150], u: [0.9615, -0.2747], n: 9, w: 80, H: 56, tiers: 1 },
-  { c: [-80, 15], u: [0.64, -0.768], n: 11, w: 90, H: 200, tiers: 2 },
-];
-
 const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // Sonata of the Sun: a field of dull gold under a gold-green air; one great drawn sun low ahead (the world's
   // GreatSun: the sky's own disc is not drawn) behind the bells and arches, so they stand as shade with a thread of
   // gold round every edge and its rays pour through them
   sun: {
     label: "Sonata of the Sun",
-    zenith: [0.36, 0.33, 0.2],
-    upper: [0.6, 0.44, 0.15],
-    horizon: [0.8, 0.53, 0.15],
-    glow: [1.0, 0.66, 0.2],
+    zenith: [0.3, 0.29, 0.2],
+    upper: [0.5, 0.39, 0.15],
+    horizon: [0.72, 0.49, 0.15],
+    glow: [0.92, 0.6, 0.18],
     amb: [0.46, 0.44, 0.52],
     key: [1.0, 0.78, 0.42],
     keyI: 2.1,
-    sunAz: 12,
-    sunEl: 13,
-    keyAz: 12,
-    keyEl: 19,
+    sunAz: SUN_SKY.az,
+    sunEl: SUN_SKY.el,
+    keyAz: SUN_SKY.keyAz,
+    keyEl: SUN_SKY.keyEl,
     cloudLit: [0.7, 0.6, 0.3],
     cloudShade: [0.4, 0.4, 0.26],
     night: 0,
-    exposure: 0.9,
+    exposure: 0.8,
     fx: [0.0, 0.55, 0.0, 0],
   },
   // Sonata of the Stars: a deep blue-green night; the light is gold and white, and comes from the pyramid's point
@@ -333,64 +327,21 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "sun",
     place: "sky",
     air: AIR.sun,
-    fog: [0.0005, 0.011],
-    terrain: {
-      base: 2,
-      sines: [
-        [0.011, 0.004, 0.4, 5],
-        [-0.006, 0.013, 1.9, 4],
-        [0.023, 0.017, 3.1, 1.6],
-        [0.031, -0.027, 0.7, 0.9],
-      ],
-      bumps: [
-        [0, -150, 190, 16],
-        [-260, 120, 150, 10],
-        [280, 40, 160, 12],
-      ],
-      rim: [520, 900, 40],
-    },
+    // (thin air: the bells are first seen from two and a half kilometres, and must stand in the haze, not be lost in it)
+    fog: [0.00011, 0.0042],
+    // a vast open plain, the road across it, the aqueducts and the far city of bells: the land, the way and what
+    // the plane flies round are worked out together in sun/shape.ts
+    terrain: SUN_TERRAIN,
     water: null,
     centre: [0, -40],
-    radius: 610,
-    ceil: 260,
-    // (the first aqueduct is kept low, so the first sight is the whole city of bells and its suns standing over it)
-    entry: { x: 0, z: 470, above: 34, yaw: 0 },
-    gate: { x: 150, z: -470, above: 20, yaw: -0.25 },
-    path: [
-      [0, 470, 34],
-      [4, 390, 34],
-      [8, 310, 19],
-      [18, 250, 14],
-      [20, 208, 15],
-      [8, 150, 15],
-      [-12, 96, 17],
-      [-50, 40, 22],
-      [-110, -10, 30],
-      [-180, -90, 40],
-      [-172, -192, 48],
-      [-120, -320, 50],
-      [40, -345, 42],
-      [120, -400, 28],
-      [150, -470, 20],
-      [158, -502, 20],
-    ],
-    obstacles: [
-      // the bells (see worlds/Sun.tsx BELLS)
-      { x: 30, z: -190, r: 84, h: 470, bell: true },
-      { x: -92, z: -120, r: 62, h: 330, bell: true },
-      { x: 124, z: -92, r: 54, h: 300, bell: true },
-      { x: -10, z: -40, r: 70, h: 120, bell: true },
-      { x: -210, z: -260, r: 46, h: 240, bell: true },
-      { x: 210, z: -250, r: 42, h: 210, bell: true },
-      // the towers of the two gatehouses on the way in (Sun.tsx GATEHOUSES)
-      { x: 55.7, z: 203.7, r: 13, h: 132 },
-      { x: -15.7, z: 212.3, r: 13, h: 132 },
-      { x: 23.6, z: 80.1, r: 14, h: 142 },
-      { x: -47.6, z: 111.9, r: 14, h: 142 },
-      // the piers either side of the way through each aqueduct
-      ...SUN_BRIDGES.flatMap((b) => [-1, 1].map((sd) => ({ x: b.c[0] + b.u[0] * sd * b.w * 0.5, z: b.c[1] + b.u[1] * sd * b.w * 0.5, r: b.w * 0.14 + 2, h: b.H + 12 }))),
-    ],
-    canvases: [{ painting: "sun-allegro", x: -31, z: 302, yaw: 0.65 }],
+    radius: 2060,
+    ceil: 520,
+    pace: 1.8,
+    entry: SUN_ENTRY,
+    gate: SUN_GATE,
+    path: SUN_PATH,
+    obstacles: [...SUN_OBSTACLES],
+    canvases: [{ painting: "sun-allegro", x: SUN_CANVAS.x, z: SUN_CANVAS.z, yaw: SUN_CANVAS.yaw }],
   },
   stars: {
     id: "stars",
