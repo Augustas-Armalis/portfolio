@@ -544,7 +544,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     id: "gate",
     title: "Offering",
     year: "1909",
-    music: "road",
+    music: "gate",
     place: "forest",
     air: AIR.gate,
     fog: [0.00022, 0.02],

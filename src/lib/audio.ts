@@ -105,7 +105,11 @@ export const MIX: Record<Channel, number> = { music: 0.65, flight: 0.65, piano: 
 // offline (afconvert to PCM, whole-file RMS of the mono sum):
 //   nocturne-for-absent-things.mp3   -22.5 dBFS RMS, peak -3.0   -> 1
 //   afterlight.m4a                   -15.7 dBFS RMS, peak +0.3   -> 0.46 (-6.7 dB)
-const FILE_TRIM: [string, number][] = [["/afterlight.", 0.46]];
+//   ciurlionis-jura-dube.mp3         -17.5 dBFS RMS, peak  0.0   -> 0.56 (-5 dB)
+const FILE_TRIM: [string, number][] = [
+  ["/afterlight.", 0.46],
+  ["/ciurlionis-jura-dube.", 0.56],
+];
 export function fileTrim(url: string | null | undefined) {
   if (!url) return 1;
   for (const [k, v] of FILE_TRIM) if (url.includes(k)) return v;
@@ -515,6 +519,40 @@ function retryOnGesture(v: Voice) {
       });
   };
   EVENTS.forEach((e) => window.addEventListener(e, go, true));
+}
+
+// A phone only lets an element start without a gesture if that element has
+// played during one. Called inside a tap, this plays a moment of silence on
+// the voice, so that later it may start its recording on its own.
+let silence = "";
+export function voicePrime(v: Voice | null) {
+  if (!v || !v.el.paused || v.want) return;
+  const cur = v.el.getAttribute("src");
+  if (cur && !cur.startsWith("blob:")) return;
+  if (!silence) {
+    const n = 800;
+    const b = new DataView(new ArrayBuffer(44 + n));
+    const str = (o: number, t: string) => [...t].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+    str(0, "RIFF");
+    b.setUint32(4, 36 + n, true);
+    str(8, "WAVEfmt ");
+    b.setUint32(16, 16, true);
+    b.setUint16(20, 1, true);
+    b.setUint16(22, 1, true);
+    b.setUint32(24, 8000, true);
+    b.setUint32(28, 8000, true);
+    b.setUint16(32, 1, true);
+    b.setUint16(34, 8, true);
+    str(36, "data");
+    b.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) b.setUint8(44 + i, 128);
+    silence = URL.createObjectURL(new Blob([b.buffer], { type: "audio/wav" }));
+  }
+  v.el.src = silence;
+  void v.el
+    .play()
+    .then(() => v.el.src.startsWith("blob:") && v.el.pause())
+    .catch(() => {});
 }
 
 // Start (or carry on) a voice and fade it to `level`. Playing a voice that is

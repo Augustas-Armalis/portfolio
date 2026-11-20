@@ -7,6 +7,7 @@ import { gyroAvailable, gyroCentre, gyroStart, gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { play } from "@/lib/sfx";
+import { FLIGHT_CREDIT, useFlightCredit } from "@/lib/flightMusic";
 import { WORLDS, setFlight, setGuide, useFlightFlags, useVoyageTick, useWorld, voyage } from "./worlds/voyage";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
 import { photoCtl, postCtl, type Capture } from "./Post";
@@ -969,6 +970,41 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
     </AnimatePresence>
   );
   const stop = { onClick: (e: React.MouseEvent) => e.stopPropagation(), onPointerDown: (e: React.PointerEvent) => e.stopPropagation() };
+  // whose music this is: shown for a while each time the recording begins (the licence asks for the credit)
+  const creditAt = useFlightCredit();
+  const [credit, setCredit] = useState(false);
+  useEffect(() => {
+    if (!creditAt || !flying) {
+      setCredit(false);
+      return;
+    }
+    const a = window.setTimeout(() => setCredit(true), 2600);
+    const b = window.setTimeout(() => setCredit(false), 2600 + 9000);
+    return () => {
+      window.clearTimeout(a);
+      window.clearTimeout(b);
+    };
+  }, [creditAt, flying]);
+  const creditLine = (
+    <AnimatePresence>
+      {credit && (
+        <motion.div
+          key="credit"
+          data-flight="credit"
+          className="pointer-events-none flex items-center gap-2 whitespace-nowrap text-[12px] font-medium tracking-[-0.01em] text-white/85 [text-shadow:0_1px_10px_rgb(0_0_0/0.55)]"
+          initial={{ opacity: 0, y: 4, filter: "blur(4px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          exit={{ opacity: 0, filter: "blur(4px)" }}
+          transition={{ duration: 0.9, ease: EASE }}
+        >
+          <svg width="11" height="12" viewBox="0 0 11 12" fill="currentColor" aria-hidden className="opacity-80">
+            <path d="M3.6 1.6v6.1a2.1 2.1 0 1 0 1 1.8V4l4.3-1v3.7a2.1 2.1 0 1 0 1 1.8V.6L3.6 1.6Z" />
+          </svg>
+          {FLIGHT_CREDIT}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 
   if (mobile) {
     const chip = (on: boolean) => `lg-btn pointer-events-auto flex h-11 items-center gap-1.5 whitespace-nowrap px-3.5 text-[13.5px] font-medium ${on ? "lg-on" : "text-white/92"}`;
@@ -995,6 +1031,9 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
         </div>
         <div className="pointer-events-none absolute z-30 bottom-[calc(max(12px,env(safe-area-inset-bottom))+66px)] landscape:bottom-[max(12px,env(safe-area-inset-bottom))]" style={{ right: SAFE.r }}>
           <Throttle value={thr} onChange={throttle} />
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4" style={{ bottom: `calc(${SAFE.b} + 62px)` }}>
+          {creditLine}
         </div>
         <div className="pointer-events-none absolute inset-x-0 z-30 flex justify-center" style={{ bottom: SAFE.b }}>
           <Glass className="pointer-events-auto flex items-center gap-0.5 p-1" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={{ ...GLASS_SPRING, delay: 0.06 }} data-flight="switches" {...stop}>
@@ -1058,6 +1097,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
           </button>
         </Glass>
       </Bottom>
+      <div className="pointer-events-none absolute inset-x-0 bottom-[76px] z-30 flex justify-center px-4">{creditLine}</div>
       {/* where you are: the painting this world is built from */}
       <div className="pointer-events-none absolute bottom-6 left-5 z-30">{caption}</div>
     </>

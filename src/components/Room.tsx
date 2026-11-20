@@ -704,8 +704,10 @@ function Scene({
       planeApi.current?.beginLand(cam);
       if (voyage.homing) {
         // coming home out of the light, the music comes back up, and only then lets go
+        // (the one place his own music is heard in the flight: Afterlight, for the warm return)
         flightMusicVolume(1);
-        window.setTimeout(() => stage.current !== "fly" && flightMusicStop(), 4200);
+        flightMusicTo("home");
+        window.setTimeout(() => stage.current !== "fly" && flightMusicStop(7), 17000);
       } else flightMusicStop();
       setStage("land");
       return;
