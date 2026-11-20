@@ -211,11 +211,11 @@ const larpo: Project = {
   what: "A full-stack website and product design studio for SaaS and AI teams.",
   story: [
     "Larpo is my design studio, and it was my first business. We design and build websites, product interfaces and brands for SaaS and AI teams. Strategy, design, motion and code sit in one team, so a launch takes weeks, not months.",
-    "It has earned over six figures, keeps growing, and is now run by a team of four. What you see today is its fourth brand. Each one got sharper as the work did.",
+    "I started it in 2024 under other names of my own. It has earned over six figures since, keeps growing, and is now run by a team of four. This year it became Larpo, its fourth brand, and each one got sharper as the work did.",
     "Teams come to us for one thing and stay for the rest: Acquisity came for product design and left with a rebrand, a website and a front end, and still works with us.",
   ],
   role: "Founder, head of design",
-  years: "Now",
+  years: "2024 – now",
   status: "Taking projects",
   stack: "Figma, React, Next.js, Motion, Three.js",
   image: "/img/p/larpo-1.webp",
@@ -567,7 +567,7 @@ export const resume = {
     {
       title: "Experience",
       rows: [
-        { when: "Now", title: "Founder, head of design", org: "Larpo Studio", body: "A full-stack website and product design studio for SaaS and AI teams. My first business: over six figures earned, a team of four, now on its fourth brand.", app: "larpo" },
+        { when: "2024 – now", title: "Founder, head of design", org: "Larpo Studio", body: "A full-stack website and product design studio for SaaS and AI teams. My first business, started in 2024 under earlier names: over six figures earned, a team of four, rebranded as Larpo this year.", app: "larpo" },
         { when: "2025 – now", title: "Lead product designer", org: "Acquisity", body: "Over a year leading product design for Acquisity's AI acquisition platform: product, rebrand, website and front end." },
         { when: "2025 – 2026", title: "CEO, product and design", org: "Contles", body: "A creator-marketing platform, built from zero without investment. First at the ISM entrepreneurship club, then Kickstart Lab and Startup Fair, and a place on Rykliai, Lithuania's Shark Tank.", app: "contles" },
       ] as ResumeRow[],
@@ -593,6 +593,7 @@ export const resume = {
 // The timeline, oldest first. `when` is shown as written.
 export type Milestone = { when: string; title: string; body: string; app?: AppId; key?: boolean };
 export const timeline: Milestone[] = [
+  { when: "2024", title: "My own studio", body: "Websites and products for clients, under the names that later became Larpo.", app: "larpo" },
   { when: "Jun 2025", title: "Acquisity", body: "Product design for an AI acquisition platform. Now leading it." },
   { when: "Oct 2025", title: "Lunor", body: "My designs, shared. People bought and used loads of them.", app: "lunor" },
   { when: "Dec 2025", title: "Contles begins", body: "Brands and creators in one place. First at the ISM club, then Kickstart Lab, Startup Fair and Rykliai, Lithuania's Shark Tank.", app: "contles", key: true },
