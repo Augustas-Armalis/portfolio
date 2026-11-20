@@ -1440,7 +1440,7 @@ function Scene({
       // (on a phone the stick is the glass one under the left thumb, and a drag anywhere else turns the eye)
       const k = inp.keys;
       const auto = mobile || voyage.guide;
-      let sx = mobile ? inp.jx : auto ? 0 : inp.sx;
+      let sx = mobile ? inp.jx : 0; // (with a mouse the pointer is never a stick: the keys fly the plane, the mouse only looks)
       const bank = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
       if (bank) sx = bank;
       const thr = (k.has("shift") || k.has("e") ? 1 : 0) - (k.has("control") || k.has("q") ? 1 : 0);
@@ -1452,7 +1452,7 @@ function Scene({
       if (g && (inp.dx || inp.dy)) gyroNudge((-inp.dx / W) * LOOK_PER_WIDTH, (-inp.dy / W) * LOOK_PER_WIDTH * 0.8);
       const fi = flightIn.current;
       fi.sx = sx;
-      fi.sy = mobile ? inp.jy : auto ? 0 : inp.sy;
+      fi.sy = mobile ? inp.jy : 0;
       fi.thr = thr;
       fi.climb = climb;
       fi.wheel = inp.zoom;
