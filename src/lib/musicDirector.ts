@@ -223,10 +223,11 @@ function resolve(): Now | null {
   const stream = place === "desk" ? LEVEL.deskStream : LEVEL.flightStream;
   const file = place === "desk" ? LEVEL.deskFile : LEVEL.flightFile;
   if (t.kind === "worlds") {
-    if (st.blocked) return { kind: "sea", key: `sea:${st.world}`, track: "sea-dube", level: 1 };
-    // (a world that has not been given a place of its own yet takes the avenue's)
-    const w = WORLD_MUSIC[st.world] ?? WORLD_MUSIC.road;
-    return { kind: "yt", key: `w:${st.world}`, video: w.video, at: w.at, level: stream * (w.gain ?? 1), track: "worlds", part: w.part };
+    // One piece for the whole journey: "In the Forest" from take-off to landing, never restarted or swapped
+    // as the plane passes from world to world (one key for the flight, so the stream simply carries on).
+    if (st.blocked) return { kind: "sea", key: "sea:flight", track: "sea-dube", level: 1 };
+    const w = WORLD_MUSIC.road;
+    return { kind: "yt", key: "w:flight", video: w.video, at: w.at, level: stream * (w.gain ?? 1), track: "worlds", part: "In the Forest" };
   }
   if (t.kind === "yt") {
     // (in flight the hosted Čiurlionis stands in; at the field nothing does: his music is for the flight only)
