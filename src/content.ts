@@ -761,7 +761,7 @@ export const CONTACT_EMAIL: string | null = null;
 // Every channel. href null means "not filled in yet": the UI still shows the row,
 // pointing at "#" so it looks finished, and the real link drops in here later.
 export type Channel = {
-  id: "email" | "x" | "linkedin" | "larpo" | "instagram" | "instagramStudio" | "github" | "spotify";
+  id: "email" | "x" | "linkedin" | "larpo" | "instagram" | "instagramStudio" | "github" | "spotify" | "youtube";
   label: string;
   value: string;
   href: string | null;
@@ -774,8 +774,9 @@ export const CONTACTS: Record<Channel["id"], Channel> = {
   // placeholders until he confirms them (value is display only, href stays null)
   email: { id: "email", label: "Email", value: CONTACT_EMAIL ?? "Email", href: CONTACT_EMAIL ? `mailto:${CONTACT_EMAIL}` : null },
   instagram: { id: "instagram", label: "Instagram", value: "Personal", href: null },
-  github: { id: "github", label: "GitHub", value: "GitHub", href: null },
-  spotify: { id: "spotify", label: "Spotify", value: "Augustas Armalis", href: null },
+  github: { id: "github", label: "GitHub", value: "Augustas-Armalis", href: "https://github.com/Augustas-Armalis" },
+  spotify: { id: "spotify", label: "Spotify", value: "Augustas Armalis", href: "https://open.spotify.com/artist/1caZzY2xlQW23Xe1DWtw6H" },
+  youtube: { id: "youtube", label: "YouTube", value: "hollow kid", href: "https://www.youtube.com/@hollowkidsongs" },
 };
 export const contactList: Channel[] = Object.values(CONTACTS);
 export const bookCall = { label: "Book a call", href: "https://cal.com/larpo/15min", sub: "15 min on Cal.com" };

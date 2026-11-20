@@ -1,8 +1,8 @@
 "use client";
 
 import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransform, type AnimationPlaybackControls } from "motion/react";
-import { useEffect, useRef, useState } from "react";
-import { apps, bookCall, dockApps, gameApps, mainWork, owner, playableTracks, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { apps, bookCall, dockApps, gallery, gameApps, mainWork, owner, playableTracks, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
 import { flightMusicPrime } from "@/lib/flightMusic";
 import { handoff } from "@/lib/handoff";
 import { isUp, useOS, useWallpaper } from "@/store";
@@ -433,23 +433,26 @@ function ProjectsWidget({ onOpen }: { onOpen: Open }) {
   );
 }
 
-// A large picture from Shots, changing slowly.
+// A large picture from the Gallery, changing slowly.
 function PhotoWidget({ onOpen }: { onOpen: Open }) {
+  // a few of his photographs: the Gallery's Best of, one after another
+  const best = useMemo(() => (gallery.albums.find((x) => x.id === "best")?.items ?? []).map((id) => gallery.media.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m && m.kind === "photo"), []);
   const [i, setI] = useState(0);
   useEffect(() => {
-    const iv = window.setInterval(() => setI((n) => (n + 1) % shots.items.length), 6000);
+    const iv = window.setInterval(() => setI((n) => (n + 1) % best.length), 6000);
     return () => window.clearInterval(iv);
-  }, []);
-  const s = shots.items[i];
+  }, [best.length]);
+  const s = best[i];
+  if (!s) return null;
   return (
-    <Widget app="shots" onOpen={onOpen} label="Open Shots" className="block h-[clamp(132px,24dvh,206px)] w-full">
+    <Widget app="gallery" onOpen={onOpen} label="Open Gallery" className="block h-[clamp(132px,24dvh,206px)] w-full">
       <AnimatePresence initial={false}>
-        <motion.img key={s.src} src={s.src} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: EASE_OUT }} />
+        <motion.img key={s.id} src={s.src.replace(/w=\d+/, "w=900")} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: EASE_OUT }} />
       </AnimatePresence>
       <span aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgb(0_0_0/0.55))]" />
-      <span className="absolute inset-x-4 bottom-3 flex items-baseline justify-between">
-        <span className="text-[17px] font-semibold tracking-[-0.022em]">Shots</span>
-        <span className="text-[13px] text-white/75">{s.title}</span>
+      <span className="absolute inset-x-4 bottom-3 flex items-baseline justify-between gap-3">
+        <span className="text-[17px] font-semibold tracking-[-0.022em]">Gallery</span>
+        <span className="truncate text-[13px] text-white/75">{s.title}</span>
       </span>
     </Widget>
   );

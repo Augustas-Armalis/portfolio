@@ -1,6 +1,6 @@
 "use client";
 
-// Shots and Gallery: one Photos-style grid with Quick Look.
+// Shots: his design shots in a Photos-style grid with Quick Look (the Gallery is gallery.tsx).
 
 import { ArrowUpRight, Eye } from "lucide-react";
 import { useState } from "react";
