@@ -52,6 +52,8 @@ export const postCtl = {
   // one finished frame drawn at width x height pixels, cropped to a rectangle of the frame (0..1, origin top left)
   capture: null as ((rect: { x: number; y: number; w: number; h: number }, width: number, height: number) => Capture | null) | null,
   level: 0,
+  // where the scene itself is drawn (null: straight to the screen), for whoever warms shaders ahead of time
+  sceneTarget: null as THREE.WebGLRenderTarget | null,
 };
 
 // The camera in the hand: what its rings and dials are set to. The camera's
@@ -523,6 +525,7 @@ export function Post({ level }: { level: number }) {
       gl.autoClear = ac;
     };
     postCtl.level = lv;
+    postCtl.sceneTarget = p?.full ?? null;
     if (!p) {
       POST_U.uLinearOut.value = 0;
       gl.setRenderTarget(null);

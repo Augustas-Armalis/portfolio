@@ -472,7 +472,7 @@ export function Plane({
         const inside = side < 19 && ry < 26;
         const crossed = Number.isFinite(st.gateAlong) && st.gateAlong < 0 !== along < 0 && Math.abs(along - st.gateAlong) < 40;
         const through = inside && (crossed || Math.abs(along) < 3.5);
-        if (process.env.NODE_ENV !== "production" && crossed && !inside) console.warn(`[voyage] ${id}: passed the gate's plane outside it (${side.toFixed(1)} m aside, ${ry.toFixed(1)} m above its middle)`);
+        if (process.env.NODE_ENV !== "production" && crossed && !inside && side < 60) console.warn(`[voyage] ${id}: passed the gate's plane outside it (${side.toFixed(1)} m aside, ${ry.toFixed(1)} m above its middle)`);
         st.gateAlong = along;
         if (through) {
           voyage.next = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1] ?? null;
@@ -481,10 +481,12 @@ export function Plane({
         }
       }
     } else if (voyage.phase === "closing") {
-      voyage.veil = Math.min(1, voyage.veil + dt / 1.2);
+      voyage.veil = Math.min(1, voyage.veil + dt / 1.0);
       if (voyage.veil >= 1 && voyage.next) {
         const to = voyage.next;
         voyage.next = null;
+        // a world made ready while this one was flown is simply shown
+        voyage.quick = voyage.ready === to;
         swapWorld(to);
         const e = entryOf(to);
         place(to, e.pos, e.yaw);
@@ -495,9 +497,10 @@ export function Plane({
       // the new world is drawn under the cloud for a few frames (its shaders and buffers are made there) before it opens
       voyage.veil = 1;
       voyage.held += dt;
-      if (voyage.held > 0.75 && voyage.frames >= 5 && !voyage.skyFrom) voyage.phase = "opening";
+      // (one that was ready needs only the sky's change of colour; one made here and now is given longer)
+      if (voyage.held > (voyage.quick ? 0.3 : 0.75) && voyage.frames >= (voyage.quick ? 3 : 5) && !voyage.skyFrom) voyage.phase = "opening";
     } else {
-      voyage.veil = Math.max(0, voyage.veil - dt / 2.1);
+      voyage.veil = Math.max(0, voyage.veil - dt / 1.7);
       if (voyage.veil <= 0) voyage.phase = "open";
     }
   };
@@ -542,7 +545,7 @@ export function Plane({
       const hands = st.t < 0.9 || voyage.phase === "closing";
       const edge = glide(dt, hands ? { ...input, sx: 0, sy: 0, climb: 0 } : input, { launching, hands });
       passage(dt);
-      crossingStep(dt);
+      crossingStep(dt, voyage.next !== null && voyage.ready === voyage.next);
       airOf(edge);
       lookStep(dt, st.t < 1.7 ? null : input);
       chase(dt, cam, easeInOutCubic(clamp01(st.t / 1.7)));
@@ -686,6 +689,7 @@ export function Plane({
       voyage.phase = "hold";
       voyage.veil = 1;
       voyage.held = 0;
+      voyage.quick = false;
       swapWorld(id);
       voyage.frames = 0;
       if (along > 0 || id === "home") {

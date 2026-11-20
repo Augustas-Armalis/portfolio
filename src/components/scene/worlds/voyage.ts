@@ -769,6 +769,8 @@ export const voyage = {
   veil: 0, // 0..1 the cloud over the lens; exactly 1 at the frame the world changes
   mist: 0, // extra air density for every shader (SKY_U.uMist), rises with the veil
   frames: 0, // frames drawn since the world last changed
+  ready: null as WorldId | null, // the next world, made ready ahead of time while this one is flown (worlds/Worlds.tsx)
+  quick: false, // this crossing arrived in a world that was ready: the cloud need not wait for it
   held: 0, // seconds the cloud has been closed
   skyFrom: null as SkyState | null,
   skyT: 1,
@@ -826,6 +828,7 @@ export function swapWorld(id: WorldId) {
   voyage.skyFrom = voyage.lastSky;
   voyage.skyT = 0;
   voyage.cur = id;
+  voyage.ready = null;
   voyage.frames = 0;
   voyage.enteredAt = performance.now();
   emit();
@@ -854,7 +857,7 @@ export function voyageSky(live: SkyState, dt: number): SkyState {
   let s = target;
   if (voyage.skyFrom) {
     // unhurried: the closed cloud is the whole picture while this runs, and a quick change of its colour reads as a flash
-    voyage.skyT = Math.min(1, voyage.skyT + dt / 0.8);
+    voyage.skyT = Math.min(1, voyage.skyT + dt / (voyage.quick ? 0.6 : 0.8));
     const t = voyage.skyT;
     s = mixSky(voyage.skyFrom, target, t * t * (3 - 2 * t));
     if (t >= 1) voyage.skyFrom = null;
@@ -864,10 +867,10 @@ export function voyageSky(live: SkyState, dt: number): SkyState {
 }
 // ---------- how long a crossing takes ----------
 // Measured from the gate to open air on the far side: seconds of flight under each part of the cloud, and the
-// real time the main thread was held making the new world (from the change to its third drawn frame).
+// hitch: the longest single frame while the cloud was shut, which is where a world not made ahead of time is made.
 // Development: every crossing is logged and kept in window.__crossings.
 export type Crossing = { from: WorldId; to: WorldId; close: number; hold: number; open: number; total: number; buildMs: number; warm: boolean };
-const xing = { on: false, from: "home" as WorldId, to: "home" as WorldId, close: 0, hold: 0, open: 0, swapAt: 0, buildMs: -1, warm: false };
+const xing = { on: false, from: "home" as WorldId, to: "home" as WorldId, close: 0, hold: 0, open: 0, lastAt: 0, buildMs: 0, warm: false };
 export const crossings: Crossing[] = [];
 export function crossingStep(dt: number, warm = false) {
   if (voyage.phase === "open") {
@@ -875,18 +878,19 @@ export function crossingStep(dt: number, warm = false) {
     xing.on = false;
     const c: Crossing = { from: xing.from, to: xing.to, close: +xing.close.toFixed(2), hold: +xing.hold.toFixed(2), open: +xing.open.toFixed(2), total: +(xing.close + xing.hold + xing.open).toFixed(2), buildMs: Math.round(xing.buildMs), warm: xing.warm };
     crossings.push(c);
-    if (process.env.NODE_ENV !== "production") console.info(`[voyage] ${c.from} -> ${c.to}: ${c.total} s (cloud closing ${c.close}, closed ${c.hold}, opening ${c.open}); new world made in ${c.buildMs} ms${c.warm ? " (it was warm)" : ""}`);
+    if (process.env.NODE_ENV !== "production") console.info(`[voyage] ${c.from} -> ${c.to}: ${c.total} s (cloud closing ${c.close}, closed ${c.hold}, opening ${c.open}); longest frame under the cloud ${c.buildMs} ms${c.warm ? " (the world was ready)" : " (the world was made under the cloud)"}`);
     return;
   }
-  if (!xing.on) Object.assign(xing, { on: true, from: voyage.cur, to: voyage.next ?? voyage.cur, close: 0, hold: 0, open: 0, swapAt: 0, buildMs: -1, warm });
+  if (!xing.on) Object.assign(xing, { on: true, from: voyage.cur, to: voyage.next ?? voyage.cur, close: 0, hold: 0, open: 0, lastAt: performance.now(), buildMs: 0, warm });
+  const now = performance.now();
+  if (voyage.phase === "hold") xing.buildMs = Math.max(xing.buildMs, now - xing.lastAt);
+  xing.lastAt = now;
   if (voyage.phase === "closing") {
     xing.close += dt;
     xing.to = voyage.next ?? xing.to;
     xing.warm = warm;
   } else if (voyage.phase === "hold") {
     xing.hold += dt;
-    if (!xing.swapAt) xing.swapAt = performance.now();
-    if (xing.buildMs < 0 && voyage.frames >= 3) xing.buildMs = performance.now() - xing.swapAt;
   } else xing.open += dt;
 }
 if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __crossings: crossings });

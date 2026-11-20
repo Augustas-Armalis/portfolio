@@ -413,7 +413,11 @@ const CUFF = 2;
 const SKIN = 3;
 const HAIR = 4;
 const LINE = 5;
-function buildKing(side: -1 | 1, coarse: boolean) {
+// The kings and their wood are the heaviest thing in the whole flight to make. So they can be made ahead of time,
+// a few milliseconds a frame, while the plane is still over the sea (prepareKings); the world then takes them
+// ready-made. Without that they are made in one go, as before.
+type King = { geo: THREE.BufferGeometry; crown: Part[]; lights: Halo[] };
+function* kingSteps(side: -1 | 1, coarse: boolean, budget: number): Generator<void, King, void> {
   const pale = side < 0;
   const by = DOME_AT.y;
   const P = (d: number, h: number, w = 0): V3 => [side * d * R, by + h * R, KINGS.z + w * R];
@@ -557,7 +561,7 @@ function buildKing(side: -1 | 1, coarse: boolean) {
     }
   }
   const v = coarse ? 1.5 : 1;
-  const parts = [body.mesh(1.55 * v, paints), head.mesh(0.6 * v, paints), hands.mesh(0.5 * v, paints)];
+  const parts = [yield* body.meshSteps(1.55 * v, paints, undefined, budget), yield* head.meshSteps(0.6 * v, paints, undefined, budget), yield* hands.meshSteps(0.5 * v, paints, undefined, budget)];
   const geo = mergeGeometries(parts)!;
   parts.forEach((g) => g.dispose());
 
@@ -600,275 +604,305 @@ function buildKing(side: -1 | 1, coarse: boolean) {
   return { geo, crown, lights };
 }
 
+// The whole of the wood and everything in it, as work that can be put down and picked up (see prepareKings).
+function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, budget: number) {
+  let began = performance.now();
+  const r = rng(1909 + 7);
+  const gy = (x: number, z: number) => groundAt(def, x, z);
+  const halos: Halo[] = []; // windows
+  const stars: Halo[] = [];
+  const by = DOME_AT.y;
+
+  // ---------- the wood ----------
+  // Old trunks, thick as towers, that lean and turn as they rise and break into two or three heavy boughs;
+  // the boughs arch over and fork again, and close a vault over the kings.
+  const wood: Part[] = [];
+  const towns = new Kit();
+  const BARK: V3 = [0.052, 0.036, 0.026];
+  const BARK_TOP: V3 = [0.026, 0.03, 0.031];
+  const DARK: V3 = [0.007, 0.011, 0.014];
+  type Trunk = { x: number; z: number; R: number; H: number; fork?: number; aim?: number };
+  const trunks: Trunk[] = [];
+  const ahead = (z: number) => z - KINGS.z;
+  // the aisle the plane comes up widens into a glade before the kings, so nothing stands between them and the eye
+  const clear = (z: number) => 66 + 124 * THREE.MathUtils.smoothstep(330 - ahead(z), 0, 260);
+  const tryTrunk = (x: number, z: number, rad: number, H: number, o: Partial<Trunk> = {}) => {
+    if (Math.abs(x) < clear(z) + rad && ahead(z) > -70) return;
+    if (Math.abs(ahead(z)) < 80 && Math.abs(x) < 228) return;
+    for (const c of def.canvases) if (Math.hypot(x - c.x, z - c.z) < 50) return;
+    for (const t of trunks) if (Math.hypot(t.x - x, t.z - z) < (t.R + rad) * 2.5) return;
+    trunks.push({ x, z, R: rad, H, ...o });
+  };
+  // close behind the kings and beside them, as in the picture: these are the ones the light falls on
+  for (const [x, z, rad] of [
+    [-76, -112, 14],
+    [82, -124, 15],
+    [-168, -104, 15],
+    [176, -116, 16],
+    [-128, -210, 13],
+    [134, -220, 14],
+    [-212, -300, 16],
+    [206, -320, 16],
+    [-262, -40, 17],
+    [268, -52, 17],
+    [-236, 96, 16],
+    [240, 110, 16],
+  ] as const)
+    trunks.push({ x, z: KINGS.z + z, R: rad, H: 300 + r() * 40, fork: 0.56 + r() * 0.08 });
+  // the aisle: two uneven rows of the greatest trunks
+  for (let z = 520; z > KINGS.z + 150; z -= 76) for (const s of [-1, 1]) tryTrunk(s * (clear(z) + 16 + r() * 22), z + (r() - 0.5) * 36, 12 + r() * 5, 270 + r() * 60, { fork: 0.52 + r() * 0.12 });
+  // and the wood thickening to either side and beyond
+  const nOuter = props.mobile ? 14 : Math.round(30 * Math.max(0.6, props.trees));
+  for (let i = 0; i < nOuter * 4 && trunks.length < 29 + nOuter; i++) tryTrunk((r() < 0.5 ? -1 : 1) * (130 + r() * 340), 560 - r() * 1100, 8 + r() * 8, 220 + r() * 110);
+
+  // a huddle of houses and towers on a bough, dark against the sky, a few windows lit; now and then small figures
+  const town = (c: V3, a: number, n: number, sc: number) => {
+    const along: V3 = [Math.cos(a), 0, Math.sin(a)];
+    for (let i = 0; i < n; i++) {
+      const o = (i - (n - 1) / 2) * (4.6 + r() * 1.6) * sc;
+      const px = c[0] + along[0] * o;
+      const pz = c[2] + along[2] * o;
+      const py = c[1];
+      const kind = r();
+      if (kind < 0.24) {
+        // a small figure: some stand, some lift their arms
+        const fh = (3.4 + r() * 1.6) * sc;
+        towns.add(new THREE.CylinderGeometry(0.32 * sc, 0.62 * sc, fh, 6), [px, py + fh / 2, pz], DARK);
+        towns.add(new THREE.SphereGeometry(0.52 * sc, 8, 6), [px, py + fh + 0.4 * sc, pz], DARK);
+        if (r() < 0.6) for (const sx of [-1, 1]) towns.box(0.2 * sc, 1.9 * sc, 0.2 * sc, [px + along[0] * sx * 0.62 * sc, py + fh * 1.02, pz + along[2] * sx * 0.62 * sc], DARK);
+        continue;
+      }
+      const tall = kind > 0.72;
+      const w = (3.2 + r() * 2.6) * sc;
+      const hh = (tall ? 12 + r() * 13 : 4 + r() * 4.4) * sc;
+      towns.box(w * (tall ? 0.72 : 1), hh, w * (tall ? 0.72 : 1), [px, py + hh / 2, pz], DARK, { rot: [0, -a, 0] });
+      if (tall) {
+        const sp = (5 + r() * 8) * sc;
+        towns.add(new THREE.ConeGeometry(w * 0.56, sp, 4), [px, py + hh + sp / 2, pz], DARK, { rot: [0, -a + Math.PI / 4, 0] });
+        if (r() < 0.35) towns.add(new THREE.SphereGeometry(w * 0.5, 8, 6), [px, py + hh + 0.6, pz], DARK, { scale: [1, 1.25, 1] });
+      } else towns.add(new THREE.ConeGeometry(w * 0.88, 2.8 * sc, 4), [px, py + hh + 1.4 * sc, pz], DARK, { rot: [0, -a + Math.PI / 4, 0], scale: [1, 1, 0.8] });
+      const nW = tall ? 2 : 1;
+      for (let wI = 0; wI < nW; wI++) if (r() < 0.86) halos.push({ p: [px + (r() - 0.5) * w * 0.5, py + hh * (0.3 + r() * 0.5), pz + (r() - 0.5) * w * 0.5], size: (1.9 + r() * 1.5) * Math.sqrt(sc), col: r() < 0.7 ? [1, 0.72, 0.38] : [1, 0.46, 0.2], k: 0.9 + r() * 0.8 });
+    }
+  };
+  // a bough: thick where it leaves, arching up and over, wandering a little
+  const bough = (p0: V3, a: number, len: number, rise: number, rad: number, depth: number, sides = 9) => {
+    const ph = r() * 6.28;
+    const bend = (r() - 0.5) * 0.9;
+    const wob = len * 0.05;
+    const q = (u: number): V3 => {
+      const aa = a + bend * u;
+      const w = Math.sin(u * 5.2 + ph) * wob * u;
+      return [p0[0] + Math.cos(aa) * len * Math.pow(u, 1.12) - Math.sin(aa) * w, p0[1] + rise * (1 - (1 - u) * (1 - u)) + Math.cos(u * 4.1 + ph) * wob * 0.5 * u, p0[2] + Math.sin(aa) * len * Math.pow(u, 1.12) + Math.cos(aa) * w];
+    };
+    wood.push(limb([p0, q(0.14), q(0.32), q(0.52), q(0.74), q(1)], [rad, rad * 0.86, rad * 0.68, rad * 0.5, rad * 0.3, rad * 0.08], BARK_TOP, 3, { sides, seg: depth ? 14 : 22, twist: 1.2 }));
+    return q;
+  };
+  const tree = (t: Trunk) => {
+    const g0 = gy(t.x, t.z);
+    const fork = t.fork ?? 0.44 + r() * 0.14;
+    const Hf = t.H * fork;
+    const leanA = r() * 6.28;
+    const lean = 0.03 + r() * 0.07;
+    const sway = (0.5 + r() * 0.5) * t.R * 1.5;
+    const ph = r() * 6.28;
+    const at = (k: number): V3 => [t.x + Math.cos(leanA) * lean * Hf * k + Math.sin(k * 4.4 + ph) * sway * Math.min(1, k * 2), g0 - 7 + (Hf + 7) * k, t.z + Math.sin(leanA) * lean * Hf * k + Math.cos(k * 3.7 + ph) * sway * 0.8 * Math.min(1, k * 2)];
+    // the foot spreads into the ground; the bole swells again under the fork
+    wood.push(limb([at(0), at(0.07), at(0.2), at(0.42), at(0.66), at(0.86), at(1)], [t.R * 2.1, t.R * 1.36, t.R * 1.04, t.R * 0.96, t.R * 0.92, t.R * 0.98, t.R * 0.9], BARK, 3, { top: BARK_TOP, sides: 14, seg: 30, twist: 2.4 }));
+    const p0 = at(1);
+    const nB = 2 + (r() < 0.6 ? 1 : 0);
+    // most reach toward the aisle and the kings
+    const a0 = t.aim ?? (r() < 0.75 ? Math.atan2(-(t.z - (KINGS.z + ahead(t.z) * 0.75)), -t.x) + (r() - 0.5) * 0.9 : r() * 6.28);
+    for (let j = 0; j < nB; j++) {
+      const a = a0 + (j * Math.PI * 2) / nB + (r() - 0.5) * 0.7;
+      const len = (j === 0 ? 96 : 70) + r() * 60;
+      const rise = (t.H - Hf) * (0.6 + r() * 0.4);
+      const rad = t.R * (0.66 - j * 0.07);
+      const q = bough(p0, a, len, rise, rad, 0);
+      // it forks again, and ends in a few twigs
+      const u1 = 0.36 + r() * 0.16;
+      const q2 = bough(q(u1), a + (r() < 0.5 ? 1 : -1) * (0.6 + r() * 0.6), len * (0.5 + r() * 0.2), rise * 0.5 + 14, rad * 0.5, 1, 7);
+      for (const [qq, u, k] of [
+        [q, 0.72, 0.2],
+        [q, 0.96, 0.12],
+        [q2, 0.8, 0.12],
+      ] as const) {
+        const e = qq(u);
+        const ta = a + (r() - 0.5) * 2.6;
+        wood.push(limb([e, [e[0] + Math.cos(ta) * 18, e[1] + 9, e[2] + Math.sin(ta) * 18], [e[0] + Math.cos(ta) * 40, e[1] + 12 + r() * 14, e[2] + Math.sin(ta) * 40]], [rad * k, rad * k * 0.55, rad * 0.02], BARK_TOP, 3, { sides: 5, seg: 8 }));
+      }
+      // towns live where a bough runs level
+      for (const [qq, rr2] of [
+        [q, rad * 0.42],
+        [q2, rad * 0.26],
+      ] as const)
+        if (r() < 0.72) {
+          const u = 0.5 + r() * 0.34;
+          const c = qq(u);
+          const d = qq(u + 0.04);
+          town([c[0], c[1] + rr2 * 0.8, c[2]], Math.atan2(d[2] - c[2], d[0] - c[0]), 4 + Math.floor(r() * 5), 1);
+        }
+    }
+  };
+  for (const t of trunks) {
+    tree(t);
+    if (performance.now() - began > budget) {
+      yield;
+      began = performance.now();
+    }
+  }
+  // three great boughs slung from trunk to trunk behind the kings: on them the towns that show between the
+  // two bowed heads and against the bands of the sky, as he put them
+  const span = (a: V3, c: V3, sag: number, rad: number, n: number, sc: number) => {
+    const mid: V3 = [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2 - sag, (a[2] + c[2]) / 2];
+    const q1: V3 = [(a[0] * 3 + c[0]) / 4, (a[1] * 3 + c[1]) / 4 - sag * 0.8, (a[2] * 3 + c[2]) / 4];
+    const q3: V3 = [(a[0] + c[0] * 3) / 4, (a[1] + c[1] * 3) / 4 - sag * 0.8, (a[2] + c[2] * 3) / 4];
+    wood.push(limb([a, q1, mid, q3, c], [rad * 1.2, rad, rad * 0.9, rad, rad * 1.2], BARK_TOP, 3, { sides: 9, seg: 20, twist: 1 }));
+    const ang = Math.atan2(c[2] - a[2], c[0] - a[0]);
+    town([mid[0], mid[1] + rad * 0.8, mid[2]], ang, n, sc);
+  };
+  const KZ = KINGS.z;
+  span([-168, by + 4.6 * R, KZ - 104], [-76, by + 5.3 * R, KZ - 112], 14, 5.5, 8, 1.3);
+  span([82, by + 5.0 * R, KZ - 124], [176, by + 4.4 * R, KZ - 116], 12, 5.5, 8, 1.3);
+  span([-262, by + 2.2 * R, KZ - 40], [-168, by + 2.9 * R, KZ - 104], 8, 5, 9, 1.4);
+  span([176, by + 3.0 * R, KZ - 116], [268, by + 2.3 * R, KZ - 52], 8, 5, 8, 1.4);
+  span([-128, by + 3.7 * R, KZ - 210], [134, by + 4.1 * R, KZ - 220], 16, 5.5, 12, 1.5);
+
+  // white lights hung far up among the boughs, as many as stars
+  const nStar = props.mobile ? 80 : 190;
+  for (let i = 0; i < nStar; i++) {
+    const x = (r() - 0.5) * 900;
+    const z = KINGS.z + 260 - r() * 760;
+    const y = by + 10 + Math.pow(r(), 0.8) * 270;
+    if (Math.abs(x) < 150 && Math.abs(z - KINGS.z) < 70 && y < by + 5.2 * R) continue;
+    stars.push({ p: [x, y, z], size: 2.6 + r() * 3.4, col: r() < 0.72 ? [0.88, 0.93, 1.0] : [1, 0.84, 0.6], k: 0.55 + r() * 0.9 });
+  }
+
+  // ---------- the kings ----------
+  yield;
+  began = performance.now();
+  const left = yield* kingSteps(-1, props.mobile, budget);
+  const right = yield* kingSteps(1, props.mobile, budget);
+  yield;
+  began = performance.now();
+  wood.push(...left.crown, ...right.crown);
+  const crownLights = [...left.lights, ...right.lights];
+
+  // ---------- the little world ----------
+  // His own homestead under the glass, in the light of that picture: a pale field, a path, low roofs, round
+  // trees gone rose and gold in a low sun, a poplar or two, blue hills behind. In the middle of it the desk.
+  const k = new Kit();
+  const DP = (x: number, y: number, z: number): V3 => [DOME_AT.x + x, by + y, KINGS.z + z];
+  const GL = 2.7; // its own light (lights are turned down at night; this is the one that is not)
+  // the dish it stands on, dark beneath
+  k.add(new THREE.CylinderGeometry(R + 0.9, R - 6, 3.6, 56), DP(0, -1.95, 0), [0.045, 0.026, 0.018], { top: [0.2, 0.1, 0.04] });
+  k.add(new THREE.TorusGeometry(R + 0.5, 0.4, 6, 72), DP(0, 0.05, 0), [1, 0.62, 0.3], { glow: 1.4, rot: [Math.PI / 2, 0, 0] });
+  // the field and the path that leaves the desk
+  k.add(new THREE.CylinderGeometry(R - 0.3, R - 0.3, 0.5, 64), DP(0, -0.2, 0), [0.98, 0.78, 0.5], { glow: GL * 0.5 });
+  k.box(2.2, 0.14, R * 1.5, DP(2.4, 0.12, -R * 0.1), [1, 0.9, 0.72], { glow: GL * 0.56, rot: [0, 0.16, 0] });
+  k.add(new THREE.SphereGeometry(R * 0.5, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), DP(-R * 0.3, 0, -R * 0.5), [0.72, 0.6, 0.74], { glow: GL * 0.42, scale: [1.3, 0.4, 0.6] });
+  k.add(new THREE.SphereGeometry(R * 0.4, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), DP(R * 0.42, 0, -R * 0.58), [0.8, 0.62, 0.66], { glow: GL * 0.42, scale: [1.3, 0.4, 0.6] });
+  // the desk, the display on it
+  k.box(5.2, 0.3, 2.5, DP(0, 2.6, 5), [0.5, 0.27, 0.15], { glow: GL * 0.42 });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.box(0.24, 2.5, 0.24, DP(sx * 2.3, 1.25, 5 + sz * 0.95), [0.36, 0.19, 0.1], { glow: GL * 0.36 });
+  k.box(2.5, 1.5, 0.12, DP(0, 3.9, 4.5), [0.08, 0.06, 0.07], { glow: 0 });
+  k.box(2.3, 1.3, 0.03, DP(0, 3.9, 4.58), [1.0, 0.86, 0.7], { glow: GL * 0.6 });
+  // roofs
+  for (const [x, z, w, rot] of [
+    [-9, -6, 6.4, 0.3],
+    [-15.5, -1, 4.6, -0.2],
+    [10, -9, 5.4, -0.4],
+  ] as const) {
+    k.box(w, 3.0, w * 0.72, DP(x, 1.5, z), [0.98, 0.8, 0.6], { glow: GL * 0.46, rot: [0, rot, 0] });
+    k.add(new THREE.ConeGeometry(w * 0.8, 2.6, 4), DP(x, 4.3, z), [0.78, 0.24, 0.15], { glow: GL * 0.44, rot: [0, rot + Math.PI / 4, 0], scale: [1, 1, 0.74] });
+  }
+  // round trees, rose and ochre; slim dark poplars; a thin tower
+  const tr = rng(77);
+  for (let i = 0; i < 20; i++) {
+    const a = 0.62 + (i / 20) * (Math.PI * 2 - 1.24) + Math.PI / 2;
+    const d = R * (0.46 + tr() * 0.44);
+    const x = Math.cos(a) * d;
+    const z = Math.sin(a) * d - 3;
+    if (i % 5 === 2) {
+      const h = 11 + tr() * 6;
+      k.add(new THREE.ConeGeometry(1.5, h, 7), DP(x, h / 2 + 0.4, z), [0.3, 0.14, 0.12], { glow: GL * 0.3, top: [0.5, 0.26, 0.16] });
+    } else {
+      const s = 3.2 + tr() * 2.4;
+      const rose = tr() < 0.6;
+      k.add(new THREE.CylinderGeometry(0.22, 0.3, 3.4, 5), DP(x, 1.7, z), [0.34, 0.16, 0.1], { glow: GL * 0.3 });
+      k.add(new THREE.SphereGeometry(s, 12, 9), DP(x, 3.2 + s * 0.8, z), rose ? [0.72, 0.3, 0.2] : [0.76, 0.46, 0.2], { glow: GL * 0.4, scale: [1, 0.92, 1], top: rose ? [0.95, 0.52, 0.36] : [0.98, 0.7, 0.34] });
+    }
+  }
+  k.box(1.1, 15, 1.1, DP(15, 7.5, -13), [0.34, 0.16, 0.13], { glow: GL * 0.3 });
+  k.add(new THREE.ConeGeometry(1.1, 3.4, 4), DP(15, 16.6, -13), [0.34, 0.16, 0.13], { glow: GL * 0.3, rot: [0, Math.PI / 4, 0] });
+
+  // embers drifting up through the wood
+  const embers = pointsGeometry(
+    props.mobile ? 110 : Math.round(260 * Math.max(0.4, props.effects)),
+    (_i, q) => {
+      const a = q() * Math.PI * 2;
+      const d = 30 + Math.pow(q(), 0.7) * 300;
+      return [Math.cos(a) * d * 0.7, 8 + q() * 240, KINGS.z + 90 + Math.sin(a) * d, 0.5 + q() * 1.1];
+    },
+    404,
+  );
+  // one bird, far up, crossing
+  const birdG = new THREE.BufferGeometry();
+  birdG.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0.9, -6.4, 1.9, 1.9, -2.6, 0.3, -0.9, 0, 0, 0.9, 2.6, 0.3, -0.9, 6.4, 1.9, 1.9, 0, 0, 1.6, -0.7, 0, -0.4, 0.7, 0, -0.4], 3));
+
+  // the plane is eased round every trunk
+  def.obstacles.length = OWN_OBSTACLES;
+  for (const t of trunks) def.obstacles.push({ x: t.x, z: t.z, r: t.R + 6, h: t.H });
+
+  yield;
+  const woodG = mergeGeometries(wood)!;
+  yield;
+  wood.forEach((g) => g.dispose());
+  return {
+    wood: woodG,
+    bark: makeEmberLit("plain"),
+    left: left.geo,
+    leftMat: makeEmberLit("pale"),
+    right: right.geo,
+    rightMat: makeEmberLit("dark"),
+    towns: towns.parts.length ? towns.build() : null,
+    dark: makeTempera({ amb: 0.7, key: 0.05, dab: 0.4 }),
+    little: k.build(),
+    lit: makeTempera({ amb: 0.5, key: 0.2, dab: 0.5 }),
+    domeGeo: new THREE.SphereGeometry(R, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2),
+    domeSky: makeDomeSky(),
+    domeGlass: makeDomeGlass(),
+    rays: raysGeometry(props.mobile ? 150 : 280, 5),
+    raysMat: makeRays(),
+    nightGeo: new THREE.SphereGeometry(1400, 48, 24),
+    nightMat: makeNight(),
+    embers,
+    emberMat: makePoints({ a: [1, 0.5, 0.18], b: [1, 0.76, 0.4], scale: 480, drift: 5, gain: 1.3, max: 12 }),
+    birdG,
+    birdMat: new THREE.MeshBasicMaterial({ color: "#020506", side: THREE.DoubleSide, fog: false }),
+    halos,
+    stars,
+    crownLights,
+  };
+}
+type Wood = ReturnType<typeof woodSteps> extends Generator<void, infer R, void> ? R : never;
+const woodKey = (p: Pick<WorldProps, "mobile" | "trees" | "effects">) => `${p.mobile}|${p.trees}|${p.effects > 0.5}`;
+let madeWood: { key: string; wood: Wood } | null = null;
+
 export default function KingsWorld({ props }: { props: WorldProps }) {
   const bird = useRef<THREE.Mesh>(null);
   const night = useRef<THREE.Mesh>(null);
   const b = useDisposable(() => {
-    const r = rng(1909 + 7);
-    const gy = (x: number, z: number) => groundAt(def, x, z);
-    const halos: Halo[] = []; // windows
-    const stars: Halo[] = [];
-    const by = DOME_AT.y;
-
-    // ---------- the wood ----------
-    // Old trunks, thick as towers, that lean and turn as they rise and break into two or three heavy boughs;
-    // the boughs arch over and fork again, and close a vault over the kings.
-    const wood: Part[] = [];
-    const towns = new Kit();
-    const BARK: V3 = [0.052, 0.036, 0.026];
-    const BARK_TOP: V3 = [0.026, 0.03, 0.031];
-    const DARK: V3 = [0.007, 0.011, 0.014];
-    type Trunk = { x: number; z: number; R: number; H: number; fork?: number; aim?: number };
-    const trunks: Trunk[] = [];
-    const ahead = (z: number) => z - KINGS.z;
-    // the aisle the plane comes up widens into a glade before the kings, so nothing stands between them and the eye
-    const clear = (z: number) => 66 + 124 * THREE.MathUtils.smoothstep(330 - ahead(z), 0, 260);
-    const tryTrunk = (x: number, z: number, rad: number, H: number, o: Partial<Trunk> = {}) => {
-      if (Math.abs(x) < clear(z) + rad && ahead(z) > -70) return;
-      if (Math.abs(ahead(z)) < 80 && Math.abs(x) < 228) return;
-      for (const c of def.canvases) if (Math.hypot(x - c.x, z - c.z) < 50) return;
-      for (const t of trunks) if (Math.hypot(t.x - x, t.z - z) < (t.R + rad) * 2.5) return;
-      trunks.push({ x, z, R: rad, H, ...o });
-    };
-    // close behind the kings and beside them, as in the picture: these are the ones the light falls on
-    for (const [x, z, rad] of [
-      [-76, -112, 14],
-      [82, -124, 15],
-      [-168, -104, 15],
-      [176, -116, 16],
-      [-128, -210, 13],
-      [134, -220, 14],
-      [-212, -300, 16],
-      [206, -320, 16],
-      [-262, -40, 17],
-      [268, -52, 17],
-      [-236, 96, 16],
-      [240, 110, 16],
-    ] as const)
-      trunks.push({ x, z: KINGS.z + z, R: rad, H: 300 + r() * 40, fork: 0.56 + r() * 0.08 });
-    // the aisle: two uneven rows of the greatest trunks
-    for (let z = 520; z > KINGS.z + 150; z -= 76) for (const s of [-1, 1]) tryTrunk(s * (clear(z) + 16 + r() * 22), z + (r() - 0.5) * 36, 12 + r() * 5, 270 + r() * 60, { fork: 0.52 + r() * 0.12 });
-    // and the wood thickening to either side and beyond
-    const nOuter = props.mobile ? 14 : Math.round(30 * Math.max(0.6, props.trees));
-    for (let i = 0; i < nOuter * 4 && trunks.length < 29 + nOuter; i++) tryTrunk((r() < 0.5 ? -1 : 1) * (130 + r() * 340), 560 - r() * 1100, 8 + r() * 8, 220 + r() * 110);
-
-    // a huddle of houses and towers on a bough, dark against the sky, a few windows lit; now and then small figures
-    const town = (c: V3, a: number, n: number, sc: number) => {
-      const along: V3 = [Math.cos(a), 0, Math.sin(a)];
-      for (let i = 0; i < n; i++) {
-        const o = (i - (n - 1) / 2) * (4.6 + r() * 1.6) * sc;
-        const px = c[0] + along[0] * o;
-        const pz = c[2] + along[2] * o;
-        const py = c[1];
-        const kind = r();
-        if (kind < 0.24) {
-          // a small figure: some stand, some lift their arms
-          const fh = (3.4 + r() * 1.6) * sc;
-          towns.add(new THREE.CylinderGeometry(0.32 * sc, 0.62 * sc, fh, 6), [px, py + fh / 2, pz], DARK);
-          towns.add(new THREE.SphereGeometry(0.52 * sc, 8, 6), [px, py + fh + 0.4 * sc, pz], DARK);
-          if (r() < 0.6) for (const sx of [-1, 1]) towns.box(0.2 * sc, 1.9 * sc, 0.2 * sc, [px + along[0] * sx * 0.62 * sc, py + fh * 1.02, pz + along[2] * sx * 0.62 * sc], DARK);
-          continue;
-        }
-        const tall = kind > 0.72;
-        const w = (3.2 + r() * 2.6) * sc;
-        const hh = (tall ? 12 + r() * 13 : 4 + r() * 4.4) * sc;
-        towns.box(w * (tall ? 0.72 : 1), hh, w * (tall ? 0.72 : 1), [px, py + hh / 2, pz], DARK, { rot: [0, -a, 0] });
-        if (tall) {
-          const sp = (5 + r() * 8) * sc;
-          towns.add(new THREE.ConeGeometry(w * 0.56, sp, 4), [px, py + hh + sp / 2, pz], DARK, { rot: [0, -a + Math.PI / 4, 0] });
-          if (r() < 0.35) towns.add(new THREE.SphereGeometry(w * 0.5, 8, 6), [px, py + hh + 0.6, pz], DARK, { scale: [1, 1.25, 1] });
-        } else towns.add(new THREE.ConeGeometry(w * 0.88, 2.8 * sc, 4), [px, py + hh + 1.4 * sc, pz], DARK, { rot: [0, -a + Math.PI / 4, 0], scale: [1, 1, 0.8] });
-        const nW = tall ? 2 : 1;
-        for (let wI = 0; wI < nW; wI++) if (r() < 0.86) halos.push({ p: [px + (r() - 0.5) * w * 0.5, py + hh * (0.3 + r() * 0.5), pz + (r() - 0.5) * w * 0.5], size: (1.9 + r() * 1.5) * Math.sqrt(sc), col: r() < 0.7 ? [1, 0.72, 0.38] : [1, 0.46, 0.2], k: 0.9 + r() * 0.8 });
-      }
-    };
-    // a bough: thick where it leaves, arching up and over, wandering a little
-    const bough = (p0: V3, a: number, len: number, rise: number, rad: number, depth: number, sides = 9) => {
-      const ph = r() * 6.28;
-      const bend = (r() - 0.5) * 0.9;
-      const wob = len * 0.05;
-      const q = (u: number): V3 => {
-        const aa = a + bend * u;
-        const w = Math.sin(u * 5.2 + ph) * wob * u;
-        return [p0[0] + Math.cos(aa) * len * Math.pow(u, 1.12) - Math.sin(aa) * w, p0[1] + rise * (1 - (1 - u) * (1 - u)) + Math.cos(u * 4.1 + ph) * wob * 0.5 * u, p0[2] + Math.sin(aa) * len * Math.pow(u, 1.12) + Math.cos(aa) * w];
-      };
-      wood.push(limb([p0, q(0.14), q(0.32), q(0.52), q(0.74), q(1)], [rad, rad * 0.86, rad * 0.68, rad * 0.5, rad * 0.3, rad * 0.08], BARK_TOP, 3, { sides, seg: depth ? 14 : 22, twist: 1.2 }));
-      return q;
-    };
-    const tree = (t: Trunk) => {
-      const g0 = gy(t.x, t.z);
-      const fork = t.fork ?? 0.44 + r() * 0.14;
-      const Hf = t.H * fork;
-      const leanA = r() * 6.28;
-      const lean = 0.03 + r() * 0.07;
-      const sway = (0.5 + r() * 0.5) * t.R * 1.5;
-      const ph = r() * 6.28;
-      const at = (k: number): V3 => [t.x + Math.cos(leanA) * lean * Hf * k + Math.sin(k * 4.4 + ph) * sway * Math.min(1, k * 2), g0 - 7 + (Hf + 7) * k, t.z + Math.sin(leanA) * lean * Hf * k + Math.cos(k * 3.7 + ph) * sway * 0.8 * Math.min(1, k * 2)];
-      // the foot spreads into the ground; the bole swells again under the fork
-      wood.push(limb([at(0), at(0.07), at(0.2), at(0.42), at(0.66), at(0.86), at(1)], [t.R * 2.1, t.R * 1.36, t.R * 1.04, t.R * 0.96, t.R * 0.92, t.R * 0.98, t.R * 0.9], BARK, 3, { top: BARK_TOP, sides: 14, seg: 30, twist: 2.4 }));
-      const p0 = at(1);
-      const nB = 2 + (r() < 0.6 ? 1 : 0);
-      // most reach toward the aisle and the kings
-      const a0 = t.aim ?? (r() < 0.75 ? Math.atan2(-(t.z - (KINGS.z + ahead(t.z) * 0.75)), -t.x) + (r() - 0.5) * 0.9 : r() * 6.28);
-      for (let j = 0; j < nB; j++) {
-        const a = a0 + (j * Math.PI * 2) / nB + (r() - 0.5) * 0.7;
-        const len = (j === 0 ? 96 : 70) + r() * 60;
-        const rise = (t.H - Hf) * (0.6 + r() * 0.4);
-        const rad = t.R * (0.66 - j * 0.07);
-        const q = bough(p0, a, len, rise, rad, 0);
-        // it forks again, and ends in a few twigs
-        const u1 = 0.36 + r() * 0.16;
-        const q2 = bough(q(u1), a + (r() < 0.5 ? 1 : -1) * (0.6 + r() * 0.6), len * (0.5 + r() * 0.2), rise * 0.5 + 14, rad * 0.5, 1, 7);
-        for (const [qq, u, k] of [
-          [q, 0.72, 0.2],
-          [q, 0.96, 0.12],
-          [q2, 0.8, 0.12],
-        ] as const) {
-          const e = qq(u);
-          const ta = a + (r() - 0.5) * 2.6;
-          wood.push(limb([e, [e[0] + Math.cos(ta) * 18, e[1] + 9, e[2] + Math.sin(ta) * 18], [e[0] + Math.cos(ta) * 40, e[1] + 12 + r() * 14, e[2] + Math.sin(ta) * 40]], [rad * k, rad * k * 0.55, rad * 0.02], BARK_TOP, 3, { sides: 5, seg: 8 }));
-        }
-        // towns live where a bough runs level
-        for (const [qq, rr2] of [
-          [q, rad * 0.42],
-          [q2, rad * 0.26],
-        ] as const)
-          if (r() < 0.72) {
-            const u = 0.5 + r() * 0.34;
-            const c = qq(u);
-            const d = qq(u + 0.04);
-            town([c[0], c[1] + rr2 * 0.8, c[2]], Math.atan2(d[2] - c[2], d[0] - c[0]), 4 + Math.floor(r() * 5), 1);
-          }
-      }
-    };
-    for (const t of trunks) tree(t);
-    // three great boughs slung from trunk to trunk behind the kings: on them the towns that show between the
-    // two bowed heads and against the bands of the sky, as he put them
-    const span = (a: V3, c: V3, sag: number, rad: number, n: number, sc: number) => {
-      const mid: V3 = [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2 - sag, (a[2] + c[2]) / 2];
-      const q1: V3 = [(a[0] * 3 + c[0]) / 4, (a[1] * 3 + c[1]) / 4 - sag * 0.8, (a[2] * 3 + c[2]) / 4];
-      const q3: V3 = [(a[0] + c[0] * 3) / 4, (a[1] + c[1] * 3) / 4 - sag * 0.8, (a[2] + c[2] * 3) / 4];
-      wood.push(limb([a, q1, mid, q3, c], [rad * 1.2, rad, rad * 0.9, rad, rad * 1.2], BARK_TOP, 3, { sides: 9, seg: 20, twist: 1 }));
-      const ang = Math.atan2(c[2] - a[2], c[0] - a[0]);
-      town([mid[0], mid[1] + rad * 0.8, mid[2]], ang, n, sc);
-    };
-    const KZ = KINGS.z;
-    span([-168, by + 4.6 * R, KZ - 104], [-76, by + 5.3 * R, KZ - 112], 14, 5.5, 8, 1.3);
-    span([82, by + 5.0 * R, KZ - 124], [176, by + 4.4 * R, KZ - 116], 12, 5.5, 8, 1.3);
-    span([-262, by + 2.2 * R, KZ - 40], [-168, by + 2.9 * R, KZ - 104], 8, 5, 9, 1.4);
-    span([176, by + 3.0 * R, KZ - 116], [268, by + 2.3 * R, KZ - 52], 8, 5, 8, 1.4);
-    span([-128, by + 3.7 * R, KZ - 210], [134, by + 4.1 * R, KZ - 220], 16, 5.5, 12, 1.5);
-
-    // white lights hung far up among the boughs, as many as stars
-    const nStar = props.mobile ? 80 : 190;
-    for (let i = 0; i < nStar; i++) {
-      const x = (r() - 0.5) * 900;
-      const z = KINGS.z + 260 - r() * 760;
-      const y = by + 10 + Math.pow(r(), 0.8) * 270;
-      if (Math.abs(x) < 150 && Math.abs(z - KINGS.z) < 70 && y < by + 5.2 * R) continue;
-      stars.push({ p: [x, y, z], size: 2.6 + r() * 3.4, col: r() < 0.72 ? [0.88, 0.93, 1.0] : [1, 0.84, 0.6], k: 0.55 + r() * 0.9 });
+    // made ahead of time while the plane was over the sea, or here and now
+    if (madeWood && madeWood.key === woodKey(props)) {
+      const w = madeWood.wood;
+      madeWood = null;
+      return w;
     }
-
-    // ---------- the kings ----------
-    const left = buildKing(-1, props.mobile);
-    const right = buildKing(1, props.mobile);
-    wood.push(...left.crown, ...right.crown);
-    const crownLights = [...left.lights, ...right.lights];
-
-    // ---------- the little world ----------
-    // His own homestead under the glass, in the light of that picture: a pale field, a path, low roofs, round
-    // trees gone rose and gold in a low sun, a poplar or two, blue hills behind. In the middle of it the desk.
-    const k = new Kit();
-    const DP = (x: number, y: number, z: number): V3 => [DOME_AT.x + x, by + y, KINGS.z + z];
-    const GL = 2.7; // its own light (lights are turned down at night; this is the one that is not)
-    // the dish it stands on, dark beneath
-    k.add(new THREE.CylinderGeometry(R + 0.9, R - 6, 3.6, 56), DP(0, -1.95, 0), [0.045, 0.026, 0.018], { top: [0.2, 0.1, 0.04] });
-    k.add(new THREE.TorusGeometry(R + 0.5, 0.4, 6, 72), DP(0, 0.05, 0), [1, 0.62, 0.3], { glow: 1.4, rot: [Math.PI / 2, 0, 0] });
-    // the field and the path that leaves the desk
-    k.add(new THREE.CylinderGeometry(R - 0.3, R - 0.3, 0.5, 64), DP(0, -0.2, 0), [0.98, 0.78, 0.5], { glow: GL * 0.5 });
-    k.box(2.2, 0.14, R * 1.5, DP(2.4, 0.12, -R * 0.1), [1, 0.9, 0.72], { glow: GL * 0.56, rot: [0, 0.16, 0] });
-    k.add(new THREE.SphereGeometry(R * 0.5, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), DP(-R * 0.3, 0, -R * 0.5), [0.72, 0.6, 0.74], { glow: GL * 0.42, scale: [1.3, 0.4, 0.6] });
-    k.add(new THREE.SphereGeometry(R * 0.4, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), DP(R * 0.42, 0, -R * 0.58), [0.8, 0.62, 0.66], { glow: GL * 0.42, scale: [1.3, 0.4, 0.6] });
-    // the desk, the display on it
-    k.box(5.2, 0.3, 2.5, DP(0, 2.6, 5), [0.5, 0.27, 0.15], { glow: GL * 0.42 });
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.box(0.24, 2.5, 0.24, DP(sx * 2.3, 1.25, 5 + sz * 0.95), [0.36, 0.19, 0.1], { glow: GL * 0.36 });
-    k.box(2.5, 1.5, 0.12, DP(0, 3.9, 4.5), [0.08, 0.06, 0.07], { glow: 0 });
-    k.box(2.3, 1.3, 0.03, DP(0, 3.9, 4.58), [1.0, 0.86, 0.7], { glow: GL * 0.6 });
-    // roofs
-    for (const [x, z, w, rot] of [
-      [-9, -6, 6.4, 0.3],
-      [-15.5, -1, 4.6, -0.2],
-      [10, -9, 5.4, -0.4],
-    ] as const) {
-      k.box(w, 3.0, w * 0.72, DP(x, 1.5, z), [0.98, 0.8, 0.6], { glow: GL * 0.46, rot: [0, rot, 0] });
-      k.add(new THREE.ConeGeometry(w * 0.8, 2.6, 4), DP(x, 4.3, z), [0.78, 0.24, 0.15], { glow: GL * 0.44, rot: [0, rot + Math.PI / 4, 0], scale: [1, 1, 0.74] });
-    }
-    // round trees, rose and ochre; slim dark poplars; a thin tower
-    const tr = rng(77);
-    for (let i = 0; i < 20; i++) {
-      const a = 0.62 + (i / 20) * (Math.PI * 2 - 1.24) + Math.PI / 2;
-      const d = R * (0.46 + tr() * 0.44);
-      const x = Math.cos(a) * d;
-      const z = Math.sin(a) * d - 3;
-      if (i % 5 === 2) {
-        const h = 11 + tr() * 6;
-        k.add(new THREE.ConeGeometry(1.5, h, 7), DP(x, h / 2 + 0.4, z), [0.3, 0.14, 0.12], { glow: GL * 0.3, top: [0.5, 0.26, 0.16] });
-      } else {
-        const s = 3.2 + tr() * 2.4;
-        const rose = tr() < 0.6;
-        k.add(new THREE.CylinderGeometry(0.22, 0.3, 3.4, 5), DP(x, 1.7, z), [0.34, 0.16, 0.1], { glow: GL * 0.3 });
-        k.add(new THREE.SphereGeometry(s, 12, 9), DP(x, 3.2 + s * 0.8, z), rose ? [0.72, 0.3, 0.2] : [0.76, 0.46, 0.2], { glow: GL * 0.4, scale: [1, 0.92, 1], top: rose ? [0.95, 0.52, 0.36] : [0.98, 0.7, 0.34] });
-      }
-    }
-    k.box(1.1, 15, 1.1, DP(15, 7.5, -13), [0.34, 0.16, 0.13], { glow: GL * 0.3 });
-    k.add(new THREE.ConeGeometry(1.1, 3.4, 4), DP(15, 16.6, -13), [0.34, 0.16, 0.13], { glow: GL * 0.3, rot: [0, Math.PI / 4, 0] });
-
-    // embers drifting up through the wood
-    const embers = pointsGeometry(
-      props.mobile ? 110 : Math.round(260 * Math.max(0.4, props.effects)),
-      (_i, q) => {
-        const a = q() * Math.PI * 2;
-        const d = 30 + Math.pow(q(), 0.7) * 300;
-        return [Math.cos(a) * d * 0.7, 8 + q() * 240, KINGS.z + 90 + Math.sin(a) * d, 0.5 + q() * 1.1];
-      },
-      404,
-    );
-    // one bird, far up, crossing
-    const birdG = new THREE.BufferGeometry();
-    birdG.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0.9, -6.4, 1.9, 1.9, -2.6, 0.3, -0.9, 0, 0, 0.9, 2.6, 0.3, -0.9, 6.4, 1.9, 1.9, 0, 0, 1.6, -0.7, 0, -0.4, 0.7, 0, -0.4], 3));
-
-    // the plane is eased round every trunk
-    def.obstacles.length = OWN_OBSTACLES;
-    for (const t of trunks) def.obstacles.push({ x: t.x, z: t.z, r: t.R + 6, h: t.H });
-
-    const woodG = mergeGeometries(wood)!;
-    wood.forEach((g) => g.dispose());
-    return {
-      wood: woodG,
-      bark: makeEmberLit("plain"),
-      left: left.geo,
-      leftMat: makeEmberLit("pale"),
-      right: right.geo,
-      rightMat: makeEmberLit("dark"),
-      towns: towns.parts.length ? towns.build() : null,
-      dark: makeTempera({ amb: 0.7, key: 0.05, dab: 0.4 }),
-      little: k.build(),
-      lit: makeTempera({ amb: 0.5, key: 0.2, dab: 0.5 }),
-      domeGeo: new THREE.SphereGeometry(R, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2),
-      domeSky: makeDomeSky(),
-      domeGlass: makeDomeGlass(),
-      rays: raysGeometry(props.mobile ? 150 : 280, 5),
-      raysMat: makeRays(),
-      nightGeo: new THREE.SphereGeometry(1400, 48, 24),
-      nightMat: makeNight(),
-      embers,
-      emberMat: makePoints({ a: [1, 0.5, 0.18], b: [1, 0.76, 0.4], scale: 480, drift: 5, gain: 1.3, max: 12 }),
-      birdG,
-      birdMat: new THREE.MeshBasicMaterial({ color: "#020506", side: THREE.DoubleSide, fog: false }),
-      halos,
-      stars,
-      crownLights,
-    };
+    const g = woodSteps(props, Infinity);
+    let r = g.next();
+    while (!r.done) r = g.next();
+    return r.value;
   }, [props.mobile, props.trees, props.effects > 0.5]);
 
   useFrame(({ camera }) => {
@@ -903,4 +937,23 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       <Halos list={b.crownLights} />
     </>
   );
+}
+
+// Returns a step to call once a frame until it says it is done.
+export function prepareKings(props: Pick<WorldProps, "mobile" | "trees" | "effects">, budget = 5) {
+  const key = woodKey(props);
+  if (madeWood && madeWood.key !== key) dropKings();
+  const g = madeWood ? null : woodSteps(props, budget);
+  return () => {
+    if (!g || madeWood) return true;
+    const r = g.next();
+    if (r.done) madeWood = { key, wood: r.value };
+    return !!r.done;
+  };
+}
+// a flight that ends before the kings lets go of whatever was made for them
+export function dropKings() {
+  const w = madeWood?.wood as Record<string, unknown> | undefined;
+  madeWood = null;
+  if (w) for (const v of Object.values(w)) if (v instanceof THREE.BufferGeometry || v instanceof THREE.Material || v instanceof THREE.Texture) v.dispose();
 }

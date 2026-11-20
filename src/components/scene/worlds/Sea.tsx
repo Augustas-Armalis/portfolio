@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, WORLD_U, makeTempera, makeWater, rng, type GroundPalette, type Halo, type Puff } from "./kit";
 import { SKY_U } from "../sky";
-import { ORIGIN, WORLDS } from "./voyage";
+import { ORIGIN, WORLDS, voyage } from "./voyage";
 
 // Tranquility (Ramybė, 1904). One hazy field of ochre and grey-green, the sky
 // and the water nearly the same; a level horizon; and on it one long dark
@@ -171,6 +171,8 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
   const clear = useRef(0);
   const last = useRef(0);
   useFrame(({ camera }) => {
+    // made ready ahead of time, it waits: the air is still the world's before it
+    if (voyage.cur !== "sea") return;
     // the scene's own clock (it is the one the dev stills step)
     const now = SKY_U.uTime.value;
     const dt = Math.min(Math.max(now - last.current, 0), 0.1);

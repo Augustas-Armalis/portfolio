@@ -140,6 +140,15 @@ export class Clay {
 
   // The skin, at a given fineness (metres between samples). `box` keeps only a part of the figure.
   mesh(voxel: number, paints: Paint[], box?: { min: V3; max: V3 }) {
+    const g = this.meshSteps(voxel, paints, box);
+    let r = g.next();
+    while (!r.done) r = g.next();
+    return r.value;
+  }
+  // The same, as work that can be put down and picked up: it yields whenever it has run for `budget` milliseconds,
+  // so a figure can be made a little each frame while something else is on screen.
+  *meshSteps(voxel: number, paints: Paint[], box?: { min: V3; max: V3 }, budget = Infinity): Generator<void, THREE.BufferGeometry, void> {
+    let began = performance.now();
     const solid = this.lumps.filter((l) => l.mode !== 2);
     const lo: V3 = [1e9, 1e9, 1e9];
     const hi: V3 = [-1e9, -1e9, -1e9];
@@ -179,6 +188,10 @@ export class Clay {
         const j1 = Math.min(ny - 1, Math.ceil((cy + hy - o[1]) / voxel));
         const k0 = Math.max(0, Math.floor((cz - hz - o[2]) / voxel));
         const k1 = Math.min(nz - 1, Math.ceil((cz + hz - o[2]) / voxel));
+        if (performance.now() - began > budget) {
+          yield;
+          began = performance.now();
+        }
         for (let k = k0; k <= k1; k++) {
           const z = o[2] + k * voxel;
           for (let j = j0; j <= j1; j++) {
@@ -236,7 +249,11 @@ export class Clay {
       seen.set(key, id);
       return id;
     };
-    for (let k = 0; k < nz - 1; k++)
+    for (let k = 0; k < nz - 1; k++) {
+      if (performance.now() - began > budget) {
+        yield;
+        began = performance.now();
+      }
       for (let j = 0; j < ny - 1; j++) {
         let q = j * nx + k * nxy;
         for (let i = 0; i < nx - 1; i++, q++) {
@@ -265,6 +282,7 @@ export class Clay {
           }
         }
       }
+    }
 
     // paint: every vertex takes the colour of the lumps it lies on, run together where they meet
     const nv = pos.length / 3;
@@ -272,6 +290,10 @@ export class Clay {
     const pat = new Float32Array(nv * 2);
     const painted = this.lumps.filter((l) => l.mode !== 1);
     for (let v = 0; v < nv; v++) {
+      if ((v & 255) === 0 && performance.now() - began > budget) {
+        yield;
+        began = performance.now();
+      }
       const x = pos[v * 3];
       const y = pos[v * 3 + 1];
       const z = pos[v * 3 + 2];
