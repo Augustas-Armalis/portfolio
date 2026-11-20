@@ -63,7 +63,7 @@ export function LockFace({ mode, onEnter, onShutDown, locked }: { mode: FaceMode
       </motion.div>
       <motion.div {...group(0.2, 10)} className="relative mt-auto flex flex-col items-center pb-[7vh]">
         <motion.div {...leaf(0.2)} className="flex flex-col items-center">
-          <Monogram size={56} />
+          <Monogram size={56} eager />
           <div className="mt-3 text-[17px] font-semibold leading-[22px] tracking-[-0.02em] [text-shadow:0_1px_8px_rgb(0_0_0/0.3)]">{owner.name}</div>
         </motion.div>
         <motion.button

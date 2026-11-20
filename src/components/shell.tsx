@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { about, mainWork, otherWork, owner, projectGroups, projects, type DeskItem } from "@/content";
 import { useOS } from "@/store";
 import { AppIcon, DocArt, FolderArt } from "./icons";
-import { MarkDeep, SystemBootMark } from "./Mark";
+import { SystemBootMark } from "./Mark";
 import { EASE_OUT, sfx } from "./ui";
 
 // Now-playing bars. A CSS animation on transform only: it runs on the compositor for as long as music plays,
@@ -91,18 +91,29 @@ export function DeskArt({ item }: { item: DeskItem }) {
   ) : null;
 }
 
-// His mark as an account picture: the gold circle on a near-black disc, the app icon made round
-// (to be swapped for his photo later).
-export function Monogram({ size = 88 }: { size?: number }) {
+// His account picture, as macOS and iOS show one: his own photograph in a circle. The files are a square cut of
+// public/img/augustas.jpg around his face (so the face sits in the middle of the circle at any size), at 96, 192
+// and 288 px: the browser takes the one that is twice the drawn size (three times on a 3x phone), never the whole
+// picture. Off-screen ones load lazily; the lock screen's, which is the first thing seen, loads at once (`eager`).
+// A hairline in pure black or white keeps its edge on any ground.
+const PHOTO = [96, 192, 288].map((w) => `/img/augustas-${w}.webp ${w}w`).join(", ");
+export function Monogram({ size = 88, eager = false }: { size?: number; eager?: boolean }) {
   return (
-    <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-[linear-gradient(180deg,#1b1c21_0%,#0a0b0d_100%)] shadow-[0_10px_26px_-12px_rgb(16_18_24/0.5),inset_0_0_0_0.5px_rgb(255_255_255/0.14),0_0_0_0.5px_rgb(0_0_0/0.3)]"
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/img/augustas-192.webp"
+      srcSet={PHOTO}
+      sizes={`${size}px`}
+      width={size}
+      height={size}
+      alt={owner.name}
+      draggable={false}
+      loading={eager ? "eager" : "lazy"}
+      decoding="async"
+      fetchPriority={eager ? "high" : undefined}
+      className="block shrink-0 rounded-full bg-[#101012] object-cover shadow-[0_10px_26px_-12px_rgb(16_18_24/0.5)] outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
       style={{ width: size, height: size }}
-      role="img"
-      aria-label={owner.name}
-    >
-      <MarkDeep size={Math.round(size * 0.56)} />
-    </div>
+    />
   );
 }
 

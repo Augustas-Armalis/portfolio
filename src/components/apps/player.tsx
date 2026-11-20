@@ -8,11 +8,12 @@ import { tracks } from "@/content";
 import { getAnalyser, tapMediaElement } from "@/lib/audio";
 import { useOS } from "@/store";
 
-type PlayerState = { id: string | null; playing: boolean; t: number; dur: number };
+// `vol` is the player's own volume (0 to 1): Records and Settings both show it
+type PlayerState = { id: string | null; playing: boolean; t: number; dur: number; vol: number };
 
 let media: HTMLAudioElement | null = null;
 
-let pstate: PlayerState = { id: null, playing: false, t: 0, dur: 0 };
+let pstate: PlayerState = { id: null, playing: false, t: 0, dur: 0, vol: 1 };
 
 const psubs = new Set<() => void>();
 
@@ -83,7 +84,9 @@ export const player = {
     pset({ t: sec });
   },
   volume(v: number) {
-    audioEl().volume = Math.max(0, Math.min(1, v));
+    const vol = Math.max(0, Math.min(1, v));
+    audioEl().volume = vol;
+    pset({ vol });
   },
   stop() {
     if (!media) return;
