@@ -126,7 +126,10 @@ export function makeLoaderOverlay(rate = 1): LoaderOverlay {
       u.uOpen.value = smooth(clamp01((t - T.openAt) / T.open));
       u.uGlow.value = 0.6 * smooth(clamp01((t - 0.15) / 0.9)) * (1 - smooth(clamp01((t - 1.1) / 1.5)));
       u.uLineA.value = 1 - smooth(clamp01((t - 0.8) / 1.0));
-      return t < T.total;
+      // (the DOM loader is a picture of the same horizon now, and dissolves straight into the world: nothing of the
+      // old darkness is drawn once the reveal has begun)
+      void T;
+      return t < 0;
     },
     // the light takes the colour of the hour's horizon, lifted to a luminous tint
     tint(s) {
