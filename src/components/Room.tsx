@@ -241,6 +241,7 @@ function Scene({
   onHandoff,
   onReaderInfo,
   onSky,
+  bookSide,
   q,
 }: {
   mobile: boolean;
@@ -263,6 +264,7 @@ function Scene({
   onHandoff: (t?: UserId) => void;
   onReaderInfo: (i: ReaderInfo) => void;
   onSky: (s: { label: string; night: number; hdr: "day" | "sunset" | "night" }) => void;
+  bookSide: MutableRefObject<{ side: number; k: number }>;
   q: Quality;
 }) {
   const { camera, size, gl, scene, advance } = useThree();
@@ -301,6 +303,7 @@ function Scene({
   const reader = useRef<ReaderApi | null>(null);
   const sketch = useRef<SketchApi | null>(null);
   const [reading, setReading] = useState(false);
+  // which page of the open spread a phone is reading (0 left, 1 right), and where the eye is between them
   // the loader's in-canvas half, drawn over the finished frame until the dark has lifted
   const ARR = mobile ? ARRIVE_PHONE : ARRIVE;
   const veil = useMemo(() => (instant ? null : makeLoaderOverlay(mobile ? LOADER_RATE_PHONE : 1)), [instant, mobile]);
@@ -326,6 +329,7 @@ function Scene({
   // the move into or out of a desk mode: how long it takes and the lens it started with
   const tr = useRef({ dur: DUR.focus, fov0: cfg.fov });
   const par = useRef(0);
+  const fling = useRef({ x: 0, y: 0 });
   const introK = useRef(1);
   const landedFov = useRef(false);
   const v = useMemo(
@@ -638,9 +642,12 @@ function Scene({
       const spineX = m === "book" ? -0.0675 : -0.103;
       const w = m === "book" ? 0.29 : 0.44;
       const h = m === "book" ? 0.22 : 0.17;
-      const d = fitDist(w, h);
-      v.toLook.copy(local(c, rot, spineX, 0.02, 0));
-      v.toPos.copy(local(c, rot, spineX, 0.02 + d, d * 0.14));
+      // on a phone the novel is read a page at a time: one page fills the width, and the eye goes over to the other
+      const page = m === "book" && mobile;
+      const d = page ? fitDist(0.142, 0.2) : fitDist(w, h);
+      const px = page ? spineX + (bookSide.current.k - 0.5) * 0.135 : spineX;
+      v.toLook.copy(local(c, rot, px, 0.02, 0));
+      v.toPos.copy(local(c, rot, px, 0.02 + d, d * 0.14));
       v.toUp.set(0, 0, -1).applyAxisAngle(v.Y, rot);
     } else if (m === "camera") {
       // pick the camera up: eye height just behind the desk, framed past the
@@ -854,12 +861,27 @@ function Scene({
     const r = rig.current;
     const inp = input.current;
     if (!still) {
+      const F = fling.current;
       if (inp.dx || inp.dy) {
         // grab the world: what's under the pointer follows it, so dragging
         // right swings the camera left and dragging down lifts it
         r.gaz -= inp.dx * 0.0034;
         r.gpol -= inp.dy * 0.0024;
+        // how fast the hand is moving it, for when it lets go
+        const k = 1 - Math.exp(-dt * 30);
+        F.x += (inp.dx / Math.max(dt, 1e-3) - F.x) * k;
+        F.y += (inp.dy / Math.max(dt, 1e-3) - F.y) * k;
         inp.dx = inp.dy = 0;
+      } else if (inp.dragging) {
+        // held still: nothing to carry on with
+        F.x *= Math.exp(-dt * 14);
+        F.y *= Math.exp(-dt * 14);
+      } else if (Math.abs(F.x) + Math.abs(F.y) > 4) {
+        // let go while moving: the world turns on a little way and comes to rest
+        r.gaz -= F.x * 0.0034 * dt;
+        r.gpol -= F.y * 0.0024 * dt;
+        F.x *= Math.exp(-dt * 6.5);
+        F.y *= Math.exp(-dt * 6.5);
       }
       if (inp.zoom) {
         r.gr *= Math.exp(inp.zoom * 0.0011);
@@ -1151,6 +1173,11 @@ function Scene({
     if (s === "focus" || s === "unfocus") {
       const T = tr.current;
       let fovT = cfg.fov;
+      if (s === "focus" && mode === "book" && mobile) {
+        const B = bookSide.current;
+        B.k += (B.side - B.k) * (1 - Math.exp(-dt * 7));
+        focusPose("book");
+      }
       if (s === "unfocus") {
         if (nav === "explore") {
           // put down while exploring: back to where the walk was left
@@ -1384,7 +1411,13 @@ function Scene({
         onPick={() => startRef.current?.()}
       >
         {mobile ? (
-          <Phone screenMat={screenMat} screenRef={screen} />
+          <>
+            <Phone screenMat={screenMat} screenRef={screen} />
+            {/* a phone on a stand is a small thing to hit with a finger: the whole of it and a margin take the tap */}
+            <mesh visible={false} position={[0, DESK.top + 0.085, 0]}>
+              <boxGeometry args={[0.13, 0.19, 0.1]} />
+            </mesh>
+          </>
         ) : (
           <DeskModel name="display">
             <Monitor screenMat={screenMat} screenRef={screen} />
@@ -1520,6 +1553,8 @@ export default function Room({
   const stageRef = useRef<Stage>("idle");
   stageRef.current = stage;
   const [mode, setMode] = useState<Mode>("none");
+  const modeRef = useRef<Mode>("none");
+  modeRef.current = mode;
   const [nav, setNav] = useState<"orbit" | "explore">("orbit");
   const navRef = useRef<{ explore: () => void; back: () => void } | null>(null);
   const [hours, setHours] = useState(() => clockHours());
@@ -1584,7 +1619,15 @@ export default function Room({
   }, [revealed, skipIntro, reduced, isMobile]);
   const idle = stage === "idle" && active && revealed && introDone && mode === "none";
   const live = active;
-  const exit = useCallback(() => exitRef.current?.(), []);
+  const exit = useCallback(() => {
+    // the hour is only ever set inside the camera: putting it down gives the sky back to the visitor's own clock
+    if (modeRef.current === "camera") {
+      setLiveSky(true);
+      setTimeOverride(null);
+      setHours(clockHours());
+    }
+    exitRef.current?.();
+  }, []);
 
   // keyboard: Esc exits any mode, piano keys, book arrows, flight keys
   useEffect(() => {
@@ -1620,6 +1663,33 @@ export default function Room({
       drop();
     };
   }, [mode, exit, nav]);
+
+  // The novel on a phone, a page at a time: the left page, then the right, then the leaf turns.
+  const bookSide = useRef({ side: 0, k: 0.5 });
+  const [bookPage, setBookPage] = useState(0);
+  useEffect(() => {
+    if (mode !== "book") return;
+    bookSide.current.side = 0;
+    bookSide.current.k = 0.5;
+    setBookPage(0);
+  }, [mode]);
+  const bookStep = (dir: 1 | -1) => {
+    const r = apiRef.current?.reader.current;
+    if (!isMobile) return dir > 0 ? r?.next() : r?.prev();
+    const B = bookSide.current;
+    if (dir > 0) {
+      if (B.side === 0) B.side = 1;
+      else if (readerInfo.spread < readerInfo.spreads - 1) {
+        r?.next();
+        B.side = 0;
+      }
+    } else if (B.side === 1) B.side = 0;
+    else if (readerInfo.spread > 0) {
+      r?.prev();
+      B.side = 1;
+    }
+    setBookPage(B.side);
+  };
 
   const tap = useRef(false);
   const onDown = (e: React.PointerEvent) => {
@@ -1680,8 +1750,7 @@ export default function Room({
     if (mode === "camera" && mine && tap.current && !input.current.moved && e.type === "pointerup") apiRef.current?.focusAt(e.clientX, e.clientY);
     tap.current = false;
     if (mine && mode === "book" && Math.abs(e.clientX - down.current.x) > 50 && Math.abs(e.clientX - down.current.x) > Math.abs(e.clientY - down.current.y)) {
-      if (e.clientX < down.current.x) apiRef.current?.reader.current?.next();
-      else apiRef.current?.reader.current?.prev();
+      bookStep(e.clientX < down.current.x ? 1 : -1);
     }
     if (pointers.current.size === 0) {
       input.current.dragging = false;
@@ -1771,6 +1840,7 @@ export default function Room({
           onHandoff={onHandoff}
           onReaderInfo={setReaderInfo}
           onSky={setSky}
+          bookSide={bookSide}
           q={q}
         />
       </Canvas>
@@ -1812,19 +1882,8 @@ export default function Room({
               navRef.current?.back();
               setNav("orbit");
             }}
-            hours={hours}
-            live={liveSky}
-            onTime={(h) => {
-              setLiveSky(false);
-              setHours(h);
-              setTimeOverride(h);
-            }}
-            onLive={() => {
-              setLiveSky(true);
-              setTimeOverride(null);
-              setHours(clockHours());
-            }}
-            label={`${sky.label || "Live sky"} · drag to look around`}
+            mobile={isMobile}
+            label={isMobile ? "Drag to look · pinch to zoom" : `${sky.label || "Live sky"} · drag to look around`}
           />
         )}
       </AnimatePresence>
@@ -1854,8 +1913,9 @@ export default function Room({
             key="book"
             info={readerInfo}
             onExit={exit}
-            onPrev={() => apiRef.current?.reader.current?.prev()}
-            onNext={() => apiRef.current?.reader.current?.next()}
+            page={isMobile ? { n: readerInfo.spread * 2 + bookPage + 1, of: readerInfo.spreads * 2 } : undefined}
+            onPrev={() => bookStep(-1)}
+            onNext={() => bookStep(1)}
             onApp={novelApp}
           />
         )}

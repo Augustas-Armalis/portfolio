@@ -66,12 +66,15 @@ export const LAYOUT: Record<"desktop" | "mobile", Placement[]> = {
     { kind: "headphones", target: "art", label: "Art", pos: [0.45, 0, -0.08], rot: -0.6, from: [0.6, 0.6, 0.45], spin: -0.55 },
     { kind: "camera", target: "founder", label: "Founder", pos: [0.44, 0, 0.19], rot: -0.62, from: [0.6, 0.6, -0.1], spin: 0.6 },
   ],
+  // a phone held upright: nothing lies against anything else and nothing stands in front of anything, so every
+  // thing can be told apart and tapped. The novel and the sketchbook down the left, the phone in the middle,
+  // the headphones (the tall thing) at the back right with the camera in front of them, the keys along the front
   mobile: [
-    { kind: "keys", target: "art", label: "Art", pos: [0, 0, 0.215], rot: 0, from: [0, 0.5, 0.4], spin: 0.25 },
-    { kind: "book", target: "art", label: "Art", pos: [-0.205, 0, -0.07], rot: 0.18, from: [-0.4, 0.55, -0.1], spin: -0.6 },
-    { kind: "sketchbook", target: "engineer", label: "Product engineer", pos: [-0.2, 0, 0.07], rot: -0.3, from: [-0.4, 0.5, 0.3], spin: 0.5 },
-    { kind: "headphones", target: "art", label: "Art", pos: [0.2, 0, 0.06], rot: -0.6, from: [0.4, 0.55, 0.3], spin: -0.55 },
-    { kind: "camera", target: "founder", label: "Founder", pos: [0.19, 0, -0.13], rot: -0.5, from: [0.4, 0.55, -0.1], spin: 0.6 },
+    { kind: "keys", target: "art", label: "Art", pos: [-0.055, 0, 0.235], rot: 0, from: [0, 0.5, 0.4], spin: 0.25 },
+    { kind: "book", target: "art", label: "Art", pos: [-0.215, 0, -0.165], rot: 0.1, from: [-0.4, 0.55, -0.1], spin: -0.6 },
+    { kind: "sketchbook", target: "engineer", label: "Product engineer", pos: [-0.2, 0, 0.045], rot: -0.14, from: [-0.4, 0.5, 0.3], spin: 0.5 },
+    { kind: "headphones", target: "art", label: "Art", pos: [0.225, 0, -0.16], rot: -0.5, from: [0.4, 0.55, 0.3], spin: -0.55 },
+    { kind: "camera", target: "founder", label: "Founder", pos: [0.21, 0, 0.05], rot: -0.42, from: [0.4, 0.55, -0.1], spin: 0.6 },
   ],
 };
 
@@ -92,7 +95,8 @@ export type RigCfg = {
 };
 export const RIG: Record<"desktop" | "mobile", RigCfg> = {
   desktop: { target: [0.04, 0.98, 0], az: 0.34, pol: 1.47, r: 2.0, fov: 36, azMin: -0.95, azMax: 0.95, polMin: 1.12, polMax: 1.5, rMin: 1.45, rMax: 2.7 },
-  mobile: { target: [0, 0.9, 0.02], az: 0.22, pol: 1.3, r: 1.5, fov: 50, azMin: -0.85, azMax: 0.85, polMin: 1.0, polMax: 1.45, rMin: 1.1, rMax: 2.0 },
+  // (a little further back and a little higher than it was, so the whole spread of the desk is in an upright frame)
+  mobile: { target: [0, 0.8, 0.03], az: 0.12, pol: 1.16, r: 1.68, fov: 50, azMin: -0.85, azMax: 0.85, polMin: 0.9, polMax: 1.45, rMin: 1.0, rMax: 2.4 },
 };
 
 // ---------- shared GLSL ----------
@@ -128,7 +132,7 @@ float pathW(float z){ return 0.32 + abs(z) * 0.006; }
 export const PLANE_SPOT: Record<"desktop" | "mobile", { pos: [number, number, number]; rot: number }> = {
   desktop: { pos: [0.262, 0, 0.215], rot: -0.42 },
   // clear of the keyboard's right end and of the headphones' cup, inside the front edge
-  mobile: { pos: [0.265, 0, 0.235], rot: -0.35 },
+  mobile: { pos: [0.255, 0, 0.245], rot: -0.3 },
 };
 
 // A still lake off to the back left: it reflects the sky.

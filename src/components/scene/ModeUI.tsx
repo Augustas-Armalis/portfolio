@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronsUp, Download, Grid3x3, LocateFixed, Lock, LockOpen, Pause, PlaneLanding, Play, SkipBack, SkipForward, Smartphone } from "lucide-react";
+import { Check, ChevronsUp, Download, Grid3x3, LocateFixed, Lock, LockOpen, Pause, PlaneLanding, Play, SkipBack, SkipForward, SlidersHorizontal, Smartphone, X } from "lucide-react";
 import { gyroAvailable, gyroCentre, gyroStart, gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
@@ -15,23 +15,30 @@ import { photoCtl, postCtl, type Capture } from "./Post";
 // that sit over the 3D scene. Every mode has the same exit: Esc or "Put down".
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+// Safe-area insets, so glass never sits under a notch, a rounded corner or the home bar.
+const SAFE = {
+  t: "max(12px, env(safe-area-inset-top))",
+  b: "max(12px, env(safe-area-inset-bottom))",
+  l: "max(14px, env(safe-area-inset-left))",
+  r: "max(14px, env(safe-area-inset-right))",
+};
 const btn = "lg-btn pointer-events-auto h-8 px-3.5 text-[13px] font-medium text-white/92";
 
 // The top capsule every mode shares: what you're holding, a hint, and the way out.
 export function TopBar({ title, hint, exitLabel = "Put down", onExit }: { title: string; hint?: string; exitLabel?: string; onExit: () => void }) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-4 z-30 flex justify-center px-4">
+    <div className={`pointer-events-none absolute inset-x-0 top-4 z-30 flex justify-center px-4 [@media(pointer:coarse)]:top-[max(12px,env(safe-area-inset-top))] [@media(pointer:coarse)]:justify-start [@media(pointer:coarse)]:pl-[max(14px,env(safe-area-inset-left))] [@media(pointer:coarse)]:pr-[calc(max(14px,env(safe-area-inset-right))+56px)]`}>
       <Glass
-        className="flex items-center gap-1 p-1 pl-4"
+        className={`flex min-w-0 items-center gap-1 p-1 pl-4 [@media(pointer:coarse)]:p-0.5 [@media(pointer:coarse)]:pl-4`}
         initial={{ ...GLASS_IN, y: -10 }}
         animate={GLASS_ON}
         exit={{ ...GLASS_IN, y: -10 }}
         transition={GLASS_SPRING}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <span className="text-[13px] font-semibold tracking-[-0.02em]">{title}</span>
+        <span className="min-w-0 truncate text-[13px] font-semibold tracking-[-0.02em]">{title}</span>
         {hint && <span className="ml-2 hidden text-[12.5px] text-white/65 sm:inline">{hint}</span>}
-        <button type="button" className={`${btn} lg-chip ml-2`} onClick={(e) => (e.stopPropagation(), onExit())}>
+        <button type="button" data-mode-exit="" className={`${btn} lg-chip ml-2 shrink-0 whitespace-nowrap [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-4 [@media(pointer:coarse)]:text-[14px]`} onClick={(e) => (e.stopPropagation(), onExit())}>
           {exitLabel}
           <span className="ml-1.5 text-white/50 [@media(hover:none)]:hidden">Esc</span>
         </button>
@@ -632,7 +639,7 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
             </div>
             <canvas ref={wave} className="h-9 w-[92px] shrink-0 max-[420px]:hidden" aria-hidden />
             <div className="flex shrink-0 items-center">
-              <button type="button" aria-label="Previous" className={`${icon} h-9 w-9`} onClick={() => step(-1)}>
+              <button type="button" aria-label="Previous" className={`${icon} h-9 w-9 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10`} onClick={() => step(-1)}>
                 <SkipBack size={17} fill="currentColor" strokeWidth={0} />
               </button>
               <button
@@ -663,7 +670,7 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
                   </motion.span>
                 </AnimatePresence>
               </button>
-              <button type="button" aria-label="Next" className={`${icon} h-9 w-9`} onClick={() => step(1)}>
+              <button type="button" aria-label="Next" className={`${icon} h-9 w-9 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-10`} onClick={() => step(1)}>
                 <SkipForward size={17} fill="currentColor" strokeWidth={0} />
               </button>
             </div>
@@ -700,31 +707,32 @@ export function MusicUI({ onExit }: { onExit: () => void }) {
 
 // ---------- book ----------
 
-export function BookUI({ info, onExit, onPrev, onNext, onApp }: { info: { spread: number; spreads: number; ready: boolean }; onExit: () => void; onPrev: () => void; onNext: () => void; onApp: () => void }) {
+export function BookUI({ info, page, onExit, onPrev, onNext, onApp }: { info: { spread: number; spreads: number; ready: boolean }; page?: { n: number; of: number }; onExit: () => void; onPrev: () => void; onNext: () => void; onApp: () => void }) {
+  const tall = `${btn} [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-4 [@media(pointer:coarse)]:text-[14px]`;
   return (
     <>
       <TopBar title="Žiemos naktys šviesesnės" hint="Click or drag a page, or use ← →" exitLabel="Close book" onExit={onExit} />
       <Bottom>
         {/* one row on a desk, two on a phone: the pages, then where else to read it */}
-        <Glass radius={22} className="pointer-events-auto flex items-center gap-1 p-1 max-sm:flex-col max-sm:gap-0.5" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+        <Glass radius={26} className="pointer-events-auto flex items-center gap-1 p-1 max-sm:flex-col max-sm:gap-0.5" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-1">
-            <button type="button" className={btn} onClick={onPrev} aria-label="Previous page">
+            <button type="button" className={tall} onClick={onPrev} aria-label="Previous page">
               ←
             </button>
-            <span className="min-w-[72px] text-center text-[12px] tabular-nums text-white/70">{info.ready ? `${info.spread + 1} / ${info.spreads}` : "Opening…"}</span>
-            <button type="button" className={btn} onClick={onNext} aria-label="Next page">
+            <span className="min-w-[72px] text-center text-[12px] tabular-nums text-white/70">{!info.ready ? "Opening…" : page ? `${page.n} / ${page.of}` : `${info.spread + 1} / ${info.spreads}`}</span>
+            <button type="button" className={tall} onClick={onNext} aria-label="Next page">
               →
             </button>
           </div>
           <span className="mx-1 h-4 w-px bg-white/25 max-sm:hidden" />
           <div className="flex items-center gap-1 whitespace-nowrap">
-            <button type="button" className={btn} onClick={onApp}>
+            <button type="button" className={tall} onClick={onApp}>
               Read in the Novel app
             </button>
-            <a className={btn + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.epub" download>
+            <a className={tall + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.epub" download>
               EPUB
             </a>
-            <a className={btn + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.pdf" download>
+            <a className={tall + " inline-flex items-center"} href="/content/novel/Ziemos_Naktys_Sviesesnes.pdf" download>
               PDF
             </a>
           </div>
@@ -737,15 +745,16 @@ export function BookUI({ info, onExit, onPrev, onNext, onApp }: { info: { spread
 // ---------- sketch ----------
 
 export function SketchUI({ onExit, onClear, onSave }: { onExit: () => void; onClear: () => void; onSave: () => void }) {
+  const tall = `${btn} [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:px-4 [@media(pointer:coarse)]:text-[14px]`;
   return (
     <>
       <TopBar title="Sketchbook" hint="Draw on the page" onExit={onExit} />
       <Bottom>
         <Glass className="pointer-events-auto flex items-center gap-1 p-1" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-          <button type="button" className={btn} onClick={onClear}>
+          <button type="button" className={tall} onClick={onClear}>
             Clear
           </button>
-          <button type="button" className={btn} onClick={onSave}>
+          <button type="button" className={tall} onClick={onSave}>
             Save PNG
           </button>
         </Glass>
@@ -755,14 +764,6 @@ export function SketchUI({ onExit, onClear, onSave }: { onExit: () => void; onCl
 }
 
 // ---------- flight ----------
-
-// Safe-area insets, so glass never sits under a notch, a rounded corner or the home bar.
-const SAFE = {
-  t: "max(12px, env(safe-area-inset-top))",
-  b: "max(12px, env(safe-area-inset-bottom))",
-  l: "max(14px, env(safe-area-inset-left))",
-  r: "max(14px, env(safe-area-inset-right))",
-};
 
 // The stick, for a thumb: a glass dish with a bead in it. The bead follows the thumb to the rim and springs back
 // when it lifts; a small dead middle means resting a thumb on it does nothing. What it sends is eased again by
@@ -1063,7 +1064,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   );
 }
 
-// ---------- navigation + time of day ----------
+// ---------- navigation ----------
 
 const fmtH = (h: number) => {
   const hh = Math.floor(h) % 24;
@@ -1071,106 +1072,61 @@ const fmtH = (h: number) => {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 };
 
-// A small Liquid Glass bar, bottom left: Orbit / Explore, Back to desk, and a
-// time-of-day scrubber that previews the sky (Live snaps back to the clock).
-export function NavBar({
-  nav,
-  onNav,
-  onBack,
-  hours,
-  live,
-  onTime,
-  onLive,
-  label,
-}: {
-  nav: "orbit" | "explore";
-  onNav: (n: "orbit" | "explore") => void;
-  onBack: () => void;
-  hours: number;
-  live: boolean;
-  onTime: (h: number) => void;
-  onLive: () => void;
-  label: string;
-}) {
-  const seg = (on: boolean) => `lg-btn pointer-events-auto h-7 px-3 text-[12.5px] font-medium ${on ? "lg-on" : "text-white/90"}`;
+// The desk's few controls: Orbit / Explore, Back to desk, and the graphics level. (The sky here always follows
+// the visitor's own clock; the hour can be set only inside the camera's photo mode.) With a mouse it is a small
+// bar, bottom left. On a phone it is one round glass button in the top corner that opens into the same bar.
+export function NavBar({ nav, onNav, onBack, label, mobile = false }: { nav: "orbit" | "explore"; onNav: (n: "orbit" | "explore") => void; onBack: () => void; label: string; mobile?: boolean }) {
+  const seg = (on: boolean) => `lg-btn pointer-events-auto px-3 font-medium ${mobile ? "h-10 text-[14px]" : "h-7 text-[12.5px]"} ${on ? "lg-on" : "text-white/90"}`;
   const [gfx, setGfx] = useState(false);
+  const [open, setOpen] = useState(false);
   const choice = useQualityChoice();
   const quality = useQuality();
-  return (
-    <div className="pointer-events-none absolute bottom-5 left-4 z-30 max-sm:bottom-auto max-sm:left-3 max-sm:top-14">
-      <Glass
-        radius={22}
-        className="pointer-events-auto flex flex-col gap-1.5 p-1.5"
-        initial={GLASS_IN}
-        animate={GLASS_ON}
-        exit={GLASS_IN}
-        transition={GLASS_SPRING}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-1">
-          <div className="flex rounded-full bg-black/18 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.2)]">
-            <button type="button" className={seg(nav === "orbit")} onClick={() => onNav("orbit")}>
-              Orbit
-            </button>
-            <button type="button" className={seg(nav === "explore")} onClick={() => onNav("explore")}>
-              Explore
-            </button>
-          </div>
-          <AnimatePresence>
-            {nav === "explore" && (
-              <motion.button
-                type="button"
-                className="lg-btn lg-chip pointer-events-auto h-7 px-3 text-[12.5px] font-medium text-white/92"
-                initial={{ opacity: 0, x: -6, scale: 0.94 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: -6, scale: 0.94 }}
-                transition={GLASS_SPRING}
-                onClick={onBack}
-              >
-                Back to desk
-              </motion.button>
-            )}
-          </AnimatePresence>
-        </div>
-        <div className="flex items-center gap-2 px-1.5 pb-0.5">
-          <span className="w-10 text-[12px] font-semibold tabular-nums">{fmtH(hours)}</span>
-          <input
-            type="range"
-            min={0}
-            max={23.98}
-            step={0.05}
-            value={hours}
-            onChange={(e) => onTime(+e.target.value)}
-            className="h-1 w-36 cursor-pointer accent-white"
-            aria-label="Time of day"
-          />
-          <button
-            type="button"
-            className={`lg-btn pointer-events-auto px-2 py-0.5 text-[11.5px] font-semibold ${live ? "lg-on" : "lg-chip text-white/90"}`}
-            onClick={onLive}
-          >
-            {live ? "Live" : "Go live"}
+  const body = (
+    <>
+      <div className="flex items-center gap-1">
+        <div className="flex rounded-full bg-black/18 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.2)]">
+          <button type="button" className={seg(nav === "orbit")} onClick={() => onNav("orbit")}>
+            Orbit
+          </button>
+          <button type="button" className={seg(nav === "explore")} onClick={() => onNav("explore")}>
+            Explore
           </button>
         </div>
-        <div className="flex items-center justify-between gap-3 px-2 pb-0.5 text-[11px] text-white/65">
-          <span>{nav === "explore" ? "Drag to look · W A S D to move · scroll to fly forward" : label}</span>
-          <button type="button" className="lg-btn pointer-events-auto -mr-1 px-1.5 py-0.5 text-[11px] font-medium text-white/85" aria-expanded={gfx} onClick={() => setGfx((g) => !g)}>
-            Graphics · {QUALITY_LABELS[choice]}
-          </button>
-        </div>
-        <AnimatePresence initial={false}>
-          {gfx && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
-              <div className="flex flex-col gap-1.5 px-1 pb-1 pt-0.5">
-                <div className="flex rounded-full bg-black/18 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.2)]">
-                  {(["auto", "low", "medium", "high", "ultra"] as QualityChoice[]).map((c) => (
-                    <button key={c} type="button" className={`lg-btn pointer-events-auto h-6 flex-1 px-2 text-[11.5px] font-medium ${choice === c ? "lg-on" : "text-white/90"}`} onClick={() => setQualityChoice(c)}>
-                      {QUALITY_LABELS[c]}
-                    </button>
-                  ))}
-                </div>
-                {(
+        <AnimatePresence>
+          {nav === "explore" && (
+            <motion.button
+              type="button"
+              className={`lg-btn lg-chip pointer-events-auto whitespace-nowrap px-3 font-medium text-white/92 ${mobile ? "h-10 text-[14px]" : "h-7 text-[12.5px]"}`}
+              initial={{ opacity: 0, x: -6, scale: 0.94 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -6, scale: 0.94 }}
+              transition={GLASS_SPRING}
+              onClick={onBack}
+            >
+              Back to desk
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
+      <div className={`flex items-center justify-between gap-3 px-2 pb-0.5 text-white/65 ${mobile ? "text-[12.5px]" : "text-[11px]"}`}>
+        <span className={mobile ? "whitespace-nowrap" : undefined}>{nav === "explore" ? (mobile ? "Drag to look · pinch to move" : "Drag to look · W A S D to move · scroll to fly forward") : label}</span>
+        <button type="button" className={`lg-btn pointer-events-auto -mr-1 whitespace-nowrap font-medium text-white/85 ${mobile ? "h-9 px-2.5 text-[12.5px]" : "px-1.5 py-0.5 text-[11px]"}`} aria-expanded={gfx} onClick={() => setGfx((g) => !g)}>
+          Graphics · {QUALITY_LABELS[choice]}
+        </button>
+      </div>
+      <AnimatePresence initial={false}>
+        {gfx && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
+            <div className="flex flex-col gap-1.5 px-1 pb-1 pt-0.5">
+              <div className="flex rounded-full bg-black/18 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.2)]">
+                {(["auto", "low", "medium", "high", "ultra"] as QualityChoice[]).map((c) => (
+                  <button key={c} type="button" className={`lg-btn pointer-events-auto flex-1 px-2 font-medium ${mobile ? "h-9 text-[12.5px]" : "h-6 text-[11.5px]"} ${choice === c ? "lg-on" : "text-white/90"}`} onClick={() => setQualityChoice(c)}>
+                    {QUALITY_LABELS[c]}
+                  </button>
+                ))}
+              </div>
+              {!mobile &&
+                (
                   [
                     ["Resolution", "resolution", (quality.dpr - 0.75) / 1.25],
                     ["Grass", "grass", (quality.grass - 0.2) / 1.3],
@@ -1193,10 +1149,35 @@ export function NavBar({
                     />
                   </label>
                 ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+  const stop = { onPointerDown: (e: React.PointerEvent) => e.stopPropagation(), onClick: (e: React.MouseEvent) => e.stopPropagation() };
+  if (mobile)
+    return (
+      <div className="pointer-events-none absolute z-30" style={{ top: SAFE.t, left: SAFE.l }} data-desk="nav">
+        <Glass radius={open ? 24 : 22} lens={false} className="pointer-events-auto overflow-hidden" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING} {...stop}>
+          <button type="button" aria-label={open ? "Close the controls" : "Controls: look around, graphics"} aria-expanded={open} className="lg-btn grid h-11 w-11 place-items-center text-white" onClick={() => setOpen((o) => !o)}>
+            {open ? <X size={18} strokeWidth={2.1} /> : <SlidersHorizontal size={18} strokeWidth={2} />}
+          </button>
+          <AnimatePresence initial={false}>
+            {open && (
+              // it opens downward and outward from the button, and what is in it is never squeezed on the way
+              <motion.div key="body" initial={{ height: 0, width: 44, opacity: 0 }} animate={{ height: "auto", width: "auto", opacity: 1 }} exit={{ height: 0, width: 44, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
+                <div className="flex w-[min(312px,calc(100vw-28px))] flex-col gap-1.5 px-1.5 pb-1.5">{body}</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Glass>
+      </div>
+    );
+  return (
+    <div className="pointer-events-none absolute bottom-5 left-4 z-30">
+      <Glass radius={22} className="pointer-events-auto flex flex-col gap-1.5 p-1.5" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING} {...stop}>
+        {body}
       </Glass>
     </div>
   );
