@@ -840,7 +840,7 @@ function Scene({
     } else if (m === "book" || m === "sketch") {
       const { c, rot } = P(m === "book" ? "book" : "sketchbook");
       // (the sketchbook slides a little to its right as it opens, to keep its cover on the desk)
-      const spineX = m === "book" ? -0.0675 : -0.103 + SKETCH_OPEN_SHIFT;
+      const spineX = m === "book" ? -0.0675 : -0.103 + (mobile ? 0 : SKETCH_OPEN_SHIFT);
       const w = m === "book" ? 0.29 : 0.44;
       const h = m === "book" ? 0.22 : 0.17;
       // on a phone the novel is read a page at a time: one page fills the width, and the eye goes over to the other
@@ -1577,7 +1577,7 @@ function Scene({
     if (o.kind === "sketchbook")
       return (
         <Held away={mobile && (mode === "book" || reading)}>
-          <SketchbookLive open={mode === "sketch"} apiRef={sketch} />
+          <SketchbookLive open={mode === "sketch"} shift={mobile ? 0 : SKETCH_OPEN_SHIFT} apiRef={sketch} />
         </Held>
       );
     if (o.kind === "headphones")
