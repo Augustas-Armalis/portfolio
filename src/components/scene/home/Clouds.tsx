@@ -77,14 +77,16 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
       uniforms: { ...SKY_U, ...HOME_U },
       vertexShader: /* glsl */ `
         attribute float aOpen; attribute vec4 aPlace; attribute vec4 aSize;
-        uniform float uTime;
+        uniform float uTime; uniform float uNight;
         varying vec3 vWorld; varying vec3 vN; varying float vOpen; varying vec3 vLocal; varying float vSeed;
         void main(){
           // the cloud's place drifts with the wind and wraps round the field, centred on the eye
           vec2 c = aPlace.xz + vec2(uTime * 2.6, uTime * 0.9) * (0.8 + 0.4 * aSize.w);
           c = mod(c - cameraPosition.xz + ${(SPAN / 2).toFixed(1)}, ${SPAN.toFixed(1)}) - ${(SPAN / 2).toFixed(1)} + cameraPosition.xz;
           float cs = cos(aPlace.w); float sn = sin(aPlace.w);
-          vec3 p = position * aSize.xyz;
+          // after dark most of them are gone and the rest are smaller: the night is for the stars
+          float nightK = aSize.w > 0.38 ? 1.0 - smoothstep(0.35, 0.8, uNight) : 1.0 - 0.35 * uNight;
+          vec3 p = position * aSize.xyz * nightK;
           p = vec3(p.x * cs + p.z * sn, p.y, -p.x * sn + p.z * cs);
           vec3 n = normalize(normal / aSize.xyz);
           vN = vec3(n.x * cs + n.z * sn, n.y, -n.x * sn + n.z * cs);

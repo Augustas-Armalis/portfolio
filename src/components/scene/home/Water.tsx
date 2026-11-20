@@ -61,7 +61,8 @@ export function LakeMirror({ quality }: { quality: number }) {
       REFLECT_U.uReflOn.value = 0;
       return;
     }
-    if (REFLECT_U.uReflOn.value > 0.5 && ++tick.current % 2) return;
+    // (every other frame; every third on a middling machine)
+    if (REFLECT_U.uReflOn.value > 0.5 && ++tick.current % (quality >= 1 ? 2 : 3)) return;
     // the eye, mirrored in the water
     cam.getWorldPosition(T.pos);
     T.rot.extractRotation(cam.matrixWorld);

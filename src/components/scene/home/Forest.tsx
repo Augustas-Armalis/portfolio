@@ -129,13 +129,13 @@ export function Forest({ amount, mobile }: { amount: number; mobile: boolean }) 
     const meshes: THREE.Object3D[] = [];
     const geos: THREE.BufferGeometry[] = [];
     let tris = 0;
-    for (const lod of [0, 1] as const)
+    for (const lod of [-1, 0, 1] as const)
       for (const kind of KINDS)
         for (let v = 0; v < VARIANTS; v++) {
-          // (a phone has no close cut: every whole tree is the coarse one)
+          // (a phone has no close cuts: every whole tree is the coarse one)
           const list = trees.filter((t: HomeTree) => t.kind === kind && t.v % VARIANTS === v && (mobile ? t.lod !== 2 && lod === 1 : t.lod === lod));
           if (!list.length) continue;
-          const geo = buildTree(kind, v, lod === 0 ? 1 : 0);
+          const geo = buildTree(kind, v, lod === -1 ? 2 : lod === 0 ? 1 : 0);
           geos.push(geo);
           const im = new THREE.InstancedMesh(geo, mat, list.length);
           list.forEach((t, i) => {

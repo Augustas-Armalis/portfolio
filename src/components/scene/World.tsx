@@ -111,15 +111,15 @@ export function makeSkyMaterial(env = false) {
           float n1 = clouds(uv * vec2(0.55, 1.1), uTime);
           float n2 = fbm(uv * vec2(0.25, 0.5) * 0.7 - vec2(uTime * 0.003, 0.0) + 31.0);
           float fadeH = smoothstep(0.02, 0.22, h) * (1.0 - smoothstep(0.6, 0.98, h));
-          float cov1 = smoothstep(0.58, 0.82, n1) * fadeH * 0.6 * uSkyFx.x * (1.0 - 0.35 * uCumulus);
-          float cov2 = smoothstep(0.55, 0.78, n2) * fadeH * uSkyFx.x * (1.0 - 0.7 * uCumulus);
+          float cov1 = smoothstep(0.58, 0.82, n1) * fadeH * 0.6 * uSkyFx.x * (1.0 - 0.94 * uCumulus);
+          float cov2 = smoothstep(0.55, 0.78, n2) * fadeH * uSkyFx.x * (1.0 - 0.96 * uCumulus);
           float lit = clamp((n2 - fbm(uv * vec2(0.25, 0.5) * 0.7 - vec2(uTime * 0.003, 0.0) + 31.0 + uSunDir.xz * 0.1)) * 4.0 + 0.5, 0.0, 1.0);
           vec3 cc = mix(uCloudShade, uCloudLit, lit);
           cc += uGlow * pow(max(sd, 0.0), 8.0) * 1.4 * sunVis;
           col = mix(col, mix(uCloudShade, uCloudLit, 0.7), cov1 * 0.55);
           col = mix(col, cc, cov2 * 0.75);
           // long quiet bars of cloud stacked above the horizon, as he painted them
-          float bars = smoothstep(0.52, 0.7, fbm(vec2(atan(d.z, d.x) * 2.2 + uTime * 0.002, h * 26.0 + 2.0))) * smoothstep(0.015, 0.06, h) * (1.0 - smoothstep(0.14, 0.3, h)) * uSkyFx.y * (1.0 - 0.6 * uCumulus);
+          float bars = smoothstep(0.52, 0.7, fbm(vec2(atan(d.z, d.x) * 2.2 + uTime * 0.002, h * 26.0 + 2.0))) * smoothstep(0.015, 0.06, h) * (1.0 - smoothstep(0.14, 0.3, h)) * uSkyFx.y * (1.0 - 0.8 * uCumulus);
           col = mix(col, mix(uCloudShade, uCloudLit, 0.55) + uGlow * pow(max(sd, 0.0), 6.0) * 0.8 * sunVis, bars * 0.5);
           float cover = max(max(cov1, cov2), bars * 0.6);
 

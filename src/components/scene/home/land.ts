@@ -295,8 +295,9 @@ export function forestD(x: number, z: number) {
   const ang = Math.atan2(-x, -z); // 0 north, + to the west (left of the view)
   const lane = Math.exp(-((ang - 0.42) * (ang - 0.42)) / 0.03) * (1 - sstep(140, 330, r));
   d *= 1 - 0.9 * lane;
-  // the visitor's own side: open, so the desk is come to across a meadow
-  if (z > 4) d *= sstep(14, 60, Math.abs(x) + Math.max(0, 60 - z) * 0.2);
+  // the visitor's own side: a lane left open down the middle (the arrival comes down it, and the desk is come to
+  // across a meadow), woods standing either side of it
+  if (z > 4) d = Math.max(d * sstep(14, 60, Math.abs(x) + Math.max(0, 60 - z) * 0.2), 0.62 * sstep(26, 60, Math.abs(x)) * (1 - sstep(120, 200, Math.abs(x))) * sstep(70, 120, z) * (0.45 + 0.55 * vnoise(x * 0.03 + 9, z * 0.03)) * sstep(60, 140, coastZ(x) - z));
   // the road is lined, not overgrown
   if (z < 10 && z > HOME_GATE_Z - 80) {
     const rd = Math.abs(x - roadX(z));
@@ -309,7 +310,8 @@ export function forestD(x: number, z: number) {
 }
 
 export type TreeKind = "broad" | "birch" | "pine" | "spruce" | "cypress" | "bush";
-export type HomeTree = { x: number; y: number; z: number; s: number; kind: TreeKind; v: number; rot: number; tint: number; lod: 0 | 1 | 2 };
+// lod: -1 the few nearest the desk (finest), 0 whole trees near by, 1 whole trees further off, 2 the far woods
+export type HomeTree = { x: number; y: number; z: number; s: number; kind: TreeKind; v: number; rot: number; tint: number; lod: -1 | 0 | 1 | 2 };
 
 // Every tree of the home world. Near the desk and the road they are whole
 // trees (lod 0 the few nearest, 1 the rest); beyond, the wood is thousands of
@@ -328,7 +330,7 @@ export function plantHome(amount: number): HomeTree[] {
     return u < 0.52 ? "broad" : u < 0.74 ? "birch" : u < 0.9 ? "pine" : "bush";
   };
   const push = (x: number, z: number, kind: TreeKind, s: number, lod: 0 | 1 | 2) => {
-    trees.push({ x, y: landH(x, z), z, s, kind, v: Math.floor(r() * 3), rot: r() * 6.283, tint: r(), lod });
+    trees.push({ x, y: landH(x, z), z, s, kind, v: Math.floor(r() * 3), rot: r() * 6.283, tint: r(), lod: lod === 0 && Math.hypot(x, z) < 82 ? -1 : lod });
   };
   const near = (x: number, z: number): 0 | 1 => (Math.hypot(x, z) < 135 || (z < 0 && Math.abs(x - roadX(z)) < 24 && z > HOME_GATE_Z - 20) ? 0 : 1);
 
@@ -338,6 +340,9 @@ export function plantHome(amount: number): HomeTree[] {
     [27, -36, "pine", 1.15], [33, -44, "pine", 1.3], [22, -47, "pine", 1.05], [38, -31, "spruce", 1.0], [44, -40, "spruce", 1.2],
     [-58, -22, "broad", 1.25], [-66, -31, "broad", 1.05], [-52, -12, "bush", 1.0], [56, -8, "broad", 1.2], [62, -19, "birch", 1.1],
     [-44, 24, "broad", 1.15], [-52, 33, "birch", 1.0], [48, 30, "pine", 1.1], [57, 22, "broad", 1.0], [-30, 46, "bush", 1.1], [34, 52, "birch", 1.05],
+    [-38, 62, "broad", 1.3], [-47, 71, "broad", 1.05], [-29, 74, "birch", 1.1], [-58, 55, "pine", 1.15], [-66, 66, "spruce", 1.1], [-24, 96, "broad", 1.2], [-35, 108, "pine", 1.2], [-78, 84, "broad", 1.25],
+    [42, 68, "pine", 1.2], [51, 77, "pine", 1.35], [36, 84, "birch", 1.05], [63, 60, "broad", 1.2], [72, 72, "spruce", 1.2], [29, 104, "broad", 1.3], [46, 118, "birch", 1.1], [84, 92, "broad", 1.15],
+    [-22, 58, "bush", 1.0], [25, 61, "bush", 1.1], [-88, 40, "birch", 1.1], [92, 36, "pine", 1.1], [18, 70, "cypress", 0.9], [-19, 132, "cypress", 1.2], [23, 141, "cypress", 1.05],
     [-12, -118, "cypress", 1.0], [-17, -124, "cypress", 1.25], [-9, -127, "cypress", 0.85], [72, -74, "cypress", 1.1], [-96, 18, "cypress", 1.15], [-101, 12, "cypress", 0.9], [84, 64, "cypress", 1.0],
   ];
   for (const [x, z, k, s] of hand) if (hLakeK(x, z) > 1.25) push(x, z, k, s, 0);

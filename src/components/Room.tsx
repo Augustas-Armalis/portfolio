@@ -1182,7 +1182,11 @@ function Scene({
       hemi.current.groundColor.copy(s.amb).multiply(new THREE.Color(0.5, 0.5, 0.3));
       hemi.current.intensity = 0.9;
     }
-    if (fill.current) fill.current.intensity = 0.1 + s.amb.r * 0.6;
+    // as the day goes, the desk's own fill and the sky it mirrors go down with the field's light, so it stays IN the dusk
+    // (while the sunset sky is what it mirrors: after dark it mirrors our own night sky, which is dark already)
+    const dayK = s.elev < -3 ? 1 : 0.42 + 0.58 * THREE.MathUtils.smoothstep(s.elev, -3, 7);
+    if (fill.current) fill.current.intensity = (0.1 + s.amb.r * 0.6) * (0.4 + 0.6 * THREE.MathUtils.smoothstep(s.elev, -9, 6));
+    scene.environmentIntensity = (s.elev >= 12 ? 0.9 : s.elev >= -3 ? 0.75 : 0.6) * (voyage.cur === "home" ? dayK : 1);
     const hdr = s.elev >= 12 ? "day" : s.elev >= -3 ? "sunset" : "night";
     if (s.label + hdr !== lastLabel.current) {
       lastLabel.current = s.label + hdr;

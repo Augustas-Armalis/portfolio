@@ -184,42 +184,35 @@ const BARK2: V3 = [0.15, 0.115, 0.085];
 function broad(seed: number, rich: number) {
   const r = rng(seed);
   const m = new Mesh();
-  const H = 9.5 + r() * 3;
+  const H = 10.5 + r() * 3.5;
   const lean = (r() - 0.5) * 0.9;
-  const fork = H * (0.3 + r() * 0.08);
+  const fork = H * (0.27 + r() * 0.07);
   const at = (k: number) => V(lean * k * k, fork * k, 0);
-  limb(m, [at(0), at(0.5), at(1)], 0.3, 0.2, rich ? 8 : 5, rich ? 5 : 2, BARK, BARK2, 0, 0.55);
+  limb(m, [at(0), at(0.5), at(1)], 0.32, 0.21, rich ? 8 : 5, rich ? 5 : 2, BARK, BARK2, 0, 0.55);
   const top = at(1);
-  const heart = V(top.x + lean * 0.3, H * 0.64, 0);
-  const W = H * (0.4 + r() * 0.08);
+  const W = H * (0.36 + r() * 0.07);
+  // the crown is a tall rounded heap (an egg standing on its broad end), not a plate: lumps set on a dome from
+  // the lowest boughs to the top, biggest in the middle heights
+  const mid = H * 0.64;
+  const heart = V(top.x + lean * 0.3, mid, 0);
   const lo: V3 = [0.026, 0.07, 0.03];
   const hi: V3 = [0.105, 0.185, 0.06];
-  // boughs reaching out and up from the fork, each carrying its own heap of leaves
-  const boughs = rich ? 6 : 3;
-  for (let i = 0; i < boughs; i++) {
-    const a = (i / boughs) * Math.PI * 2 + r() * 0.8;
-    const rise = 0.42 + r() * 0.3; // of H: low boughs reach wide, high ones stay in
-    const reach = W * (1.05 - (rise - 0.42) * 1.6) * (0.75 + r() * 0.3);
-    const end = V(top.x + Math.cos(a) * reach, H * rise, top.z + Math.sin(a) * reach);
-    const mid = top.clone().lerp(end, 0.5).add(V(0, H * 0.05, 0));
-    limb(m, [top.clone().setY(top.y - 0.3), mid, end], 0.13, 0.035, rich ? 5 : 3, rich ? 4 : 2, BARK2, BARK2);
-    const lumps = rich ? 3 : 1;
-    for (let j = 0; j < lumps; j++) {
-      const w = W * (0.38 + r() * 0.16) * (j === 0 ? 1 : 0.66);
-      const ja = r() * 6.28;
-      const c = j === 0 ? V(end.x, end.y + w * 0.25, end.z) : V(end.x + Math.cos(ja) * w * 0.9, end.y + (r() - 0.25) * w * 0.9, end.z + Math.sin(ja) * w * 0.9);
-      puff(m, c, [w, w * (0.78 + r() * 0.2), w * (0.9 + r() * 0.2)], seed + i * 3.1 + j * 1.3, rich ? 1 : 0, lo, hi, heart, W * 1.2);
+  const rings = rich ? [5, 5, 4, 1] : [3, 2, 1];
+  rings.forEach((count, ri) => {
+    const t = rings.length === 1 ? 0 : ri / (rings.length - 1); // 0 the lowest ring .. 1 the top
+    const y = H * (0.44 + 0.5 * t);
+    // the dome's radius at this height
+    const out = W * Math.sqrt(Math.max(0, 1 - Math.pow((y - mid) / (H * 0.42), 2))) * 0.82;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + ri * 1.1 + r() * 0.7;
+      const d = count === 1 ? 0 : out * (0.75 + r() * 0.3);
+      const w = W * (0.4 + r() * 0.14) * (1 - 0.25 * Math.abs(t - 0.4));
+      const c = V(heart.x + Math.cos(a) * d, y + (r() - 0.5) * H * 0.05, heart.z + Math.sin(a) * d);
+      // a bough out to each of the lower lumps
+      if (ri < 2 && (rich || i % 2 === 0)) limb(m, [top.clone().setY(top.y - 0.3), top.clone().lerp(c, 0.5).add(V(0, H * 0.04, 0)), c.clone().setY(c.y - w * 0.3)], 0.13, 0.035, rich ? 5 : 3, rich ? 4 : 2, BARK2, BARK2);
+      puff(m, c, [w, w * (0.86 + r() * 0.2), w * (0.92 + r() * 0.16)], seed + ri * 5.3 + i * 1.7, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, W * 1.25);
     }
-  }
-  // the dome: lumps heaped over the middle, highest at the centre
-  const caps = rich ? 5 : 3;
-  for (let i = 0; i < caps; i++) {
-    const a = (i / caps) * 6.28 + r();
-    const out = i === 0 ? 0 : W * (0.3 + r() * 0.2);
-    const w = W * (i === 0 ? 0.5 : 0.36 + r() * 0.14);
-    const c = V(heart.x + Math.cos(a) * out, H * (i === 0 ? 0.9 : 0.74 + r() * 0.1), heart.z + Math.sin(a) * out);
-    puff(m, c, [w, w * 0.82, w], seed + 20 + i * 2.7, rich ? 1 : 0, lo, hi, heart, W * 1.2);
-  }
+  });
   return m.geometry();
 }
 
@@ -246,7 +239,7 @@ function birch(seed: number, rich: number) {
     const w = (rich ? 0.62 : 0.85) * (1.25 - (k - 0.42) * 1.1) * (0.8 + r() * 0.4);
     const c = V(o.x + Math.cos(a) * out, o.y - 0.2 - r() * 0.4, o.z + Math.sin(a) * out);
     if (rich && j % 2 === 0) limb(m, [o, o.clone().lerp(c, 0.6).add(V(0, 0.3, 0)), c], 0.028, 0.008, 4, 2, white, [0.5, 0.47, 0.42], 0.5);
-    puff(m, c, [w, w * (1.2 + r() * 0.5), w * (0.85 + r() * 0.3)], seed + j * 2.1, rich ? 1 : 0, lo, hi, heart, H * 0.3, 0.35);
+    puff(m, c, [w, w * (1.2 + r() * 0.5), w * (0.85 + r() * 0.3)], seed + j * 2.1, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, H * 0.3, 0.35);
   }
   return m.geometry();
 }
@@ -287,14 +280,14 @@ function pine(seed: number, rich: number) {
       const ww = w * (j === 0 ? 1 : 0.55 + r() * 0.3);
       const ja = r() * 6.28;
       const cc = j === 0 ? c : V(c.x + Math.cos(ja) * w * 0.8, c.y + (r() - 0.35) * w * 0.5, c.z + Math.sin(ja) * w * 0.8);
-      puff(m, cc, [ww, ww * (0.58 + r() * 0.16), ww * (0.9 + r() * 0.2)], seed + i * 3.3 + j, rich ? 1 : 0, lo, hi, heart, W * 1.5, 0.3);
+      puff(m, cc, [ww, ww * (0.58 + r() * 0.16), ww * (0.9 + r() * 0.2)], seed + i * 3.3 + j, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, W * 1.5, 0.3);
     }
   }
   const cap = at(0.99);
   for (let j = 0; j < (rich ? 3 : 1); j++) {
     const ja = r() * 6.28;
     const ww = W * (0.4 + r() * 0.14);
-    puff(m, V(cap.x + Math.cos(ja) * W * 0.25 * j, cap.y + 0.3 - j * 0.15, cap.z + Math.sin(ja) * W * 0.25 * j), [ww, ww * 0.62, ww], seed + 40 + j, rich ? 1 : 0, lo, hi, heart, W * 1.5, 0.3);
+    puff(m, V(cap.x + Math.cos(ja) * W * 0.25 * j, cap.y + 0.3 - j * 0.15, cap.z + Math.sin(ja) * W * 0.25 * j), [ww, ww * 0.62, ww], seed + 40 + j, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, W * 1.5, 0.3);
   }
   return m.geometry();
 }
@@ -337,7 +330,7 @@ function cypress(seed: number, rich: number) {
     // a flame: narrow foot, fullest a third of the way up, drawn to a point
     const w = W * (0.55 + 1.1 * Math.sin(Math.PI * Math.pow(k, 0.62)) * (1 - k * 0.55)) * (0.9 + r() * 0.2);
     const c = V((r() - 0.5) * W * 0.5, y, (r() - 0.5) * W * 0.5);
-    puff(m, c, [w, (H * 0.8) / n * (0.95 + r() * 0.3), w], seed + i * 1.9, rich ? 1 : 0, lo, hi, heart, H * 0.5, 0.25);
+    puff(m, c, [w, (H * 0.8) / n * (0.95 + r() * 0.3), w], seed + i * 1.9, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, H * 0.5, 0.25);
   }
   return m.geometry();
 }
@@ -353,7 +346,7 @@ function bush(seed: number, rich: number) {
     const a = r() * 6.28;
     const d = r() * 1.2;
     const w = 0.8 + r() * 0.7;
-    puff(m, V(Math.cos(a) * d, 0.7 + r() * 1.0, Math.sin(a) * d), [w, w * (0.75 + r() * 0.3), w], seed + i * 2.3, rich ? 1 : 0, lo, hi, heart, 2.2, 0.4);
+    puff(m, V(Math.cos(a) * d, 0.7 + r() * 1.0, Math.sin(a) * d), [w, w * (0.75 + r() * 0.3), w], seed + i * 2.3, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, 2.2, 0.4);
   }
   return m.geometry();
 }

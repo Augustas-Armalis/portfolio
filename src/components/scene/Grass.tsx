@@ -86,9 +86,11 @@ function scatter(g: THREE.InstancedBufferGeometry, ring: Ring, seed: number) {
     // the dirt path: blades thin out and shorten toward its centre
     const pz = off[i * 3 + 1];
     const onPath = Math.abs(off[i * 3] - pathX(pz)) / pathW(pz);
-    const pathK = Math.abs(pz) < 45 ? sstep(0.45, 1.15, onPath) : 1;
-    const keep = pathK > 0.05 || rnd() < 0.012;
-    shp[i * 4] = (ring.height[0] + rnd() * (ring.height[1] - ring.height[0])) * Math.max(fade * (keep ? Math.max(pathK, 0.18) : 0.001), 0.001);
+    // (the grass thins toward the path by there being fewer blades, each still a whole blade: short dark stubs
+    // standing in the sand read as dirt)
+    const pathK = Math.abs(pz) < 45 ? sstep(0.5, 1.2, onPath) : 1;
+    const keep = rnd() < pathK * pathK;
+    shp[i * 4] = (ring.height[0] + rnd() * (ring.height[1] - ring.height[0])) * Math.max(fade * (keep ? 0.62 + 0.38 * pathK : 0.001), 0.001);
     shp[i * 4 + 1] = ring.width * (1 + r * (ring.grow ?? 0)) * (0.7 + rnd() * 0.6);
     shp[i * 4 + 2] = 0.25 + rnd() * 0.7;
     shp[i * 4 + 3] = rnd();
@@ -153,7 +155,8 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
           lod = (1.0 - smoothstep(uTile * 0.34, uTile * 0.49, dc)) * smoothstep(11.5, 16.0, length(root));
           // the road stays bare as far as it runs
           float pk = abs(root.x - pathX(root.y)) / pathW(root.y);
-          lod *= mix(1.0, smoothstep(0.5, 1.2, pk), step(root.y, 2.0) * step(uRoadEnd, root.y));
+          // (fewer blades toward it, not shorter ones)
+          lod *= mix(1.0, step(aShape.w, smoothstep(0.55, 1.25, pk)), step(root.y, 2.0) * step(uRoadEnd, root.y));
           // in flight a fine tile rides with the plane and the wide one makes room for it
           #ifdef WALK
             // the fine grass underfoot, wherever one walks to
@@ -506,7 +509,7 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
       off[n * 4 + 2] = rnd();
       off[n * 4 + 3] = rnd();
       head[n * 4] = 0.2 + rnd() * 0.3;
-      head[n * 4 + 1] = 0.01 + rnd() * rnd() * 0.016;
+      head[n * 4 + 1] = 0.012 + rnd() * rnd() * 0.024;
       head[n * 4 + 2] = rnd();
       head[n * 4 + 3] = rnd() * 6.28;
     }
