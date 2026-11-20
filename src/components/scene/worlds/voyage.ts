@@ -625,33 +625,32 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     },
     water: 0,
     centre: [0, -60],
-    radius: 670,
-    ceil: 190,
+    radius: 700,
+    ceil: 260,
     entry: { x: 10, z: 500, above: 12, yaw: 0 },
-    gate: { x: 250, z: -420, above: 30, yaw: -1.2 },
-    // in past the painting, to where the picture is seen as he drew it, round the long back's end and on behind the island to the gate
+    gate: { x: 250, z: -420, above: 30, yaw: -0.28 },
+    // in past the painting and straight out over the bay toward the two lights, the island filling the horizon as
+    // the evening goes to night, and through the gate under its head
     path: [
       [10, 500, 12],
-      [20, 420, 9],
-      [24, 340, 8],
-      [30, 240, 7],
-      [40, 140, 6],
-      [84, 10, 6],
-      [92, -100, 7],
-      [10, -168, 9],
-      [-150, -186, 9],
-      [-290, -200, 10],
-      [-345, -270, 14],
-      [-260, -360, 20],
-      [-20, -420, 28],
+      [20, 420, 10],
+      [24, 340, 9],
+      [30, 240, 8],
+      [40, 140, 8],
+      [60, 40, 9],
+      [92, -60, 10],
+      [140, -160, 14],
+      [190, -260, 20],
+      [230, -350, 26],
       [250, -420, 30],
-      [286, -406, 30],
+      [260, -455, 30],
     ],
+    // the island (worlds/Sea.tsx ISLAND): its head and its long back, as bells along it
     obstacles: [
-      { x: 181, z: -260, r: 60, h: 100, bell: true },
-      { x: 100, z: -260, r: 44, h: 60, bell: true },
-      { x: 20, z: -260, r: 30, h: 30, bell: true },
-      { x: -60, z: -260, r: 22, h: 22, bell: true },
+      { x: 342, z: -640, r: 135, h: 240, bell: true },
+      { x: 169, z: -640, r: 95, h: 140, bell: true },
+      { x: -5, z: -640, r: 66, h: 66, bell: true },
+      { x: -173, z: -640, r: 48, h: 48, bell: true },
     ],
     canvases: [{ painting: "tranquility", x: -15, z: 327, yaw: 0.69 }],
   },
@@ -805,6 +804,7 @@ export const voyage = {
   homing: false,
   // where the plane went through the last gate, for the gate's ripple (side and height from its middle, metres)
   gateHit: null as { world: WorldId; side: number; up: number; at: number } | null,
+  skyMod: null as ((s: SkyState) => SkyState) | null,
   warm: 0, // 0..1 the closing cloud is that world's light instead of the air's colour
   onHome: null as (() => void) | null,
 };
@@ -881,6 +881,8 @@ export function voyageSky(live: SkyState, dt: number): SkyState {
     s = mixSky(voyage.skyFrom, target, t * t * (3 - 2 * t));
     if (t >= 1) voyage.skyFrom = null;
   }
+  // a world may turn its own sky as the plane moves through it (Tranquility deepens into night toward the island)
+  if (voyage.skyMod && !voyage.skyFrom) s = voyage.skyMod(s);
   voyage.lastSky = s;
   return s;
 }

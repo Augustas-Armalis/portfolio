@@ -1,11 +1,12 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
-import { Kit, WORLD_U, makeTempera, makeWater, rng, type GroundPalette, type Halo, type Puff } from "./kit";
-import { SKY_U } from "../sky";
+import { Kit, WORLD_U, makeTempera, makeWater, ridge2, rng, type GroundPalette, type Halo, type Puff } from "./kit";
+import { Birds, type Flock } from "./life";
+import { SKY_U, airState, mixSky, type SkyState } from "../sky";
 import { ORIGIN, WORLDS, voyage } from "./voyage";
 
 // Tranquility (Ramybė, 1904). One hazy field of ochre and grey-green, the sky
@@ -14,12 +15,18 @@ import { ORIGIN, WORLDS, voyage } from "./voyage";
 // right, a long back sinking away to the left into a thin spit, and at the
 // waterline under the head two small lights, each drawn down into the still
 // water as a long broken streak. Nothing else.
+//
+// Built at the size it has in the picture's frame: the island is over a kilometre long and its head stands
+// 240 m out of the water, carved with ridges, cliffs and gullies and a thread of light along its crest. The
+// plane comes straight out over the bay toward the two lights; as it nears the island the evening deepens into
+// night (the sky's own colours turn, the stars come out, the water darkens and mirrors it), mist lies low on the
+// water, and the eyes' light comes down the whole bay as two wide glittering paths.
 
 const def = WORLDS.sea;
 export const SEA_PAL: GroundPalette = { a: [0.3, 0.27, 0.16], b: [0.36, 0.3, 0.17], c: [0.26, 0.26, 0.17], shore: [0.42, 0.37, 0.24] };
 
 // the island lies along x, its head toward +x; these are shared with the water's mirror of it
-export const ISLAND = { x: 40, z: -260, half: 262, top: 98 };
+export const ISLAND = { x: 40, z: -640, half: 560, top: 240 };
 // height of the back at a place along it (-1 the tip of the spit .. +1 the short spit beyond the head), in metres
 const profJS = (xn: number) => {
   const d = xn - 0.54;
@@ -39,7 +46,7 @@ float islandProf(float xn){
   float tail = 0.05 * (1.0 - pow(abs(xn), 6.0));
   return ${ISLAND.top.toFixed(1)} * (head * 0.95 + back + tail) * (1.0 - pow(abs(xn), 12.0));
 }`;
-const halfWidth = (xn: number) => 7 + profJS(xn) * 0.56;
+const halfWidth = (xn: number) => 10 + profJS(xn) * 0.56;
 
 function buildIsland(mobile: boolean) {
   const g = new THREE.SphereGeometry(1, mobile ? 90 : 150, mobile ? 28 : 44);
@@ -53,8 +60,12 @@ function buildIsland(mobile: boolean) {
     // the crown of the head is lumpy, like knuckles, or clumps of trees
     const crown = Math.exp(-Math.pow((xn - 0.56) / 0.17, 2));
     const lump = 1 + crown * (0.075 * Math.abs(Math.sin(xn * 34 + 0.6 + v.z * 1.2)) + 0.025 * Math.sin(xn * 97 + v.z * 5)) + 0.025 * Math.sin(xn * 23 + v.z * 7);
-    const y = Math.max(v.y, -0.08) * prof * lump;
-    p.setXYZ(i, xn * ISLAND.half, y, v.z * halfWidth(xn) * (1 + 0.05 * Math.sin(xn * 31 + v.y * 4)));
+    // carved: ridges running down its flanks, gullies between them, a few sheer cliffs where the head meets the sea
+    const ridges = ridge2(xn * 9 + 3.1, Math.atan2(v.y, v.z) * 2.2, 4);
+    const cliff = Math.exp(-Math.pow((xn - 0.6) / 0.12, 2)) * Math.max(0, 1 - Math.abs(v.y - 0.25) * 2.2);
+    const carve = 1 + 0.09 * (ridges - 0.45) + 0.05 * cliff;
+    const y = Math.max(v.y, -0.08) * prof * lump * (1 + 0.04 * (ridges - 0.45));
+    p.setXYZ(i, xn * ISLAND.half, y, v.z * halfWidth(xn) * (1 + 0.05 * Math.sin(xn * 31 + v.y * 4)) * carve);
     // near-black olive at the head, through plum, to violet-blue at the far tip: the air inside one object
     const k = Math.min(1, Math.max(0, (0.62 - xn) / 1.5));
     const a = k < 0.45 ? [0.016, 0.042, 0.026] : [0.06, 0.075, 0.085];
@@ -78,9 +89,37 @@ function buildIsland(mobile: boolean) {
 }
 
 // where the two eyes are: at the waterline under the head, on the side that faces the way in
+// (set up in the face now, a fifth of the way up the head, where they look out over the bay)
 export function eyes() {
-  return [0.5, 0.665].map((xn) => new THREE.Vector3(ISLAND.x + xn * ISLAND.half, 1.5, ISLAND.z + halfWidth(xn) * 0.985));
+  return [0.5, 0.64].map((xn) => {
+    const prof = profJS(xn);
+    const y = prof * 0.2;
+    const vy = y / Math.max(prof, 1);
+    return new THREE.Vector3(ISLAND.x + xn * ISLAND.half, y, ISLAND.z + halfWidth(xn) * Math.sqrt(Math.max(0, 1 - vy * vy)) + 2);
+  });
 }
+
+// the night the evening turns into near the island
+const NIGHT = airState({
+  label: "Tranquility",
+  zenith: [0.008, 0.016, 0.04],
+  upper: [0.024, 0.04, 0.08],
+  horizon: [0.11, 0.1, 0.12],
+  glow: [0.75, 0.5, 0.3],
+  amb: [0.1, 0.12, 0.17],
+  key: [0.62, 0.7, 0.92],
+  keyI: 0.55,
+  sunAz: 62,
+  sunEl: -12,
+  keyAz: -30,
+  keyEl: 40,
+  cloudLit: [0.2, 0.2, 0.24],
+  cloudShade: [0.05, 0.06, 0.08],
+  night: 1,
+  exposure: 1.25,
+  fx: [0.0, 0.0, 0.0, 1],
+});
+const dusk = { k: 0, keyK: -1, sky: null as SkyState | null };
 
 export default function SeaWorld({ props }: { props: WorldProps }) {
   const b = useDisposable(() => {
@@ -89,8 +128,10 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
     const halos: Halo[] = [];
     const glows: Halo[] = [];
     for (const p of e) {
-      halos.push({ p: [p.x, p.y, p.z + 0.4], size: 3.4, col: [1.0, 0.9, 0.66], k: 1.4 });
-      glows.push({ p: [p.x, p.y, p.z + 0.6], size: 15, col: [0.95, 0.72, 0.38], k: 0.22 });
+      // a hot small core, a halo, and a wide soft bloom: they are the brightest things in the world
+      halos.push({ p: [p.x, p.y, p.z + 0.4], size: 9, col: [1.0, 0.9, 0.66], k: 1.8 });
+      glows.push({ p: [p.x, p.y, p.z + 0.6], size: 46, col: [0.95, 0.72, 0.38], k: 0.32 });
+      glows.push({ p: [p.x, p.y, p.z + 1], size: 140, col: [0.9, 0.62, 0.32], k: 0.09 });
     }
     // a thin post at the very tip of the spit, the one upright mark in the picture
     const k = new Kit();
@@ -98,7 +139,9 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
     k.box(0.35, 13, 0.35, [tip, 5.5, ISLAND.z], [0.05, 0.05, 0.07]);
     k.box(2.6, 0.3, 0.3, [tip, 9.6, ISLAND.z], [0.05, 0.05, 0.07]);
     const puffs: Puff[] = [];
-    for (let i = 0; i < 10; i++) puffs.push({ p: [ISLAND.x - ISLAND.half * (0.3 + r() * 0.9), 5 + r() * 4, ISLAND.z + (r() - 0.5) * 120], size: 50 + r() * 60, a: 0.5 });
+    // mist lying low on the water: along the island's foot, and in drifting banks across the bay
+    for (let i = 0; i < 22; i++) puffs.push({ p: [ISLAND.x - ISLAND.half * (0.9 - r() * 1.8), 4 + r() * 6, ISLAND.z + 150 + (r() - 0.5) * 160], size: 70 + r() * 90, a: 0.55 });
+    for (let i = 0; i < 18; i++) puffs.push({ p: [(r() - 0.5) * 900, 3 + r() * 5, 380 - r() * 760], size: 60 + r() * 80, a: 0.4 });
     // a soft band of mist lying along the horizon all round
     for (let i = 0; i < 26; i++) {
       const a = (i / 26) * Math.PI * 2 + r() * 0.2;
@@ -110,7 +153,9 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
     for (const [x, z, h] of [
       [-520, -640, 17],
       [-610, -470, 13],
+      [-420, -300, 11],
       [640, -520, 15],
+      [760, -260, 19],
     ] as const) {
       const sail = new THREE.BufferGeometry();
       sail.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, h * 0.42, 0, 0, 0, h, 0, 0, 0, 0, 0, h * 0.86, 0, -h * 0.2, 0, 0], 3));
@@ -129,7 +174,11 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
     }
     return {
       island: buildIsland(props.mobile),
-      dark: makeTempera({ amb: 0.85, key: 0.5, dab: 1.2 }),
+      dark: makeTempera({ amb: 0.85, key: 0.5, dab: 1.2, grain: 1, ao: 0.4, aoH: 60, rim: [0.55, 0.62, 0.42], rimPow: 4, wrap: 0.5 }),
+      flocks: [
+        { c: [ISLAND.x + 320, 120, ISLAND.z + 120], r: 260, n: props.mobile ? 6 : 12, size: 2.2, speed: 11 },
+        { c: [-200, 60, -100], r: 150, n: props.mobile ? 4 : 8, size: 1.4, speed: 9 },
+      ] as Flock[],
       post: k.build(),
       sails: sk.build(),
       birds: bk.build(),
@@ -140,7 +189,8 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
         def,
         lights: e,
         lightCol: [1.0, 0.86, 0.56],
-        lightLen: 900,
+        lightLen: 1600,
+        lightW: 5,
         deep: [0.1, 0.11, 0.075],
         calm: 0.55,
         tint: [0.97, 0.99, 0.96],
@@ -169,6 +219,25 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
   // comes in, and thickens again behind it. The birds drift in a slow wide circle beyond the head.
   const birds = useRef<THREE.Group>(null);
   const clear = useRef(0);
+  // the world's own sky turns with the plane's distance to the island (re-blended only when the step changes)
+  useEffect(() => {
+    voyage.skyMod = (s) => {
+      if (voyage.cur !== "sea" || dusk.k <= 0.002) return s;
+      const q = Math.round(dusk.k * 160) / 160;
+      if (q !== dusk.keyK || !dusk.sky) {
+        dusk.keyK = q;
+        const e = q * q * (3 - 2 * q);
+        dusk.sky = mixSky(s, NIGHT, e);
+      }
+      return dusk.sky;
+    };
+    return () => {
+      voyage.skyMod = null;
+      dusk.k = 0;
+      dusk.sky = null;
+      dusk.keyK = -1;
+    };
+  }, []);
   const last = useRef(0);
   useFrame(({ camera }) => {
     // made ready ahead of time, it waits: the air is still the world's before it
@@ -178,10 +247,12 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
     const dt = Math.min(Math.max(now - last.current, 0), 0.1);
     last.current = now;
     const d = Math.hypot(camera.position.x - ORIGIN.x - (ISLAND.x + ISLAND.half * 0.5), camera.position.z - ORIGIN.z - ISLAND.z);
-    const want = 1 - Math.min(1, Math.max(0, (d - 260) / 480));
+    const want = 1 - Math.min(1, Math.max(0, (d - 400) / 700));
     clear.current += (want - clear.current) * (1 - Math.exp(-dt * 0.5));
     const k = clear.current * clear.current * (3 - 2 * clear.current);
-    WORLD_U.uFogD.value = def.fog[0] * (5.2 - 4.2 * k);
+    WORLD_U.uFogD.value = def.fog[0] * (4.2 - 3.4 * k);
+    // evening into night, smoothly, with the distance to the island (from the painting at the way in to the head)
+    dusk.k = Math.min(1, Math.max(0, (1180 - d) / 760));
     if (birds.current) {
       const t = now * 0.03;
       birds.current.position.set(ISLAND.x + 260 + Math.cos(t) * 300, 150 + Math.sin(t * 3.1) * 12, ISLAND.z - 240 + Math.sin(t) * 220);
@@ -200,6 +271,7 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
       <group ref={birds}>
         <mesh geometry={b.birds} material={b.dark} />
       </group>
+      <Birds flocks={b.flocks} tint={[0.06, 0.07, 0.07]} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
       <Halos list={b.glows} kind={2} />
       <Halos list={b.halos} />

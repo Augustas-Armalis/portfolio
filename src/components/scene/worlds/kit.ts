@@ -374,7 +374,8 @@ export function makeTerrainMaterial(def: WorldDef, pal: GroundPalette) {
 // distance, and lights drawn down into it as long broken streaks. `reflect`
 // is GLSL for anything else that should stand mirrored in it:
 //   vec4 worldReflect(vec3 P, vec3 r)  ->  rgb, coverage   (local coordinates)
-export function makeWater(o: { def: WorldDef; lights?: THREE.Vector3[]; lightCol?: V3; lightLen?: number; deep?: V3; calm?: number; reflect?: string; shore?: V3; tint?: V3 }) {
+// `lightW` widens the lights' streaks into broad glittering paths (Tranquility's eyes)
+export function makeWater(o: { def: WorldDef; lights?: THREE.Vector3[]; lightCol?: V3; lightLen?: number; lightW?: number; deep?: V3; calm?: number; reflect?: string; shore?: V3; tint?: V3 }) {
   const lights = o.lights ?? [];
   const n = Math.max(1, lights.length);
   const arr = lights.length ? lights : [new THREE.Vector3(0, -999, 0)];
@@ -385,6 +386,7 @@ export function makeWater(o: { def: WorldDef; lights?: THREE.Vector3[]; lightCol
       uLights: { value: arr },
       uLightCol: { value: new THREE.Color(...(o.lightCol ?? [1, 0.8, 0.45])) },
       uLen: { value: o.lightLen ?? 170 },
+      uLW: { value: o.lightW ?? 1 },
       uDeep: { value: new THREE.Color(...(o.deep ?? [0.02, 0.045, 0.055])) },
       uCalm: { value: o.calm ?? 1 },
       uTint: { value: new THREE.Color(...(o.tint ?? [1, 1, 1])) },
@@ -394,7 +396,7 @@ export function makeWater(o: { def: WorldDef; lights?: THREE.Vector3[]; lightCol
       varying vec3 vWorld; varying vec3 vLocal; varying vec2 vCamL;
       void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vLocal = (wp.xyz - modelMatrix[3].xyz); vCamL = cameraPosition.xz - modelMatrix[3].xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
-      uniform vec3 uLights[${n}]; uniform vec3 uLightCol; uniform float uLen; uniform vec3 uDeep; uniform float uCalm; uniform vec3 uTint;
+      uniform vec3 uLights[${n}]; uniform vec3 uLightCol; uniform float uLen; uniform float uLW; uniform vec3 uDeep; uniform float uCalm; uniform vec3 uTint;
       varying vec3 vWorld; varying vec3 vLocal; varying vec2 vCamL;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -433,12 +435,14 @@ export function makeWater(o: { def: WorldDef; lights?: THREE.Vector3[]; lightCol
           vec2 d = q - F;
           float s = dot(d, u);
           float dcam = max(D - s, 0.0);
-          float w = max(0.07, dcam * 0.0042);
+          float w = max(0.07, dcam * 0.0042) * uLW;
           float t = dot(d, vec2(-u.y, u.x)) + (h0 - 0.62) * w * 2.2 * smoothstep(0.0, 30.0, s);
           float a = exp(-(t * t) / (w * w)) * smoothstep(-0.4, 1.5, s) * smoothstep(hc * 1.5, hc * 5.5, dcam) * (1.0 - smoothstep(uLen * 0.7, uLen, s));
           float lg = log(max(dcam, 1.0));
           float brk = 0.25 + 0.75 * smoothstep(0.3, 0.72, vnoise(vec2(lg * 13.0 + uTime * 0.22, float(i) * 7.0)) * 0.6 + vnoise(vec2(lg * 41.0 - uTime * 0.3, 3.0)) * 0.4);
-          col += uLightCol * a * brk * (0.4 + 0.6 * dcam / max(D, 1.0)) * (1.0 + uPulse * 0.6) * step(-500.0, uLights[i].y);
+          // (a wide path glitters: broken into many small sparks that come and go along the ripples)
+          float spark = uLW > 1.5 ? 0.45 + 1.1 * smoothstep(0.62, 0.8, vnoise(q * vec2(0.55, 2.2) + vec2(uTime * 0.6, -uTime * 0.35))) : 1.0;
+          col += uLightCol * a * brk * spark * (0.4 + 0.6 * dcam / max(D, 1.0)) * (1.0 + uPulse * 0.6) * step(-500.0, uLights[i].y);
         }
         ${o.shore ? `{ float th = terrainH(q); col = mix(col, ${v3(o.shore)} * (uSkyCol + uKeyCol * 0.3), smoothstep(-0.9, -0.02, th + (h0 - 0.6) * 0.5) * 0.9); }` : ""}
         col = applyAir(col, vWorld);
