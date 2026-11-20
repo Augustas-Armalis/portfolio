@@ -380,6 +380,9 @@ function makeStoneMaterial() {
         float strata = vnoise(vec2(P.y * 0.06 + fbm(P.xz * 0.02) * 2.0, P.x * 0.004 + P.z * 0.003));
         float grain = fbm(P.xz * 0.15 + P.y * 0.12) * 0.6 + fbm(vec2(P.x + P.z, P.y) * 0.5) * 0.4 * mix(0.5, 1.0, fine);
         vec3 rock = mix(vec3(0.075, 0.07, 0.085), vec3(0.2, 0.165, 0.135), strata) * (0.75 + 0.5 * grain);
+        // out in the daylight the cliff is the pale weathered rock of the ranges seen across the land (as a sheer
+        // face turned from the low sun it otherwise read as a black cut-out); in the cave it stays dark
+        rock *= mix(2.4, 1.0, smoothstep(-2.0, 6.0, L.z));
         vec3 alb = rock;
         if (kind > 1.5 && kind < 2.95) {
           // the carved orders: pale stone, cut clean, a little paler outward, worn

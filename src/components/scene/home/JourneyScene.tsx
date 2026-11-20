@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { SKY_U, mixSky, skyState, type SkyState } from "../sky";
 import { pathOf, voyage } from "../worlds/voyage";
+import { Cave } from "./Cave";
 import { FOREST_LINE, TOWN } from "./journey";
 import { HOME_U } from "./land";
 import { Town } from "./Town";
@@ -114,7 +115,7 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     <>
       <Town mobile={mobile} />
       <Woods amount={trees} mobile={mobile} effects={effects} />
-      {/* the cave mountain (./Cave) is off until it is finished: it drew as a flat dark cut-out */}
+      <Cave />
     </>
   );
 }
