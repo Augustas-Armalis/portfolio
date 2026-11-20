@@ -146,15 +146,36 @@ let lastStep = 0;
 // `up: false` while flying: a step up mid-flight would rebuild grass, trees and the shadow map in the air (a
 // hitch for nothing); it waits for the desk. A step down is still taken, the device needs it.
 // The first seconds of a visit are the arrival: the camera comes down out of the sky while the last shaders are
-// made, and a change of gear there rebuilds the lens, the grass and the shadows in the middle of the one shot that
-// must be seamless. The gear guessed behind the loader is kept until the camera has settled.
+// made. A step UP there would rebuild the lens, the grass and the shadows in the middle of the one shot that must
+// be seamless, so there is none until the camera has settled. But a gear the machine cannot hold must not be
+// held either: during the arrival the way DOWN is quicker than usual. Half a second of frames over budget (the
+// middle frame of the last sixteen, so one stall while a shader is made does not count) and it steps down at
+// once, and again a second and a half later if that was not enough.
 const SETTLE_MS = 16000;
+const EARLY = new Float32Array(16);
+let earlyN = 0;
 let firstReport = 0;
+function early(dt: number, t: number) {
+  const s = get();
+  if (s.choice !== "auto" || dt <= 0) return;
+  EARLY[earlyN++ % EARLY.length] = Math.min(dt, 0.5);
+  if (earlyN < EARLY.length || t - lastStep < 1500) return;
+  const mid = Array.from(EARLY).sort((a, b) => a - b)[EARLY.length >> 1];
+  const i = ORDER.indexOf(s.auto);
+  // (over budget: slower than 34 frames a second, which sixteen such frames make half a second of)
+  if (mid <= 1 / 34 || i <= 0) return;
+  s.auto = ORDER[i - 1];
+  s.ceiling = s.auto;
+  window.setTimeout(() => (get().ceiling = ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(get().auto) + 1)]), 60000);
+  lastStep = t;
+  earlyN = 0;
+  emit(false);
+}
 export function reportFrame(dt: number, up = true) {
   const s = get();
   const t = performance.now();
   if (!firstReport) firstReport = t;
-  if (t - firstReport < SETTLE_MS) return;
+  if (t - firstReport < SETTLE_MS) return early(dt, t);
   if (s.choice !== "auto" || dt <= 0 || dt > 0.5) return;
   acc += dt;
   frames++;
