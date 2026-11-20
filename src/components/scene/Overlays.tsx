@@ -5,20 +5,16 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { TRACK, geist } from "./font";
 import { BOOT } from "./shared";
 
-const { markY, markH, markW, stroke, barY, barW, barH } = BOOT;
-const cx = (markW / 2) * 0.66;
-const cy = markY + markH * 0.16;
+const { sunR, sunY, gap, lineH, lineHalf, barY, barW, barH } = BOOT;
 
 // The boot mark and bar, drawn in CSS px from the viewport centre, the same
 // numbers the 3D screen shader uses.
 function BootMark({ w, h, color, track, prog }: { w: number; h: number; color: string; track: string; prog: number }) {
   return (
     <svg className="absolute inset-0 h-full w-full" viewBox={`${-w / 2} ${-h / 2} ${w} ${h}`} aria-hidden>
-      <g stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" fill="none">
-        <line x1={0} y1={markY - markH / 2} x2={-markW / 2} y2={markY + markH / 2} />
-        <line x1={0} y1={markY - markH / 2} x2={markW / 2} y2={markY + markH / 2} />
-        <line x1={-cx} y1={cy} x2={cx} y2={cy} />
-      </g>
+      {/* the half-sun on its horizon */}
+      <path d={`M${-sunR} ${sunY}A${sunR} ${sunR} 0 0 1 ${sunR} ${sunY}Z`} fill={color} />
+      <rect x={-lineHalf} y={sunY + gap} width={lineHalf * 2} height={lineH} rx={lineH / 2} fill={color} />
       <rect x={-barW / 2} y={barY - barH / 2} width={barW} height={barH} rx={barH / 2} fill={track} />
       <rect
         x={-barW / 2}
@@ -72,8 +68,10 @@ export function BootVeil({ onDone }: { onDone: () => void }) {
 
 // ---------- the loader ----------
 //
-// Darkness, and one hairline of light on the horizon. Real loading progress
-// draws the line across; his name and the hour sit on it. This DOM layer is in
+// Darkness, and the mark of the OS being made out of light: one hairline, the
+// horizon, drawn across by real loading progress, and over its middle the
+// half-sun rising out of it as the same progress climbs. His name and the
+// hour sit under the line. This DOM layer is in
 // the server-rendered HTML, so it paints before any script runs, and its line
 // runs as a CSS transition on the compositor, so it keeps gliding while the
 // main thread compiles shaders. When the world is ready the canvas is already
@@ -119,6 +117,10 @@ if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Obje
 const LOADER_CSS = `
 @keyframes ld-first{from{transform:scaleX(0)}to{transform:scaleX(.08)}}
 .ld-fill{transform-origin:0 50%;transform:scaleX(0);animation:ld-first 1.6s cubic-bezier(.23,1,.32,1) both;transition:transform .7s cubic-bezier(.23,1,.32,1),opacity .28s linear;will-change:transform}
+@keyframes ld-dawn{from{transform:translateY(101%)}to{transform:translateY(84%)}}
+.ld-sun{transform:translateY(101%);animation:ld-dawn 1.6s cubic-bezier(.23,1,.32,1) both;transition:transform .7s cubic-bezier(.23,1,.32,1);will-change:transform}
+.ld-sky{transition:opacity .5s cubic-bezier(.4,0,.2,1),transform .6s cubic-bezier(.23,1,.32,1),filter .6s cubic-bezier(.23,1,.32,1)}
+.ld-halo{opacity:0;transition:opacity .9s cubic-bezier(.23,1,.32,1)}
 .ld-type{transition:opacity .7s cubic-bezier(.23,1,.32,1),filter .7s cubic-bezier(.23,1,.32,1),transform .7s cubic-bezier(.23,1,.32,1)}
 `;
 
@@ -135,7 +137,9 @@ export function Preloader({ hideForReducedMotion = false }: { hideForReducedMoti
   const [time, setTime] = useState<string | null>(null);
   const line = useRef<HTMLDivElement>(null);
   const fill = useRef<HTMLDivElement>(null);
-  const taken = useRef(false);
+  const sun = useRef<HTMLDivElement>(null);
+  const halo = useRef<HTMLDivElement>(null);
+  const taken = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const f = () => bump((n) => n + 1);
     subs.add(f);
@@ -165,17 +169,32 @@ export function Preloader({ hideForReducedMotion = false }: { hideForReducedMoti
   useLayoutEffect(() => {
     const el = fill.current;
     if (!el || loader.progress <= 0) return;
-    if (!taken.current) {
+    if (taken.current !== el) {
       // pin the line where the CSS animation has it, so the hand-over can never step back
-      taken.current = true;
+      // (once for each time the loader is put up)
+      taken.current = el;
       const now = getComputedStyle(el).transform;
       el.style.transition = "none";
       el.style.animation = "none";
       el.style.transform = now === "none" ? "scaleX(0)" : now;
       void el.offsetWidth;
       el.style.transition = "";
+      // the sun likewise: from wherever its own first glimmer has got to
+      const su = sun.current;
+      if (su) {
+        const at = getComputedStyle(su).transform;
+        su.style.transition = "none";
+        su.style.animation = "none";
+        su.style.transform = at === "none" ? "translateY(101%)" : at;
+        void su.offsetWidth;
+        su.style.transition = "";
+      }
     }
     el.style.transform = `scaleX(${Math.max(0.08, loader.progress).toFixed(4)})`;
+    // the sun is up when the line is across: its rise eases in late, so the last of the loading is the dawn
+    const up = Math.pow(Math.max(0.16, loader.progress), 1.6);
+    if (sun.current) sun.current.style.transform = `translateY(${((1 - up) * 101).toFixed(2)}%)`;
+    if (halo.current && loader.phase === "load") halo.current.style.opacity = (up * 0.9).toFixed(3);
   });
   if (phase === "gone") return null;
   const open = phase === "open";
@@ -194,9 +213,14 @@ export function Preloader({ hideForReducedMotion = false }: { hideForReducedMoti
     >
       <style dangerouslySetInnerHTML={{ __html: LOADER_CSS }} />
       <div className="absolute left-1/2 top-1/2 w-[min(360px,64vw)] -translate-x-1/2">
+        {/* the half-sun, rising out of the line (it is clipped at the horizon, a breath above it, as in the mark) */}
+        <div className="ld-sky pointer-events-none absolute bottom-[7px] left-1/2 h-[26px] w-[52px] -translate-x-1/2 overflow-hidden" style={out ? { opacity: 0, transform: "scale(1.5)", filter: "blur(6px)" } : undefined} aria-hidden>
+          <div ref={sun} className="ld-sun h-[52px] w-[52px] rounded-full bg-white" />
+        </div>
+        <div ref={halo} className="ld-halo pointer-events-none absolute bottom-[-40px] left-1/2 h-[140px] w-[260px] -translate-x-1/2 bg-[radial-gradient(closest-side,rgb(255_236_200/0.2),rgb(255_236_200/0.06)_55%,transparent)]" style={out ? { opacity: 0 } : undefined} aria-hidden />
         <div
-          className="ld-type absolute inset-x-0 bottom-0 flex items-baseline justify-between pb-[14px] text-[13px] font-medium leading-none"
-          style={out ? { opacity: 0, filter: "blur(5px)", transform: "translateY(-5px)", transitionDelay: open ? "0.12s" : "0s" } : undefined}
+          className="ld-type absolute inset-x-0 top-0 flex items-baseline justify-between pt-[16px] text-[13px] font-medium leading-none"
+          style={out ? { opacity: 0, filter: "blur(5px)", transform: "translateY(5px)", transitionDelay: open ? "0.12s" : "0s" } : undefined}
         >
           <span>Augustas Armalis</span>
           {/* (a phone's loader carries the name alone) */}

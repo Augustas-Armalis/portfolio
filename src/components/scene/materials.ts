@@ -412,7 +412,7 @@ export const coverReady = () => {
 // is crisp at any distance and matches the DOM veil exactly. Writes display
 // (sRGB) values directly, like CSS does.
 export function makeScreenMaterial(size: [number, number]) {
-  const { markY, markH, markW, stroke, barY, barW, barH } = BOOT;
+  const { sunR, sunY, gap, lineH, lineHalf, barY, barW, barH } = BOOT;
   const f = (n: number) => n.toFixed(3);
   return new THREE.ShaderMaterial({
     toneMapped: false,
@@ -437,13 +437,11 @@ export function makeScreenMaterial(size: [number, number]) {
       float cover(float d){ float w = max(fwidth(d), 1e-4) * 0.5; return 1.0 - smoothstep(-w, w, d); }
       void main(){
         vec2 p = (vUv - 0.5) * uSize * uPx; p.y = -p.y;
-        vec2 apex = vec2(0.0, ${f(markY - markH / 2)});
-        vec2 fl = vec2(${f(-markW / 2)}, ${f(markY + markH / 2)});
-        vec2 fr = vec2(${f(markW / 2)}, ${f(markY + markH / 2)});
-        float cy = ${f(markY + markH * 0.16)};
-        float cx = ${f((markW / 2) * 0.66)};
-        float d = min(min(seg(p, apex, fl), seg(p, apex, fr)), seg(p, vec2(-cx, cy), vec2(cx, cy))) - ${f(stroke / 2)};
-        float mark = cover(d);
+        // the mark: a half-sun on its horizon
+        vec2 sc = vec2(0.0, ${f(sunY)});
+        float sun = max(length(p - sc) - ${f(sunR)}, p.y - sc.y);
+        float horizon = rbox(p - vec2(0.0, ${f(sunY + gap + lineH / 2)}), vec2(${f(lineHalf)}, ${f(lineH / 2)}), ${f(lineH / 2)});
+        float mark = max(cover(sun), cover(horizon));
         vec2 bp = p - vec2(0.0, ${f(barY)});
         float track = cover(rbox(bp, vec2(${f(barW / 2)}, ${f(barH / 2)}), ${f(barH / 2)}));
         float fw = max(${f(barW)} * uProg, ${f(barH)});

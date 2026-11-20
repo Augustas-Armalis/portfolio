@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import { Mark } from "./Mark";
 import { useEffect } from "react";
 import { mainWork, owner } from "@/content";
 import { useOS, useWallpaper } from "@/store";
@@ -16,7 +17,7 @@ export function Monogram({ size = 88 }: { size?: number }) {
       role="img"
       aria-label={owner.name}
     >
-      {owner.name[0]}
+      <Mark size={Math.round(size * 0.62)} />
     </div>
   );
 }
@@ -115,7 +116,9 @@ export function PowerOverlay() {
                 animate={{ opacity: [0.5, 1, 0.5] }}
                 transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
               />
-              <span className="relative text-[84px] font-semibold leading-none tracking-[-0.045em] text-white">A</span>
+              <span className="relative text-white">
+                <Mark size={104} />
+              </span>
               <div className="relative h-[5px] w-[180px] overflow-hidden rounded-full bg-white/[0.16]">
                 <motion.div
                   className="h-full w-full origin-left rounded-full bg-white"

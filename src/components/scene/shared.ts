@@ -13,11 +13,18 @@ export const PHONE = { w: 0.0716, h: 0.1476, d: 0.0083, r: 0.0105, aw: 0.0672, a
 
 // The boot frame, in CSS px from the viewport centre (y down). The 3D screen
 // shader and the DOM veil both draw from these numbers, so the hand-off is exact.
+// (the mark is the half-sun on its horizon: a half disc of radius sunR whose flat edge lies at sunY, and under
+// it, a gap away, a round-ended line)
 export const BOOT = {
   markY: -26,
   markH: 42,
   markW: 34,
   stroke: 4.2,
+  sunR: 19,
+  sunY: -22,
+  gap: 6,
+  lineH: 5.6,
+  lineHalf: 29.5,
   barY: 46,
   barW: 156,
   barH: 4,
