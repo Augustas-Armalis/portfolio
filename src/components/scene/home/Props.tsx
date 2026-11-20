@@ -255,8 +255,8 @@ function house(b: Build, x: number, z: number, rotY: number, sx: number, sz: num
   const y = Math.min(landH(x - 3, z), landH(x + 3, z), landH(x, z - 3), landH(x, z + 3)) - 0.3;
   b.at(x, y, z, rotY);
   b.box(0, h / 2, 0, sx, h, sz, wall);
-  b.roof(0, h, 0, sx, sz, sx * 0.55, roofC, wall);
-  b.box(sx * 0.2, h + sx * 0.5, sz * 0.2, 0.5, 1.1, 0.5, [0.3, 0.22, 0.18]);
+  b.roof(0, h, 0, sx, sz, sx * 0.72, roofC, wall);
+  b.box(sx * 0.2, h + sx * 0.6, sz * 0.2, 0.5, 1.1, 0.5, [0.3, 0.22, 0.18]);
   // windows on the long sides, a door: dark by day, lit after dusk
   for (const side of [-1, 1])
     for (let i = 0; i < 2; i++) {
@@ -331,14 +331,55 @@ function build() {
     b.at(S.x + dx, landH(S.x + dx, S.z + dz), S.z + dz);
     b.rock(0, 0, 0, s, r() * 9, STONE);
   }
-  // --- haystacks: a rounded cock of hay on a pole
+  // --- hay: slim pointed cocks on their poles (kupetos), as they stand in a mown Lithuanian meadow
   for (const [x, z] of PLACES.hay) {
-    const s = 0.85 + r() * 0.35;
-    b.at(x, landH(x, z) - 0.15, z, r() * 6);
-    b.cyl(0, 0, 0, 1.25 * s, 1.5 * s, 1.0 * s, 12, [THATCH[0] * 0.6, THATCH[1] * 0.6, THATCH[2] * 0.6], 0, THATCH);
-    b.cyl(0, 1.0 * s, 0, 1.5 * s, 0.95 * s, 0.9 * s, 12, THATCH, 0, [THATCH[0] * 1.15, THATCH[1] * 1.12, THATCH[2] * 1.0]);
-    b.cyl(0, 1.9 * s, 0, 0.95 * s, 0, 1.1 * s, 12, [THATCH[0] * 1.15, THATCH[1] * 1.12, THATCH[2]], 0, [THATCH[0] * 1.3, THATCH[1] * 1.25, THATCH[2] * 1.1]);
-    b.cyl(0, 2.8 * s, 0, 0.03, 0.02, 0.6, 5, WOOD_DARK);
+    const k = 0.85 + r() * 0.3;
+    b.at(x, landH(x, z) - 0.1, z, r() * 6);
+    b.cyl(0, 0, 0, 0.95 * k, 0.8 * k, 0.9 * k, 10, [THATCH[0] * 0.62, THATCH[1] * 0.62, THATCH[2] * 0.6], 0, THATCH);
+    b.cyl(0, 0.9 * k, 0, 0.8 * k, 0.12 * k, 1.9 * k, 10, THATCH, 0, [THATCH[0] * 1.25, THATCH[1] * 1.2, THATCH[2] * 1.05]);
+    b.cyl(0, 2.7 * k, 0, 0.035, 0.02, 0.95, 5, WOOD_DARK);
+  }
+  // --- the farmstead: a log house under a steep shingled roof with white window trim, a granary with a porch, a
+  // well with its sweep, a stork's nest on a pole, a rail fence round the yard
+  {
+    const F = PLACES.farm;
+    const fy = Math.min(landH(F.x - 5, F.z), landH(F.x + 5, F.z), landH(F.x, F.z - 5), landH(F.x, F.z + 5)) - 0.25;
+    const LOG: V3 = [0.2, 0.14, 0.09];
+    const SHINGLE: V3 = [0.16, 0.15, 0.14];
+    const TRIM: V3 = [0.78, 0.76, 0.7];
+    b.at(F.x, fy, F.z, 0.5);
+    b.box(0, 1.45, 0, 6.2, 2.9, 11, LOG);
+    b.roof(0, 2.9, 0, 6.2, 11, 4.3, SHINGLE, LOG);
+    b.box(1.2, 6.2, 1.5, 0.6, 1.5, 0.6, [0.34, 0.2, 0.15]);
+    for (const side of [-1, 1])
+      for (let i = 0; i < 3; i++) {
+        b.box(side * 3.12, 1.65, -3.2 + i * 3.2, 0.06, 1.25, 1.05, TRIM);
+        b.box(side * 3.16, 1.65, -3.2 + i * 3.2, 0.05, 0.95, 0.75, [0.5, 0.36, 0.14], 0.9);
+      }
+    b.box(0, 1.1, 5.53, 1.0, 2.1, 0.08, [0.12, 0.2, 0.16]);
+    // the wind boards crossed at the gable's peak
+    for (const zz of [-5.75, 5.75]) for (const sx of [-1, 1]) b.box(sx * 0.18, 7.45, zz, 0.07, 0.9, 0.05, TRIM);
+    // the granary (klėtis)
+    const gx = F.x + 17;
+    const gz = F.z + 13;
+    b.at(gx, fy + 0.2, gz, 2.0);
+    b.box(0, 1.25, 0, 4.4, 2.2, 5.6, [LOG[0] * 0.85, LOG[1] * 0.85, LOG[2] * 0.85]);
+    b.roof(0, 2.45, 0.5, 4.4, 7.0, 2.7, [THATCH[0] * 0.7, THATCH[1] * 0.68, THATCH[2] * 0.6], LOG);
+    for (const sx of [-1.9, 0, 1.9]) b.cyl(sx, 0, 3.6, 0.09, 0.08, 2.4, 6, WOOD_DARK, 0, WOOD);
+    // the well and its sweep
+    b.at(F.x + 7.5, fy, F.z + 7);
+    b.cyl(0, 0, 0, 0.75, 0.72, 0.85, 10, WOOD, 0, WOOD_PALE);
+    b.cyl(2.3, 0, 0, 0.11, 0.09, 4.2, 6, WOOD_DARK, 0, WOOD);
+    b.box(0.6, 4.75, 0, 0.09, 0.09, 6.4, WOOD_PALE);
+    b.at(F.x + 7.5, fy, F.z + 7, Math.PI / 2);
+    b.box(0, 4.2, -0.6, 0.1, 0.1, 6.6, WOOD, 0, 0.36);
+    b.box(0, 2.3, -3.6, 0.03, 3.6, 0.03, WOOD_PALE);
+    // the stork's pole: a cartwheel of sticks on top
+    b.at(F.x - 9, fy, F.z + 6);
+    b.cyl(0, 0, 0, 0.13, 0.1, 8.2, 7, WOOD_DARK, 0, WOOD);
+    b.cyl(0, 8.2, 0, 0.5, 0.85, 0.35, 9, [0.17, 0.13, 0.09], 0, [0.24, 0.19, 0.13]);
+    b.cyl(0, 8.55, 0, 0.1, 0.07, 0.55, 5, [0.82, 0.82, 0.8]);
+    b.box(0.02, 9.12, 0.12, 0.05, 0.05, 0.3, [0.75, 0.2, 0.12]);
   }
   // --- fences
   for (const line of PLACES.fences) fence(b, line, r);
@@ -364,8 +405,8 @@ function build() {
     const a = (i / 13) * Math.PI * 2 + r() * 0.4;
     const d = 22 + r() * 30;
     const sx = 5 + r() * 2.5;
-    const wall: V3 = r() < 0.5 ? PLASTER : r() < 0.5 ? [0.6, 0.5, 0.32] : [0.36, 0.26, 0.17];
-    house(b, Vg.x + Math.cos(a) * d, Vg.z + Math.sin(a) * d * 0.8, r() * 3.1, sx, sx * (1.3 + r() * 0.5), 2.8 + r() * 0.8, wall, r() < 0.65 ? TILE : [0.2, 0.17, 0.15], r);
+    const wall: V3 = r() < 0.72 ? [0.21 + r() * 0.05, 0.15 + r() * 0.03, 0.1] : r() < 0.5 ? [0.5, 0.42, 0.2] : PLASTER;
+    house(b, Vg.x + Math.cos(a) * d, Vg.z + Math.sin(a) * d * 0.8, r() * 3.1, sx, sx * (1.3 + r() * 0.5), 2.8 + r() * 0.8, wall, r() < 0.3 ? TILE : r() < 0.5 ? [THATCH[0] * 0.7, THATCH[1] * 0.68, THATCH[2] * 0.6] : [0.17, 0.16, 0.15], r);
   }
   // --- the ruined tower on its foothill
   const T = PLACES.tower;

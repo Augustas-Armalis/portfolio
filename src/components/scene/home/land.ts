@@ -130,11 +130,14 @@ export const PLACES = (() => {
     shrine: { x: 4.6, z: -27 },
     hay: [[-33, -15], [-44, -21], [-39.5, -28.5], [-57, -11], [-52, -30]] as [number, number][],
     village: { x: -64, z: -420 },
+    // a farmstead (sodyba) across the meadow west of the lake: house, granary, well with a sweep, a stork's pole
+    farm: { x: -122, z: -30 },
     lighthouse: { x: 150, z: shoreZ(150) - 16 },
     tower: { x: -282, z: -318 },
     fences: [
       [[9, -16], [10.5, -30], [10, -44], [12, -53]],
       [[-70, -2], [-52, -4], [-36, -1], [-24, -6]],
+      [[-136, -16], [-123, -12], [-108, -15], [-103, -27]],
       [[14, 40], [26, 58], [30, 78]],
     ] as [number, number][][],
   };
@@ -401,7 +404,7 @@ export function forestD(x: number, z: number) {
     d = Math.max(d, (1 - sstep(26, 70, rd)) * sstep(7.5, 10, rd) * sstep(-30, -70, z) * (0.55 + 0.45 * vnoise(x * 0.05, z * 0.03)));
   }
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
-  d *= sstep(34, 70, Math.hypot(x - PLACES.village.x, z - PLACES.village.z)) * sstep(10, 26, Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z)) * sstep(1.5, 5, streamD(x, z));
+  d *= sstep(22, 44, Math.hypot(x - PLACES.farm.x, z - PLACES.farm.z)) * sstep(34, 70, Math.hypot(x - PLACES.village.x, z - PLACES.village.z)) * sstep(10, 26, Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z)) * sstep(1.5, 5, streamD(x, z));
   return Math.min(1, d);
 }
 
