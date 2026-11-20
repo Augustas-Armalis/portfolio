@@ -273,6 +273,22 @@ export function makeTerrainMaterial(def: WorldDef, pal: GroundPalette) {
         vec2 p = vLocal.xz;
         float h = vLocal.y;
         vec3 alb = groundAlb(p);
+        float gd = length(vWorld - cameraPosition);
+        // painted, not printed: broad drifts of lighter and darker field, long soft strokes laid along a slowly
+        // turning hand, and close to the eye short dabs like tufts, light ones and dark ones
+        alb *= mix(0.84, 1.15, smoothstep(0.3, 0.7, fbm(p * 0.006 + 21.0)));
+        float ga = vnoise(p * 0.008 + 5.0) * 6.2832;
+        vec2 gdir = vec2(cos(ga), sin(ga));
+        vec2 gq = vec2(dot(p, gdir), dot(p, vec2(-gdir.y, gdir.x)));
+        float brush = vnoise(vec2(gq.x * 0.08, gq.y * 0.85)) * 0.6 + vnoise(vec2(gq.x * 0.28, gq.y * 2.4) + 7.0) * 0.4;
+        alb *= 1.0 + (brush - 0.5) * 0.34 * (1.0 - smoothstep(70.0, 340.0, gd));
+        {
+          float near = 1.0 - smoothstep(12.0, 64.0, gd);
+          vec2 tc = p * 1.7; vec2 ti = floor(tc); vec2 tf = fract(tc) - 0.5; float th = hash12(ti);
+          vec2 off = (vec2(hash12(ti + 3.1), hash12(ti + 7.7)) - 0.5) * 0.6;
+          float tuft = (1.0 - smoothstep(0.06, 0.34, length((tf - off) * vec2(2.6, 0.9)))) * step(0.42, th);
+          alb *= 1.0 + tuft * near * (th > 0.7 ? 0.34 : -0.28);
+        }
         ${pal.high ? `alb = mix(alb, ${v3(pal.high)}, smoothstep(${(pal.highAt ?? [20, 60])[0].toFixed(1)}, ${(pal.highAt ?? [20, 60])[1].toFixed(1)}, h + (vnoise(p * 0.03) - 0.5) * 14.0));` : ""}
         ${pal.rock ? `alb = mix(alb, ${v3(pal.rock)} * (0.8 + 0.4 * vnoise(vec2(h * 0.3, p.x * 0.02))), smoothstep(0.82, 0.62, n.y));` : ""}
         ${

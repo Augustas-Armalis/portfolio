@@ -208,6 +208,25 @@ export function Ground({ fogDensity }: { fogDensity: number }) {
             float patchN = vnoise(vWorld.xz * 0.11 + 3.0);
             float dry = smoothstep(0.5, 0.85, patchN * 0.7 + clumpN * 0.3);
             vec3 far = mix(vec3(0.13, 0.2, 0.05), vec3(0.28, 0.24, 0.095), dry) * mix(0.72, 1.12, clamp(clumpN * 0.6 + patchN * 0.6 - 0.1, 0.0, 1.0)) * 0.8;
+            {
+              // out along the road the field is painted: broad drifts, long soft strokes, and near the eye short dabs like tufts
+              // (none of it round the desk, where the real blades stand thick)
+              float away = smoothstep(24.0, 70.0, r);
+              float gd = length(vWorld - cameraPosition);
+              vec2 gp = vWorld.xz;
+              float k = mix(0.86, 1.14, smoothstep(0.3, 0.7, fbm(gp * 0.006 + 21.0)));
+              float ga = vnoise(gp * 0.008 + 5.0) * 6.2832;
+              vec2 gdir = vec2(cos(ga), sin(ga));
+              vec2 gq = vec2(dot(gp, gdir), dot(gp, vec2(-gdir.y, gdir.x)));
+              float brush = vnoise(vec2(gq.x * 0.08, gq.y * 0.85)) * 0.6 + vnoise(vec2(gq.x * 0.28, gq.y * 2.4) + 7.0) * 0.4;
+              k *= 1.0 + (brush - 0.5) * 0.32 * (1.0 - smoothstep(70.0, 340.0, gd));
+              float near = 1.0 - smoothstep(12.0, 64.0, gd);
+              vec2 tc = gp * 1.7; vec2 ti = floor(tc); vec2 tf = fract(tc) - 0.5; float th = hash12(ti);
+              vec2 off = (vec2(hash12(ti + 3.1), hash12(ti + 7.7)) - 0.5) * 0.6;
+              float tuft = (1.0 - smoothstep(0.06, 0.34, length((tf - off) * vec2(2.6, 0.9)))) * step(0.42, th);
+              k *= 1.0 + tuft * near * (th > 0.7 ? 0.32 : -0.26);
+              far *= mix(1.0, k, away);
+            }
             vec3 alb = mix(soil, far, smoothstep(2.5, 14.0, r));
             // dirt path
             float px = abs(vWorld.x - pathX(vWorld.z)) / pathW(vWorld.z);

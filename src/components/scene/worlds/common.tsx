@@ -119,6 +119,7 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
     const r = rng(91 + id.length * 7);
     const halos: Halo[] = [];
     const glows: Halo[] = [];
+    const threads: number[] = [];
     const k = new Kit();
     const step = Math.round(46 / 4);
     const tan = new THREE.Vector3();
@@ -131,12 +132,12 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
       halos.push({ p: [p.x, p.y - 0.75, p.z], size: 2.2, col: tint, k: 0.17 * gain });
       // a fine thread of light falling from it, gone before it reaches the ground
       const h = Math.min(p.y - 0.75 - g - 0.5, 2.4);
-      if (h > 1.2) k.add(new THREE.CylinderGeometry(0.018, 0.003, h, 4, 1, true), [p.x, p.y - 0.75 - h / 2, p.z], [tint[0] * 0.8, tint[1] * 0.74, tint[2] * 0.6], { glow: 0.3 * gain });
-      if (angels && n % 4 === 1 && effects > 0.25) {
+      if (h > 1.2) threads.push(p.x, p.y - 0.75, p.z, h);
+      if (angels && n % 4 === 3 && effects > 0.25) {
         tan.subVectors(pts[i + 1], pts[i - 1]).normalize();
-        const s = n % 8 === 1 ? 1 : -1;
+        const s = n % 8 === 3 ? 1 : -1;
         // in the home wood they stand at the roadside, inside the lane the trees keep clear
-        const aside = id === "home" ? 4.8 : 8.5;
+        const aside = id === "home" ? 4.8 : 12;
         const ax = p.x - tan.z * s * aside;
         const az = p.z + tan.x * s * aside;
         const gy = id === "home" ? 0 : groundAt(def, ax, az);
@@ -153,7 +154,56 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
         glows.push({ p: [ax, (onWater ? p.y - 0.9 : gy) + size * 1.72, az], size: size * 1.3, col: [1, 0.9, 0.7], k: 0.3 * gain });
       }
     }
-    return { geo, mat, halos: haloGeometry(halos), haloMat: makeHaloMaterial(0), glows: glows.length ? haloGeometry(glows) : null, glowMat: makeHaloMaterial(2), marks: k.parts.length ? k.build() : null, tempera: makeTempera({ amb: 0.9, key: 0.3 }) };
+    // the thread each waymark trails: a soft taper of light, added to what is behind it, faint by day
+    const tp: number[] = [];
+    const tu: number[] = [];
+    const ti: number[] = [];
+    for (let i = 0; i < threads.length; i += 4) {
+      const [x, y, z, h] = threads.slice(i, i + 4);
+      const b0 = tp.length / 3;
+      for (const [sx, v] of [
+        [-1, 0],
+        [1, 0],
+        [-1, 1],
+        [1, 1],
+      ]) {
+        tp.push(x, y - v * h, z);
+        tu.push(sx, v);
+      }
+      ti.push(b0, b0 + 2, b0 + 1, b0 + 1, b0 + 2, b0 + 3);
+    }
+    const threadGeo = new THREE.BufferGeometry();
+    threadGeo.setAttribute("position", new THREE.Float32BufferAttribute(tp, 3));
+    threadGeo.setAttribute("uv", new THREE.Float32BufferAttribute(tu, 2));
+    threadGeo.setIndex(ti);
+    if (tp.length) threadGeo.computeBoundingSphere();
+    const threadMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: { ...SKY_U, ...WORLD_U, uTint: { value: new THREE.Color(...tint) }, uGain: { value: gain } },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv; varying float vDist;
+        void main(){
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vDist = -mv.z;
+          // a ribbon that faces the eye, never thinner than a pixel and a half
+          mv.x += uv.x * max(0.05, vDist * 0.0011);
+          vUv = uv; gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uTint; uniform float uGain;
+        varying vec2 vUv; varying float vDist;
+        ${GLSL_SKY}
+        void main(){
+          float a = exp(-vUv.x * vUv.x * 5.0) * (1.0 - vUv.y) * (1.0 - vUv.y);
+          a *= smoothstep(2.0, 12.0, vDist) * (1.0 - smoothstep(70.0, 190.0, vDist)) * mix(0.16, 0.34, uNight) * exp(-vDist * uMist * 1.5);
+          gl_FragColor = vec4(uTint * a * uGain, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    return { geo, mat, threadGeo: tp.length ? threadGeo : null, threadMat, halos: haloGeometry(halos), haloMat: makeHaloMaterial(0), glows: glows.length ? haloGeometry(glows) : null, glowMat: makeHaloMaterial(2), marks: k.parts.length ? k.build() : null, tempera: makeTempera({ amb: 0.9, key: 0.3 }) };
   }, [id, effects > 0.25]);
   return (
     <>
@@ -161,6 +211,7 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
       {marks && <mesh geometry={b.halos} material={b.haloMat} renderOrder={6} />}
       {b.glows && <mesh geometry={b.glows} material={b.glowMat} renderOrder={6} />}
       {b.marks && <mesh geometry={b.marks} material={b.tempera} />}
+      {marks && b.threadGeo && <mesh geometry={b.threadGeo} material={b.threadMat} renderOrder={5} />}
     </>
   );
 }
