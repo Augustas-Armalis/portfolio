@@ -751,14 +751,14 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       // pool, a wider one in the clearing, and the still pool before the kings that the little world lies mirrored in
       bumps: [
         [0, KINGS.z, 150, 5],
-        [-8, 650, 34, -3.2],
-        [-52, 580, 30, -3],
-        [-22, 505, 34, -3.3],
-        [-12, 440, 30, -3],
-        [12, 360, 62, -4.2],
-        [36, 285, 30, -3],
-        [6, 222, 32, -3.2],
-        [-14, 158, 30, -3],
+        [-10, 655, 34, -3.2],
+        [-76, 578, 30, -3],
+        [-70, 500, 34, -3.3],
+        [-26, 432, 30, -3],
+        [44, 352, 62, -4.2],
+        [60, 284, 30, -3],
+        [32, 220, 32, -3.2],
+        [-8, 158, 30, -3],
         [0, 70, 42, -3.4],
         [0, -30, 86, -4.6],
       ],
@@ -770,19 +770,20 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     ceil: 150,
     entry: { x: 0, z: 700, above: 14, yaw: 0 },
     gate: null,
-    // a long way in: the path winds between the great trunks, so the light ahead is only glimpsed through them;
+    // a long way in: the path winds wide between the great trunks, so that from the entry the kings are hidden and
+    // their light is only glimpsed through the wood, now on one side, now on the other;
     // then it straightens into the glade, low, so the kings stand over the plane like hills for the whole of the
     // approach; only at the last does it climb to their hands, and between them into the light
     path: [
       [0, 700, 14],
-      [-24, 630, 14],
-      [-40, 560, 15],
-      [-30, 490, 15],
-      [-4, 420, 16],
-      [22, 350, 16],
-      [26, 280, 17],
-      [12, 215, 19],
-      [0, 150, 22],
+      [-30, 632, 14],
+      [-66, 560, 15],
+      [-62, 490, 15],
+      [-22, 420, 16],
+      [36, 350, 16],
+      [52, 285, 17],
+      [30, 222, 19],
+      [6, 156, 22],
       [0, 80, 27],
       [0, 20, 34],
       [0, -40, 46],
@@ -796,7 +797,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -114, z: KINGS.z, r: 60, h: 190 },
       { x: 114, z: KINGS.z, r: 60, h: 190 },
     ],
-    canvases: [{ painting: "kings", x: -56, z: 640, yaw: 0.5 }],
+    canvases: [{ painting: "kings", x: -66, z: 648, yaw: 0.5 }],
   },
 };
 

@@ -727,7 +727,7 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
   return (
     <>
       <mesh ref={night} geometry={b.nightGeo} material={b.nightMat} renderOrder={-9} frustumCulled={false} />
-      <WorldBase id="kings" def={def} pal={KINGS_PAL} props={props} grass={false} pathTint={[1, 0.8, 0.52]} pathGain={0.16} angels={false} marks={false} groundSize={3400} />
+      <WorldBase id="kings" def={def} pal={KINGS_PAL} props={props} grass={false} pathTint={[1, 0.8, 0.52]} pathGain={0.05} angels={false} marks={false} groundSize={3400} />
       <mesh geometry={b.waterGeo} material={b.waterMat} renderOrder={1} />
       <mesh geometry={b.wood} material={b.bark} />
       <mesh geometry={b.left} material={b.leftMat} />

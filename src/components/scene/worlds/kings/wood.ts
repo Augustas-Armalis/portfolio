@@ -45,6 +45,7 @@ class Build {
   tex: number[] = [];
   idx: number[] = [];
   seams: number[] = [];
+  rounds: { from: number; to: number; c: V3; r: V3 }[] = [];
   private p = new THREE.Vector3();
   vert(x: number, y: number, z: number, c: V3, kind: number, u: number, v: number) {
     this.pos.push(x, y, z);
@@ -153,7 +154,7 @@ class Build {
     }
   }
   // a small faceted lump (a head, a lantern, a boulder when it is pulled about)
-  lump(c: V3, r: V3, col: V3, kind: number, detail = 0, rough = 0, seed = 0) {
+  lump(c: V3, r: V3, col: V3, kind: number, detail = 0, rough = 0, seed = 0, round = false) {
     const g = new THREE.IcosahedronGeometry(1, detail);
     const p = g.attributes.position;
     const base = this.pos.length / 3;
@@ -166,6 +167,8 @@ class Build {
     }
     for (let i = 0; i < p.count; i += 3) this.idx.push(base + i, base + i + 1, base + i + 2);
     g.dispose();
+    // (round ones are shaded as the rounded thing they stand for, not as the facets they are made of)
+    if (round) this.rounds.push({ from: base, to: base + p.count, c, r });
   }
   build() {
     const g = new THREE.BufferGeometry();
@@ -186,6 +189,21 @@ class Build {
       n.setXYZ(a, x / l, y / l, z / l);
       n.setXYZ(b, x / l, y / l, z / l);
     }
+    const pos = g.attributes.position;
+    for (const o of this.rounds)
+      for (let i = o.from; i < o.to; i++) {
+        const x = (pos.getX(i) - o.c[0]) / (o.r[0] * o.r[0]);
+        const y = (pos.getY(i) - o.c[1]) / (o.r[1] * o.r[1]);
+        const z = (pos.getZ(i) - o.c[2]) / (o.r[2] * o.r[2]);
+        const l = Math.hypot(x, y, z) || 1;
+        // (a little of the facet's own turn is kept, so a boulder is not an egg)
+        const k = 0.75;
+        const nx = n.getX(i) * (1 - k) + (x / l) * k;
+        const ny = n.getY(i) * (1 - k) + (y / l) * k;
+        const nz = n.getZ(i) * (1 - k) + (z / l) * k;
+        const m = Math.hypot(nx, ny, nz) || 1;
+        n.setXYZ(i, nx / m, ny / m, nz / m);
+      }
     g.computeBoundingSphere();
     return g;
   }
@@ -332,7 +350,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
       const sp = (5 + r() * 9) * sc;
       b.roof(px, py + hh, pz, w * 0.7, w * 0.7, sp, yaw, ROOF_C);
       // some towers carry an onion dome under the spire, or a lantern at the top
-      if (r() < 0.3) b.lump([px, py + hh + w * 0.2, pz], [w * 0.52, w * 0.6, w * 0.52], ROOF_C, ROOF, 1);
+      if (r() < 0.3) b.lump([px, py + hh + w * 0.2, pz], [w * 0.52, w * 0.6, w * 0.52], ROOF_C, ROOF, 1, 0, 0, true);
       if (r() < 0.5) lamps.push({ p: [px, py + hh * (0.6 + r() * 0.3), pz], size: 2.2 * Math.sqrt(sc), col: r() < 0.7 ? [1, 0.72, 0.38] : [1, 0.5, 0.22], k: 0.6 + r() * 0.5 });
     } else {
       b.walls(px, py - 0.6, pz, w, hh + 0.6, d, yaw, wc, WALL, seed);
@@ -555,7 +573,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
       const z = zTop - r() * (zTop - KINGS.z - 60);
       const x = aisleX(z) + (r() < 0.5 ? -1 : 1) * (10 + r() * (clear(z) + 30));
       const s = 2.5 + r() * r() * 9;
-      b.lump([x, gy(x, z) + s * 0.25, z], [s * (1 + r() * 0.5), s * (0.55 + r() * 0.3), s * (1 + r() * 0.5)], [0.04, 0.042, 0.04], BARK, 1, 0.22, i * 3.1);
+      b.lump([x, gy(x, z) + s * 0.25, z], [s * (1 + r() * 0.5), s * (0.55 + r() * 0.3), s * (1 + r() * 0.5)], [0.06, 0.062, 0.058], BARK, 2, 0.16, i * 3.1, true);
     }
 
   // white lights hung far up among the boughs, small as stars

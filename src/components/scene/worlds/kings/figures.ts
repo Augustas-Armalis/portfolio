@@ -76,11 +76,11 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number): Gener
         { col: [0.09, 0.196, 0.19], kind: 0, what: [0, 1, 0, 0], grp: 1 },
         { col: [0.2, 0.39, 0.37], kind: 0.9, what: [0, 1, 0, 0], grp: 1 },
         { col: [0.56, 0.31, 0.2], kind: 1, what: sk, grp: 2 },
-        { col: [0.34, 0.25, 0.14], kind: 1, what: hr, grp: 3 },
+        { col: [0.25, 0.17, 0.085], kind: 1, what: hr, grp: 3 },
         { col: [0.1, 0.045, 0.03], kind: 1, what: sk, grp: 2 },
-        { col: [0.5, 0.45, 0.36], kind: 1, what: hr, grp: 3 },
+        { col: [0.4, 0.36, 0.28], kind: 1, what: hr, grp: 3 },
         { col: [0.4, 0.16, 0.11], kind: 1, what: sk, grp: 2 },
-        { col: [0.4, 0.4, 0.35], kind: 1, what: [1, 0, 0, 0], grp: 0 },
+        { col: [0.32, 0.33, 0.29], kind: 1, what: [1, 0, 0, 0], grp: 0 },
       ]
     : [
         { col: [0.046, 0.028, 0.024], kind: 0, what: [1, 0, 0, 0], grp: 0 },
@@ -161,8 +161,10 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number): Gener
   head.ball(F(-0.06, 0.12), rr(0.5, 0.52, 0.45), SKIN, { ...ax, k: 0.1 * R });
   head.ball(F(0.14, -0.2), rr(0.36, 0.46, 0.3 + 0.04 * (1 - g)), SKIN, { ...ax, k: 0.12 * R });
   head.ball(F(0.16, -0.5), rr(0.26, 0.18, 0.24 + 0.04 * (1 - g)), SKIN, { ...ax, k: 0.1 * R });
-  // the brow, a shelf over the eyes
-  head.ball(F(0.47, 0.062), rr(0.1, 0.058 + 0.012 * (1 - g), 0.28), SKIN, { ...ax, k: 0.03 * R });
+  // the forehead comes down full to the brow, and the brow is its lower edge: a soft shelf with its shade beneath it.
+  // (The light is below them. Whatever stood out on top of the brow would be the one dark thing on a lit face.)
+  head.ball(F(0.16, 0.2), rr(0.33, 0.3, 0.38), SKIN, { ...ax, k: 0.1 * R });
+  head.ball(F(0.45, 0.035), rr(0.1, 0.065 + 0.012 * (1 - g), 0.28), SKIN, { ...ax, k: 0.06 * R });
   // the nose: one long straight blade from the brow, the tip and the wings small at its end
   {
     const nd: V3 = [f[0] * 0.555 + up[0] * -0.832, f[1] * 0.555 + up[1] * -0.832, 0];
@@ -170,8 +172,6 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number): Gener
     head.ball(F(0.585 - 0.01 * (1 - g), -0.1), rr(0.165, 0.062 + 0.012 * (1 - g), 0.038 + 0.014 * (1 - g)), SKIN, { x: nd, y: np, k: 0.025 * R });
     head.ball(F(0.665 - 0.02 * (1 - g), -0.235), rr(0.045, 0.04, 0.052 + 0.016 * (1 - g)), SKIN, { ...ax, k: 0.02 * R });
   }
-  // (the root of the nose runs into the brow without a crease)
-  head.ball(F(0.49, 0.03), rr(0.085, 0.085, 0.085), SKIN, { ...ax, k: 0.07 * R });
   // the lips, thin, and the chin
   head.ball(F(0.5, -0.39), rr(0.085, 0.045, 0.13), SKIN, { ...ax, k: 0.04 * R });
   head.ball(F(0.495, -0.475), rr(0.07, 0.035, 0.1), SKIN, { ...ax, k: 0.035 * R });
@@ -515,7 +515,7 @@ export function makeKingMaterial(k: King) {
         vec3 col = alb * (coolFill(n) * ao * ao + warm + sss);
         // every edge turned toward it takes the light: the nap of the cloth, the down on a cheek, a sleeve's hem
         float fres = pow(1.0 - abs(dot(n, V)), 2.6);
-        col += DOME_WARM * alb * fres * att * clamp(dl.x + 0.5, 0.0, 1.0) * (1.5 + 0.5 * skinW + 1.2 * hairW) * ao;
+        col += DOME_WARM * alb * fres * att * clamp(dl.x + 0.5, 0.0, 1.0) * (1.5 + 0.5 * skinW + 0.4 * hairW) * ao;
         // and on the far side a thread of the night's blue
         col += vec3(0.016, 0.042, 0.07) * fres * clamp(0.35 - dl.x, 0.0, 1.0) * ao * (0.5 + alb.g * 4.0);
         // hair takes a sheen along its strands
@@ -524,7 +524,7 @@ export function makeKingMaterial(k: King) {
           Tg = normalize(Tg - n * dot(Tg, n) + n * (strand - 0.5) * 0.3);
           float th1 = dot(Tg, normalize(Ld + V));
           float th2 = dot(Tg, normalize(vec3(0.0, 1.0, 0.0) + V));
-          col += hairW * (DOME_WARM * alb * att * pow(max(1.0 - th1 * th1, 0.0), 22.0) * 5.0 * clamp(dl.x + 0.4, 0.0, 1.0) + vec3(0.02, 0.045, 0.07) * pow(max(1.0 - th2 * th2, 0.0), 30.0) * 0.5) * ao * (0.5 + strand);
+          col += hairW * (DOME_WARM * alb * att * pow(max(1.0 - th1 * th1, 0.0), 22.0) * 3.2 * clamp(dl.x + 0.4, 0.0, 1.0) + vec3(0.02, 0.045, 0.07) * pow(max(1.0 - th2 * th2, 0.0), 30.0) * 0.5) * ao * (0.5 + strand);
         }
         // silk thread: a soft light of its own colour where it lies toward the dome (never brighter than the dome makes it)
         col += thread * stitched * (0.01 + att * (0.25 + 0.9 * pow(max(dot(n, normalize(Ld + V)), 0.0), 10.0)) * clamp(dl.x + 0.3, 0.0, 1.0));
