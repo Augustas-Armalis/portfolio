@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { MarkDeep, SystemBootMark } from "./Mark";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { mainWork, owner } from "@/content";
 import { isUp, useOS, useWallpaper } from "@/store";
@@ -203,8 +203,14 @@ export function PowerOverlay() {
 // their places. Nothing above this component swaps or cross-fades when the session unlocks.
 export default function Login() {
   useGlassScope();
-  const user = useOS((s) => s.user);
-  const up = useOS(isUp);
+  // Shut Down hands the display back to the room, which fades this screen out over half a second. For that half
+  // second the screen holds what it was showing: the session has already ended in the store, and without this the
+  // desktop would be swapped for a lock screen waking out of black in the middle of the fade.
+  const off = useOS((s) => s.phase === "room");
+  const now = { user: useOS((s) => s.user), up: useOS(isUp) };
+  const held = useRef(now);
+  if (!off) held.current = now;
+  const { user, up } = held.current;
   const locked = useOS((s) => s.locked);
   const login = useOS((s) => s.login);
   const shutdown = useOS((s) => s.shutdown);
