@@ -66,7 +66,7 @@ export function makeGoldStone(o: { shade?: V3; amb?: number; key?: number; throu
         // the light comes through it: round the edges of a form that stands before the sun, and faintly through its body
         float back = pow(max(dot(-V, uSunDir), 0.0), 2.5);
         float thin = pow(1.0 - abs(dot(n, V)), 1.6);
-        col += uGlow * alb * (thin * (0.22 + 1.7 * back) + 0.12 * back) * uThrough * (1.0 - glowA);
+        col += uGlow * mix(alb, vec3(1.0), 0.5) * (thin * (0.2 + 1.5 * back) + 0.06 * back) * uThrough * (1.0 - glowA);
         if (uOrn > 0.0 && abs(n.y) < 0.8) {
           float y = vLocal.y; float fy = fwidth(y);
           float curved = smoothstep(0.0004, 0.002, fwidth(th) / max(fy, 1e-5));

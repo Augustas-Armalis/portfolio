@@ -90,7 +90,7 @@ const T0: Terrain = { base: 0, sines: [], bumps: [], rim: [1, 2, 0] };
 // The Sonata of the Sun's aqueducts: each crosses the path of light at `c`, an arch centred on it; `u` runs along
 // the bridge, `n` arches of `w` metres, `H` high. Their piers by the path are obstacles (below); worlds/Sun.tsx builds them.
 export const SUN_BRIDGES: { c: [number, number]; u: [number, number]; n: number; w: number; H: number; tiers: number }[] = [
-  { c: [8, 150], u: [0.9615, -0.2747], n: 9, w: 80, H: 150, tiers: 1 },
+  { c: [8, 150], u: [0.9615, -0.2747], n: 9, w: 80, H: 56, tiers: 1 },
   { c: [-80, 15], u: [0.64, -0.768], n: 11, w: 90, H: 200, tiers: 2 },
 ];
 
@@ -100,12 +100,12 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // gold round every edge and its rays pour through them
   sun: {
     label: "Sonata of the Sun",
-    zenith: [0.3, 0.35, 0.36],
-    upper: [0.56, 0.5, 0.27],
-    horizon: [0.72, 0.56, 0.22],
-    glow: [1.0, 0.72, 0.26],
-    amb: [0.42, 0.44, 0.56],
-    key: [1.0, 0.82, 0.5],
+    zenith: [0.36, 0.33, 0.2],
+    upper: [0.6, 0.44, 0.15],
+    horizon: [0.8, 0.53, 0.15],
+    glow: [1.0, 0.66, 0.2],
+    amb: [0.46, 0.44, 0.52],
+    key: [1.0, 0.78, 0.42],
     keyI: 2.1,
     sunAz: 12,
     sunEl: 13,
@@ -114,7 +114,7 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
     cloudLit: [0.7, 0.6, 0.3],
     cloudShade: [0.4, 0.4, 0.26],
     night: 0,
-    exposure: 0.86,
+    exposure: 0.9,
     fx: [0.0, 0.55, 0.0, 0],
   },
   // Sonata of the Stars: a deep blue-green night; the light is gold and white, and comes from the pyramid's point
@@ -140,19 +140,19 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // Rex: umber dusk with amber low in it and a green-gold cast in the shade
   rex: {
     label: "Rex",
-    zenith: [0.017, 0.015, 0.014],
-    upper: [0.07, 0.052, 0.036],
-    horizon: [0.33, 0.215, 0.13],
-    glow: [0.95, 0.6, 0.3],
-    amb: [0.25, 0.225, 0.165],
-    key: [1.0, 0.8, 0.52],
-    keyI: 1.25,
-    sunAz: -40,
-    sunEl: 26,
-    keyAz: -30,
+    zenith: [0.013, 0.016, 0.028],
+    upper: [0.062, 0.05, 0.058],
+    horizon: [0.37, 0.225, 0.17],
+    glow: [1.0, 0.6, 0.3],
+    amb: [0.25, 0.225, 0.19],
+    key: [1.0, 0.8, 0.54],
+    keyI: 1.3,
+    sunAz: -32,
+    sunEl: 30,
+    keyAz: -26,
     keyEl: 36,
-    cloudLit: [0.5, 0.36, 0.24],
-    cloudShade: [0.08, 0.065, 0.05],
+    cloudLit: [0.5, 0.36, 0.28],
+    cloudShade: [0.07, 0.07, 0.09],
     night: 0.5,
     exposure: 1.0,
     fx: [0.25, 0.6, 0.0, 0.5],
@@ -323,12 +323,13 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, -40],
     radius: 610,
     ceil: 260,
-    entry: { x: 0, z: 470, above: 16, yaw: 0 },
+    // (the first aqueduct is kept low, so the first sight is the whole city of bells and its suns standing over it)
+    entry: { x: 0, z: 470, above: 30, yaw: 0 },
     gate: { x: 150, z: -470, above: 20, yaw: -0.25 },
     path: [
-      [0, 470, 16],
-      [4, 390, 14],
-      [8, 310, 13],
+      [0, 470, 30],
+      [4, 390, 24],
+      [8, 310, 16],
       [18, 250, 14],
       [20, 208, 15],
       [8, 150, 15],

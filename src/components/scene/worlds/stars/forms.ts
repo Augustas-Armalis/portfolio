@@ -325,3 +325,119 @@ export function makeRayDiscMaterial(o: { col?: V3; hot?: V3; rays?: number; gain
       }`,
   });
 }
+
+// ---------- painted cloud ----------
+// Cloud as he painted it, and as the Trail of Angels film builds it: rounded banks heaped on a flat base, gold on
+// the side of the light, violet in their shadowed undersides, a line of light round the edge when the sun is
+// behind, soft and a little torn at the silhouette. Each cloud is one quad that faces the eye; its body is modelled
+// in the shader (seven round lobes joined into one soft form with a real normal, so it is lit like a solid thing),
+// its edge eroded with noise. Never a cluster of separate balls.
+export type PCloud = { p: V3; w: number; seed?: number; k?: number };
+export function paintedCloudGeometry(list: PCloud[], from: V3 = [0, 0, 0]) {
+  // far ones first, so the near are laid over them
+  const d = (c: PCloud) => Math.hypot(c.p[0] - from[0], c.p[1] - from[1], c.p[2] - from[2]);
+  const sorted = [...list].sort((a, b) => d(b) - d(a));
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  const pos = new Float32Array(sorted.length * 4);
+  const par = new Float32Array(sorted.length * 2);
+  sorted.forEach((c, i) => {
+    pos.set([c.p[0], c.p[1], c.p[2], c.w], i * 4);
+    par.set([c.seed ?? (i * 0.618) % 1, c.k ?? 1], i * 2);
+  });
+  g.setAttribute("aPos", new THREE.InstancedBufferAttribute(pos, 4));
+  g.setAttribute("aPar", new THREE.InstancedBufferAttribute(par, 2));
+  g.instanceCount = sorted.length;
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
+  return g;
+}
+// lit / shade / under: the paint on its lit side, its shaded side and its underside (each is lit by the world's own
+// sky and light). rim: the line of light round it. self: light of its own (a night cloud). fade: metres over which
+// it thins away into the distance. near: metres over which it thins as the eye comes up to it.
+export function makeCloudPaint(o: { lit: V3; shade: V3; under: V3; rim?: number; self?: number; amb?: number; key?: number; air?: number; fade?: [number, number]; near?: [number, number] }) {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: {
+      ...SKY_U,
+      ...WORLD_U,
+      uLit: { value: new THREE.Color(...o.lit) },
+      uShadeC: { value: new THREE.Color(...o.shade) },
+      uUnder: { value: new THREE.Color(...o.under) },
+      uRim: { value: o.rim ?? 1 },
+      uSelf: { value: o.self ?? 0 },
+      uAmb: { value: o.amb ?? 1 },
+      uKey: { value: o.key ?? 0.5 },
+      uAirK: { value: o.air ?? 0.6 },
+      uFade: { value: new THREE.Vector2(...(o.fade ?? [2000, 2900])) },
+      uNear: { value: new THREE.Vector2(...(o.near ?? [60, 260])) },
+    },
+    vertexShader: /* glsl */ `
+      attribute vec4 aPos; attribute vec2 aPar;
+      uniform float uTime; uniform vec3 uSunDir; uniform vec3 uKeyDir; uniform vec2 uNear; uniform vec2 uFade;
+      varying vec2 vUv; varying vec3 vL; varying vec2 vSunS; varying float vBack; varying float vSeed; varying vec3 vWorld; varying float vA;
+      void main(){
+        vSeed = aPar.x;
+        vec3 c = aPos.xyz + vec3(sin(uTime * 0.012 + vSeed * 40.0), 0.0, cos(uTime * 0.01 + vSeed * 23.0)) * aPos.w * 0.05;
+        vec4 wc = modelMatrix * vec4(c, 1.0);
+        vec4 mv = viewMatrix * wc;
+        float dist = length(mv.xyz);
+        vec3 dir = mv.xyz / dist;
+        mv.xy += position.xy * vec2(aPos.w, aPos.w * 0.6);
+        vUv = position.xy; vWorld = wc.xyz;
+        vL = normalize((viewMatrix * vec4(uKeyDir, 0.0)).xyz);
+        vec3 sv = (viewMatrix * vec4(uSunDir.y > 0.0 ? uSunDir : uKeyDir, 0.0)).xyz;
+        vSunS = normalize(sv.xy + vec2(1e-4));
+        vBack = pow(max(dot(dir, sv), 0.0), 4.0);
+        vA = aPar.y * smoothstep(uNear.x, uNear.y, dist) * (1.0 - smoothstep(uFade.x, uFade.y, dist));
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uLit; uniform vec3 uShadeC; uniform vec3 uUnder; uniform float uRim; uniform float uSelf; uniform float uAmb; uniform float uKey; uniform float uAirK;
+      varying vec2 vUv; varying vec3 vL; varying vec2 vSunS; varying float vBack; varying float vSeed; varying vec3 vWorld; varying float vA;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${GLSL_AIR}
+      void main(){
+        if (vA < 0.004) discard;
+        vec2 p = vUv * vec2(1.0, 0.6);
+        float n1 = vnoise(p * 3.2 + vSeed * 17.0); float n2 = vnoise(p * 3.2 + vSeed * 29.0 + 5.0);
+        p += (vec2(n1, n2) - 0.5) * 0.1;
+        float H = 0.0; vec3 N = vec3(0.0, 0.0, 0.02);
+        for (int i = 0; i < 7; i++) {
+          float fi = float(i);
+          float h1 = hash12(vec2(vSeed * 91.0 + fi, 1.7)); float h2 = hash12(vec2(vSeed * 57.0 + fi * 3.1, 9.2));
+          bool top = i >= 4;
+          vec2 c = top ? vec2((h1 - 0.5) * 0.95, 0.1 + 0.14 * h2) : vec2(-0.6 + fi * 0.4 + (h1 - 0.5) * 0.16, -0.1 + 0.07 * h2);
+          float r = top ? 0.2 + 0.11 * h1 : 0.27 + 0.1 * h2;
+          vec2 d = p - c; float q = 1.0 - dot(d, d) / (r * r);
+          if (q > 0.0) { float sq = sqrt(q); float h = sq * r; H = max(H, h); N += vec3(d / r, sq) * h * h * h; }
+        }
+        // billows on the form, and its torn edge
+        float bil = fbm(p * 5.0 + vSeed * 40.0 + uTime * 0.004);
+        float e = H + (bil - 0.5) * 0.15 + (vnoise(p * 19.0 + vSeed * 9.0) - 0.5) * 0.035;
+        float base = smoothstep(-0.27, -0.18, p.y + (n1 - 0.5) * 0.05);
+        float a = smoothstep(0.0, 0.1, e) * base;
+        if (a < 0.004) discard;
+        vec3 n = normalize(N + vec3((n1 - 0.5), (n2 - 0.5), 0.0) * 0.5 * H);
+        float w = smoothstep(-0.35, 0.7, dot(n, vL) + (bil - 0.5) * 0.5);
+        vec3 amb = uSkyCol * uAmb;
+        vec3 col = mix(uShadeC * amb, uLit * (amb + uKeyCol * uKey), w);
+        // its underside, in shadow, and the flat foot of it
+        float und = max(smoothstep(0.15, -0.75, n.y), smoothstep(-0.02, -0.22, p.y) * 0.8);
+        col = mix(col, uUnder * amb, und * 0.85);
+        // a line of light round it, widest on the side of the sun, and the sun coming through its thin parts
+        float thin = 1.0 - smoothstep(0.0, 0.16, e);
+        float side = 0.5 + 0.5 * dot(normalize(p + vec2(0.0, 0.05)), vSunS);
+        vec3 glowC = mix(uGlow, uKeyCol, 0.35);
+        col += glowC * thin * (0.1 + 0.5 * side + 2.2 * vBack) * uRim;
+        col += glowC * vBack * (1.0 - smoothstep(0.0, 0.3, H)) * 0.5 * uRim;
+        vec3 V = normalize(cameraPosition - vWorld);
+        col = mix(col, airCol(-V), airAmt(vWorld) * uAirK);
+        col += uLit * uSelf * glowK() * (0.5 + 0.5 * w);
+        gl_FragColor = vec4(col, a * vA);
+        ${END}
+      }`,
+  });
+}

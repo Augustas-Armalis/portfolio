@@ -7,7 +7,7 @@ import { SKY_U } from "../sky";
 import { Gallery, Halos, LightGate, LightPath, Mist, useDisposable, type WorldProps } from "./common";
 import { Kit, angel, makePoints, makeTempera, pointsGeometry, rng, terrainGeometry, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, LightShafts, type Flock, type Shaft } from "./life";
-import { cumulus, linesGeometry, makeLineMaterial, makeRayDiscMaterial, makeSoftMaterial, ribbonGeometry, softGeometry, type Seg, type Soft } from "./stars/forms";
+import { linesGeometry, makeCloudPaint, makeLineMaterial, makeRayDiscMaterial, makeSoftMaterial, paintedCloudGeometry, ribbonGeometry, softGeometry, type PCloud, type Seg, type Soft } from "./stars/forms";
 import { FIG_KINDS, constellation, heroAngel, makeGlobeGlass, makePyramidVeil, makeStarRiver, makeWaveBand, makeWaveSea, riverGeometry, wingFan } from "./stars/parts";
 import { ORIGIN, WORLDS, groundAt, pathOf } from "./voyage";
 
@@ -212,20 +212,20 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     }
 
     // ----- clouds: rounded, layered, lit gold-green on the side of the light, receding to the horizon -----
-    const clouds: Soft[] = [];
-    const nC = props.mobile ? 50 : Math.round(90 + 60 * props.effects);
+    // (the low ones are the painting's own ochre and umber cloud; the high ones are blue-green and far)
+    const warm: PCloud[] = [];
+    const cool: PCloud[] = [];
+    const nC = props.mobile ? 44 : Math.round(70 + 50 * props.effects);
     for (let i = 0; i < nC; i++) {
       const a = r() * Math.PI * 2;
-      const lowLayer = i % 5 !== 0;
-      const d = lowLayer ? 300 + r() * 1500 : 1300 + r() * 1100;
+      const low = i % 4 !== 0;
+      const d = low ? 560 + r() * 1400 : 1300 + r() * 1100;
       const x = Math.cos(a) * d;
       const z = Math.sin(a) * d - 200;
-      const s = lowLayer ? 18 + r() * 26 + d * 0.022 : 70 + r() * 90;
-      const y = lowLayer ? g(x, z) + 14 + r() * 70 + s * 0.2 : 560 + r() * 700;
-      const long = 1.6 + r() * 2.2;
-      if (nearPath(x, y, z) < s * long * 1.4 + 60) continue;
-      // (drawn out across the view, like staves)
-      cumulus(clouds, [x, y, z], s, lowLayer ? [0.15, 0.3, 0.31] : [0.07, 0.14, 0.22], r, { glow: 0.012, long: lowLayer ? long : long * 1.5, yaw: (r() - 0.5) * 0.5, sy: lowLayer ? 0.7 : 0.4 });
+      const w = low ? 44 + r() * 60 + d * 0.02 : 200 + r() * 200;
+      const y = low ? g(x, z) + 30 + r() * 110 + w * 0.2 : 600 + r() * 700;
+      if (nearPath(x, y, z) < w + 120) continue;
+      (low && i % 3 !== 0 ? warm : cool).push({ p: [x, y, z], w, seed: r() });
     }
     // mist lying in the troughs of the waves
     const puffs: Puff[] = [];
@@ -297,8 +297,10 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       giants: softGeometry(giants, 3),
       orbMat: makeSoftMaterial({ shade: [0.35, 0.4, 0.7], under: [0.4, 0.4, 0.6], rim: 1.4, dab: 0.8, amb: 1.2, key: 0.9 }),
       giantMat: makeSoftMaterial({ shade: [0.3, 0.4, 0.7], under: [0.4, 0.4, 0.6], rim: 1.2, dab: 1, amb: 1.1, key: 0.7, fade: [1500, 3000] }),
-      clouds: softGeometry(clouds, fine ? 2 : 1),
-      cloudMat: makeSoftMaterial({ shade: [0.3, 0.46, 0.8], under: [0.2, 0.34, 0.6], rim: 2.4, dab: 1.5, amb: 0.9, key: 1.0, flat: 0.3, sway: 2.5, fade: [1300, 2600], soft: 0.7 }),
+      warm: paintedCloudGeometry(warm, [0, 100, 300]),
+      warmMat: makeCloudPaint({ lit: [1.0, 0.7, 0.34], shade: [0.5, 0.26, 0.12], under: [0.14, 0.12, 0.3], rim: 1.5, self: 0.05, amb: 1.2, key: 1.0, air: 0.7, fade: [1500, 2700], near: [90, 320] }),
+      cool: paintedCloudGeometry(cool, [0, 100, 300]),
+      coolMat: makeCloudPaint({ lit: [0.4, 0.74, 0.66], shade: [0.12, 0.28, 0.36], under: [0.06, 0.1, 0.3], rim: 1.3, self: 0.03, amb: 1.2, key: 0.9, air: 0.7, fade: [1500, 2700], near: [90, 320] }),
       globeGeo: new THREE.SphereGeometry(GLOBE.r, 72, 48),
       globeMat: makeGlobeGlass(GLOBE.r),
       gy,
@@ -348,7 +350,8 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       <LightPath id="stars" def={def} tint={[1, 0.92, 0.7]} gain={2.2} effects={props.effects} angels={false} />
       <LightGate id="stars" def={def} tint={[1, 0.92, 0.7]} gain={2} />
       <Gallery def={def} />
-      <mesh geometry={b.clouds} material={b.cloudMat} frustumCulled={false} />
+      <mesh geometry={b.cool} material={b.coolMat} frustumCulled={false} renderOrder={1.2} />
+      <mesh geometry={b.warm} material={b.warmMat} frustumCulled={false} renderOrder={1.3} />
       <mesh geometry={b.orbs} material={b.orbMat} frustumCulled={false} />
       <mesh geometry={b.giants} material={b.giantMat} frustumCulled={false} />
       <mesh geometry={b.set} material={b.tempera} />
