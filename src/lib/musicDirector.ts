@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { audioHushed, channel, externalMusic, onMusicClaim, onMuteChange, onOwnerStop, resumeAudio, sceneMuted, setDeskMusic, voice, voicePlayUrl, voicePrime, voiceStop, type Voice } from "@/lib/audio";
 import { FLIGHT_CREDIT, hostedFlightActive, hostedFlightPrime, hostedFlightStop, hostedFlightTo, hostedFlightVolume } from "@/lib/flightHosted";
+import { fieldMusicGain, getSoundSettings, masterGain, setSoundSettings, subscribeSoundSettings } from "@/lib/soundSettings";
 import { makeDeck, type Deck } from "@/lib/stream";
 
 // The music of the 3D world: what plays, where, and how it hands over.
@@ -21,8 +22,14 @@ import { makeDeck, type Deck } from "@/lib/stream";
 // credit stands in the mini-player for as long as it plays). At the desk
 // nothing takes over: Čiurlionis's music is for the flight alone, it begins
 // with the take-off and leaves with the landing, and nothing else ever starts
-// on its own. Augustas's own Nocturne and Afterlight, and everything else in
-// the picker, play only when they are chosen.
+// on its own. When the field's stream cannot start by itself (Safari and
+// every iPhone refuse a frame that plays with sound unasked; a blocker; no
+// network) the mini-player says "Play field music": pressing it tries again
+// inside that press and opens the player's own frame, whose play button
+// always works (playFieldMusic below). Augustas's own Nocturne and
+// Afterlight play only when they are picked in the flight's list, for that
+// flight: the choice is forgotten on landing and never kept between visits,
+// so neither can ever begin by itself.
 //
 // One thing plays at a time, across the whole site. In flight the music is the
 // owner "flight" of the audio manager whether it is a stream or a file (the
@@ -99,7 +106,13 @@ export const WORLD_MUSIC: Record<string, { video: string; at: number; gain?: num
 
 // How loud. A stream is levelled by its player's volume (0..1); a file by its voice in the graph. Both are
 // multiplied by the visitor's volume (the slider), which is 1 at its middle mark.
-const LEVEL = { deskStream: 0.12, flightStream: 0.34, deskFile: 0.28, flightFile: 0.7, flightSea: 0.72 };
+// (The field's stream was at 0.12, which under the wind he took for silence: it is the sound of the field now,
+// a clear background, a little under the flight's music. Its own slider is the "field music" level of
+// lib/soundSettings.ts, shared with the OS's Settings; the master volume there leans every stream too, since a
+// frame is outside the audio graph.)
+const LEVEL = { deskStream: 0.32, flightStream: 0.34, deskFile: 0.28, flightFile: 0.7, flightSea: 0.72 };
+// his own music: only ever by choice
+const OWN: TrackId[] = ["nocturne", "afterlight"];
 const FADE = { world: 6, desk: 4, out: 2.5, pick: 1.6 };
 const DEFAULT: Record<Place, TrackId> = { desk: "spring", flight: "worlds" };
 const STORE = "ag-music";
@@ -120,6 +133,8 @@ type S = {
   live: 0 | 1; // which deck has the stream
   decks: [Deck, Deck] | null;
   blocked: boolean; // streams have failed on this page: the hosted music stands in
+  patient: boolean; // the visitor has asked for the field's music by hand: from now on its player waits for them, and never times out
+  askedAt: number; // performance.now() when the field's stream was last asked for
   lastFail: string | null;
   pos: Record<string, number>; // where each stream was left
   hidden: boolean;
@@ -142,6 +157,8 @@ const st: S = (G.__aosMusic ??= {
   live: 0,
   decks: null,
   blocked: false,
+  patient: false,
+  askedAt: 0,
   lastFail: null,
   pos: {},
   hidden: false,
@@ -218,7 +235,7 @@ function resolve(): Now | null {
   return { kind: "file", key: `f:${id}`, file: t.file!, level: file, track: id };
 }
 
-const streamLevel = (n: Now & { kind: "yt" }) => Math.min(1, n.level * gainOf() * (st.place === "flight" ? st.flightVol : 1));
+const streamLevel = (n: Now & { kind: "yt" }) => Math.min(1, n.level * masterGain() * (st.place === "flight" ? gainOf() * st.flightVol : fieldMusicGain()));
 const fileLevel = (n: Now & { kind: "file" }) => Math.min(1.2, n.level * gainOf());
 
 function leave(now: Now, fade: number) {
@@ -275,13 +292,21 @@ function apply(fade?: number) {
   st.now = want;
   note(`in: ${want.key}${want.kind === "yt" ? ` @${Math.round(st.pos[want.key] ?? want.at)}s` : ""}`);
   if (want.kind === "yt") {
-    const next = (cur && cur.kind === "yt" ? 1 - st.live : st.live) as 0 | 1;
+    // The deck that is not sounding takes it: the other one may still be on its way out (a world just left, or
+    // the flight's music fading after a landing while the field's comes back), and is left to finish its fade.
+    const ds = decks();
+    const busy = (cur && cur.kind === "yt") || ds[st.live].vol > 0.02;
+    const next = (busy ? 1 - st.live : st.live) as 0 | 1;
     st.live = next;
-    const d = decks()[next];
+    const d = ds[next];
     d.fade(0, 0);
     // a stream left earlier is taken up where it was (a world's section within the same flight, the desk's for the visit)
     const at = st.pos[want.key] ?? want.at;
-    d.play(want.video, at);
+    const patient = st.place === "desk" && st.patient;
+    st.askedAt = performance.now();
+    d.play(want.video, at, patient);
+    // (a patient player that has not started is offered again in the mini-player a moment later: see view)
+    if (patient) window.setTimeout(emit, 3700);
     // (its level comes up when it is really playing: see onDeckState)
   } else if (want.kind === "file") {
     resumeAudio();
@@ -370,6 +395,11 @@ export function musicFlightStop(fade = 5) {
   if (typeof window === "undefined" || st.place !== "flight") return;
   st.place = null;
   st.flightVol = 1;
+  // (his own music was for that flight: the next one begins with Čiurlionis again unless it is picked again)
+  if (st.choice.flight && OWN.includes(st.choice.flight)) {
+    delete st.choice.flight;
+    save();
+  }
   note("flight: stop");
   apply(fade);
   // the next flight finds every world's section at its beginning again
@@ -403,7 +433,31 @@ export function pickTrack(id: TrackId) {
   save();
   apply(FADE.pick);
 }
+// The field's music, asked for by hand (the mini-player's "Play field music", pressed): tried again inside that
+// press, and the player's own frame is opened out, where its play button works in every browser. From then on
+// the field's player is patient: it waits for the visitor instead of giving up.
+export function playFieldMusic() {
+  if (typeof window === "undefined" || st.place === "flight") return;
+  note("field music asked for by hand");
+  st.blocked = false;
+  st.patient = true;
+  st.muted = false;
+  st.open = true;
+  save();
+  const now = st.now;
+  if (st.place === "desk" && now && now.kind === "yt") {
+    // (already waiting on its deck: asked again, inside this press)
+    st.askedAt = performance.now();
+    decks()[st.live].play(now.video, st.pos[now.key] ?? now.at, true);
+    window.setTimeout(emit, 3700);
+    return emit();
+  }
+  st.place = "desk";
+  apply(FADE.pick);
+}
 export function setMusicVolume(v: number) {
+  // (at the field the slider is the field music's own level, the one Settings shows)
+  if (st.place !== "flight") return setSoundSettings({ fieldMusic: v });
   st.volume = Math.min(1, Math.max(0, v));
   save();
   const now = st.now;
@@ -414,6 +468,8 @@ export function setMusicVolume(v: number) {
 }
 export function setMusicMuted(m: boolean) {
   st.muted = m;
+  // (asking for the field's music again is a press: a stream refused earlier is given another chance)
+  if (!m && st.place !== "flight") st.blocked = false;
   save();
   note(m ? "muted" : "unmuted");
   apply(m ? 0.6 : FADE.pick);
@@ -423,7 +479,8 @@ export function setMusicOpen(open: boolean) {
   emit();
 }
 
-export type MusicView = { place: Place | null; choice: TrackId; playing: Track | null; part: string | null; kind: Now["kind"] | null; state: string; volume: number; muted: boolean; open: boolean; fallback: boolean; credit: string | null; v: number };
+// `tap`: the field's music could not start by itself and waits for a press ("Play field music")
+export type MusicView = { place: Place | null; choice: TrackId; playing: Track | null; part: string | null; kind: Now["kind"] | null; state: string; volume: number; muted: boolean; open: boolean; fallback: boolean; tap: boolean; credit: string | null; v: number };
 let snap: MusicView | null = null;
 let snapV = -1;
 function view(): MusicView {
@@ -440,16 +497,17 @@ function view(): MusicView {
     part: now?.kind === "yt" ? (now.part ?? null) : null,
     kind: now?.kind ?? null,
     state: d ? d.state : now ? "playing" : "idle",
-    volume: st.volume,
+    volume: place === "flight" ? st.volume : getSoundSettings().fieldMusic,
     muted: st.muted,
     open: st.open,
     fallback: st.blocked,
+    tap: place === "desk" && !silent() && (d ? st.patient && d.state !== "playing" && performance.now() - st.askedAt > 3500 : st.blocked),
     credit: now?.kind === "sea" ? FLIGHT_CREDIT : (playing?.credit ?? null),
     v: st.v,
   };
   return snap;
 }
-const SERVER: MusicView = { place: null, choice: "spring", playing: null, part: null, kind: null, state: "idle", volume: 0.7, muted: false, open: false, fallback: false, credit: null, v: 0 };
+const SERVER: MusicView = { place: null, choice: "spring", playing: null, part: null, kind: null, state: "idle", volume: 0.7, muted: false, open: false, fallback: false, tap: false, credit: null, v: 0 };
 export const useMusic = () =>
   useSyncExternalStore(
     (f) => {
@@ -474,7 +532,10 @@ function init() {
     try {
       const k = JSON.parse(window.sessionStorage.getItem(STORE) ?? "null") as { choice?: S["choice"]; volume?: number; muted?: boolean } | null;
       if (k) {
-        st.choice = k.choice ?? {};
+        // (only a choice among Čiurlionis's recordings is kept, and only for the flight: his own music, or anything
+        // an older build kept for the desk, is never found waiting to start by itself)
+        const f = k.choice?.flight;
+        st.choice = f && TRACKS.some((t) => t.id === f) && !OWN.includes(f) ? { flight: f } : {};
         if (typeof k.volume === "number") st.volume = k.volume;
         st.muted = !!k.muted;
       }
@@ -503,7 +564,17 @@ function init() {
     onOwnerStop((owner, fade) => {
       if (owner === "flight" && st.place === "flight" && !st.leaving) musicFlightStop(fade);
     }),
-    onMuteChange(() => apply(0.4)),
+    onMuteChange(() => {
+      // (the pill pressed for sound is a press: the field's stream, refused earlier, may be tried again)
+      if (!sceneMuted() && st.place !== "flight") st.blocked = false;
+      apply(0.4);
+    }),
+    // the visitor's levels (the mini-player's slider, the OS's Settings): what is playing leans to them
+    subscribeSoundSettings(() => {
+      const now = st.now;
+      if (now?.kind === "yt") decks()[st.live].fade(streamLevel(now), 0.15);
+      emit();
+    }),
   );
   const vis = () => {
     const hidden = document.visibilityState !== "visible";
@@ -529,6 +600,9 @@ if (typeof window !== "undefined") {
       volume: st.volume,
       flightVol: st.flightVol,
       blocked: st.blocked,
+      patient: st.patient,
+      tap: view().tap,
+      sound: getSoundSettings(),
       lastFail: st.lastFail,
       live: st.live,
       decks: st.decks?.map((d) => d.report()) ?? [],
@@ -544,6 +618,8 @@ if (typeof window !== "undefined") {
         pick: pickTrack,
         volume: setMusicVolume,
         mute: setMusicMuted,
+        playField: playFieldMusic,
+        sound: setSoundSettings,
         tracks: TRACKS,
         worlds: WORLD_MUSIC,
         // rehearse a refused stream: the hosted music must take over

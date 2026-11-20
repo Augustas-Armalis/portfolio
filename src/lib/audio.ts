@@ -1,5 +1,6 @@
 import { useOS } from "@/store";
 import { playPiano } from "@/lib/piano";
+import { masterGain, subscribeSoundSettings } from "@/lib/soundSettings";
 
 // The audio manager: every sound of the site goes through this one graph, on
 // one AudioContext.
@@ -13,7 +14,8 @@ import { playPiano } from "@/lib/piano";
 //
 //   Every channel has a fixed trim (MIX below), and the trims meet in one
 //   bus: bus -> soft limiter -> sink -> speakers. The sink is 0 while the OS
-//   Sound setting is off and while the tab is hidden. The analyser listens
+//   Sound setting is off and while the tab is hidden; otherwise it is the
+//   visitor's master volume (lib/soundSettings.ts). The analyser listens
 //   to music, flight and piano before their trims (it feeds the visuals, it
 //   is not on the way to the speakers).
 //
@@ -185,6 +187,9 @@ const soundOn = () => {
   }
 };
 
+// the last level before the speakers: the visitor's master volume, or nothing
+const sinkLevel = () => (soundOn() && visible() ? masterGain() : 0);
+
 // The graph is built once and kept on globalThis: a hot reload of this module
 // must not open a second AudioContext next to the first.
 function state(): State {
@@ -196,7 +201,7 @@ function state(): State {
   }
   const ctx = new AudioContext();
   const sink = ctx.createGain();
-  sink.gain.value = soundOn() && visible() ? 1 : 0;
+  sink.gain.value = sinkLevel();
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 1024;
   analyser.smoothingTimeConstant = 0.82;
@@ -439,7 +444,7 @@ function applyGates() {
   if (!s) return;
   const t = s.ctx.currentTime;
   s.voices.forEach((v) => v.gate?.gain.setTargetAtTime(gateOf(v), t, 0.12));
-  s.sink.gain.setTargetAtTime(soundOn() && visible() ? 1 : 0, t, visible() ? 0.18 : 0.06);
+  s.sink.gain.setTargetAtTime(sinkLevel(), t, visible() ? 0.18 : 0.06);
 }
 
 function register(id: string, el: HTMLMediaElement, o: { channel: Channel; owner: Owner | null; scene: boolean }, through?: (ctx: AudioContext) => AudioNode) {
@@ -795,8 +800,11 @@ if (typeof window !== "undefined") {
     if (s.restarting && !prev.restarting) stopOwner("records", 0.8);
   });
   document.addEventListener("visibilitychange", onVisibility);
+  // (the master volume leans the sink, as a ramp)
+  const unsubSound = subscribeSoundSettings(applyGates);
   p.teardown = () => {
     unsub();
+    unsubSound();
     document.removeEventListener("visibilitychange", onVisibility);
   };
   const live = (globalThis as G).__aosAudio;

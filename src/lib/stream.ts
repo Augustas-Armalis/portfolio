@@ -12,6 +12,10 @@
 // - Anything that keeps a deck from playing (the script blocked, the embed
 //   refused, autoplay refused, no network) ends in `onFail`, and the director
 //   falls back to the music we host.
+// - Some browsers never let a frame start with sound by itself (Safari, every
+//   iPhone): there a deck can be asked to play `patient`ly. Its frame is shown
+//   at once, with the player's own play button on it, nothing times out, and
+//   it is taken up from the moment the visitor presses play in the frame.
 // - Under ?mute=1 the players are muted and behave as usual otherwise, so
 //   states and volumes can be read without a sound being made.
 
@@ -88,9 +92,10 @@ export type Deck = {
   vol: number; // 0..1, where the level is now
   to: number; // 0..1, where it is heading
   want: boolean;
+  patient: boolean; // waiting for the visitor to press play in the frame: no timeout, no failure
   error: string | null;
   title: string;
-  play(videoId: string, start: number): void;
+  play(videoId: string, start: number, patient?: boolean): void;
   seek(s: number): void;
   fade(to: number, seconds: number): void;
   stop(fade: number): void;
@@ -138,6 +143,7 @@ export function makeDeck(name: string): Deck {
     d.state = "failed";
     d.error = why;
     d.want = false;
+    d.patient = false;
     el.style.opacity = "0";
     delete el.dataset.live;
     try {
@@ -207,7 +213,12 @@ export function makeDeck(name: string): Deck {
             },
             onStateChange: (e: { data: number }) => onState(e.data),
             onError: (e: { data: number }) => fail(`the player refused it (error ${e.data})`),
-            onAutoplayBlocked: () => fail("autoplay was refused"),
+            onAutoplayBlocked: () => {
+              // (a patient deck waits for the visitor's own press on the player)
+              if (!d.patient) return fail("autoplay was refused");
+              d.state = "paused";
+              d.onState?.(d);
+            },
           },
         });
       })
@@ -225,20 +236,26 @@ export function makeDeck(name: string): Deck {
     vol: 0,
     to: 0,
     want: false,
+    patient: false,
     error: null,
     title: "",
     onState: null,
     onFail: null,
-    play(videoId, start) {
+    play(videoId, start, patient = false) {
       gen++;
       window.clearTimeout(stopT);
       d.want = true;
+      d.patient = patient;
       d.error = null;
       const same = d.videoId === videoId && ready && d.state !== "failed" && d.state !== "idle";
       d.videoId = videoId;
       pendingStart = start;
       d.state = same ? d.state : "loading";
-      arm(11000);
+      if (patient) {
+        window.clearTimeout(watch);
+        el.style.opacity = "1";
+        el.dataset.live = "";
+      } else arm(11000);
       if (!player) {
         if (!making) create(videoId, start);
         return;
@@ -280,6 +297,7 @@ export function makeDeck(name: string): Deck {
       window.clearTimeout(watch);
       window.clearTimeout(stopT);
       d.want = false;
+      d.patient = false;
       d.fade(0, fade);
       el.style.opacity = "0";
       delete el.dataset.live;
@@ -337,7 +355,7 @@ export function makeDeck(name: string): Deck {
       } catch {
         /* not ready */
       }
-      return { deck: name, video: d.videoId, state: d.state, code, want: d.want, vol: +d.vol.toFixed(3), to: +d.to.toFixed(3), playerVolume: api, muted, t: +d.time().toFixed(1), error: d.error, title: d.title, frame: !!el.querySelector("iframe"), shown: el.style.opacity };
+      return { deck: name, video: d.videoId, state: d.state, code, want: d.want, patient: d.patient, vol: +d.vol.toFixed(3), to: +d.to.toFixed(3), playerVolume: api, muted, t: +d.time().toFixed(1), error: d.error, title: d.title, frame: !!el.querySelector("iframe"), shown: el.style.opacity };
     },
   };
   return d;
