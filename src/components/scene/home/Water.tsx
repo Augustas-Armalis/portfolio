@@ -20,14 +20,15 @@ const BIAS = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 
 export function LakeMirror({ quality }: { quality: number }) {
   const { gl, scene, camera } = useThree();
   const rt = useMemo(() => {
-    const k = quality >= 1 ? 1 : 0.66;
-    const t = new THREE.WebGLRenderTarget(Math.round(960 * k), Math.round(540 * k), { type: THREE.HalfFloatType, depthBuffer: true });
+    const k = quality >= 1 ? 1 : 0.6;
+    const t = new THREE.WebGLRenderTarget(Math.round(800 * k), Math.round(450 * k), { type: THREE.HalfFloatType, depthBuffer: true });
     t.texture.minFilter = t.texture.magFilter = THREE.LinearFilter;
     return t;
   }, [quality]);
   const tmp = useMemo(
     () => ({
       cam: new THREE.PerspectiveCamera(),
+      clear: new THREE.Color(),
       pos: new THREE.Vector3(),
       look: new THREE.Vector3(),
       up: new THREE.Vector3(),
@@ -62,7 +63,7 @@ export function LakeMirror({ quality }: { quality: number }) {
       return;
     }
     // (every other frame; every third on a middling machine)
-    if (REFLECT_U.uReflOn.value > 0.5 && ++tick.current % (quality >= 1 ? 2 : 3)) return;
+    void tick;
     // the eye, mirrored in the water
     cam.getWorldPosition(T.pos);
     T.rot.extractRotation(cam.matrixWorld);
@@ -83,7 +84,12 @@ export function LakeMirror({ quality }: { quality: number }) {
     gl.shadowMap.autoUpdate = false;
     try {
       gl.setRenderTarget(rt);
+      // (cleared to nothing: where no tree or mountain stands, the water shows its own sky and clouds)
+      gl.getClearColor(T.clear);
+      const ca = gl.getClearAlpha();
+      gl.setClearColor(0x000000, 0);
       gl.clear();
+      gl.setClearColor(T.clear, ca);
       gl.render(scene, mc);
     } finally {
       gl.shadowMap.autoUpdate = auto;
