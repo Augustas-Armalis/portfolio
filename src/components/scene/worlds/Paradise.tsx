@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, makeWater, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
-import { Procession, RayedSun, SunShafts, crownMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, useDeepLens, type Beam, type Crown, type Heap } from "./fairy/shared";
+import { Procession, RayedSun, SunShafts, heapBlobs, heapMesh, makeHeapMaterial, useDeepLens, type Beam, type Heap } from "./fairy/shared";
 import { COLONNADE, ISLE, POOL_R, TOP_R, TOP_Y, Wings, buildColonnade, buildSteps, seraph, stoneAt } from "./paradise/isle";
 import { Blooms, Butterflies, CloudDeck, makeWingMaterial, type Bloom, type Flutter } from "./paradise/life";
 import { makeSea } from "./paradise/sea";
@@ -204,17 +204,6 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       const [x, z] = polar(a, onSand ? 690 + r() * 22 : 535 + r() * 150);
       flutter.push({ p: [x, Math.max(g(x, z), 0.1) + (onSand ? 0.12 : 1.4 + r() * 5), z], roam: onSand ? 0 : 3 + r() * 6, size: 0.45 + r() * 0.5, seed: r() });
     }
-    // flowering bushes at the foot of the steps and in small groves in the meadow: white, rose and gold
-    const bushes: Crown[] = [];
-    for (let i = 0; i < (props.mobile ? 70 : Math.round(220 * (0.5 + 0.5 * props.trees))); i++) {
-      const grove = r() < 0.6;
-      const a = grove ? Math.floor(r() * 16) * (Math.PI / 8) + 0.19 + (r() - 0.5) * 0.12 : r() * Math.PI * 2;
-      const [x, z] = polar(a, grove ? 560 + r() * 60 : 528 + r() * 8);
-      if (Math.abs(x) < 34 && z < 0) continue;
-      const s = 1.6 + r() * 1.8;
-      bushes.push({ p: [x, g(x, z) - s * 0.15, z], r: s, h: 0.9 + r() * 0.4, seed: r() });
-    }
-
     // ---- the sky: long low heaps of gold and olive cloud in ranks to the horizon, and one great bank behind the isle
     const near: Heap[] = [];
     const far: Heap[] = [];
@@ -281,7 +270,6 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       pool: makeWater({ def, deep: [0.06, 0.12, 0.12], calm: 0.25, tint: [1.0, 1.02, 1.05] }),
       blooms,
       flutter,
-      bushes: crownMesh(bushes, makeCrownMaterial({ a: [0.16, 0.26, 0.07], b: [0.3, 0.32, 0.12], shade: [0.04, 0.09, 0.04], gold: 1 }), true),
       near: heapMesh(heapBlobs(near, 5), heapMat, props.mobile ? 1 : 2),
       far: heapMesh(heapBlobs(far, 9), heapMat, 1),
       heapMat,
@@ -309,7 +297,6 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       </mesh>
       <mesh geometry={b.set} material={b.tempera} />
       <mesh geometry={b.wings} material={b.wingMat} />
-      <primitive object={b.bushes} />
       <Blooms list={b.blooms} />
       <Butterflies list={b.flutter} />
       {b.files.map((f, i) => (

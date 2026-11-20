@@ -24,12 +24,14 @@ export function buildSteps(mobile: boolean) {
   const pos: number[] = [];
   const col: number[] = [];
   const idx: number[] = [];
-  const ring = (r: number, y: number, c: V3, glow = 0.04) => {
+  // (alt: a second colour laid in rays, for the inlaid sun of the court)
+  const ring = (r: number, y: number, c: V3, glow = 0.04, alt?: V3, rays = 24) => {
     const b = pos.length / 3;
     for (let s = 0; s <= seg; s++) {
       const a = (s / seg) * Math.PI * 2;
       pos.push(Math.cos(a) * r, y, Math.sin(a) * r);
-      col.push(c[0], c[1], c[2], glow);
+      const k = alt && Math.floor((s / seg) * rays * 2) % 2 === 0 ? alt : c;
+      col.push(k[0], k[1], k[2], glow);
     }
     return b;
   };
@@ -56,19 +58,23 @@ export function buildSteps(mobile: boolean) {
     band(mid2, nook);
   }
   // the court at the top: pale paving in broad rings, down to the rim of the pool
-  const rings: [number, V3][] = [
+  const PAVE: V3 = [0.52, 0.42, 0.2];
+  const INLAY: V3 = [0.8, 0.66, 0.32];
+  const rings: [number, V3, V3?][] = [
     [TOP_R, LIP],
-    [TOP_R - 14, TREAD],
-    [150, mix3(TREAD, [0.9, 0.8, 0.56], 0.5)],
-    [148, NOOK],
-    [126, mix3(TREAD, [0.95, 0.86, 0.6], 0.6)],
+    [TOP_R - 10, PAVE],
+    [TOP_R - 12, NOOK],
+    [152, PAVE, INLAY],
+    [150, NOOK],
+    [126, PAVE],
     [124, NOOK],
-    [92, TREAD],
+    [96, PAVE, INLAY],
+    [94, NOOK],
     [POOL_R + 5, LIP],
   ];
   let prev = -1;
-  for (const [r, c] of rings) {
-    const b = ring(r, TOP_Y, c);
+  for (const [r, c, alt] of rings) {
+    const b = ring(r, TOP_Y, c, 0.04, alt);
     if (prev >= 0) band(prev, b);
     prev = b;
   }

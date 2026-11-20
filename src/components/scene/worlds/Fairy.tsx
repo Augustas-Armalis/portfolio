@@ -16,8 +16,10 @@ import { WORLDS, groundAt, pathOf } from "./voyage";
 // road going up behind the wall; and on its peaks a castle of many towers, every window lit, with the sun
 // standing in a fan of rays just behind its highest spire.
 //
-// The plane comes in over a rise, low across the plain, and goes once round the mountain, climbing, to cross
-// the castle's face; then away toward the sun.
+// The plane comes in over a rise and low across the fields, then climbs straight at the castle while the
+// mountain grows to fill the sky, passes close under its towers by the right flank, and goes away toward the
+// sun. (It does not circle: the eye looks where the plane flies, and a plane that circles a mountain looks
+// away from it.)
 
 const def = WORLDS.fairy;
 const f4 = (n: number) => n.toFixed(4);
@@ -419,7 +421,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       masonry: makeMasonry({ bay: 27, amb: 0.62, key: 0.5 }),
       tempera: makeTempera({ amb: 0.78, key: 0.6, dab: 1.3, grain: 1.1, ao: 0.4, aoH: 30, wrap: 0.8, rim: [0.95, 0.5, 0.22], rimPow: 3 }),
       rock: makeTempera({ amb: 0.8, key: 0.62, dab: 1.4, strata: 0.9, grain: 1.2, wrap: 0.9, rim: [1.0, 0.56, 0.3], rimPow: 3.2 }),
-      stone: makeTempera({ amb: 0.7, key: 0.6, dab: 1.1, strata: 0.35, grain: 1.0, wrap: 0.9, gold: 0.5, rim: [1.0, 0.56, 0.26], rimPow: 2.6 }),
+      stone: makeTempera({ amb: 0.7, key: 0.6, dab: 1.2, strata: 0.75, grain: 1.2, wrap: 0.9, gold: 0.5, rim: [1.0, 0.56, 0.26], rimPow: 2.6 }),
       motes: pointsGeometry(nM, (_, q) => [MT.x + (q() - 0.5) * 1500, 30 + q() * 700, MT.z + 200 + (q() - 0.5) * 1700, 0.5 + q() * 1.3], 9),
       moteMat: makePoints({ a: [1, 0.84, 0.5], b: [1, 0.95, 0.8], scale: 320, drift: 3.2, gain: 0.7, max: 14 }),
     };
