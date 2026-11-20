@@ -62,5 +62,13 @@
   "width": 960,
   "height": 553,
   "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Ciurlionis_-_Tranquility_(Ramybe).jpg"
+ },
+ {
+  "id": "kings",
+  "file": "/assets/ciurlionis/kings.jpg",
+  "title": "Fairy Tale of the Kings (Karalių pasaka, 1909)",
+  "width": 1280,
+  "height": 1201,
+  "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_FAIRY_TALE_(FAIRY_TALE_OF_KINGS)_-_1909.jpg"
  }
 ]
