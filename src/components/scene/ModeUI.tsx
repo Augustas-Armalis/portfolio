@@ -720,7 +720,7 @@ export function BookUI({ info, page, onExit, onPrev, onNext, onApp }: { info: { 
             <button type="button" className={tall} onClick={onPrev} aria-label="Previous page">
               ←
             </button>
-            <span className="min-w-[72px] text-center text-[12px] tabular-nums text-white/70">{!info.ready ? "Opening…" : page ? `${page.n} / ${page.of}` : `${info.spread + 1} / ${info.spreads}`}</span>
+            <span className="min-w-[72px] text-center text-[12px] tabular-nums text-white/70">{!info.ready ? "Opening…" : page ? `${page.n} / ${page.of}` : info.spread === 0 ? `1 / ${info.spreads * 2 - 2}` : 2 * info.spread + 1 > info.spreads * 2 - 2 ? `${2 * info.spread} / ${info.spreads * 2 - 2}` : `${2 * info.spread}–${2 * info.spread + 1} / ${info.spreads * 2 - 2}`}</span>
             <button type="button" className={tall} onClick={onNext} aria-label="Next page">
               →
             </button>

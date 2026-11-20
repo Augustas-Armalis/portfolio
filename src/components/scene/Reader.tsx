@@ -1,6 +1,6 @@
 "use client";
 
-import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { play } from "@/lib/sfx";
@@ -10,8 +10,12 @@ import { clamp01, easeInOutCubic, nowS } from "./shared";
 
 // The novel as a physical book. Closed it sits on the desk; in reading mode
 // the cover swings open and pages turn with a curling page (bent geometry in
-// the vertex shader). Pages are typeset on demand from /content/novel.json
-// into canvas textures: serif text, chapter illustrations, page numbers.
+// the vertex shader). The pages are his print edition itself: every page of
+// the typeset PDF rendered to a greyscale image (/content/novel/pages/p001.png
+// .. p144.png, 986 x 1400), printed here onto the book's own paper by the page
+// shader (white becomes the paper's warm tone with its grain, black the ink).
+// Page 1 is a right-hand page, so odd pages are always on the right. Only the
+// spread being read and two pages either side are ever held in memory.
 
 const BW = 0.135; // closed width (x)
 const BD = 0.205; // depth (z)
@@ -23,153 +27,42 @@ const BOARD = 0.0014; // cover board thickness
 const BLOCK = 0.0186; // the whole page block, shut
 const HALF = 0.0096; // each side of the block when it lies open
 
-type Novel = { title: string; author: string; illustrator?: string; years?: string; chapters: { id: string; title: string; paragraphs: string[]; image?: string }[] };
-type Line = { t: string; x: number; big?: boolean };
-type Page = { kind: "title" } | { kind: "text"; lines: Line[]; image?: string; heading?: string; n: number };
+export const PAGES = 144;
+const pageUrl = (n: number) => `/content/novel/pages/p${String(n).padStart(3, "0")}.png`;
+// the printed page is a little shorter than the leaf it is printed on (986 x 1400 on a 132 x 200 mm leaf, width filled)
+const PRINT_V = PW / (986 / 1400) / PD;
 
-const PX = { w: 1000, h: 1515, m: 92, top: 128, bottom: 120, size: 31, lead: 47 };
-const SERIF = `"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif`;
-
-function paginate(novel: Novel): Page[] {
-  const c = document.createElement("canvas").getContext("2d")!;
-  c.font = `${PX.size}px ${SERIF}`;
-  const width = PX.w - PX.m * 2;
-  const pages: Page[] = [{ kind: "title" }];
-  let n = 1;
-  let cur: Extract<Page, { kind: "text" }> = { kind: "text", lines: [], n: n++ };
-  let y = PX.top;
-  const maxY = PX.h - PX.bottom;
-  const newPage = (extra?: Partial<Extract<Page, { kind: "text" }>>) => {
-    if (cur.lines.length || cur.heading) pages.push(cur);
-    cur = { kind: "text", lines: [], n: n++, ...extra };
-    y = PX.top;
-  };
-  novel.chapters.forEach((ch) => {
-    newPage({ heading: ch.title, image: ch.image });
-    y = PX.top + (ch.image ? 560 : 180) + 70;
-    ch.paragraphs.forEach((para, pi) => {
-      const words = para.replace(/\s+/g, " ").trim().split(" ");
-      let line = "";
-      let first = true;
-      const indent = pi === 0 ? 0 : 42;
-      const flush = () => {
-        if (y + PX.lead > maxY) newPage();
-        cur.lines.push({ t: line, x: first ? indent : 0 });
-        y += PX.lead;
-        first = false;
-        line = "";
-      };
-      for (const w of words) {
-        const test = line ? line + " " + w : w;
-        if (c.measureText(test).width > width - (first ? indent : 0) && line) {
-          flush();
-          line = w;
-        } else line = test;
-      }
-      if (line) flush();
-    });
-  });
-  if (cur.lines.length) pages.push(cur);
-  return pages;
-}
-
-const images = new Map<string, HTMLImageElement>();
-function image(src: string, onload: () => void) {
-  let im = images.get(src);
-  if (!im) {
-    im = new Image();
-    im.src = src;
-    images.set(src, im);
-  }
-  if (!im.complete) im.addEventListener("load", onload, { once: true });
-  return im;
-}
-
-function paper(g: CanvasRenderingContext2D) {
-  g.fillStyle = "#f5f1e8";
-  g.fillRect(0, 0, PX.w, PX.h);
-  const gr = g.createLinearGradient(0, 0, PX.w, 0);
-  gr.addColorStop(0, "rgba(120,100,70,0.08)");
-  gr.addColorStop(0.08, "rgba(120,100,70,0)");
-  g.fillStyle = gr;
-  g.fillRect(0, 0, PX.w, PX.h);
-}
-
-function drawPage(page: Page | undefined, novel: Novel | null, left: boolean, redraw: () => void) {
-  const c = document.createElement("canvas");
-  c.width = PX.w;
-  c.height = PX.h;
-  const g = c.getContext("2d")!;
-  paper(g);
-  if (left) {
-    // spine shadow on the right edge for left pages
-    g.save();
-    g.translate(PX.w, 0);
-    g.scale(-1, 1);
-    const gr = g.createLinearGradient(0, 0, PX.w * 0.12, 0);
-    gr.addColorStop(0, "rgba(90,70,40,0.12)");
-    gr.addColorStop(1, "rgba(90,70,40,0)");
-    g.fillStyle = gr;
-    g.fillRect(0, 0, PX.w, PX.h);
-    g.restore();
-  }
-  if (!left) {
-    // gutter: the page curves into the spine
-    const gr = g.createLinearGradient(0, 0, PX.w * 0.14, 0);
-    gr.addColorStop(0, "rgba(90,70,40,0.16)");
-    gr.addColorStop(1, "rgba(90,70,40,0)");
-    g.fillStyle = gr;
-    g.fillRect(0, 0, PX.w, PX.h);
-  }
-  g.fillStyle = "#2a2622";
-  g.textBaseline = "alphabetic";
-  if (!page || !novel) return c;
-  if (page.kind === "title") {
-    g.textAlign = "center";
-    g.font = `500 64px ${SERIF}`;
-    g.fillText(novel.title.toUpperCase(), PX.w / 2, 560);
-    g.font = `italic 34px ${SERIF}`;
-    g.fillStyle = "#4a443d";
-    g.fillText(novel.author, PX.w / 2, 650);
-    if (novel.illustrator) {
-      g.font = `26px ${SERIF}`;
-      g.fillText(`Iliustracijos: ${novel.illustrator}`, PX.w / 2, 1180);
+// The paper and what is printed on it, shared by the pages lying open and the leaf that turns.
+const GLSL_PRINT = /* glsl */ `
+  uniform float uLinearOut;
+  float hashP(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+  float vnP(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hashP(i), hashP(i + vec2(1.0, 0.0)), f.x), mix(hashP(i + vec2(0.0, 1.0)), hashP(i + vec2(1.0, 1.0)), f.x), f.y); }
+  vec3 printed(sampler2D map, float has, vec2 uv, float gutterSide){
+    const vec3 PAPER = vec3(0.905, 0.862, 0.78);   // linear: a warm uncoated stock
+    const vec3 INK = vec3(0.022, 0.019, 0.017);
+    // the print sits in the middle of the leaf, its height ${(PRINT_V * 100).toFixed(1)}% of it
+    float v = (uv.y - ${((1 - PRINT_V) / 2).toFixed(4)}) / ${PRINT_V.toFixed(4)};
+    float lum = 1.0;
+    if (has > 0.5 && v >= 0.0 && v <= 1.0) {
+      // a touch sharper than the mip chain would choose: type stays crisp at an angle
+      lum = texture2D(map, vec2(uv.x, v), -0.6).r;
     }
-    if (novel.years) g.fillText(novel.years, PX.w / 2, 1230);
-    return c;
+    // paper: long fibres and a fine tooth, and the leaf darkening a little into the gutter
+    float grain = 0.96 + 0.04 * vnP(uv * vec2(260.0, 420.0)) + 0.02 * (vnP(uv * vec2(40.0, 900.0)) - 0.5);
+    float gutter = mix(1.0, 0.86, pow(1.0 - clamp(abs(uv.x - gutterSide) / 0.12, 0.0, 1.0), 2.0));
+    // ink sits on the paper, a little warmer than black, never pure
+    return mix(INK, PAPER * grain, lum) * gutter;
   }
-  if (page.heading) {
-    if (page.image) {
-      const im = image(page.image, redraw);
-      if (im.complete && im.naturalWidth) {
-        const s = 500;
-        g.drawImage(im, (PX.w - s) / 2, PX.top, s, s);
-      }
-    }
-    g.textAlign = "center";
-    g.font = `500 44px ${SERIF}`;
-    g.fillText(page.heading, PX.w / 2, PX.top + (page.image ? 560 : 180) + 10);
-  }
-  g.textAlign = "left";
-  g.font = `${PX.size}px ${SERIF}`;
-  let y = page.heading ? PX.top + (page.image ? 560 : 180) + 70 + PX.lead : PX.top + PX.lead;
-  for (const l of page.lines) {
-    g.fillText(l.t, PX.m + l.x, y);
-    y += PX.lead;
-  }
-  g.textAlign = "center";
-  g.font = `24px ${SERIF}`;
-  g.fillStyle = "#7a7268";
-  g.fillText(String(page.n), PX.w / 2, PX.h - 64);
-  return c;
-}
-
+`;
 function makePageMaterial() {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
     uniforms: {
       uFront: { value: null as THREE.Texture | null },
       uBack: { value: null as THREE.Texture | null },
+      uHasF: { value: 0 },
+      uHasB: { value: 0 },
       uP: { value: 0 },
       uCurl: { value: 0 },
       uDir: { value: 1 },
@@ -201,25 +94,40 @@ function makePageMaterial() {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
       }`,
     fragmentShader: /* glsl */ `
-      uniform sampler2D uFront; uniform sampler2D uBack; uniform float uLight; uniform float uLinearOut;
+      uniform sampler2D uFront; uniform sampler2D uBack; uniform float uLight; uniform float uHasF; uniform float uHasB;
       varying vec2 vUv; varying float vShade;
+      ${GLSL_PRINT}
       void main(){
-        vec4 c = gl_FrontFacing ? texture2D(uFront, vUv) : texture2D(uBack, vec2(1.0 - vUv.x, vUv.y));
+        // its front is a right-hand page (gutter on its left edge), its back a left-hand one, seen mirrored
+        vec3 c = gl_FrontFacing ? printed(uFront, uHasF, vUv, 0.0) : printed(uBack, uHasB, vec2(1.0 - vUv.x, vUv.y), 1.0);
         // a printed page is display-referred: through the lens it keeps its own paper white and ink (alpha 0, see Post)
-        gl_FragColor = vec4(c.rgb * vShade * uLight, 1.0 - uLinearOut);
+        gl_FragColor = vec4(c * vShade * uLight, 1.0 - uLinearOut);
         #include <colorspace_fragment>
       }`,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
   });
 }
 
-// the page lying flat: the same paper, and like the turning leaf it passes through the lens untouched
-function pageSurface(color: string) {
-  const m = new THREE.MeshBasicMaterial({ color, toneMapped: false });
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.uLinearOut = POST_U.uLinearOut;
-    sh.fragmentShader = sh.fragmentShader.replace("void main() {", "uniform float uLinearOut;\nvoid main() {").replace("#include <dithering_fragment>", "#include <dithering_fragment>\n  gl_FragColor.a = 1.0 - uLinearOut;");
-  };
-  return m;
+// the page lying flat: the same paper and print, and like the turning leaf it passes through the lens untouched
+function pageSurface(gutterSide: number) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uMap: { value: null as THREE.Texture | null }, uHas: { value: 0 }, ...POST_U },
+    vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uMap; uniform float uHas;
+      varying vec2 vUv;
+      ${GLSL_PRINT}
+      void main(){
+        gl_FragColor = vec4(printed(uMap, uHas, vUv, ${gutterSide.toFixed(1)}), 1.0 - uLinearOut);
+        #include <colorspace_fragment>
+      }`,
+    // (each layer of the open book wins its depth test by a fixed step over the one under it)
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
 }
 
 function pageGeometry() {
@@ -247,8 +155,6 @@ export function Reader({
 }) {
   const m = getMats();
   const cover = useRef<THREE.Group>(null);
-  const novel = useRef<Novel | null>(null);
-  const pages = useRef<Page[]>([]);
   const st = useRef({ spread: 0, open: 0, openTarget: 0, turn: null as null | { dir: 1 | -1; t0: number; from: number; to: number; drag: boolean; hand: boolean }, closing: false });
   const root = useRef<THREE.Group>(null);
   // soft contact shadow under the lifted page: darkest along the spine side
@@ -305,75 +211,74 @@ export function Reader({
     t.colorSpace = THREE.SRGBColorSpace;
     return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false });
   }, []);
-  const texCache = useRef(new Map<string, THREE.CanvasTexture>());
-  // pages are lit like under a reading lamp, so they read at any time of day
-  const left = useMemo(() => pageSurface("#f3efe6"), []);
-  const right = useMemo(() => pageSurface("#f6f2e9"), []);
+  // the print pages: loaded as they come near, never more than the spread and two pages either side
+  const { gl } = useThree();
+  const texCache = useRef(new Map<number, THREE.Texture>());
+  const aniso = useMemo(() => gl.capabilities.getMaxAnisotropy(), [gl]);
+  const loader = useMemo(() => new THREE.TextureLoader(), []);
+  const left = useMemo(() => pageSurface(1), []);
+  const right = useMemo(() => pageSurface(0), []);
   const turnMat = useMemo(makePageMaterial, []);
   const turnGeo = useMemo(pageGeometry, []);
-  const blank = useMemo(() => {
-    const c = document.createElement("canvas");
-    c.width = 8;
-    c.height = 12;
-    const g = c.getContext("2d")!;
-    g.fillStyle = "#f5f1e8";
-    g.fillRect(0, 0, 8, 12);
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  }, []);
-
-  const spreads = () => Math.ceil((pages.current.length + 1) / 2);
-  const tex = (idx: number, isLeft: boolean): THREE.Texture => {
-    if (idx < 0 || idx >= pages.current.length) return blank;
-    const key = `${idx}`;
-    let t = texCache.current.get(key);
+  // which page each surface shows (0: none, the bare paper)
+  const shown = useRef({ L: 0, R: 1, F: 0, B: 0 });
+  const pageTex = (n: number): THREE.Texture | null => {
+    if (n < 1 || n > PAGES) return null;
+    let t = texCache.current.get(n);
     if (!t) {
-      const c = drawPage(pages.current[idx], novel.current, isLeft, () => {
-        const t2 = texCache.current.get(key);
-        if (!t2) return;
-        const c2 = drawPage(pages.current[idx], novel.current, isLeft, () => {});
-        (t2.image as HTMLCanvasElement).getContext("2d")!.drawImage(c2, 0, 0);
-        t2.needsUpdate = true;
+      t = loader.load(pageUrl(n), (tx) => {
+        tx.userData.ready = true;
+        tx.needsUpdate = true;
       });
-      t = new THREE.CanvasTexture(c);
       t.colorSpace = THREE.SRGBColorSpace;
-      t.anisotropy = 8;
-      texCache.current.set(key, t);
-      // keep memory bounded
-      if (texCache.current.size > 14) {
-        const first = texCache.current.keys().next().value as string;
-        texCache.current.get(first)?.dispose();
-        texCache.current.delete(first);
-      }
+      t.anisotropy = aniso;
+      t.generateMipmaps = true;
+      t.minFilter = THREE.LinearMipmapLinearFilter;
+      t.magFilter = THREE.LinearFilter;
+      texCache.current.set(n, t);
     }
     return t;
   };
-  // spread s: left = page 2s-1, right = page 2s (page 0 is the title page)
-  const show = (s: number) => {
-    left.map = s === 0 ? blank : tex(2 * s - 1, true);
-    right.map = tex(2 * s, false);
-    left.needsUpdate = right.needsUpdate = true;
-    onInfo({ spread: s, spreads: spreads(), ready: pages.current.length > 0 });
+  // hold only what is near: the spread, the leaf that may turn either way, and one more each side
+  const keepNear = (s: number) => {
+    for (let n = 2 * s - 2; n <= 2 * s + 5; n++) pageTex(n);
+    texCache.current.forEach((t, n) => {
+      if (n < 2 * s - 4 || n > 2 * s + 7) {
+        t.dispose();
+        texCache.current.delete(n);
+      }
+    });
   };
-
-  useEffect(() => {
-    if (!reading || novel.current) return;
-    let dead = false;
-    fetch("/content/novel.json")
-      .then((r) => r.json())
-      .then((n: Novel) => {
-        if (dead) return;
-        novel.current = n;
-        pages.current = paginate(n);
-        show(st.current.spread);
-      })
-      .catch(() => {});
-    return () => {
-      dead = true;
+  // bind each surface to its page, every frame: a page that arrives late simply appears (no flash of another)
+  const bind = () => {
+    const sh = shown.current;
+    const set = (u: Record<string, THREE.IUniform>, map: string, has: string, n: number) => {
+      const t = pageTex(n);
+      const ok = !!t && t.userData.ready === true;
+      u[map].value = ok ? t : null;
+      u[has].value = ok ? 1 : 0;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reading]);
+    set(left.uniforms, "uMap", "uHas", sh.L);
+    set(right.uniforms, "uMap", "uHas", sh.R);
+    set(turnMat.uniforms, "uFront", "uHasF", sh.F);
+    set(turnMat.uniforms, "uBack", "uHasB", sh.B);
+  };
+  const SPREADS = Math.floor(PAGES / 2) + 1;
+  // spread s: left = page 2s (none on the first), right = page 2s + 1 (none after the last)
+  const show = (s: number) => {
+    shown.current.L = 2 * s;
+    shown.current.R = 2 * s + 1;
+    keepNear(s);
+    bind();
+    onInfo({ spread: s, spreads: SPREADS, ready: true });
+  };
+  useEffect(
+    () => () => {
+      texCache.current.forEach((t) => t.dispose());
+      texCache.current.clear();
+    },
+    [],
+  );
 
   useEffect(() => {
     const s = st.current;
@@ -390,23 +295,26 @@ export function Reader({
   const prog = () => (turnMat.uniforms.uP.value as number);
   const begin = (dir: 1 | -1, drag: boolean) => {
     const s = st.current;
-    if (s.turn || s.open < 0.98 || !pages.current.length) return false;
-    if (dir === 1 && 2 * s.spread + 1 >= pages.current.length) return false;
+    if (s.turn || s.open < 0.98) return false;
+    if (dir === 1 && 2 * s.spread + 1 >= PAGES) return false;
     if (dir === -1 && s.spread === 0) return false;
     const p0 = dir === 1 ? 0 : 1;
     turnMat.uniforms.uP.value = p0;
     turnMat.uniforms.uDir.value = dir;
     s.turn = { dir, t0: nowS(), from: p0, to: drag ? p0 : 1 - p0, drag, hand: drag };
+    const sh = shown.current;
     if (dir === 1) {
-      turnMat.uniforms.uFront.value = tex(2 * s.spread, false);
-      turnMat.uniforms.uBack.value = tex(2 * s.spread + 1, true);
-      right.map = tex(2 * s.spread + 2, false);
+      // the right-hand page lifts: its back is the next left-hand page, and under it the next right
+      sh.F = 2 * s.spread + 1;
+      sh.B = 2 * s.spread + 2;
+      sh.R = 2 * s.spread + 3;
     } else {
-      turnMat.uniforms.uFront.value = tex(2 * s.spread - 2, false);
-      turnMat.uniforms.uBack.value = s.spread - 1 === 0 ? blank : tex(2 * s.spread - 1, true);
-      left.map = s.spread - 1 === 0 ? blank : tex(2 * s.spread - 3, true);
+      // the left-hand page lifts back: its back is the right-hand page before, and under it the left before
+      sh.F = 2 * s.spread - 1;
+      sh.B = 2 * s.spread;
+      sh.L = 2 * s.spread - 2;
     }
-    left.needsUpdate = right.needsUpdate = true;
+    bind();
     if (turnMesh.current) turnMesh.current.visible = true;
     return true;
   };
@@ -486,6 +394,7 @@ export function Reader({
 
   useFrame((_, dt) => {
     const s = st.current;
+    if (reading || s.open > 0.01) bind();
     // cover: smooth open/close; a small peek right after it lands on the desk
     let peek = 0;
     if (peekAt !== null) {
@@ -526,20 +435,20 @@ export function Reader({
     }
     if (pageL.current) {
       pageL.current.visible = o > 0.55;
-      pageL.current.position.y = -(tL + 0.0003);
+      pageL.current.position.y = -(tL + 0.0004);
     }
     if (pageR.current) {
       pageR.current.visible = o > 0.02 || peek > 0;
-      pageR.current.position.y = top + 0.0003;
+      pageR.current.position.y = top + 0.0004;
     }
-    if (shadow.current) shadow.current.position.y = top + 0.0004;
+    if (shadow.current) shadow.current.position.y = top + 0.0008;
     if (gutter.current) {
-      gutter.current.position.y = top + 0.0005;
+      gutter.current.position.y = top + 0.0009;
       gutterMat.opacity = clamp01((o - 0.7) / 0.3);
       gutter.current.visible = o > 0.7;
     }
     if (turnMesh.current) {
-      turnMesh.current.position.y = top + 0.0007;
+      turnMesh.current.position.y = top + 0.0012;
       turnMesh.current.visible = !!s.turn;
     }
     if (s.turn) {
@@ -583,7 +492,7 @@ export function Reader({
         <boxGeometry args={[BW, BOARD, BD]} />
       </mesh>
       <mesh ref={blockR} material={m.pages} position={[SPINE_X + 0.0004 + PW / 2, BOARD + BLOCK / 2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[PW, BLOCK, BD - 0.004]} />
+        <boxGeometry args={[PW, BLOCK, PD - 0.001]} />
       </mesh>
       <mesh ref={spine} material={m.paperBlack} position={[SPINE_X + 0.0008, BT / 2, 0]}>
         <boxGeometry args={[0.0016, BT, BD]} />
@@ -595,7 +504,7 @@ export function Reader({
       {/* turning page, pivoting on the spine */}
       <mesh ref={turnMesh} visible={false} geometry={turnGeo} material={turnMat} position={[SPINE_X, BT, 0]} frustumCulled={false} onPointerMove={dragTo} />
       <mesh ref={shadow} material={shadowMat} position={[SPINE_X + PW * 0.4, BT, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[PW, PD * 1.04]} />
+        <planeGeometry args={[PW, PD * 0.98]} />
       </mesh>
       {/* the gutter: both pages roll softly down into the spine */}
       <mesh ref={gutter} visible={false} material={gutterMat} position={[SPINE_X, BT, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -607,7 +516,7 @@ export function Reader({
           <boxGeometry args={[BW, BOARD, BD]} />
         </mesh>
         <mesh ref={blockL} visible={false} material={m.pages} position={[0.0004 + PW / 2, -HALF / 2, 0]}>
-          <boxGeometry args={[PW, HALF, BD - 0.004]} />
+          <boxGeometry args={[PW, HALF, PD - 0.001]} />
         </mesh>
         <mesh ref={pageL} visible={false} material={left} position={[PW / 2, -HALF, 0]} rotation={[Math.PI / 2, 0, Math.PI]} onPointerDown={grab(-1)} onPointerMove={dragTo}>
           <planeGeometry args={[PW, PD]} />

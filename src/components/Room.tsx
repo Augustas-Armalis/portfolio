@@ -1934,7 +1934,7 @@ export default function Room({
             key="book"
             info={readerInfo}
             onExit={exit}
-            page={isMobile ? { n: readerInfo.spread * 2 + bookPage + 1, of: readerInfo.spreads * 2 } : undefined}
+            page={isMobile ? { n: Math.min(readerInfo.spreads * 2 - 2, Math.max(1, readerInfo.spread * 2 + bookPage)), of: readerInfo.spreads * 2 - 2 } : undefined}
             onPrev={() => bookStep(-1)}
             onNext={() => bookStep(1)}
             onApp={novelApp}
