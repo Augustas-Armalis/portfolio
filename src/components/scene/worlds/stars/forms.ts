@@ -416,7 +416,8 @@ export function makeCloudPaint(o: { lit: V3; shade: V3; under: V3; rim?: number;
         }
         // billows on the form, and its torn edge
         float bil = fbm(p * 5.0 + vSeed * 40.0 + uTime * 0.004);
-        float e = H + (bil - 0.5) * 0.15 + (vnoise(p * 19.0 + vSeed * 9.0) - 0.5) * 0.035;
+        // (the tearing only eats into the form: outside it there is nothing)
+        float e = H + ((bil - 0.5) * 0.15 + (vnoise(p * 19.0 + vSeed * 9.0) - 0.5) * 0.035) * smoothstep(0.0, 0.06, H);
         float base = smoothstep(-0.27, -0.18, p.y + (n1 - 0.5) * 0.05);
         float a = smoothstep(0.0, 0.1, e) * base;
         if (a < 0.004) discard;

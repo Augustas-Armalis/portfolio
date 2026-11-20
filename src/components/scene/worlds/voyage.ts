@@ -324,12 +324,12 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     radius: 610,
     ceil: 260,
     // (the first aqueduct is kept low, so the first sight is the whole city of bells and its suns standing over it)
-    entry: { x: 0, z: 470, above: 30, yaw: 0 },
+    entry: { x: 0, z: 470, above: 34, yaw: 0 },
     gate: { x: 150, z: -470, above: 20, yaw: -0.25 },
     path: [
-      [0, 470, 30],
-      [4, 390, 24],
-      [8, 310, 16],
+      [0, 470, 34],
+      [4, 390, 34],
+      [8, 310, 19],
       [18, 250, 14],
       [20, 208, 15],
       [8, 150, 15],

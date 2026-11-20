@@ -35,7 +35,7 @@ export function makeWaveSea(light: V3) {
         vec3 camL = cameraPosition - (vWorld - vLocal);
         float dist = length(vWorld - cameraPosition);
         float warp = fbm(p * 0.003 + vec2(0.0, uTime * 0.003));
-        float s = p.y * 0.03 + warp * 2.2 + h * 0.1 + 0.22 * sin(p.x * 0.006 + warp * 4.0);
+        float s = p.y * 0.03 + warp * 2.2 + 0.22 * sin(p.x * 0.006 + warp * 4.0);
         float fw = fwidth(s);
         float bi = floor(s); float bf = fract(s);
         vec3 deep = vec3(0.007, 0.032, 0.046);
@@ -43,17 +43,18 @@ export function makeWaveSea(light: V3) {
         // far off the bands melt into one deep tone (and never shimmer)
         float farK = smoothstep(0.18, 0.9, fw);
         band = mix(band, deep, farK);
-        band = mix(band, dot(band, vec3(0.3, 0.5, 0.2)) * vec3(0.5, 1.25, 1.45) + deep * 0.3, (1.0 - smoothstep(80.0, 460.0, dist)) * 0.86);
+        float nearK = 1.0 - smoothstep(60.0, 420.0, dist);
+        band = mix(band, deep * 1.5, nearK * 0.93);
         // each band is lighter toward its crest, as a wave is
-        vec3 col = band * (0.55 + 0.9 * bf * bf * (1.0 - farK));
+        vec3 col = band * (0.55 + 0.9 * bf * bf * (1.0 - farK) * (1.0 - 0.85 * nearK) + 0.3 * nearK);
         // long strokes of the pastel laid along the band, and its grain
         float stroke = vnoise(vec2(p.x * 0.05, s * 14.0)) * 0.6 + vnoise(vec2(p.x * 0.21, s * 40.0)) * 0.4;
         col *= 1.0 + (stroke - 0.5) * 0.6 * (1.0 - smoothstep(60.0, 420.0, dist));
         col *= 0.8 + 0.4 * fbm(p * 0.0016 + 9.0);
         // fine level hatching in some of them
-        float hl = bf * 7.0; float hw = fwidth(hl);
+        float hl = bf * 26.0; float hw = fwidth(hl);
         float hatch = (1.0 - smoothstep(0.12, 0.2 + hw, abs(fract(hl) - 0.5))) * step(0.45, h11(bi + 7.0)) * (1.0 - smoothstep(0.3, 0.9, hw));
-        col += vec3(0.04, 0.13, 0.10) * hatch * 0.6;
+        col += vec3(0.04, 0.13, 0.10) * hatch * 0.6 * (1.0 - 0.6 * nearK);
         // the gold thread along every crest
         float crest = 1.0 - smoothstep(fw * 0.8, fw * 2.0 + 0.008, 1.0 - bf);
         vec3 gold = vec3(1.0, 0.8, 0.42);
