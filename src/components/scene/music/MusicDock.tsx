@@ -3,8 +3,8 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowUpRight, ChevronDown, Music2, Volume2, VolumeX } from "lucide-react";
-import { TRACKS, pickTrack, setMusicMuted, setMusicOpen, setMusicVolume, useMusic } from "@/lib/musicDirector";
+import { ArrowUpRight, ChevronDown, Music2, Play, Volume2, VolumeX } from "lucide-react";
+import { TRACKS, pickTrack, playFieldMusic, setMusicMuted, setMusicOpen, setMusicVolume, useMusic } from "@/lib/musicDirector";
 import { streamHost } from "@/lib/stream";
 import { useOS } from "@/store";
 import { TRACK, geist } from "../font";
@@ -14,6 +14,10 @@ import { GLASS_SPRING, Glass, GlassStyles } from "../Glass";
 // is a pill (the player's own frame, small, a title, its source); opened out it shows the frame larger, a volume,
 // a mute, and the list of everything that can be played, each with its source and credit. A streamed recording is
 // the official player, embedded: its frame is always in the page and on show while it plays.
+//
+// Where the field's music cannot start by itself (a browser that lets no frame play with sound unasked, a
+// blocker), the pill says so quietly: "Play field music". Pressing it tries again inside the press and opens the
+// player's own frame, whose play button works everywhere. Nothing else is ever played in its place.
 //
 // It sits at the top of the view beside the sound pill (on a phone, beside the corner button), clear of the
 // controls at the foot. It lives in a root of its own (made once, on the first music of the visit) so the frames in it are never
@@ -59,6 +63,8 @@ function Dock() {
   const open = m.open && show;
   const t = m.playing;
   const waiting = stream && m.state !== "playing";
+  // the field's music is waiting to be asked for by hand
+  const tap = m.tap && show;
   const line = m.muted ? "Music off" : !t ? "" : m.credit ? m.credit : stream ? (m.part ?? t.source) : t.by;
   const W = coarse ? "min(318px, calc(100vw - 80px))" : "326px";
   // (what this place plays by default leads the list)
@@ -98,20 +104,21 @@ function Dock() {
                 type="button"
                 className={`flex min-w-0 items-center gap-2 text-left ${open ? "px-3.5 pb-1 pt-2.5" : `h-9 [@media(pointer:coarse)]:h-11 ${stream ? "pl-2.5" : "pl-3.5"} pr-1`}`}
                 aria-expanded={open}
-                aria-label={open ? "Close the music panel" : `Music: ${t ? t.title : "nothing playing"}. Open the music panel`}
-                data-music="toggle"
-                onClick={() => setMusicOpen(!open)}
+                aria-label={tap && !open ? "Play field music" : open ? "Close the music panel" : `Music: ${t ? t.title : "nothing playing"}. Open the music panel`}
+                data-music={tap && !open ? "tap" : "toggle"}
+                onClick={() => (tap && !open ? playFieldMusic() : setMusicOpen(!open))}
               >
-                {!stream && !open && <Music2 size={15} strokeWidth={2} className="shrink-0 opacity-90" />}
+                {!stream && !open && (tap ? <Play size={13} strokeWidth={2.4} className="shrink-0 opacity-90" /> : <Music2 size={15} strokeWidth={2} className="shrink-0 opacity-90" />)}
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate font-semibold leading-tight tracking-[-0.02em] ${open ? "text-[14px]" : "max-w-[190px] text-[12.5px] max-sm:max-w-[104px]"}`} data-music="title">
-                    {t ? t.title : "Music"}
+                    {tap && !open ? "Play field music" : t ? t.title : m.place === "desk" ? "Field music" : "Music"}
                   </span>
                   <span className={`block truncate leading-tight text-white/72 ${open ? "mt-0.5 text-[12px]" : "max-w-[190px] text-[11px] max-sm:max-w-[104px]"}`} data-music="line">
-                    {waiting && !m.muted ? "Starting…" : open && t ? `${t.by}` : line}
+                    {tap ? (open && stream ? "Press play in the player" : open ? "It could not start here" : "Tap to start") : waiting && !m.muted ? "Starting…" : open && t ? `${t.by}` : line}
                   </span>
                 </span>
-                <ChevronDown size={15} strokeWidth={2.2} className={`mx-1.5 shrink-0 opacity-70 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+                {!(tap && !open) && <ChevronDown size={15} strokeWidth={2.2} className={`mx-1.5 shrink-0 opacity-70 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />}
+                {tap && !open && <span className="w-2.5 shrink-0" />}
               </button>
               <AnimatePresence initial={false}>
                 {open && (
@@ -134,7 +141,7 @@ function Dock() {
                       <button type="button" className={`lg-btn grid h-8 w-8 shrink-0 place-items-center ${m.muted ? "lg-on" : "text-white/95"}`} aria-pressed={m.muted} aria-label={m.muted ? "Turn the music on" : "Turn the music off"} data-music="mute" onClick={() => setMusicMuted(!m.muted)}>
                         {m.muted ? <VolumeX size={15} strokeWidth={2} /> : <Volume2 size={15} strokeWidth={2} />}
                       </button>
-                      <input type="range" min={0} max={1} step={0.01} value={m.volume} onChange={(e) => setMusicVolume(+e.target.value)} className="lg-range mr-2 flex-1" aria-label="Music volume" data-music="volume" />
+                      <input type="range" min={0} max={1} step={0.01} value={m.volume} onChange={(e) => setMusicVolume(+e.target.value)} className="lg-range mr-2 flex-1" aria-label={m.place === "flight" ? "Music volume" : "Field music volume"} data-music="volume" />
                     </div>
                     {/* the picker is the flight's: at the field there is one music, a volume and a mute */}
                     {m.place === "flight" && (
