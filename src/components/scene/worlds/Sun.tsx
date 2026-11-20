@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, GreatSun, type Flock } from "./life";
-import { cumulus, makeRayDiscMaterial, makeSoftMaterial, softGeometry, type Soft } from "./stars/forms";
+import { makeCloudPaint, makeRayDiscMaterial, makeSoftMaterial, paintedCloudGeometry, softGeometry, type PCloud, type Soft } from "./stars/forms";
 import { beamGeometry, makeBeamMaterial, makeGoldStone, type Beam } from "./sun/gold";
 import { SUN_BRIDGES, WORLDS, gateOf, groundAt, pathOf } from "./voyage";
 
@@ -32,10 +32,11 @@ import { SUN_BRIDGES, WORLDS, gateOf, groundAt, pathOf } from "./voyage";
 
 const def = WORLDS.sun;
 
-// (pale gold, lighter toward the top of every form; its shade is turned violet-blue by the paint itself: sun/gold.ts)
-const STONE: V3 = [0.86, 0.6, 0.24];
-const STONE_TOP: V3 = [1.0, 0.84, 0.5];
-const DARK: V3 = [0.4, 0.27, 0.14];
+// (the painting's own two colours: forms of violet-blue standing in an air of amber gold, every one of them drawn
+// over in fine gold line and edged with the light that comes through it: sun/gold.ts)
+const STONE: V3 = [0.28, 0.34, 0.62];
+const STONE_TOP: V3 = [0.44, 0.5, 0.78];
+const DARK: V3 = [0.13, 0.15, 0.32];
 // the low sun the whole world is lit from (the same numbers as the sky's: voyage.ts AIR.sun)
 const SUN_DIR = new THREE.Vector3(Math.sin(0.2094) * Math.cos(0.2269), Math.sin(0.2269), -Math.cos(0.2094) * Math.cos(0.2269));
 const GOLD: V3 = [1.0, 0.7, 0.22];
@@ -53,9 +54,9 @@ const SHADOWS = 12;
 // the ground under the bells' shadows: long soft tongues of shade laid away from the sun
 const bellU = { uBells: { value: Array.from({ length: SHADOWS }, () => new THREE.Vector4(0, 0, 0, 0)) } };
 export const SUN_PAL: GroundPalette = {
-  a: [0.4, 0.31, 0.09],
-  b: [0.5, 0.37, 0.11],
-  c: [0.3, 0.29, 0.12],
+  a: [0.38, 0.25, 0.045],
+  b: [0.48, 0.3, 0.05],
+  c: [0.29, 0.23, 0.07],
   hook: {
     uniforms: bellU,
     decl: /* glsl */ `
@@ -105,7 +106,7 @@ function comb(k: Kit, x: number, z: number, R: number, H: number, y0: number, si
     const h = (7 + 16 * (i / (n - 1)) + r() * 5) * (R / 70) * (0.6 + H / 500);
     const px = x + Math.cos(ang) * rr;
     const pz = z + Math.sin(ang) * rr;
-    k.add(new THREE.ConeGeometry(0.5 * (R / 70) * (0.7 + H / 700) + 0.2, h, 5), [px, y0 - 8 + (H + 8) * t + h / 2 - 1, pz], DARK, { top: [0.66, 0.48, 0.26] });
+    k.add(new THREE.ConeGeometry(0.5 * (R / 70) * (0.7 + H / 700) + 0.2, h, 5), [px, y0 - 8 + (H + 8) * t + h / 2 - 1, pz], DARK, { top: [0.3, 0.34, 0.58] });
   }
 }
 // gold threads drawn round a bell, as he drew an arc across a form
@@ -282,6 +283,7 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       threads(k, x, z, R, H, y0, i === 3 ? [0.3, 0.62] : [0.12, 0.38, 0.62]);
       comb(k, x, z, R, H, y0, i % 2 ? 2.3 : 0.75, props.mobile ? 10 : 22, r);
       comb(k, x, z, R, H, y0, i % 2 ? 0.2 : 2.6, props.mobile ? 6 : 14, r);
+      suns.push({ p: [x, y0 + H + R * 0.12, z], size: R * 0.34, col: GOLD, k: 0.9 });
       // a warm breath of light behind each crown, where the sun stands behind it
       glows.push({ p: [x, y0 + H * 0.92, z - R * 0.4], size: R * 2.4, col: [1, 0.7, 0.28], k: 0.1 });
     });
@@ -411,7 +413,7 @@ export default function SunWorld({ props }: { props: WorldProps }) {
         const z = cz + f * n * 1.6 * Math.sin(a + 1.2) + (r() - 0.5) * 2;
         if (!clear(x, z) || pts.some((q, j) => j % 4 === 0 && Math.hypot(q.x - x, q.z - z) < 14)) continue;
         const h = (16 + r() * 14) * (1 - 0.45 * f * f);
-        k.add(new THREE.ConeGeometry(0.6 + h * 0.018, h, 5), [x, g(x, z) + h / 2 - 0.5, z], DARK, { top: [0.66, 0.48, 0.26], rot: [0, 0, -f * 0.12] });
+        k.add(new THREE.ConeGeometry(0.6 + h * 0.018, h, 5), [x, g(x, z) + h / 2 - 0.5, z], DARK, { top: [0.3, 0.34, 0.58], rot: [0, 0, -f * 0.12] });
       }
     }
 
@@ -429,7 +431,8 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       bell(far, x, z, R, H, g(x, z) - 10, STONE, STONE_TOP, 40, 26);
       comb(far, x, z, R, H, g(x, z) - 10, a + 2.2, 9, r);
       threads(far, x, z, R, H, g(x, z) - 10, [0.2, 0.55]);
-      if (i % 3 === 0) suns.push({ p: [x + R * 0.3, g(x, z) + H * 0.6, z], size: 60 + R * 0.2, col: GOLD, k: 0.85 });
+      suns.push({ p: [x + R * 0.3, g(x, z) + H * (0.5 + 0.3 * r()), z], size: 50 + R * 0.25, col: GOLD, k: 0.85 });
+      suns.push({ p: [x, g(x, z) + H + R * 0.1, z], size: R * 0.3, col: GOLD, k: 0.8 });
     }
     // the far strip at the upper left of the picture: a long low shelf of land on the horizon, a comb of thin
     // strokes along it, a small temple, and its own row of drawn suns with a great one at the end
@@ -471,27 +474,44 @@ export default function SunWorld({ props }: { props: WorldProps }) {
     // low mist where the path runs between the gates, and lying in the hollows of the field
     for (let i = 0; i < (props.mobile ? 10 : 26); i++) puffs.push({ p: [(r() - 0.5) * 700, g(0, 150) + 4 + r() * 8, 420 - r() * 820], size: 50 + r() * 70, a: 0.55 });
 
-    // ----- a sky of rounded cloud, gold where the sun finds it and violet beneath, receding to the horizon -----
-    const cloudsNear: Soft[] = [];
-    const cloudsFar: Soft[] = [];
-    const nCl = props.mobile ? 70 : Math.round(150 + 110 * props.effects);
-    for (let i = 0; i < nCl; i++) {
+    // ----- suns everywhere, as in the picture: scattered through the whole air, large and small, and sown over the field -----
+    for (let i = 0; i < (props.mobile ? 40 : 110); i++) {
       const a = r() * Math.PI * 2;
-      const d = 150 + Math.sqrt(r()) * 2400;
+      const d = 140 + Math.sqrt(r()) * 1500;
       const x = Math.cos(a) * d;
       const z = Math.sin(a) * d - 100;
-      const sz = 40 + r() * 60;
-      cumulus(d < 900 ? cloudsNear : cloudsFar, [x, 560 + r() * 190 + d * 0.05, z], sz, [1.0, 0.82, 0.5], r, { long: 1 + r() * 1.4, yaw: (r() - 0.5) * 0.8, glow: 0.16 });
+      const y = g(x, z) + 60 + r() * r() * 640;
+      if (BELLS.some(([bx, bz, R]) => Math.hypot(x - bx, z - bz) < R + 20) || pts.some((q, j) => j % 6 === 0 && Math.hypot(q.x - x, q.y - y, q.z - z) < 40)) continue;
+      const size = 10 + r() * r() * 54;
+      suns.push({ p: [x, y, z], size, col: GOLD, k: 0.8 });
+      if (i % 4 === 0) glows.push({ p: [x, y, z], size: size * 2.4, col: [1, 0.7, 0.26], k: 0.09 });
     }
-    // and small ones adrift among the bells, below their shoulders
-    for (let i = 0; i < (props.mobile ? 8 : 26); i++) {
+    for (let i = 0; i < (props.mobile ? 90 : 320); i++) {
       const a = r() * Math.PI * 2;
-      const d = 240 + r() * 700;
+      const d = 40 + Math.sqrt(r()) * 620;
+      const x = Math.cos(a) * d;
+      const z = Math.sin(a) * d - 40;
+      if (!clear(x, z)) continue;
+      suns.push({ p: [x, g(x, z) + 1.6 + r() * 3, z], size: 1.3 + r() * 1.8, col: GOLD, k: 0.7 });
+    }
+
+    // ----- a sky of painted cloud: rounded banks, gold where the sun finds them and violet beneath, receding to the horizon -----
+    const pclouds: PCloud[] = [];
+    const nCl = props.mobile ? 60 : Math.round(120 + 90 * props.effects);
+    for (let i = 0; i < nCl; i++) {
+      const a = r() * Math.PI * 2;
+      const d = 200 + Math.sqrt(r()) * 2400;
+      pclouds.push({ p: [Math.cos(a) * d, 600 + r() * 220 + d * 0.06, Math.sin(a) * d - 100], w: 80 + r() * 130, seed: r() });
+    }
+    // and smaller ones adrift among the bells, below their shoulders
+    for (let i = 0; i < (props.mobile ? 8 : 24); i++) {
+      const a = r() * Math.PI * 2;
+      const d = 260 + r() * 800;
       const x = Math.cos(a) * d;
       const z = Math.sin(a) * d - 120;
-      const y = 150 + r() * 230;
-      if (pts.some((q, j) => j % 6 === 0 && Math.hypot(q.x - x, q.y - y, q.z - z) < 110) || BELLS.some(([bx, bz, R]) => Math.hypot(x - bx, z - bz) < R + 60)) continue;
-      cumulus(cloudsNear, [x, y, z], 16 + r() * 18, [1.0, 0.86, 0.6], r, { long: 1.4 + r() * 1.6, glow: 0.16 });
+      const y = 160 + r() * 240;
+      if (pts.some((q, j) => j % 6 === 0 && Math.hypot(q.x - x, q.y - y, q.z - z) < 160) || BELLS.some(([bx, bz, R]) => Math.hypot(x - bx, z - bz) < R + 90)) continue;
+      pclouds.push({ p: [x, y, z], w: 50 + r() * 60, seed: r() });
     }
 
     // ----- thousands of small round trees over the plain, in groves and rows: the measure of everything -----
@@ -520,7 +540,7 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       const tall = r() < 0.42;
       const rad = (tall ? 0.7 + r() * 0.6 : 1.0 + r() * 1.4) * far2;
       const sy = tall ? 3.2 + r() * 1.8 : 0.9 + r() * 0.4;
-      const col: V3 = tall ? (pick < 0.6 ? [0.3, 0.33, 0.1] : [0.38, 0.3, 0.08]) : pick < 0.45 ? [0.52, 0.44, 0.1] : pick < 0.75 ? [0.6, 0.38, 0.08] : [0.78, 0.56, 0.14];
+      const col: V3 = tall ? (pick < 0.6 ? [0.14, 0.2, 0.26] : [0.2, 0.22, 0.4]) : pick < 0.45 ? [0.52, 0.44, 0.1] : pick < 0.75 ? [0.6, 0.38, 0.08] : [0.78, 0.56, 0.14];
       // (those far from the way are drawn with a fifth of the triangles)
       (pts.some((q, j) => j % 8 === 0 && Math.hypot(q.x - x, q.z - z) < 230) ? trees : treesFar).push({ p: [x, g(x, z) + rad * sy * 0.85, z], r: rad, col, sy, seed: r() });
     }
@@ -565,11 +585,10 @@ export default function SunWorld({ props }: { props: WorldProps }) {
     return {
       city: k.build(),
       far: far.build(),
-      tempera: makeGoldStone({ shade: [0.7, 0.72, 1.0], amb: 1.08, key: 0.34, through: 0.75, orn: 1, grain: 1, ao: 0.3, aoH: 70 }),
-      farMat: makeGoldStone({ shade: [0.7, 0.72, 1.0], amb: 1.05, key: 0.3, through: 0.8, orn: 0.8, grain: 0, ao: 0.2, aoH: 140, grad: [0, 620] }),
-      cloudsNear: softGeometry(cloudsNear, 1),
-      cloudsFar: softGeometry(cloudsFar, 1),
-      cloudMat: makeSoftMaterial({ shade: [1.0, 0.92, 0.84], under: [0.74, 0.68, 0.94], rim: 3, dab: 1.3, amb: 1.2, key: 0.5, flat: 0.3, sway: 3, soft: 0.8, fade: [2000, 2900], air: 0.5 }),
+      tempera: makeGoldStone({ shade: [0.82, 0.86, 1.0], amb: 0.95, key: 0.42, through: 0.6, orn: 1, grain: 1, ao: 0.3, aoH: 70 }),
+      farMat: makeGoldStone({ shade: [0.82, 0.86, 1.0], amb: 0.95, key: 0.4, through: 0.6, orn: 0.8, grain: 0, ao: 0.2, aoH: 140, grad: [0, 620] }),
+      clouds: paintedCloudGeometry(pclouds, [0, 100, 300]),
+      cloudMat: makeCloudPaint({ lit: [1.0, 0.8, 0.42], shade: [1.0, 0.66, 0.36], under: [0.44, 0.4, 0.74], rim: 1.3, amb: 1.15, key: 0.45, air: 0.45, fade: [2100, 2900], near: [80, 300] }),
       trees: softGeometry(trees, 1),
       treesFar: softGeometry(treesFar, 0),
       treeMat: makeSoftMaterial({ shade: [0.72, 0.7, 0.96], under: [0.6, 0.56, 0.7], rim: 2.6, dab: 1.5, amb: 1.15, key: 0.45, ao: 0.4 }),
@@ -597,13 +616,12 @@ export default function SunWorld({ props }: { props: WorldProps }) {
   return (
     <>
       <GreatSun size={0.8} tint={[1, 0.76, 0.32]} rays={64} gain={1.15} />
-      <WorldBase id="sun" def={def} pal={SUN_PAL} props={props} tip={[0.95, 0.72, 0.24]} pathTint={[1, 0.86, 0.56]} />
+      <WorldBase id="sun" def={def} pal={SUN_PAL} props={props} tip={[1.0, 0.7, 0.18]} pathTint={[1, 0.86, 0.56]} />
       <mesh geometry={b.city} material={b.tempera} />
       <mesh geometry={b.far} material={b.farMat} />
       <mesh geometry={b.trees} material={b.treeMat} frustumCulled={false} />
       <mesh geometry={b.treesFar} material={b.treeMat} frustumCulled={false} />
-      <mesh geometry={b.cloudsFar} material={b.cloudMat} frustumCulled={false} />
-      <mesh geometry={b.cloudsNear} material={b.cloudMat} frustumCulled={false} />
+      <mesh geometry={b.clouds} material={b.cloudMat} frustumCulled={false} renderOrder={2} />
       <points geometry={b.windows} material={b.windowMat} />
       <mesh geometry={b.beams} material={b.beamMat} renderOrder={7} />
       {b.discs.map((d, i) => (

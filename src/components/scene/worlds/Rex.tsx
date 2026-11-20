@@ -8,7 +8,7 @@ import { GLSL_SKY, SKY_U } from "../sky";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { GLSL_AIR, Kit, WORLD_U, angel, haloGeometry, makeHaloMaterial, makePoints, makeTempera, makeWater, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, GreatSun, type Flock } from "./life";
-import { cumulus, makeSoftMaterial, softGeometry, type Soft } from "./stars/forms";
+import { makeCloudPaint, paintedCloudGeometry, type PCloud } from "./stars/forms";
 import { ORIGIN, WORLDS, pathOf } from "./voyage";
 
 // Rex (1909). Umber dusk, almost one colour. On a still sea a globe lies half
@@ -45,25 +45,36 @@ const FIRE: V3 = [1.0, 0.6, 0.26];
 const KING0: [number, number][] = [
   [36, 34],
   [47, 60],
-  [49, 70],
-  [49, 117],
-  [51.5, 121],
-  [57, 127],
-  [60, 138],
-  [60, 151],
-  [57.5, 160],
-  [52, 166],
-  [49.5, 169],
-  [49.5, 227],
-  [53, 229.5],
-  [53, 236],
-  [50, 236],
+  [50, 66],
+  [50, 72],
+  [48, 74],
+  [48, 112],
+  [50, 114],
+  [50, 118],
+  [53, 121],
+  [59, 127],
+  [62, 138],
+  [62, 150],
+  [59, 159],
+  [53, 165],
+  [47, 168],
+  [42, 171],
+  [41, 176],
+  [41, 214],
+  [43, 217],
+  [48, 224],
+  [55, 229],
+  [56, 231],
+  [56, 236],
+  [52, 236],
   [0.1, 236],
 ];
+// his radius at a height (sketch units): for whatever is set on him
+const kingRad = (y: number) => (y < 119 ? 48.3 : y < 167 ? 49 + 13 * Math.sin(((y - 119) / 48) * Math.PI) : y < 216 ? 41.3 : 55);
 const KING = KING0.map(([r, y]): [number, number] => [r * KS, y * KS]);
 const DECK = 236 * KS;
 // his half-width at a height, for the water's mirror of him
-const kingGLSL = `float kingR0(float y){ return y < 60.0 ? 0.0 : y < 119.0 ? 49.0 : y < 167.0 ? 49.0 + 11.0 * sin((y - 119.0) / 48.0 * 3.1416) : y < 236.0 ? 49.5 : y < 252.0 ? 21.0 : 0.0; }
+const kingGLSL = `float kingR0(float y){ return y < 60.0 ? 0.0 : y < 119.0 ? 49.0 : y < 167.0 ? 49.0 + 13.0 * sin((y - 119.0) / 48.0 * 3.1416) : y < 222.0 ? 41.0 : y < 236.0 ? 55.0 : y < 258.0 ? 24.0 : 0.0; }
 float kingR(float y){ return kingR0(y / ${KS.toFixed(1)}) * ${KS.toFixed(1)}; }`;
 
 const GLOBE_GLSL = /* glsl */ `
@@ -72,7 +83,7 @@ vec3 globeAlb(vec3 q){
   vec2 uv = vec2(atan(q.z, q.x) * 1.4, q.y * 2.2);
   float land = fbm(uv * 1.5 + 3.0) * 0.7 + fbm(uv * 4.5 + 9.0) * 0.3;
   float m = smoothstep(0.46, 0.55, land);
-  return mix(vec3(0.03, 0.025, 0.022), mix(vec3(0.44, 0.33, 0.24), vec3(0.34, 0.33, 0.22), smoothstep(0.55, 0.75, land)), m);
+  return mix(vec3(0.028, 0.036, 0.062), mix(vec3(0.58, 0.43, 0.36), vec3(0.33, 0.4, 0.27), smoothstep(0.55, 0.75, land)), m);
 }`;
 
 function makeGlobeMaterial() {
@@ -142,8 +153,8 @@ function makeKingMaterial() {
         vec2 pc = vec2(s * 0.035 + (front ? 0.0 : 17.0), y * 0.1);
         float c1 = fbm(pc + 3.0);
         float c2 = fbm(pc * 1.9 + 11.0);
-        vec3 inner = mix(vec3(0.2, 0.195, 0.14), vec3(0.4, 0.325, 0.26), smoothstep(0.4, 0.58, c1));
-        inner = mix(inner, vec3(0.1, 0.085, 0.065), smoothstep(0.54, 0.66, c2) * 0.85);
+        vec3 inner = mix(vec3(0.19, 0.25, 0.16), vec3(0.52, 0.36, 0.33), smoothstep(0.4, 0.58, c1));
+        inner = mix(inner, vec3(0.1, 0.12, 0.19), smoothstep(0.54, 0.66, c2) * 0.85);
         inner *= mix(1.0, 0.72, smoothstep(134.0, 131.0, y) * smoothstep(127.0, 131.0, y));
         float dab = vnoise(L.xz * 0.21 + y * 0.17) * 0.6 + vnoise(vec2(s, y) * 0.8) * 0.4;
         // level beds in the dark stone, and the long upright strokes of the pastel over them
@@ -189,22 +200,29 @@ function makeShellMaterial(kind: 0 | 1 | 2) {
           kind === 0
             ? `float n = f3(vec2(az * 3.6, h * 0.085) + 2.0);
                float n2 = f3(vec2(az * 9.0, h * 0.16) + 9.0);
-               vec3 c = mix(vec3(0.43, 0.34, 0.27), vec3(0.56, 0.45, 0.37), smoothstep(0.3, 0.7, n2));
-               c = mix(c, vec3(0.2, 0.165, 0.125), smoothstep(0.46, 0.62, n) * 0.8);
-               c = mix(c, vec3(0.27, 0.255, 0.18), smoothstep(0.5, 0.7, n2) * smoothstep(0.4, 0.52, n) * 0.5);
+               vec3 c = mix(vec3(0.5, 0.35, 0.32), vec3(0.68, 0.49, 0.44), smoothstep(0.3, 0.7, n2));
+               c = mix(c, vec3(0.2, 0.22, 0.14), smoothstep(0.46, 0.62, n) * 0.8);
+               c = mix(c, vec3(0.24, 0.32, 0.22), smoothstep(0.5, 0.7, n2) * smoothstep(0.4, 0.52, n) * 0.6);
                // far mountains at its foot, grey-violet, their feet in mist
                float ridge = 16.0 + 30.0 * f3(vec2(az * 7.0, 3.0)) + 9.0 * vnoise(vec2(az * 31.0, 5.0));
                float mt = 1.0 - smoothstep(-1.5, 1.5, h - ridge);
-               c = mix(c, mix(vec3(0.3, 0.26, 0.25), vec3(0.19, 0.165, 0.17), smoothstep(0.0, ridge, h)), mt * 0.9);
+               c = mix(c, mix(vec3(0.32, 0.31, 0.42), vec3(0.17, 0.18, 0.28), smoothstep(0.0, ridge, h)), mt * 0.9);
                return vec4(c, 0.93);`
             : kind === 1
               ? `float n = f3(vec2(az * 5.0 + f3(vec2(az * 3.0, h * 0.03)) * 1.6, h * 0.09) + 5.0);
                float hatch = vnoise(vec2(az * 40.0, h * 0.2));
-               vec3 c = vec3(0.058, 0.047, 0.038) * (0.8 + 0.4 * hatch);
+               vec3 c = vec3(0.042, 0.046, 0.072) * (0.8 + 0.4 * hatch);
                // long curls of paler cloud
                float curl = smoothstep(0.5, 0.57, n) * (1.0 - smoothstep(0.6, 0.74, n));
-               c = mix(c, vec3(0.25, 0.19, 0.135), curl * 0.7);
-               c = mix(c, vec3(0.13, 0.1, 0.075), smoothstep(0.6, 0.74, n) * 0.8);
+               c = mix(c, vec3(0.3, 0.22, 0.2), curl * 0.7);
+               c = mix(c, vec3(0.12, 0.13, 0.1), smoothstep(0.6, 0.74, n) * 0.8);
+               // comets drawn all over it: a pale head, a long thin tail streaming back up the arc
+               vec2 cq = vec2(az * 9.0, h * 0.016); vec2 cc = floor(cq); float ch = hash12(cc + 4.0);
+               vec2 cf = fract(cq) - vec2(0.3 + 0.4 * ch, 0.3 + 0.4 * hash12(cc + 9.0));
+               float sg = az > 0.0 ? 1.0 : -1.0;
+               float head = smoothstep(0.045, 0.015, length(cf * vec2(1.0, 0.5)));
+               float tail = smoothstep(0.014, 0.0, abs(cf.y - abs(cf.x) * 0.3)) * step(0.0, -cf.x * sg) * smoothstep(0.5, 0.0, abs(cf.x));
+               c += vec3(1.0, 0.78, 0.56) * (head * 1.3 + tail * 0.45) * step(0.45, ch);
                return vec4(c, 0.94);`
               : `// wings: a few rows of long soft feathers, each row shifted half a feather, lost in cloud here and there
                float row = h * 0.034 + f3(vec2(az * 1.5, 1.0)) * 0.8;
@@ -212,8 +230,13 @@ function makeShellMaterial(kind: 0 | 1 | 2) {
                vec2 fq = vec2(fract(fx) - 0.5, fract(row));
                float feather = smoothstep(0.56, 0.2, length(vec2(fq.x * 1.25, fq.y - 0.08)));
                float n = f3(vec2(az * 3.0, h * 0.07) + 8.0);
-               vec3 c = mix(vec3(0.33, 0.275, 0.22), vec3(0.6, 0.5, 0.41), feather * smoothstep(0.3, 0.6, n));
-               c = mix(c, vec3(0.2, 0.17, 0.135), smoothstep(0.56, 0.7, 1.0 - n) * 0.55);
+               vec3 c = mix(vec3(0.34, 0.3, 0.32), vec3(0.72, 0.56, 0.5), feather * smoothstep(0.3, 0.6, n));
+               c = mix(c, vec3(0.18, 0.2, 0.26), smoothstep(0.56, 0.7, 1.0 - n) * 0.55);
+               // and small winged figures drawn in rows among the feathers
+               vec2 aq = vec2(az * 34.0, h * 0.06); vec2 ac = floor(aq); vec2 af = fract(aq) - 0.5;
+               float robe = smoothstep(0.02, 0.0, abs(af.x) - (0.25 - af.y) * 0.2) * step(-0.36, af.y) * step(af.y, 0.24);
+               float wing = smoothstep(0.045, 0.0, abs(length(vec2(abs(af.x) - 0.2, (af.y - 0.18) * 0.5)) - 0.14)) * step(0.02, af.y);
+               c = mix(c, vec3(0.92, 0.78, 0.66), max(robe, wing) * step(0.4, hash12(ac + 2.0)) * 0.8);
                return vec4(c, 0.9);`
         }
       }
@@ -290,34 +313,53 @@ export default function RexWorld({ props }: { props: WorldProps }) {
     const nM = props.mobile ? 80 : 180;
     for (let i = 0; i < nM; i++) {
       const a = ((i + 0.5) / nM) * Math.PI * 2;
-      k.box(3.4, 6.5, 3, [X + Math.sin(a) * 52.2 * KS, DECK + 3.2, Z + Math.cos(a) * 52.2 * KS], DARK, { top: DARK_TOP, rot: [0, a, 0] });
-      if (i % 3 === 0) k.box(3.0, 4.6, 2.6, [X + Math.sin(a) * 20.9 * KS, DECK + 6.5 * KS + 2.3, Z + Math.cos(a) * 20.9 * KS], DARK, { top: DARK_TOP, rot: [0, a, 0] });
+      k.box(3.4, 6.5, 3, [X + Math.sin(a) * 55.3 * KS, DECK + 3.2, Z + Math.cos(a) * 55.3 * KS], DARK, { top: DARK_TOP, rot: [0, a, 0] });
+      if (i % 3 === 0) k.box(3.0, 4.6, 2.6, [X + Math.sin(a) * 24.4 * KS, DECK + 6.5 * KS + 2.3, Z + Math.cos(a) * 24.4 * KS], DARK, { top: DARK_TOP, rot: [0, a, 0] });
     }
     // storeys: a ledge round him every forty metres or so, and a walk round his shoulders
     for (let i = 0; i < 20; i++) {
       const yy = 66 + i * 8.4;
-      const rad = (yy < 119 ? 49 : yy < 167 ? 49 + 11 * Math.sin(((yy - 119) / 48) * Math.PI) : 49.5) * KS + 0.8;
+      if (yy > 213) continue;
+      const rad = kingRad(yy) * KS + 0.8;
       k.add(new THREE.CylinderGeometry(rad, rad, 1.6, props.mobile ? 48 : 96, 1, true), [X, yy * KS, Z], DARK_TOP);
     }
     // watchers on his brow and his shoulders: pale, winged, each as tall as a tower and lost on him
     for (let i = 0; i < (props.mobile ? 10 : 28); i++) {
       const a = ((i + 0.5) / 28) * Math.PI * 2;
       const top = i % 2 === 0;
-      const rad = (top ? 49 : 58.5) * KS;
-      angel(k, [X + Math.sin(a) * rad, top ? DECK + 0.2 : 152 * KS, Z + Math.cos(a) * rad], 4.2, a, [0.7, 0.6, 0.46], { glow: 0.5, wing: [0.9, 0.8, 0.66] });
+      const rad = (top ? 53 : 54) * KS;
+      angel(k, [X + Math.sin(a) * rad, top ? DECK + 0.2 : 164.2 * KS, Z + Math.cos(a) * rad], 4.2, a, [0.7, 0.6, 0.46], { glow: 0.5, wing: [0.9, 0.8, 0.66] });
     }
-    for (let i = 0; i < 4; i++) {
-      const a = (i / 4) * Math.PI * 2 + Math.PI / 2;
-      const p: V3 = [X + Math.sin(a) * 46.5 * KS, DECK, Z + Math.cos(a) * 46.5 * KS];
-      k.add(new THREE.CylinderGeometry(3.3 * KS, 3.7 * KS, 9 * KS, 10), [p[0], p[1] + 4.5 * KS, p[2]], DARK, { top: DARK_TOP });
-      k.add(new THREE.ConeGeometry(4.4 * KS, 8 * KS, 10), [p[0], p[1] + 13 * KS, p[2]], DARK_TOP);
+    // eight towers round his brow, the two at either hand of his face the tallest, each roofed with a spire
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 2;
+      const big = i % 4 === 0 ? 1.5 : 1;
+      const p: V3 = [X + Math.sin(a) * 51 * KS, DECK, Z + Math.cos(a) * 51 * KS];
+      k.add(new THREE.CylinderGeometry(3.4 * KS * big, 3.9 * KS * big, 20 * KS * big, 12), [p[0], p[1] + 2 * KS * big, p[2]], DARK, { top: DARK_TOP });
+      k.add(new THREE.CylinderGeometry(4.3 * KS * big, 3.4 * KS * big, 2 * KS, 12), [p[0], p[1] + (12 * big + 1) * KS, p[2]], DARK_TOP);
+      k.add(new THREE.ConeGeometry(4.6 * KS * big, 13 * KS * big, 12), [p[0], p[1] + (12 * big + 2 + 6.5 * big) * KS, p[2]], DARK, { top: [0.5, 0.36, 0.22] });
+      for (let j = 0; j < 3; j++) k.box(0.5 * KS, 1.6 * KS, 0.3, [p[0] + Math.sin(a) * 3.7 * KS * big, p[1] + (3 + j * 3) * KS * big, p[2] + Math.cos(a) * 3.7 * KS * big], [1, 0.74, 0.4], { glow: 1.3, rot: [0, a, 0] });
     }
-    k.add(new THREE.CylinderGeometry(21 * KS, 20 * KS, 6.5 * KS, 28, 1, true), [X, DECK + 3.25 * KS, Z], DARK, { top: DARK_TOP });
+    // great buttresses up his body and pilasters up his neck, each ending in a pinnacle: he is built, not turned
+    for (let i = 0; i < 12; i++) {
+      const a = ((i + 0.5) / 12) * Math.PI * 2;
+      const sn = Math.sin(a);
+      const cs = Math.cos(a);
+      k.box(7 * KS, 50 * KS, 5 * KS, [X + sn * 49.5 * KS, 91 * KS, Z + cs * 49.5 * KS], DARK, { top: DARK_TOP, rot: [0, a, 0] });
+      k.add(new THREE.ConeGeometry(3.4 * KS, 12 * KS, 4), [X + sn * 50.5 * KS, 122 * KS, Z + cs * 50.5 * KS], DARK_TOP, { rot: [0, a + Math.PI / 4, 0], flat: true });
+      k.box(4 * KS, 40 * KS, 3 * KS, [X + sn * 41.6 * KS, 195 * KS, Z + cs * 41.6 * KS], DARK, { top: DARK_TOP, rot: [0, a, 0] });
+      // a tall lit lancet between each pair of pilasters
+      const a2 = (i / 12) * Math.PI * 2;
+      k.box(1.3 * KS, 16 * KS, 0.4, [X + Math.sin(a2) * 41.5 * KS, 198 * KS, Z + Math.cos(a2) * 41.5 * KS], [1, 0.72, 0.4], { glow: 0.9, rot: [0, a2, 0] });
+    }
+    k.add(new THREE.CylinderGeometry(24.5 * KS, 23.5 * KS, 7 * KS, 36, 1, true), [X, DECK + 3.5 * KS, Z], DARK, { top: DARK_TOP });
+    k.add(new THREE.TorusGeometry(24.2 * KS, 0.35 * KS, 6, 96), [X, DECK + 6.6 * KS, Z], GILT, { glow: 0.9, rot: [Math.PI / 2, 0, 0] });
     const nP = 28;
     for (let i = 0; i < nP; i++) {
       const a = (i / nP) * Math.PI * 2;
       const tall = i % 2 === 0;
-      k.add(new THREE.ConeGeometry(1.5 * KS, (tall ? 14 : 9.5) * KS, 4), [X + Math.sin(a) * 20.4 * KS, DECK + (6.5 + (tall ? 7 : 4.75)) * KS, Z + Math.cos(a) * 20.4 * KS], DARK_TOP, { rot: [0, a + Math.PI / 4, 0], flat: true });
+      k.add(new THREE.ConeGeometry(1.7 * KS, (tall ? 22 : 13) * KS, 4), [X + Math.sin(a) * 23.6 * KS, DECK + (7 + (tall ? 11 : 6.5)) * KS, Z + Math.cos(a) * 23.6 * KS], DARK, { top: [0.9, 0.62, 0.32], glow: 0.12, rot: [0, a + Math.PI / 4, 0], flat: true });
+      if (tall) halos.push({ p: [X + Math.sin(a) * 23.6 * KS, DECK + 29.4 * KS, Z + Math.cos(a) * 23.6 * KS], size: 2.2 * KS, col: [1, 0.82, 0.56], k: 0.8 });
     }
     glows.push({ p: [X, DECK + 9 * KS, Z], size: 78 * KS, col: [0.9, 0.6, 0.32], k: 0.2 });
     for (const sx of [-1, 1]) {
@@ -403,8 +445,8 @@ export default function RexWorld({ props }: { props: WorldProps }) {
     const sk = new Kit();
     const skyHalos: Halo[] = [];
     const skyGlows: Halo[] = [];
-    sk.add(crescent(110), [1500, 1400, -1300], [1, 0.95, 0.82], { glow: 1.5, rot: [0, -0.5, 0.75] });
-    skyGlows.push({ p: [1500, 1400, -1296], size: 420, col: [0.9, 0.78, 0.6], k: 0.12 });
+    sk.add(crescent(170), [1150, 1330, -1780], [1, 0.95, 0.82], { glow: 1.6, rot: [0, -0.5, 0.75] });
+    skyGlows.push({ p: [1150, 1330, -1776], size: 560, col: [0.8, 0.8, 0.9], k: 0.14 });
     // stars over the outermost shell, drawn as his: small, many, warm
     for (let i = 0; i < (props.mobile ? 40 : 110); i++) {
       const a = r() * Math.PI * 2;
@@ -421,24 +463,22 @@ export default function RexWorld({ props }: { props: WorldProps }) {
       return d;
     };
     // cloud in rounded banks, one layer above another round him, gold where the low sun finds it, violet beneath
-    const clouds: Soft[] = [];
-    const layers: [y: number, r0: number, r1: number, size: number, n: number][] = [
-      [46, 800, 2100, 30, 40],
-      [250, 900, 1900, 40, 26],
+    const clouds: PCloud[] = [];
+    const layers: [y: number, r0: number, r1: number, w: number, n: number][] = [
+      [60, 800, 2200, 80, 40],
+      [280, 1000, 2100, 110, 20],
     ];
-    for (const [y, r0, r1, size, n0] of layers) {
+    for (const [y, r0, r1, w, n0] of layers) {
       const n = props.mobile ? Math.round(n0 * 0.5) : Math.round(n0 * (0.7 + 0.5 * props.effects));
       for (let i = 0; i < n; i++) {
         const a = r() * Math.PI * 2;
         const d = r0 + r() * (r1 - r0);
         const x = X + Math.sin(a) * d;
         const z = Z + Math.cos(a) * d;
-        const sz = size * (0.6 + r() * 0.9);
-        const long = 3 + r() * 3;
-        const yy = y + (r() - 0.5) * size * 1.6;
-        if (nearPath(x, yy, z) < sz * long * 1.3 + 260) continue;
-        const pick = r();
-        cumulus(clouds, [x, yy, z], sz, pick < 0.6 ? [0.62, 0.5, 0.4] : pick < 0.85 ? [0.5, 0.42, 0.4] : [0.34, 0.3, 0.3], r, { long, yaw: a + Math.PI / 2 + (r() - 0.5) * 0.5, sy: 0.36 });
+        const yy = y + (r() - 0.5) * w * 0.8;
+        const ww = w * (0.7 + r() * 0.8);
+        if (nearPath(x, yy, z) < ww + 240) continue;
+        clouds.push({ p: [x, yy, z], w: ww, seed: r() });
       }
     }
     // lit windows in his dark body, row above row: each one a room
@@ -446,10 +486,10 @@ export default function RexWorld({ props }: { props: WorldProps }) {
     const windows = pointsGeometry(
       nWin,
       (_, q) => {
-        const row = Math.floor(q() * 80);
+        const row = Math.floor(q() * 70);
         const y = (64 + row * 2.1) * KS + 6;
         const yy = y / KS;
-        const rad = (yy < 119 ? 49 : yy < 167 ? 49 + 11 * Math.sin(((yy - 119) / 48) * Math.PI) : 49.5) * KS + 0.6;
+        const rad = kingRad(yy) * KS + 0.6;
         const a = Math.floor(q() * 300) * ((Math.PI * 2) / 300) + (row % 2) * 0.01;
         return [X + Math.sin(a) * rad, y, Z + Math.cos(a) * rad, 0.5 + q() * 1.3];
       },
@@ -502,8 +542,8 @@ export default function RexWorld({ props }: { props: WorldProps }) {
       sky: sk.build(),
       skyHalos,
       skyGlows,
-      clouds: softGeometry(clouds, 1),
-      cloudMat: makeSoftMaterial({ shade: [0.62, 0.56, 0.8], under: [0.5, 0.44, 0.62], rim: 2.2, dab: 1.4, amb: 1.5, key: 0.9, flat: 0.25, sway: 3, fade: [1900, 2900], soft: 1 }),
+      clouds: paintedCloudGeometry(clouds, [0, 100, 400]),
+      cloudMat: makeCloudPaint({ lit: [0.85, 0.62, 0.54], shade: [0.56, 0.44, 0.46], under: [0.3, 0.32, 0.5], rim: 1.1, amb: 1.25, key: 0.5, air: 0.7, fade: [2200, 2950], near: [120, 420] }),
       windows,
       windowMat: makePoints({ a: [1, 0.72, 0.36], b: [1, 0.86, 0.6], scale: 420, gain: 1.6, max: 6 }),
       puffs,
@@ -574,7 +614,7 @@ export default function RexWorld({ props }: { props: WorldProps }) {
         <mesh geometry={b.comets} material={b.tempera} />
         <mesh geometry={b.cometHalos} material={b.cometHaloMat} renderOrder={6} />
       </group>
-      <mesh geometry={b.clouds} material={b.cloudMat} frustumCulled={false} />
+      <mesh geometry={b.clouds} material={b.cloudMat} frustumCulled={false} renderOrder={2} />
       <points geometry={b.windows} material={b.windowMat} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
       <Birds flocks={b.flocks} tint={[0.07, 0.055, 0.045]} />
