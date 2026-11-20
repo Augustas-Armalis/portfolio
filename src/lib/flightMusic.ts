@@ -33,6 +33,7 @@ export const FLIGHT_TRACKS: Record<string, FlightTrack> = {
   rex: { file: NOCTURNE, title: "Nocturne for Absent Things" },
   fairy: { file: NOCTURNE, title: "Nocturne for Absent Things" },
   paradise: { file: AFTERLIGHT, title: "Afterlight" },
+  kings: { file: NOCTURNE, title: "Nocturne for Absent Things", gain: 0.8 },
   sea: { file: AFTERLIGHT, title: "Afterlight" }, // e.g. "Jūra" (The Sea), symphonic poem
 };
 

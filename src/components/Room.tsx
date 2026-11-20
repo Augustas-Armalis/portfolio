@@ -11,7 +11,7 @@ import { play } from "@/lib/sfx";
 import { useOS } from "@/store";
 import { ambienceMuted, ambienceScene, onAmbienceChange, setAmbienceMuted, startAmbience } from "@/lib/ambience";
 import { music, sampleMusic, stopOwner } from "@/lib/audio";
-import { flightMusicStop, flightMusicTo } from "@/lib/flightMusic";
+import { flightMusicStop, flightMusicTo, flightMusicVolume } from "@/lib/flightMusic";
 import { getQuality, getQualityChoice, reportFrame, setQualityChoice, useQuality, type Quality } from "@/lib/quality";
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { DeskModel } from "./scene/glb";
@@ -52,7 +52,7 @@ import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
 import { Trees } from "./scene/Trees";
 import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
-import { ORIGIN, WORLDS, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
+import { KINGS, ORIGIN, WORLDS, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
 import { Birds, Ground, Lake, MistBands, Mountains, Sky, makeSkyMaterial } from "./scene/World";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
@@ -298,6 +298,7 @@ function Scene({
   // the loader's in-canvas half, drawn over the finished frame until the dark has lifted
   const veil = useMemo(() => (instant ? null : makeLoaderOverlay()), [instant]);
   const fast = useRef(false);
+  const musicVol = useRef(1);
   useEffect(() => {
     if (!veil) return;
     postCtl.overlay = veil.mat;
@@ -648,6 +649,8 @@ function Scene({
       voyage.onEnter = (id) => {
         if (stage.current === "fly") flightMusicTo(WORLDS[id].music);
       };
+      // flying into the kings' little world is the landing
+      voyage.onHome = () => exitRef.current?.();
       planeApi.current?.launch(cam);
       onMode("plane");
       setStage("fly");
@@ -668,8 +671,13 @@ function Scene({
     const s = stage.current;
     if (s === "fly") {
       voyage.onEnter = null;
+      voyage.onHome = null;
       planeApi.current?.beginLand(cam);
-      flightMusicStop();
+      if (voyage.homing) {
+        // coming home out of the light, the music comes back up, and only then lets go
+        flightMusicVolume(1);
+        window.setTimeout(() => stage.current !== "fly" && flightMusicStop(), 4200);
+      } else flightMusicStop();
       setStage("land");
       return;
     }
@@ -1034,6 +1042,16 @@ function Scene({
       place: voyage.cur === "home" ? (voyage.flying && cam.position.z < -46 ? "forest" : "meadow") : wdef.place,
       world: voyage.cur,
     });
+    // the kings' wood grows quiet: the music sinks as the plane nears the light they hold
+    if (flying) {
+      let vol = 1;
+      if (voyage.cur === "kings" && !voyage.homing && planeApi.current) {
+        const pp = planeApi.current.pos;
+        const d = Math.hypot(pp.x - ORIGIN.x, pp.z - ORIGIN.z - KINGS.z);
+        vol = 0.1 + 0.6 * smooth(clamp01((d - 90) / 520));
+      }
+      if (Math.abs(vol - musicVol.current) > 0.01) flightMusicVolume((musicVol.current = vol));
+    } else musicVol.current = 1;
     const s = stage.current;
     const el = now - st.current;
     const reflect = mats.reflect;

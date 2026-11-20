@@ -16,8 +16,10 @@ import { airState, mixSky, type Air, type SkyState } from "../sky";
 // that neither can see the other (the camera's far plane is 3000 m), near
 // enough that 32-bit floats still resolve a quarter of a millimetre.
 
-export type WorldId = "home" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea";
-export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "sea"];
+export type WorldId = "home" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "kings";
+export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "sea", "kings"];
+// Fairy Tale of the Kings: where the two kings stand, and the small lit world they hold between their hands
+export const KINGS = { z: -170, domeY: 58, domeR: 24 };
 export const ORIGIN = new THREE.Vector3(-2500, 0, -2700);
 
 // ---------- the ground ----------
@@ -220,6 +222,26 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
     night: 0,
     exposure: 0.95,
     fx: [0.0, 0.0, 0.0, 0],
+  },
+  // Fairy Tale of the Kings: a night wood, brown-black and teal; the only strong light is the little world
+  kings: {
+    label: "Karalių pasaka",
+    zenith: [0.004, 0.011, 0.02],
+    upper: [0.008, 0.026, 0.036],
+    horizon: [0.014, 0.04, 0.046],
+    glow: [0.9, 0.45, 0.2],
+    amb: [0.06, 0.1, 0.11],
+    key: [1.0, 0.68, 0.38],
+    keyI: 0.45,
+    sunAz: 0,
+    sunEl: -30,
+    keyAz: 0,
+    keyEl: 18,
+    cloudLit: [0.03, 0.06, 0.07],
+    cloudShade: [0.006, 0.014, 0.018],
+    night: 1,
+    exposure: 1.3,
+    fx: [0.0, 0.0, 0.0, 1],
   },
 };
 
@@ -587,8 +609,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     radius: 670,
     ceil: 190,
     entry: { x: 10, z: 500, above: 12, yaw: 0 },
-    gate: null,
-    // one long circuit: in past the paintings, to where the picture is seen as he drew it, round the head and down the long back
+    gate: { x: 250, z: -420, above: 30, yaw: -1.2 },
+    // in past the painting, to where the picture is seen as he drew it, round the long back's end and on behind the island to the gate
     path: [
       [10, 500, 12],
       [20, 420, 9],
@@ -603,15 +625,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [-345, -270, 14],
       [-260, -360, 20],
       [-20, -420, 28],
-      [240, -400, 30],
-      [380, -290, 26],
-      [432, -130, 20],
-      [384, 60, 14],
-      [260, 220, 11],
-      [140, 340, 10],
-      [60, 440, 11],
+      [250, -420, 30],
+      [286, -406, 30],
     ],
-    loop: true,
     obstacles: [
       { x: 181, z: -260, r: 60, h: 100, bell: true },
       { x: 100, z: -260, r: 44, h: 60, bell: true },
@@ -619,6 +635,50 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -60, z: -260, r: 22, h: 22, bell: true },
     ],
     canvases: [{ painting: "tranquility", x: -15, z: 327, yaw: 0.69 }],
+  },
+  kings: {
+    id: "kings",
+    title: "Karalių pasaka",
+    year: "1909",
+    music: "kings",
+    place: "none",
+    air: AIR.kings,
+    fog: [0.00042, 0.003],
+    terrain: {
+      base: 0,
+      sines: [
+        [0.017, 0.011, 0.4, 1.6],
+        [-0.012, 0.021, 1.9, 1.2],
+        [0.041, 0.033, 2.7, 0.4],
+      ],
+      bumps: [[0, KINGS.z, 150, 5]],
+      rim: [620, 1000, 30],
+    },
+    water: null,
+    centre: [0, 120],
+    radius: 520,
+    ceil: 150,
+    entry: { x: 0, z: 540, above: 13, yaw: 0 },
+    gate: null,
+    // up the aisle between the great trunks, rising to the height of the kings' hands, and between them into the light
+    path: [
+      [0, 540, 13],
+      [6, 460, 14],
+      [14, 380, 20],
+      [4, 300, 32],
+      [-10, 220, 44],
+      [-6, 140, 52],
+      [4, 60, 56],
+      [2, -20, 57],
+      [0, -100, 56],
+      [0, KINGS.z, KINGS.domeY - 3],
+      [0, KINGS.z - 40, KINGS.domeY - 3],
+    ],
+    obstacles: [
+      { x: -118, z: KINGS.z, r: 56, h: 190 },
+      { x: 118, z: KINGS.z, r: 56, h: 190 },
+    ],
+    canvases: [{ painting: "kings", x: -30, z: 428, yaw: 0.56 }],
   },
 };
 
@@ -684,6 +744,10 @@ export const voyage = {
   flying: false,
   enteredAt: 0, // performance.now() of the last arrival, for the title card
   onEnter: null as ((id: WorldId) => void) | null,
+  // the flight's ending: the plane has flown into the little world the kings hold, and is on its way home
+  homing: false,
+  warm: 0, // 0..1 the closing cloud is that world's light instead of the air's colour
+  onHome: null as (() => void) | null,
 };
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());

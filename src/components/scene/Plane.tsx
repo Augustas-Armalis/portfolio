@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { DESK, clamp01, easeInOutCubic, nowS, spring } from "./shared";
-import { WORLDS, entryOf, gateOf, groundAt, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
+import { KINGS, WORLDS, entryOf, gateOf, groundAt, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
 // A folded paper plane that lives on the desk. Click it and it takes off down
 // the road, and from there it is yours: it glides. The pointer (or A / D, or a
@@ -345,6 +345,17 @@ export function Plane({
   const passage = (dt: number) => {
     const id = voyage.cur;
     if (voyage.phase === "open") {
+      // the flight's end: into the little world between the kings' hands, and home
+      if (id === "kings" && !voyage.homing) {
+        const o = originOf(id);
+        const d = Math.hypot(st.pos.x - o.x, st.pos.y - KINGS.domeY, st.pos.z - o.z - KINGS.z);
+        if (d < KINGS.domeR + 5) {
+          voyage.homing = true;
+          voyage.warm = 1;
+          voyage.onHome?.();
+          return;
+        }
+      }
       const gate = gateOf(id);
       if (gate) {
         const o = originOf(id);
@@ -531,6 +542,8 @@ export function Plane({
       sync();
       const done = u >= 1 && voyage.veil <= 0;
       if (done) {
+        voyage.homing = false;
+        voyage.warm = 0;
         voyage.flying = false;
         voyage.assist = 0;
         voyage.mist = 0;
@@ -548,6 +561,8 @@ export function Plane({
       st.speed = speedOf(voyage.throttle);
     },
     jump: (id, along = 0) => {
+      voyage.homing = false;
+      voyage.warm = 0;
       voyage.next = null;
       voyage.phase = "hold";
       voyage.veil = 1;

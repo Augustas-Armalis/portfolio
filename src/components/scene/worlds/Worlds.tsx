@@ -9,6 +9,7 @@ import { LightGate, LightPath, type WorldProps } from "./common";
 import { WORLD_U } from "./kit";
 import FairyWorld from "./Fairy";
 import GateWorld from "./Gate";
+import KingsWorld from "./Kings";
 import ParadiseWorld from "./Paradise";
 import RexWorld from "./Rex";
 import SeaWorld from "./Sea";
@@ -40,10 +41,10 @@ function Veil() {
         transparent: true,
         depthTest: false,
         depthWrite: false,
-        uniforms: { ...SKY_U, uVeil: { value: 0 }, uAspect: { value: 1 } },
+        uniforms: { ...SKY_U, uVeil: { value: 0 }, uAspect: { value: 1 }, uWarm: { value: 0 } },
         vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = position.xy; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
         fragmentShader: /* glsl */ `
-          uniform float uVeil; uniform float uAspect;
+          uniform float uVeil; uniform float uAspect; uniform float uWarm;
           varying vec2 vUv;
           ${GLSL_NOISE}
           ${GLSL_SKY}
@@ -55,6 +56,9 @@ function Veil() {
             float a = clamp(uVeil * 2.3 - (1.0 - n) * 0.9 - (1.0 - edge) * 0.4, 0.0, 1.0);
             a = a * a * (3.0 - 2.0 * a);
             vec3 col = (uHorizon * 1.02 + uSkyCol * 0.22) * (0.94 + 0.12 * n * (1.0 - uVeil * uVeil));
+            // the way home: not cloud but the little world's own light, brightest at the heart of the frame
+            col = mix(col, vec3(2.0, 1.5, 0.84) * (1.0 - 0.34 * edge), uWarm);
+            a = mix(a, smoothstep(0.0, 1.0, uVeil * 1.6 - (1.0 - edge) * 0.0 - edge * 0.45), uWarm);
             gl_FragColor = vec4(col, a);
             #include <tonemapping_fragment>
             #include <colorspace_fragment>
@@ -69,13 +73,14 @@ function Veil() {
   }, []);
   useFrame(({ size }) => {
     mat.uniforms.uVeil.value = voyage.veil;
+    mat.uniforms.uWarm.value = voyage.warm;
     mat.uniforms.uAspect.value = size.width / size.height;
     if (ref.current) ref.current.visible = voyage.veil > 0.001;
   });
   return <mesh ref={ref} geometry={geo} material={mat} frustumCulled={false} renderOrder={1000} visible={false} />;
 }
 
-const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld };
+const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld, kings: KingsWorld };
 
 export function Worlds(props: WorldProps) {
   const id = useWorld();

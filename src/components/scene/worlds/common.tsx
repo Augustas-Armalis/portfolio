@@ -295,6 +295,7 @@ const WORLD_OF: [RegExp, WorldId][] = [
   [/^paradise|^angel|^spring/, "paradise"],
   [/^offering/, "gate"],
   [/^sea|^tranquil/, "sea"],
+  [/^kings/, "kings"],
 ];
 const worldOfPainting = (id: string) => WORLD_OF.find(([re]) => re.test(id))?.[1] ?? null;
 
@@ -396,6 +397,7 @@ const HANG: Record<WorldId, { wall: V3; ink: "dark" | "light" }> = {
   paradise: { wall: [0.86, 0.78, 0.5], ink: "dark" },
   gate: { wall: [0.3, 0.26, 0.26], ink: "light" },
   sea: { wall: [0.28, 0.28, 0.22], ink: "light" },
+  kings: { wall: [0.2, 0.26, 0.27], ink: "light" },
 };
 
 const CANVAS_H = 18;
@@ -404,8 +406,10 @@ function CanvasStand({ p, x, z, y, yaw, world, lift }: { p: PaintingInfo; x: num
   const H = aspect > 1.25 ? CANVAS_H * 0.84 : CANVAS_H;
   const W = H * aspect;
   const m = /^(.*?)\s*\((\d{4})\)\s*$/.exec(p.title);
-  const title = m ? m[1] : p.title;
-  const year = m ? m[2] : "";
+  // "English name (Lithuanian name, 1909)": the label carries his own title
+  const lt = /\(([^()]+?),\s*(\d{4})\)\s*$/.exec(p.title);
+  const title = lt ? lt[1] : m ? m[1] : p.title;
+  const year = lt ? lt[2] : m ? m[2] : "";
   const b = useDisposable(() => {
     const state = { loaded: false };
     const map = new THREE.TextureLoader().load(p.file, () => (state.loaded = true));

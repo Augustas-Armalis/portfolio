@@ -76,6 +76,7 @@ const BEDS: Record<string, Bed> = {
   paradise: { wind: 0.6, tone: 760, birds: 0.8, water: 0.25, shore: 0, piano: false }, // day birds over still water
   gate: { wind: 0.85, tone: 480, birds: 0.9, water: 0, shore: 0, piano: false }, // the wooded mountain
   sea: { wind: 0.5, tone: 440, birds: 0, water: 1, shore: 0, piano: true }, // slow swells, no birds
+  kings: { wind: 0.3, tone: 200, birds: 0, water: 0, shore: 0, piano: true }, // the night wood: almost nothing, a low breath, a rare deep note
   // a place without a world of its own
   sky: { wind: 1, tone: 760, birds: 0, water: 0, shore: 0.3, piano: false },
   none: { wind: 0.35, tone: 260, birds: 0, water: 0, shore: 0, piano: false },
