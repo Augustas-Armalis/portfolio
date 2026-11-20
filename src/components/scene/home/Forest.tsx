@@ -45,7 +45,7 @@ export function makeHomeTreeMaterial(leaves: THREE.Texture) {
         wp.x += gust * 0.0013 * h * h;
         wp.z += cos(uTime * 0.55 + ph * 1.3) * 0.0008 * h * h;
         float fol = step(0.75, aFol);
-        float fl = sin(uTime * (1.5 + aLeaf.y * 2.0) + wp.y * 1.7 + ph + aLeaf.y * 40.0) * (1.0 - smoothstep(18.0, 70.0, length(wp - cameraPosition)));
+        float fl = sin(uTime * (1.5 + aLeaf.y * 2.0) + wp.y * 1.7 + ph + aLeaf.y * 40.0) * (1.0 - smoothstep(9.0, 30.0, length(wp - cameraPosition)));
         wp += fol * vec3(fl, 0.4 * sin(uTime * 1.7 + wp.x * 1.3), cos(uTime * 1.9 + wp.x * 1.7 + ph)) * 0.05;
         float ang = aLeaf.y * 6.2832 + fl * 0.06;
         vec2 cr = vec2(aCorner.x * cos(ang) - aCorner.y * sin(ang), aCorner.x * sin(ang) + aCorner.y * cos(ang));
@@ -77,9 +77,10 @@ export function makeHomeTreeMaterial(leaves: THREE.Texture) {
         if (fol > 0.5) {
           float cell = floor(vLeaf.x + 0.5);
           vec2 uv = (vec2(mod(cell, 2.0), floor(cell * 0.5)) + vec2(vUv.x, -vUv.y) * 0.5 + 0.5) * 0.5;
-          vec4 t = texture2D(uLeafTex, uv);
-          // (further off the sheet is read blurred and its leaves thin away: the cut is lowered to keep the crown whole)
-          float cut = mix(0.5, 0.24, smoothstep(25.0, 170.0, dist));
+          // further off the sheet is read blurred: a clump is then one rounded mass, not single leaves a pixel wide
+          // that sparkle as the tree moves (and the cut is lowered to keep the crown whole)
+          vec4 t = texture2D(uLeafTex, uv, mix(0.0, 1.6, smoothstep(10.0, 55.0, dist)));
+          float cut = mix(0.5, 0.26, smoothstep(14.0, 120.0, dist));
           if (t.a < cut) discard;
           // each clump is a small rounded form of its own
           vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);

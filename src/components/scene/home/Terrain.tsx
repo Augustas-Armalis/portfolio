@@ -208,11 +208,13 @@ export function makeLandMaterial() {
         // far off, the field is the tops of its grass, and reads as grass: fine strokes standing along the line of sight
         {
           float grassK = (1.0 - sandK) * (1.0 - onPath) * (1.0 - smoothstep(0.3, 0.8, woods));
-          vec2 vd = normalize(p - cameraPosition.xz + 1e-4);
-          float sc = 5.0 / (1.0 + dist * 0.035);
-          float streak = vnoise(vec2(dot(p, vec2(-vd.y, vd.x)) * sc * 2.6, dot(p, vd) * sc * 0.42));
-          float streak2 = vnoise(vec2(dot(p, vec2(-vd.y, vd.x)) * sc * 6.5 + 9.0, dot(p, vd) * sc * 1.1));
-          alb = mix(alb, fieldFar(alb, dist) * (1.0 + ((streak - 0.5) * 0.26 + (streak2 - 0.5) * 0.16) * smoothstep(14.0, 60.0, dist) * (1.0 - smoothstep(500.0, 1500.0, dist))), grassK);
+          // (strokes fixed in the land, lying with the wind: each scale fades before it is finer than a pixel)
+          const vec2 vd = vec2(0.864, 0.503);
+          vec2 sq = vec2(dot(p, vec2(-vd.y, vd.x)), dot(p, vd));
+          float streak = (vnoise(sq * vec2(0.9, 0.16)) - 0.5) * 0.26 * (1.0 - smoothstep(0.35, 1.3, fw));
+          float streak2 = (vnoise(sq * vec2(2.6, 0.45) + 9.0) - 0.5) * 0.16 * (1.0 - smoothstep(0.12, 0.5, fw));
+          float streak3 = (vnoise(sq * vec2(0.22, 0.05) + 3.0) - 0.5) * 0.2 * (1.0 - smoothstep(1.5, 6.0, fw));
+          alb = mix(alb, fieldFar(alb, dist) * (1.0 + (streak + streak2 + streak3) * smoothstep(10.0, 40.0, dist)), grassK);
         }
         float sh = deskShadow(vWorld) * treeShade(vWorld) * cloudShade(vWorld);
         float ao = deskAO(vWorld) * (1.0 - 0.34 * smoothstep(0.0, 0.07, vCav)) * (1.0 + 0.08 * smoothstep(0.0, 0.06, -vCav));
@@ -268,8 +270,8 @@ export function makeLandMaterial() {
           float sunPath = pow(max(dot(flatR, uSunDir), 0.0), lobeW);
           float moonPath = pow(max(dot(flatR, uMoonDir), 0.0), lobeW * 1.4);
           float gl = texture2D(uCloudTex, p / 2.6 + vec2(uTime * 0.03, -uTime * 0.02)).g * texture2D(uCloudTex, p / 1.1 - vec2(uTime * 0.025, uTime * 0.04)).b;
-          float spark = smoothstep(0.3, 0.46, gl) * (1.0 - smoothstep(0.15, 0.9, fw));
-          float glintN = pow(max(dot(r, uSunDir), 0.0), mix(600.0, 120.0, seaK)) * mix(18.0, 5.0, seaK) * keep1;
+          float spark = smoothstep(0.3, 0.5, gl) * (1.0 - smoothstep(0.03, 0.22, fw));
+          float glintN = pow(max(dot(r, uSunDir), 0.0), mix(240.0, 90.0, seaK)) * mix(7.0, 3.5, seaK) * (1.0 - smoothstep(0.1, 0.9, fw));
           mirror += sunC * (glintN + sunPath * (0.7 + spark * 7.0 + (b0 - 0.4) * 1.6 * keep2)) * sunVis * cloudShade(P);
           mirror += vec3(0.8, 0.86, 1.0) * moonPath * (0.5 + spark * 4.0 + (b0 - 0.4) * 1.2 * keep2) * uNight;
 

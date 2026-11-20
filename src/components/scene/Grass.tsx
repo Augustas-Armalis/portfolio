@@ -587,7 +587,7 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
             p = base + wd * h * (1.0 - cos(a)) / L + vec3(0.0, h * sin(a) / L, 0.0) + right * position.x * 0.0016;
           } else {
             vec3 tip = base + wd * h * (1.0 - cos(L)) / L + vec3(0.0, h * sin(L) / L, 0.0);
-            p = tip + (right * position.x + up * position.y * 0.82) * aHead.y * keep;
+            p = tip + (right * position.x + up * position.y * 0.82) * max(aHead.y, length(tip - cameraPosition) * 0.0014) * keep;
           }
           vUv = position.xy; vPart = position.z; vWorld = p; vRot = aHead.w;
           // each flower mostly its drift's colour, now and then another
