@@ -440,7 +440,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "fairy",
     place: "sky",
     air: AIR.fairy,
-    fog: [0.00016, 0.012],
+    fog: [0.0003, 0.017],
     terrain: {
       base: 4,
       sines: [
@@ -451,8 +451,10 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       ],
       bumps: [
         [0, -80, 210, 14],
-        [-300, 160, 140, 20],
-        [300, 240, 150, 16],
+        [-330, 120, 140, 20],
+        [330, 200, 150, 16],
+        // the headland the plane comes in over: the mountain is first seen from its height, across the valley
+        [10, 440, 185, 132],
       ],
       rim: [520, 900, -70],
     },
@@ -460,16 +462,16 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, -40],
     radius: 620,
     ceil: 380,
-    entry: { x: 0, z: 480, above: 26, yaw: 0 },
+    entry: { x: 0, z: 480, above: 30, yaw: 0 },
     gate: { x: -170, z: -460, above: 40, yaw: 0.3 },
     // in past the painting, then round the mountain the way its own road winds, climbing to the castle, and down again to the gate
     path: [
-      [0, 480, 26],
-      [8, 400, 17],
-      [-14, 320, 15],
-      [-80, 220, 30],
-      [-190, 100, 62],
-      [-232, -70, 104],
+      [0, 480, 30],
+      [8, 400, 24],
+      [-12, 320, 40],
+      [-76, 226, 98],
+      [-186, 104, 104],
+      [-232, -70, 118],
       [-150, -240, 150],
       [10, -292, 178],
       [160, -200, 196],
@@ -487,7 +489,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: 0, z: -72, r: 66, h: 205 },
       { x: 6, z: -90, r: 48, h: 322 },
     ],
-    canvases: [{ painting: "fairy-tale", x: 32, z: 328, yaw: -0.43 }],
+    canvases: [{ painting: "fairy-tale", x: 44, z: 372, yaw: -0.5 }],
   },
   paradise: {
     id: "paradise",

@@ -19,15 +19,15 @@ export const FAIRY_PAL: GroundPalette = { a: [0.06, 0.125, 0.04], b: [0.095, 0.1
 // The mountain, measured from its own foot: the wall's rim climbs fifty metres
 // a turn while it draws in, so rim after rim lies on the side of a cone.
 export const MOUNT = { x: 0, z: -80, turns: 2.25, batter: 4.5, th0: 0 };
-const WALL: V3 = [0.5, 0.17, 0.11];
-const WALL_LOW: V3 = [0.17, 0.06, 0.1];
-const RIM: V3 = [0.56, 0.3, 0.3];
-const GREEN: V3 = [0.1, 0.22, 0.06];
-const GREEN2: V3 = [0.3, 0.36, 0.09];
+const WALL: V3 = [0.33, 0.11, 0.09];
+const WALL_LOW: V3 = [0.1, 0.04, 0.085];
+const RIM: V3 = [0.5, 0.26, 0.24];
+const GREEN: V3 = [0.05, 0.12, 0.05];
+const GREEN2: V3 = [0.2, 0.25, 0.07];
 const ROAD: V3 = [0.6, 0.47, 0.34];
-const SLOPE: V3 = [0.4, 0.42, 0.11];
-const ROCK: V3 = [0.25, 0.13, 0.25];
-const ROCK_LIT: V3 = [0.84, 0.5, 0.46];
+const SLOPE: V3 = [0.24, 0.27, 0.08];
+const ROCK: V3 = [0.16, 0.085, 0.18];
+const ROCK_LIT: V3 = [0.7, 0.4, 0.38];
 
 const sm = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -262,13 +262,19 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const stone: V3 = [0.6, 0.42, 0.5];
     const stoneLit: V3 = [0.94, 0.68, 0.56];
     const spire: V3 = [0.92, 0.56, 0.3];
-    const tower = (x: number, y: number, z: number, rad: number, h: number, tall = 5) => {
-      k.add(new THREE.CylinderGeometry(rad * 0.88, rad, h, 10), P(x, y + h / 2, z), stone, { top: stoneLit, glow: 0.1 });
-      k.add(new THREE.ConeGeometry(rad * 1.18, rad * tall, 10), P(x, y + h + (rad * tall) / 2, z), [0.6, 0.26, 0.2], { top: spire, glow: 0.3 });
-      const rows = Math.max(1, Math.floor(h / 6));
-      for (let j = 0; j < 3; j++) {
-        const a = 0.5 + j * 1.05 + x * 0.3;
-        for (let q = 0; q < rows; q++) k.box(0.5, 1.5, 0.3, P(x + Math.cos(a) * rad * 0.95, y + 3 + q * 5.4, z + Math.sin(a) * rad * 0.95), [1, 0.8, 0.4], { glow: 2.4, rot: [0, -a + Math.PI / 2, 0] });
+    const tower = (x: number, y: number, z: number, rad0: number, h0: number, tall = 5) => {
+      // slim and tall: a shaft drawn in a little toward the top, a small cornice, a steep roof and a needle on it
+      const rad = rad0 * 0.72;
+      const h = h0 * 1.25;
+      k.add(new THREE.CylinderGeometry(rad * 0.8, rad, h, 12), P(x, y + h / 2, z), stone, { top: stoneLit, glow: 0.08 });
+      k.add(new THREE.CylinderGeometry(rad * 1.02, rad * 0.84, rad * 0.5, 12), P(x, y + h + rad * 0.25, z), stoneLit, { glow: 0.1 });
+      const rh = rad * (tall + 2.4);
+      k.add(new THREE.ConeGeometry(rad * 1.0, rh, 12), P(x, y + h + rad * 0.5 + rh / 2, z), [0.5, 0.2, 0.17], { top: spire, glow: 0.22 });
+      k.add(new THREE.CylinderGeometry(0.03, 0.09, rad * 2.4, 4), P(x, y + h + rad * 0.5 + rh + rad * 1.1, z), spire, { glow: 0.5 });
+      const rows = Math.max(1, Math.floor(h / 7));
+      for (let j = 0; j < 2; j++) {
+        const a = 0.9 + j * 1.3 + x * 0.3;
+        for (let q = 0; q < rows; q++) k.box(0.26, 0.9, 0.2, P(x + Math.cos(a) * rad * 0.9, y + 3.4 + q * 6.2, z + Math.sin(a) * rad * 0.9), [1, 0.8, 0.42], { glow: 2.0, rot: [0, -a + Math.PI / 2, 0] });
       }
     };
     // the shelf it stands on, where the road arrives
@@ -306,7 +312,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       [8, 304, -24, 1.2, 9],
     ] as const)
       tower(x, y, z, rad, h, 7);
-    glows.push({ p: P(0, 196, 26), size: 130, col: [1, 0.66, 0.3], k: 0.42 });
+    glows.push({ p: P(0, 196, 26), size: 150, col: [1, 0.66, 0.3], k: 0.55 });
     halos.push({ p: P(0, 250, 10), size: 8, col: [1, 0.86, 0.56], k: 0.5 }, { p: P(8, 323, -24), size: 9, col: [1, 0.86, 0.56], k: 0.6 }, { p: P(0, 166, 53), size: 9, col: [1, 0.8, 0.46], k: 0.5 });
 
     // thin cypresses and round bushes along the road
@@ -349,10 +355,10 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     }
     // a few lying low about the mountain's foot, as if it stood above them
     const puffs: Puff[] = [];
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 30; i++) {
       const a = r() * Math.PI * 2;
-      const d = 360 + r() * 220;
-      puffs.push({ p: [Math.cos(a) * d, 44 + r() * 18, MOUNT.z + Math.sin(a) * d], size: 70 + r() * 70, a: 0.6 });
+      const d = 230 + r() * 330;
+      puffs.push({ p: [Math.cos(a) * d, 26 + r() * 30, MOUNT.z + Math.sin(a) * d], size: 80 + r() * 90, a: 0.7 });
     }
     // the sun low to the right, in a fan of rays
     const air = def.air!;
