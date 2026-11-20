@@ -27,6 +27,7 @@ const WIND = /* glsl */ `
 
 export function makeHomeTreeMaterial(leaves: THREE.Texture) {
   return new THREE.ShaderMaterial({
+    alphaToCoverage: true,
     uniforms: { ...SKY_U, ...HOME_U, uLeafTex: { value: leaves } },
     vertexShader: /* glsl */ `
       attribute vec3 aCol; attribute float aFol; attribute vec2 aCorner; attribute vec4 aLeaf;
@@ -73,6 +74,7 @@ export function makeHomeTreeMaterial(leaves: THREE.Texture) {
         vec3 alb = vCol;
         float fol = step(0.75, vFol);
         float ao = 1.0;
+        float cov = 1.0;
         float dist = length(vWorld - cameraPosition);
         if (fol > 0.5) {
           float cell = floor(vLeaf.x + 0.5);
@@ -81,7 +83,10 @@ export function makeHomeTreeMaterial(leaves: THREE.Texture) {
           // that sparkle as the tree moves (and the cut is lowered to keep the crown whole)
           vec4 t = texture2D(uLeafTex, uv, mix(0.0, 1.6, smoothstep(10.0, 55.0, dist)));
           float cut = mix(0.5, 0.26, smoothstep(14.0, 120.0, dist));
-          if (t.a < cut) discard;
+          // the leaf's edge is a soft step one pixel wide, given to the lens's multisampling as coverage: a smooth
+          // outline that does not crawl (where there is no multisampling, in the lake's mirror, it is a plain cut)
+          cov = clamp((t.a - cut) / max(fwidth(t.a) * 1.3, 0.0001) + 0.5, 0.0, 1.0);
+          if (cov < 0.1) discard;
           // each clump is a small rounded form of its own
           vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
           vec3 U = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
@@ -118,7 +123,7 @@ export function makeHomeTreeMaterial(leaves: THREE.Texture) {
         // the foot sinks into the grass
         col *= mix(0.5, 1.0, smoothstep(0.0, 1.3, vH));
         col = homeAir(col, vWorld);
-        gl_FragColor = vec4(col, 1.0);
+        gl_FragColor = vec4(col, cov);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -128,6 +133,7 @@ export function makeHomeTreeMaterial(leaves: THREE.Texture) {
 // the far woods: one card a tree
 function makeFarMaterial(sheet: THREE.Texture) {
   return new THREE.ShaderMaterial({
+    alphaToCoverage: true,
     uniforms: { ...SKY_U, ...HOME_U, uFarTex: { value: sheet } },
     vertexShader: /* glsl */ `
       attribute vec3 aRoot; attribute vec4 aDim; attribute vec3 aLo; attribute vec3 aHi;
@@ -157,7 +163,8 @@ function makeFarMaterial(sheet: THREE.Texture) {
         float cell = floor(vCell + 0.5);
         vec2 uv = (vec2(mod(cell, 2.0), floor(cell * 0.5)) + vec2(vUv.x, 1.0 - vUv.y) * 0.996 + 0.002) * 0.5;
         vec4 t = texture2D(uFarTex, uv);
-        if (t.a < 0.45) discard;
+        float cov = clamp((t.a - 0.45) / max(fwidth(t.a) * 1.3, 0.0001) + 0.5, 0.0, 1.0);
+        if (cov < 0.1) discard;
         float leafy = step(0.5, t.b);
         float nx = t.r * 2.0 - 1.0;
         float up = t.g;
@@ -180,7 +187,7 @@ function makeFarMaterial(sheet: THREE.Texture) {
         col += alb * vec3(1.15, 1.0, 0.45) * uKeyCol * back * 0.4 * leafy * sunUp * cs * smoothstep(0.4, 0.9, up);
         col *= mix(0.5, 1.0, smoothstep(0.0, 0.12, vUv.y));
         col = homeAir(col, vWorld);
-        gl_FragColor = vec4(col, 1.0);
+        gl_FragColor = vec4(col, cov);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,

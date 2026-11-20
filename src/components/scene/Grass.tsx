@@ -539,6 +539,7 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
     g.instanceCount = count;
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
     const m = new THREE.ShaderMaterial({
+      alphaToCoverage: true,
       side: THREE.DoubleSide,
       uniforms: {
         ...SKY_U,
@@ -604,6 +605,7 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
         ${GLSL_HOME_AIR}
         void main(){
           vec3 alb;
+          float cov = 1.0;
           if (vPart > 0.5) alb = vec3(0.1, 0.17, 0.045);
           else {
             float r = length(vUv);
@@ -611,13 +613,15 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
             // five petals, or a daisy's many
             float petals = vKind > 0.6 ? 11.0 : 5.0;
             float edge = (vKind > 0.6 ? 0.78 : 0.62) + (vKind > 0.6 ? 0.2 : 0.32) * cos(petals * a);
-            if (r > edge) discard;
+            // (the petal's edge as coverage, a pixel wide: smooth, and still as the flower nods)
+            cov = clamp((edge - r) / max(fwidth(r) * 1.3, 0.0001) + 0.5, 0.0, 1.0);
+            if (cov < 0.1) discard;
             alb = mix(vHue * (0.72 + 0.28 * r / edge), vec3(0.95, 0.68, 0.12), 1.0 - smoothstep(0.16, 0.26, r));
           }
           float sh = deskShadow(vWorld) * vShade;
           vec3 col = alb * (uSkyCol * 0.72 * deskAO(vWorld) + uKeyCol * 0.6 * sh * smoothstep(-0.02, 0.08, uKeyDir.y));
           col = homeAir(col, vWorld);
-          gl_FragColor = vec4(col, 1.0);
+          gl_FragColor = vec4(col, cov);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,
