@@ -197,7 +197,7 @@ export function makeLandMaterial() {
             float keepC = 1.0 - smoothstep(0.06, 0.2, fw);
             vec3 stone = vec3(0.33, 0.31, 0.28) * (0.75 + 0.45 * hash12(ci));
             vec3 earthS = vec3(0.3, 0.25, 0.18) * (0.85 + 0.3 * vnoise(p * 0.7));
-            vec3 sc = mix(earthS, mix(earthS * 0.8, stone, cob), keepC * 0.85);
+            vec3 sc = mix(earthS, mix(earthS * 0.85, stone * 0.9, cob), keepC * 0.5);
             sc = mix(sc, (earthS + stone) * 0.5, 1.0 - keepC);
             float edge = st * (1.0 - smoothstep(0.35, 0.75, vnoise(p * 1.4) * 0.5 + (1.0 - st)));
             alb = mix(alb, sc, clamp(st * 1.15 - 0.1 + edge * 0.0, 0.0, 1.0));
