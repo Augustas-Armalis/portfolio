@@ -111,6 +111,8 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
           // the rim: thinning away through a grain, and broken by the billows
           float facing = abs(dot(normalize(vN), V));
           float edge = smoothstep(0.0, 0.2, facing + (b0 - 0.5) * 0.2 * fine);
+          // a cloud the eye is about to enter thins to nothing round it (the white it becomes is the air's)
+          edge *= smoothstep(140.0, 520.0, dist + (b0 - 0.5) * 120.0);
           float grain = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
           if (edge < grain * 0.985 + 0.015) discard;
 

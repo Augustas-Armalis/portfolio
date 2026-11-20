@@ -124,7 +124,7 @@ export const HOME_U = {
   uCrownMap: { value: null as THREE.Texture | null },
   uCloudTex: { value: null as THREE.Texture | null },
   // haze at the ground (per metre), its falloff with height, the cloud cover's threshold
-  uAirK: { value: new THREE.Vector4(0.00105, 0.0045, 0.56, 0) },
+  uAirK: { value: new THREE.Vector4(0.00092, 0.0045, 0.56, 0) },
 };
 
 // The air of the home world: haze that lies in the low land and thins with
@@ -142,7 +142,11 @@ float homeAirAmt(vec3 wpos){
   float od = dist * (uAirK.x * exp(-max(cameraPosition.y, 0.0) * b) * integ + uAirK.x * 0.06 + uMist);
   return clamp(1.0 - exp(-od), 0.0, 1.0);
 }
-vec3 homeAirCol(vec3 d){ return skyBase(normalize(vec3(d.x, max(d.y, 0.0) * 0.55 + 0.02, d.z))); }
+// (looked down into from above, the air is not the horizon's own blaze but something cooler and quieter)
+vec3 homeAirCol(vec3 d){
+  vec3 c = skyBase(normalize(vec3(d.x, max(d.y, 0.0) * 0.55 + 0.02, d.z)));
+  return mix(c, mix(uUpper, uHorizon, 0.4) * 0.92, smoothstep(0.0, 0.45, -d.y) * 0.72);
+}
 // thin air is blue and adds little; only deep air is the pale horizon itself. So the middle distance keeps its
 // colour and its darks, and it is the far land that goes into the sky.
 vec3 homeAir(vec3 col, vec3 wpos){

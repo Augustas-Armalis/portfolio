@@ -131,6 +131,13 @@ const LOADER_CSS = `
 .ld-type{transition:opacity .7s cubic-bezier(.23,1,.32,1),filter .7s cubic-bezier(.23,1,.32,1),transform .7s cubic-bezier(.23,1,.32,1)}
 @keyframes ld-breathe{0%,100%{opacity:.42}50%{opacity:.9}}
 .ld-ask{animation:ld-breathe 2.4s cubic-bezier(.45,0,.55,1) infinite}
+@keyframes ld-twinkle{0%,100%{opacity:.35}50%{opacity:.9}}
+.ld-stars{position:absolute;left:50%;bottom:0;width:1px;height:1px;border-radius:50%;background:transparent;opacity:0;animation:ld-in 2.4s .3s cubic-bezier(.23,1,.32,1) forwards;transition:opacity .5s linear}
+.ld-stars::before,.ld-stars::after{content:"";position:absolute;left:0;top:0;width:1px;height:1px;border-radius:50%}
+.ld-stars::before{box-shadow:-212px -96px 0 0 rgb(255 255 255/.5),-148px -41px 0 0 rgb(255 255 255/.35),-97px -133px 0 0 rgb(255 255 255/.45),-31px -171px 0 0 rgb(255 255 255/.3),58px -118px 0 0 rgb(255 255 255/.5),126px -63px 0 0 rgb(255 255 255/.3),171px -152px 0 0 rgb(255 255 255/.45),231px -87px 0 0 rgb(255 255 255/.35),-256px -167px 0 0 rgb(255 255 255/.3),12px -64px 0 0 rgb(255 255 255/.25);animation:ld-twinkle 3.7s cubic-bezier(.45,0,.55,1) infinite}
+.ld-stars::after{box-shadow:-183px -148px 0 .5px rgb(255 240 215/.55),-64px -78px 0 0 rgb(255 255 255/.3),89px -176px 0 .5px rgb(225 235 255/.5),204px -121px 0 0 rgb(255 255 255/.3),-119px -188px 0 0 rgb(255 255 255/.35),151px -29px 0 0 rgb(255 255 255/.25),-232px -52px 0 0 rgb(255 255 255/.3);animation:ld-twinkle 5.3s 1.1s cubic-bezier(.45,0,.55,1) infinite}
+@keyframes ld-in{to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.ld-stars::before,.ld-stars::after,.ld-ask{animation:none}}
 `;
 
 function localTime() {
@@ -149,12 +156,30 @@ export function Preloader({ hideForReducedMotion = false }: { hideForReducedMoti
   const sun = useRef<HTMLDivElement>(null);
   const halo = useRef<HTMLDivElement>(null);
   const taken = useRef<HTMLElement | null>(null);
+  const num = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const f = () => bump((n) => n + 1);
     subs.add(f);
     setTime(localTime());
     loader.set(0.14); // hydrated
     return () => void subs.delete(f);
+  }, []);
+  // the count under the line: real progress, followed a little behind so it runs instead of jumping
+  useEffect(() => {
+    let raf = 0;
+    let shown = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const want = loader.progress * 100;
+      shown += (want - shown) * (1 - Math.exp(-dt * (want >= 100 ? 9 : 4.5)));
+      if (want - shown < 0.4) shown = want;
+      if (num.current) num.current.textContent = String(Math.round(shown)).padStart(2, "0");
+      if (loader.phase === "load") raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, []);
   // the canvas matches its line to this one, to the pixel (it measures it while the loader is up)
   useLayoutEffect(() => {
@@ -229,6 +254,8 @@ export function Preloader({ hideForReducedMotion = false }: { hideForReducedMoti
     >
       <style dangerouslySetInnerHTML={{ __html: LOADER_CSS }} />
       <div className="relative" style={{ width: "min(360px, 64vw)", height: 1 }}>
+        {/* a few faint stars over the horizon, before any light */}
+        <div className="ld-stars max-md:hidden" style={out ? { opacity: 0, animation: "none" } : undefined} aria-hidden />
         {/* the half-sun, rising out of the line (it is clipped at the horizon, a breath above it, as in the mark) */}
         <div className="ld-sky pointer-events-none absolute bottom-[7px] left-1/2 h-[26px] w-[52px] -translate-x-1/2 overflow-hidden" style={out ? { opacity: 0, transform: "scale(1.5)", filter: "blur(6px)" } : undefined} aria-hidden>
           <div ref={sun} className="ld-sun h-[52px] w-[52px] rounded-full bg-white" />
@@ -247,6 +274,10 @@ export function Preloader({ hideForReducedMotion = false }: { hideForReducedMoti
         {/* the line is across: one click and the world arrives (with its sound) */}
         <div className="absolute inset-x-0 top-[44px] text-center text-[12px] font-medium text-white" style={{ opacity: loader.prompt && !out ? 1 : 0, transition: "opacity .8s cubic-bezier(.23,1,.32,1)" }} aria-live="polite">
           {loader.prompt && <span className="ld-ask">{loader.prompt}</span>}
+        </div>
+        {/* how far along it is, in the same place, until the word takes over */}
+        <div className="absolute inset-x-0 top-[44px] text-center text-[12px] font-medium tabular-nums text-white/45" style={{ opacity: loader.prompt || out ? 0 : 1, transition: "opacity .5s cubic-bezier(.23,1,.32,1)" }} aria-hidden>
+          <span ref={num}>00</span>
         </div>
         <div ref={line} className="relative h-px">
           <div className="absolute inset-0 bg-white/[0.14]" style={{ opacity: out ? 0 : 1, transition: "opacity .28s linear" }} />

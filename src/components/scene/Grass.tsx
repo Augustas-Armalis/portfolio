@@ -302,6 +302,7 @@ export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boole
   const walk = useRef<THREE.Mesh>(null);
   const innerOn = useRef(0);
   const walkOn = useRef(0);
+  const warmed = useRef(0);
   useEffect(() => () => geos.forEach((g) => g.dispose()), [geos]);
   useEffect(() => () => mats.forEach((m) => m.dispose()), [mats]);
   useFrame(({ camera }, dt) => {
@@ -320,10 +321,12 @@ export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boole
       m.uniforms.uInnerOn.value = innerOn.current;
       m.uniforms.uWalkOn.value = walkOn.current;
     });
-    if (walk.current) walk.current.visible = walkOn.current > 0;
+    if (walk.current) walk.current.visible = warmed.current < 12 || walkOn.current > 0;
     // the fine blades round the desk aren't drawn once the plane has left them behind
-    if (near.current) near.current.visible = d2 < 70 * 70;
-    if (fine.current) fine.current.visible = innerOn.current > 0;
+    // (for the first frames every tile is drawn, blades at nothing: their shaders are made behind the loader, not mid-descent)
+    const warm = warmed.current++ < 12;
+    if (near.current) near.current.visible = warm || d2 < 70 * 70;
+    if (fine.current) fine.current.visible = warm || innerOn.current > 0;
   });
   return (
     <>

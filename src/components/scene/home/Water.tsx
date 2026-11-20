@@ -39,6 +39,7 @@ export function LakeMirror({ quality }: { quality: number }) {
     [],
   );
   const tick = useRef(0);
+  const warmed = useRef(0);
   useEffect(() => {
     REFLECT_U.uReflTex.value = rt.texture;
     return () => {
@@ -55,7 +56,8 @@ export function LakeMirror({ quality }: { quality: number }) {
       T.frustum.setFromProjectionMatrix(T.m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
       see = T.frustum.intersectsSphere(T.sphere);
     }
-    if (!see) {
+    // (drawn for the first frames whatever: its target and state are made behind the loader)
+    if (!see && warmed.current++ > 6) {
       REFLECT_U.uReflOn.value = 0;
       return;
     }

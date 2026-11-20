@@ -99,7 +99,8 @@ export function ContactShadows({ strength = 1 }: { strength?: number }) {
           if ((m as THREE.Mesh).isMesh && m.name !== "blob") m.layers.enable(CONTACT_LAYER);
         });
       });
-    if (camera.position.lengthSq() > 40 * 40) return;
+    // (not while the eye is far off; but the first frames always, so its small shaders are made behind the loader)
+    if (camera.position.lengthSq() > 40 * 40 && mark.current > 12) return;
     const prev = gl.getRenderTarget();
     const auto = gl.shadowMap.autoUpdate;
     const over = scene.overrideMaterial;

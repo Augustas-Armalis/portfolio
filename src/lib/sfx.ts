@@ -210,24 +210,39 @@ function air(ctx: AudioContext, dest: AudioNode, dur: number, vol: number) {
   track("sfx", s, "air");
 }
 
-// Something heavy set down on a wooden desk: a low body (a sine falling from about 90 Hz to 36 Hz, the
-// desk's own boom), a short dull knock of filtered noise on top, and for the heaviest a deeper sub under both.
-// `w` 0..1 is how heavy. Kept quiet: it is felt more than heard.
-function thud(ctx: AudioContext, dest: AudioNode, w: number) {
-  const t = ctx.currentTime + 0.003;
-  const v = 0.32 * Math.max(0.15, Math.min(1, w));
+// Something with weight set down on a solid oak top, heard from a pace away. Three things, all soft:
+//   the body: a sine falling from about 78 Hz to 40 Hz, with a rounded onset (no click), the desk's own boom;
+//   the wood: a short hollow "tok" a little over an octave above it (150 to 190 Hz, falling a touch), the part a
+//     laptop's small speakers can actually give, gone in a tenth of a second;
+//   the touch: a dull breath of low-passed noise for the first few hundredths, the felt of the thing meeting the top.
+// `w` 0..1 is how heavy: heavier is lower, longer and a little louder. Kept quiet: it is felt more than heard.
+// (Synthesised until there are recordings: see the home scene's notes for the ones to record.)
+function thud(ctx: BaseAudioContext, dest: AudioNode, w: number, at?: number) {
+  const t = at ?? ctx.currentTime + 0.003;
+  const k = Math.max(0.15, Math.min(1, w));
+  const v = 0.15 * (0.45 + 0.55 * k);
   const body = ctx.createOscillator();
   body.type = "sine";
-  body.frequency.setValueAtTime(70 + 30 * w, t);
-  body.frequency.exponentialRampToValueAtTime(34 + 6 * w, t + 0.24 + 0.1 * w);
+  body.frequency.setValueAtTime(84 - 10 * k, t);
+  body.frequency.exponentialRampToValueAtTime(43 - 5 * k, t + 0.2 + 0.1 * k);
   const bg = ctx.createGain();
   bg.gain.setValueAtTime(0.0001, t);
-  bg.gain.exponentialRampToValueAtTime(v, t + 0.006);
-  bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.3 + 0.25 * w);
+  bg.gain.exponentialRampToValueAtTime(v, t + 0.014);
+  bg.gain.setTargetAtTime(0.0001, t + 0.03, 0.05 + 0.04 * k);
   body.connect(bg).connect(dest);
   body.start(t);
-  body.stop(t + 0.62);
-  track("sfx", body, "thud");
+  body.stop(t + 0.9);
+  const wood = ctx.createOscillator();
+  wood.type = "sine";
+  wood.frequency.setValueAtTime(196 - 40 * k, t);
+  wood.frequency.exponentialRampToValueAtTime(150 - 30 * k, t + 0.09);
+  const wg = ctx.createGain();
+  wg.gain.setValueAtTime(0.0001, t);
+  wg.gain.exponentialRampToValueAtTime(v * 1.05, t + 0.007);
+  wg.gain.setTargetAtTime(0.0001, t + 0.014, 0.04 + 0.014 * k);
+  wood.connect(wg).connect(dest);
+  wood.start(t);
+  wood.stop(t + 0.5);
   if (!noise) {
     noise = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = noise.getChannelData(0);
@@ -237,22 +252,40 @@ function thud(ctx: AudioContext, dest: AudioNode, w: number) {
       d[i] = last;
     }
   }
-  const knock = ctx.createBufferSource();
-  knock.buffer = noise;
+  const touch = ctx.createBufferSource();
+  touch.buffer = noise;
   const lp = ctx.createBiquadFilter();
   lp.type = "lowpass";
-  lp.Q.value = 0.7;
-  lp.frequency.setValueAtTime(1100 - 500 * w, t);
-  lp.frequency.exponentialRampToValueAtTime(140, t + 0.09);
+  lp.Q.value = 0.5;
+  lp.frequency.setValueAtTime(620 - 220 * k, t);
+  lp.frequency.exponentialRampToValueAtTime(150, t + 0.07);
   const kg = ctx.createGain();
   kg.gain.setValueAtTime(0.0001, t);
-  kg.gain.exponentialRampToValueAtTime(v * 0.9, t + 0.003);
-  kg.gain.exponentialRampToValueAtTime(0.0001, t + 0.1 + 0.05 * w);
-  knock.connect(lp).connect(kg).connect(dest);
-  knock.start(t, Math.random() * 1.5);
-  knock.stop(t + 0.2);
-  track("sfx", knock, "thud");
+  kg.gain.exponentialRampToValueAtTime(v * 1.1, t + 0.005);
+  kg.gain.setTargetAtTime(0.0001, t + 0.008, 0.022 + 0.012 * k);
+  touch.connect(lp).connect(kg).connect(dest);
+  touch.start(t, Math.random() * 1.5);
+  touch.stop(t + 0.3);
+  // (an offline render, for measuring, has nothing to track)
+  if (typeof AudioContext !== "undefined" && ctx instanceof AudioContext) {
+    track("sfx", body, "thud");
+    track("sfx", wood, "thud");
+    track("sfx", touch, "thud");
+  }
 }
+// dev: the thud rendered offline, for measuring (no sound is played)
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production")
+  Object.assign(window, {
+    __thud: async (w: number) => {
+      const off = new OfflineAudioContext(1, 48000, 48000);
+      const keep = noise;
+      noise = null;
+      thud(off, off.destination, w, 0.01);
+      const buf = await off.startRendering();
+      noise = keep;
+      return buf.getChannelData(0);
+    },
+  });
 
 const lastAt = new Map<Sfx, number>();
 

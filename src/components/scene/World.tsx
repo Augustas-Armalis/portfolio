@@ -148,6 +148,8 @@ export function makeSkyMaterial(env = false) {
           col += uGlow * (pow(max(sd, 0.0), 900.0) * 5.0 + pow(max(sd, 0.0), 160.0) * 0.8) * sunVis * uSkyFx.z;
           // arrival mist
           col = mix(col, uHorizon * 1.05 + uSkyCol * 0.2, clamp(uMist * 3.0, 0.0, 0.9) * (1.0 - smoothstep(0.1, 0.7, h)));
+          // inside a cloud of the home sky there is no sky at all: the same white all round
+          col = mix(col, uHorizon * 1.05 + uSkyCol * 0.2, clamp(uMist * 45.0 - 0.08, 0.0, 1.0) * uCumulus);
         #endif
         col += (hash12(gl_FragCoord.xy + fract(uTime)) - 0.5) / 255.0;
         gl_FragColor = vec4(col, 1.0);

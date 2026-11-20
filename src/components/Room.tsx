@@ -22,6 +22,7 @@ import { Flowers, Grass } from "./scene/Grass";
 import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone, setBlobStrength } from "./scene/models";
 import { ContactShadows } from "./scene/home/Contact";
 import { Clouds } from "./scene/home/Clouds";
+import { Butterflies, Skein } from "./scene/home/Life";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
 import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
@@ -75,21 +76,60 @@ type Input = { dx: number; dy: number; zoom: number; dragging: boolean; last: nu
 
 const DUR = { approach: 1.55, push: 1.05, hold: 0.12, wake: 2.3, wakeDelay: 0.35, focus: 1.15 };
 const FOG = 0.016;
-// The arrival, in seconds from the moment the loader's line becomes the horizon.
-// It is short and physical: out of the dark the camera drops in, the display comes down out of the air and
-// lands with weight (a low thud, the frame shakes, dust), then each thing on the desk slams into its place in
-// turn, the paper plane last and lightest, and only then does the screen light up.
-const ARRIVE = 2.8; // the camera reaches its home pose
-const SETTLE = 1.62; // the first of the things on the desk lands
-const SLAM_DISPLAY = 1.22; // the display lands
-const SCREEN_ON = 2.35; // the lock screen begins to glow
-// On a phone the arrival is shorter and plainer: a quicker lifting of the dark, a descent of under four seconds,
-// and everything already in its place on the desk when it comes into view.
-const ARRIVE_PHONE = 3.6;
+// The arrival, in seconds from the moment the loader's line becomes the horizon. One unbroken descent:
+// the dark lifts on a view from a kilometre up, over the sea, level with the horizon (the loader's line IS that
+// horizon), the clouds below and the mountains' heads beyond them; the eye sinks into the cloud (white for a
+// breath), comes out under it over glittering water with the coast rushing up, crosses the beach, the meadows
+// and the wood, and comes down the last of the field to the desk, slowing all the way. Then the display comes
+// down out of the air and lands with weight (a low thud, the frame shakes, dust), each thing on the desk slams
+// into its place in turn, the paper plane last and lightest, and only then does the screen light up.
+const ARRIVE = 6.4; // the camera reaches its home pose
+const SETTLE = ARRIVE - 1.18; // the first of the things on the desk lands
+const SLAM_DISPLAY = ARRIVE - 1.58; // the display lands
+const SCREEN_ON = ARRIVE - 0.45; // the lock screen begins to glow
+// On a phone the descent is shorter, and everything is already in its place on the desk when it comes into view.
+const ARRIVE_PHONE = 4.6;
 const LOADER_RATE_PHONE = 1.5;
-// Where the camera begins, in the orbit rig's own coordinates around the desk:
-// far out and high in the mist, level with the horizon.
-const START = { r: 74, pol: 1.2, az: -0.1, mist: 0.045, fov: 9 };
+// Where the camera begins, in the orbit rig's own coordinates around the desk: out over the sea to the south,
+// a kilometre up, above the lower clouds.
+const START = { r: 2300, pol: 1.02, az: 0.1, fov: 9 };
+// the cloud it comes down through: how thick the white is at a height (per metre); nothing of it up where it begins
+const cloudMist = (y: number) => 0.034 * Math.exp(-(((y - 840) / 105) ** 2));
+// How the descent is paced: the share of the way down (in the logarithm of the distance, so the desk grows at an
+// even rate) reached at each share of the time. Slow above the clouds while the dark lifts; through the cloud;
+// a long second over the sea and the coast; the meadows and the wood; and a long slowing to the desk.
+const PACE: [number, number][] = [
+  [0, 0],
+  [0.15, 0.014],
+  [0.25, 0.045],
+  [0.33, 0.085],
+  [0.42, 0.2],
+  [0.56, 0.42],
+  [0.69, 0.67],
+  [0.81, 0.87],
+  [0.92, 0.975],
+  [1, 1],
+];
+// (a monotone cubic through those points: no overshoot, and it comes to rest at the end)
+const paceM = (() => {
+  const n = PACE.length;
+  const d = PACE.slice(1).map((p, i) => (p[1] - PACE[i][1]) / (p[0] - PACE[i][0]));
+  const m = PACE.map((_, i) => (i === 0 ? d[0] * 0.5 : i === n - 1 ? 0 : d[i - 1] * d[i] <= 0 ? 0 : (2 * d[i - 1] * d[i]) / (d[i - 1] + d[i])));
+  return m;
+})();
+function pace(k: number) {
+  if (k <= 0) return 0;
+  if (k >= 1) return 1;
+  let i = 0;
+  while (i < PACE.length - 2 && k > PACE[i + 1][0]) i++;
+  const [x0, y0] = PACE[i];
+  const [x1, y1] = PACE[i + 1];
+  const h = x1 - x0;
+  const t = (k - x0) / h;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * y0 + (t3 - 2 * t2 + t) * h * paceM[i] + (-2 * t3 + 3 * t2) * y1 + (t3 - t2) * h * paceM[i + 1];
+}
 if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __start0: START });
 
 // What three's default loaders are doing (textures, HDRIs), for the loader's line.
@@ -1084,13 +1124,14 @@ function Scene({
     const at = introAt.current;
     if (!instant) {
       const k = at === null ? 0 : clamp01((now - at) / ARR);
-      const u = k * k * k * (k * (k * 6 - 15) + 10);
+      const u = pace(k);
       if (u < 1) {
         const R = Math.exp(THREE.MathUtils.lerp(Math.log(START.r), Math.log(rad), u));
         const P = THREE.MathUtils.lerp(START.pol, pol, u);
         const A = THREE.MathUtils.lerp(START.az, az, u);
         v.pos.set(tx + R * Math.sin(P) * Math.sin(A), ty + R * Math.cos(P), tz + R * Math.sin(P) * Math.cos(A));
-        const el = clamp01((k - 0.07) / 0.46);
+        // level above the clouds; the eye tips down inside the cloud, and comes out of it looking at the coast
+        const el = clamp01((k - 0.14) / 0.24);
         const le = el * el * el * (el * (el * 6 - 15) + 10);
         const dx = tx - v.pos.x;
         const dy = ty - v.pos.y;
@@ -1274,7 +1315,7 @@ function Scene({
     }
     // arrival mist thins out, continuously, as the camera comes down
     const at = introAt.current;
-    const mist = instant ? 0 : at === null ? START.mist : START.mist * (1 - smooth(clamp01((now - at) / (ARR * 0.8))));
+    const mist = instant || (at !== null && now - at > ARR) ? 0 : cloudMist(cam.position.y);
     SKY_U.uMist.value = Math.max(mist, voyage.mist);
     // the plain three fog (the desk and its things) keeps pace with the shader fog
     fog.far = Math.min(176, 3 / (FOG + mist));
@@ -1555,6 +1596,8 @@ function Scene({
         <Grass mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} density={q.grass} />
         <Flowers mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} />
         <Birds />
+        {q.effects > 0.2 && <Butterflies count={mobile ? 20 : 46} />}
+        <Skein />
       </HomeWorld>
       {/* the path of light, the gate, and whichever painted world the plane is in */}
       <Worlds mobile={mobile} effects={q.effects} trees={q.trees} far={q.far} grass={q.grass} reduced={reduced} />
@@ -1703,7 +1746,8 @@ function SkyEnvironment({ envSky }: { envSky: THREE.Material }) {
 function SkyLife({ reduced, amount }: { reduced: boolean; amount: number }) {
   const [night, setNight] = useState(false);
   useFrame(() => {
-    const n = SKY_U.uNight.value > 0.5;
+    // (the fireflies come out with the dusk, before the night has fully fallen)
+    const n = SKY_U.uNight.value > 0.22;
     if (n !== night) setNight(n);
   });
   // keyed by their number too: a change of graphics quality remakes them whole (drei's Sparkles left with a new count draws nothing)
