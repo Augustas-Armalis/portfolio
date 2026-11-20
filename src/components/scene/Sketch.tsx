@@ -60,22 +60,35 @@ function paperCanvas() {
 
 export type SketchApi = { clear: () => void; save: () => void };
 
+// The page (and whether it has been drawn on) outlives the book's own mounting: the scene is built afresh when
+// the layout changes between the wide desk and the phone's (a window dragged narrow, a tablet turned), and the
+// drawing must still be there. It lasts as long as the page in the browser does: a reload starts clean.
+let PAGE: { canvas: HTMLCanvasElement; base: HTMLCanvasElement; kept: boolean } | null = null;
+
 export function SketchbookLive({ open, shift = 0, apiRef }: { open: boolean; shift?: number; apiRef: MutableRefObject<SketchApi | null> }) {
   const m = getMats();
   const body = useRef<THREE.Group>(null);
   const cover = useRef<THREE.Group>(null);
   const pencil = useRef<THREE.Group>(null);
-  const k = useRef(0);
-  const lamp = useRef(0);
   // the page has been drawn on: the book stays open when it is put down
-  const [kept, setKept] = useState(false);
+  const [kept, keep] = useState(() => !!PAGE?.kept);
+  const setKept = (v: boolean) => {
+    if (PAGE) PAGE.kept = v;
+    keep(v);
+  };
+  const k = useRef(kept ? 1 : 0);
+  const lamp = useRef(0);
   const lying = open || kept;
   const { canvas, base, tex, mat } = useMemo(() => {
-    const canvas = paperCanvas();
-    const base = document.createElement("canvas");
-    base.width = CW;
-    base.height = CH;
-    base.getContext("2d")!.drawImage(canvas, 0, 0);
+    if (!PAGE) {
+      const canvas = paperCanvas();
+      const base = document.createElement("canvas");
+      base.width = CW;
+      base.height = CH;
+      base.getContext("2d")!.drawImage(canvas, 0, 0);
+      PAGE = { canvas, base, kept: false };
+    }
+    const { canvas, base } = PAGE;
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;

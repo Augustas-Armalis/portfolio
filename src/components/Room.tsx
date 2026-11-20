@@ -59,7 +59,7 @@ import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/
 import { Forest } from "./scene/home/Forest";
 import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
 import { makeArrival } from "./scene/worlds/arrive";
-import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, useWorld, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
+import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, swapWorld, useWorld, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
 import { Sky, makeSkyMaterial } from "./scene/World";
 import { HomeMountains } from "./scene/home/Mountains";
 import { Land } from "./scene/home/Terrain";
@@ -1904,6 +1904,29 @@ export default function Room({
   useEffect(() => ambienceScene({ active }), [active]);
   // a phone hears only a very soft wind: no birds, no water, no piano notes
   useEffect(() => ambienceScene({ minimal: isMobile }), [isMobile]);
+  // The layout changes between the wide desk and the phone's (a window dragged narrow, a tablet turned): the scene
+  // is built afresh for it and starts at the desk. Whatever was in the hand is put down with it, and a flight is
+  // over; otherwise the controls of a mode stayed up over a scene that was no longer in it, and a flight left the
+  // desk standing in a world that was not drawn.
+  const layout = useRef(isMobile);
+  useEffect(() => {
+    if (layout.current === isMobile) return;
+    layout.current = isMobile;
+    if (modeRef.current === "plane") flightMusicStop();
+    if (modeRef.current === "music") stopOwner("headphones", 0.6);
+    gyroStop();
+    setFlight({ gyro: false });
+    Object.assign(voyage, { flying: false, landing: false, homing: false, next: null, phase: "open", veil: 0, mist: 0, warm: 0, assist: 0, onEnter: null, onHome: null });
+    swapWorld("home");
+    postCtl.flight.k = 0;
+    input.current.keys.clear();
+    setStage("idle");
+    setLiveSky(true);
+    setTimeOverride(null);
+    setHours(clockHours());
+    setNav("orbit");
+    setMode("none");
+  }, [isMobile]);
   // the room going away (or being rebuilt by a hot reload) takes its music with it
   useEffect(
     () => () => {
