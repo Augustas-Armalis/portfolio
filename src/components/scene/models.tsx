@@ -262,16 +262,32 @@ function dial(r: number, h: number, ridges: number, depth = 0.0004) {
   return merge([put(ridgedRing(r, h - cap, ridges, depth), 0, (h - cap) / 2, 0), put(cyl(r - 0.0013, r - 0.0002, cap, 36), 0, h - cap / 2, 0)]);
 }
 
+// With real contact shadows on the desk (scene/home/Contact) these soft patches are only a faint broad shade
+// under each thing; without them (a low graphics setting) they are the whole of its grounding.
+const blobs = new Set<{ mat: THREE.Material; opacity: number }>();
+let blobK = 1;
+export function setBlobStrength(k: number) {
+  blobK = k;
+  blobs.forEach((b) => (b.mat.opacity = b.opacity * k));
+}
 function Blob({ w, d, opacity = 0.5, y = 0.0006 }: { w: number; d: number; opacity?: number; y?: number }) {
   const m = getMats();
   const mat = useMemo(() => {
     const c = m.blob.clone();
-    c.opacity = opacity;
+    c.opacity = opacity * blobK;
     return c;
   }, [m, opacity]);
-  useEffect(() => () => mat.dispose(), [mat]);
+  useEffect(() => {
+    const e = { mat, opacity };
+    blobs.add(e);
+    mat.opacity = opacity * blobK;
+    return () => {
+      blobs.delete(e);
+      mat.dispose();
+    };
+  }, [mat, opacity]);
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, y, 0]} material={mat} renderOrder={1}>
+    <mesh name="blob" rotation={[-Math.PI / 2, 0, 0]} position={[0, y, 0]} material={mat} renderOrder={1}>
       {/* the falloff is soft all the way out, so the patch reaches a little past the footprint it was sized for */}
       <planeGeometry args={[w * 1.14, d * 1.14]} />
     </mesh>
