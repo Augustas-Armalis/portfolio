@@ -43,7 +43,7 @@ export function Butterflies({ count = 46 }: { count?: number }) {
           // wings beat fast, and close over the back between beats now and then
           float beat = sin(uTime * (17.0 + aSeed.w * 9.0) + aSeed.z * 7.0);
           float ang = (0.25 + 0.95 * (0.5 + 0.5 * beat)) * mix(1.0, 0.15, smoothstep(0.75, 0.95, sin(t * 0.9)));
-          float s = 0.021 + aSeed.w * 0.012;
+          float s = (0.021 + aSeed.w * 0.012) * (1.0 - smoothstep(8.0, 14.0, length(vec3(c.x, y, c.y) - cameraPosition)));
           vec3 right = vec3(-f.y, 0.0, f.x);
           vec3 w = vec3(c.x, y, c.y) + vec3(f.x, 0.0, f.y) * position.y * s + (right * cos(ang) * position.x + vec3(0.0, 1.0, 0.0) * sin(ang) * abs(position.x)) * s * uVis;
           vCol = aSeed.w < 0.4 ? vec3(0.93, 0.92, 0.86) : aSeed.w < 0.75 ? vec3(0.95, 0.83, 0.25) : vec3(0.45, 0.6, 0.95);

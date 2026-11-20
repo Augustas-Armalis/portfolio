@@ -260,7 +260,11 @@ export function makeLandMaterial() {
             // the trees and the mountains standing in it, loosened by the ripples
             vec4 rc = uReflMat * vec4(P, 1.0);
             vec2 uv = rc.xy / rc.w + slope * 0.035;
-            vec4 tex = texture2D(uReflTex, clamp(uv, 0.002, 0.998));
+            vec2 ts = vec2(1.6 / 480.0, 1.6 / 270.0);
+            vec2 uc = clamp(uv, 0.004, 0.996);
+            vec4 tex = (texture2D(uReflTex, uc + ts * vec2(0.5, 0.5)) + texture2D(uReflTex, uc + ts * vec2(-0.5, 0.5)) + texture2D(uReflTex, uc + ts * vec2(0.5, -0.5)) + texture2D(uReflTex, uc - ts * vec2(0.5, 0.5))) * 0.25;
+            // (toward the picture's edge it gives way to the water's own sky, so no hard line shows where it ends)
+            tex.a *= smoothstep(0.0, 0.05, uv.x) * smoothstep(0.0, 0.05, 1.0 - uv.x) * smoothstep(0.0, 0.05, uv.y) * smoothstep(0.0, 0.05, 1.0 - uv.y);
             mirror = mix(mirror, tex.rgb, tex.a * 0.94);
           }
           // the sun on the water: a path of light, breaking into glitter near by (the glitter is a slow pattern that
