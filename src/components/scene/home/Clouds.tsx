@@ -73,6 +73,8 @@ function buildCloud(seed: number, detail: number) {
 export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: number }) {
   const { meshes, mat, geos } = useMemo(() => {
     const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: true,
       uniforms: { ...SKY_U, ...HOME_U },
       vertexShader: /* glsl */ `
         attribute float aOpen; attribute vec4 aPlace; attribute vec4 aSize;
@@ -115,9 +117,12 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
           float facing = abs(dot(normalize(vN), V));
           float edge = smoothstep(0.0, 0.11, facing + (b0 - 0.5) * 0.12 * fine);
           // a cloud the eye is about to enter thins to nothing round it (the white it becomes is the air's)
-          edge *= smoothstep(140.0, 520.0, dist + (b0 - 0.5) * 120.0);
-          float grain = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-          if (edge < grain * 0.985 + 0.015) discard;
+          // The rim is soft by being blended, not by a grain of pixels (which crawled as the cloud drifted). Only the
+          // cloud's own outer skin thins away: where one lump of it stands in front of another it stays solid, so
+          // nothing of the sky shows inside a cloud.
+          float alpha = mix(1.0, edge, smoothstep(0.25, 0.7, vOpen));
+          alpha = max(alpha, 0.0) * smoothstep(140.0, 520.0, dist + (b0 - 0.5) * 120.0);
+          if (alpha < 0.02) discard;
 
           vec3 L = normalize(mix(uMoonDir, vec3(uSunDir.x, max(uSunDir.y, 0.02), uSunDir.z), smoothstep(-0.14, -0.03, uSunDir.y)));
           float keyUp = mix(0.42 * uNight, 1.0, smoothstep(-0.14, -0.03, uSunDir.y));
@@ -128,7 +133,7 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
           vec3 col = uCloudShade * (0.52 + 0.5 * up) * (0.72 + 0.28 * vOpen);
           col += uHorizon * 0.12 * (1.0 - up);
           // at night they are paler than the sky behind them (the moon and the stars' light in them), never dark blots
-          col += vec3(0.045, 0.058, 0.095) * uNight * (0.7 + 0.3 * up);
+          col += vec3(0.075, 0.09, 0.14) * uNight * (0.75 + 0.25 * up);
           col += uCloudLit * lit * keyUp;
           // a low sun reaches in under them: the bellies on its side take its colour
           float lowSun = (1.0 - smoothstep(0.08, 0.34, uSunDir.y)) * smoothstep(-0.12, 0.0, uSunDir.y);
@@ -140,7 +145,7 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
           vec3 d = -V;
           float a = max(homeAirAmt(vWorld), 1.0 - exp(-dist * 0.00011));
           col = mix(col, skyBase(normalize(vec3(d.x, max(d.y, 0.0) + 0.012, d.z))), clamp(a, 0.0, 1.0));
-          gl_FragColor = vec4(col, 1.0);
+          gl_FragColor = vec4(col, alpha);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,
