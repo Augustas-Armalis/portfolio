@@ -8,7 +8,7 @@ import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voi
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { play } from "@/lib/sfx";
 import { FLIGHT_CREDIT, useFlightCredit } from "@/lib/flightMusic";
-import { WORLDS, setFlight, setGuide, useFlightFlags, useVoyageTick, useWorld, voyage } from "./worlds/voyage";
+import { WORLDS, WORLD_ORDER, setFlight, setGuide, travelStep, travelTo, useFlightFlags, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
 import { photoCtl, postCtl, type Capture } from "./Post";
 
@@ -900,6 +900,35 @@ function Throttle({ value, onChange }: { value: number; onChange: (v: number) =>
   );
 }
 
+// The worlds, as a small glass list of their paintings: one tap and the cloud closes and opens on that world.
+const thumbOf = (id: WorldId) => (id === "home" ? null : `/assets/ciurlionis/${WORLDS[id].canvases[0]?.painting ?? id}.jpg`);
+function WorldsList({ current, onPick, mobile }: { current: WorldId; onPick: (id: WorldId) => void; mobile: boolean }) {
+  return (
+    <Glass radius={20} className={`pointer-events-auto flex flex-col gap-0.5 p-1.5 ${mobile ? "w-[236px]" : "w-[228px]"}`} initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING} data-flight="worlds">
+      {WORLD_ORDER.map((id) => {
+        const t = thumbOf(id);
+        const on = id === current;
+        return (
+          <button
+            key={id}
+            type="button"
+            className={`lg-btn flex items-center gap-2.5 rounded-[14px] px-1.5 text-left ${mobile ? "h-11" : "h-9"} ${on ? "lg-on" : "text-white/92"}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPick(id);
+            }}
+          >
+            <span className="h-7 w-7 shrink-0 overflow-hidden rounded-[8px] bg-white/15">
+              {t ? <img src={t} alt="" className="h-full w-full object-cover" decoding="async" /> : null}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium tracking-[-0.01em]">{id === "home" ? "The path of angels" : WORLDS[id].title}</span>
+          </button>
+        );
+      })}
+    </Glass>
+  );
+}
+
 // The flight's controls. On a phone: a stick under the left thumb while you fly it yourself, a throttle under the
 // right, one small pill of switches at the foot, and Land at the top; a drag anywhere else turns the eye. With a
 // mouse: the same switches in one bar. On entering a world its name is shown for a while, quietly.
@@ -912,6 +941,22 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   const cruise = (flags & 4) > 0;
   const locked = (flags & 8) > 0;
   const gyro = (flags & 16) > 0;
+  // the Worlds list, and [ / ] to step through the worlds with a keyboard
+  const [worlds, setWorlds] = useState(false);
+  const pick = (id: WorldId) => {
+    travelTo(id);
+    setWorlds(false);
+  };
+  useEffect(() => {
+    if (!flying || mobile) return;
+    const k = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement | null)?.tagName === "INPUT") return;
+      if (e.key === "[") travelStep(-1);
+      else if (e.key === "]") travelStep(1);
+    };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [flying, mobile]);
   // the throttle is also worked from the keys and the wheel: the slider follows
   const [thr, setThr] = useState(voyage.throttle);
   useEffect(() => {
@@ -1036,7 +1081,13 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
           {creditLine}
         </div>
         <div className="pointer-events-none absolute inset-x-0 z-30 flex justify-center" style={{ bottom: SAFE.b }}>
+          <div className="absolute bottom-[54px] left-1/2 -translate-x-1/2" {...stop}>
+            <AnimatePresence>{worlds && <WorldsList key="worlds" current={world} onPick={pick} mobile />}</AnimatePresence>
+          </div>
           <Glass className="pointer-events-auto flex items-center gap-0.5 p-1" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={{ ...GLASS_SPRING, delay: 0.06 }} data-flight="switches" {...stop}>
+            <button type="button" aria-pressed={worlds} aria-label="Worlds" className={round(worlds)} onClick={() => setWorlds(!worlds)}>
+              <Grid3x3 size={17} strokeWidth={2} />
+            </button>
             <button type="button" aria-pressed={guide} aria-label="Follow the path" className={chip(guide)} onClick={() => setGuide(!guide)}>
               {dot}
               Auto
@@ -1095,8 +1146,14 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
           <button type="button" aria-pressed={locked} title="Keep the view where you drag it, instead of easing back behind the plane" className={chip(locked)} onClick={() => setFlight({ lockView: !locked })}>
             Lock view
           </button>
+          <button type="button" aria-pressed={worlds} title="Go to any world ( [ and ] step through them )" aria-label="Worlds" className={chip(worlds)} onClick={() => setWorlds(!worlds)}>
+            <Grid3x3 size={14} strokeWidth={2} />
+          </button>
         </Glass>
       </Bottom>
+      <div className="pointer-events-none absolute bottom-[70px] left-1/2 z-30 -translate-x-1/2" {...stop}>
+        <AnimatePresence>{worlds && <WorldsList key="worlds" current={world} onPick={pick} mobile={false} />}</AnimatePresence>
+      </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-[76px] z-30 flex justify-center px-4">{creditLine}</div>
       {/* where you are: the painting this world is built from */}
       <div className="pointer-events-none absolute bottom-6 left-5 z-30">{caption}</div>

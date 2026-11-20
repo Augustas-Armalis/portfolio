@@ -901,6 +901,19 @@ export const useFlightFlags = () =>
     () => (voyage.guide ? 1 : 0) + (voyage.assist > 0.5 ? 2 : 0) + (voyage.cruise ? 4 : 0) + (voyage.lockView ? 8 : 0) + (voyage.gyro ? 16 : 0),
     () => 1,
   );
+// Travel straight to any world (the flight's Worlds list, and [ / ] with a keyboard): the cloud closes as at a
+// gate, the world is made under it (or simply shown, if it was made ready) and the cloud opens on its entry.
+export function travelTo(id: WorldId) {
+  if (!voyage.flying || voyage.phase !== "open" || voyage.homing || id === voyage.cur) return false;
+  voyage.next = id;
+  voyage.phase = "closing";
+  return true;
+}
+export function travelStep(dir: 1 | -1) {
+  const i = WORLD_ORDER.indexOf(voyage.cur);
+  const j = Math.min(WORLD_ORDER.length - 1, Math.max(0, i + dir));
+  return travelTo(WORLD_ORDER[j]);
+}
 export function setGuide(on: boolean) {
   voyage.guide = on;
   emit();
