@@ -175,7 +175,7 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         // no grass in water or on bare sand; under the trees it is shorter and thinner
         float level = lk < 1.15 ? LAKE_Y : SEA;
         float woods = forestAt(root);
-        lod *= smoothstep(level + 0.03, level + 0.3, gy) * smoothstep(38.0, 100.0, coastZ(root.x) - root.y + (vnoise(root * 0.035) - 0.5) * 46.0);
+        lod *= smoothstep(level + 0.03, level + 0.3, gy) * smoothstep(38.0, 100.0, inland(root) + (vnoise(root * 0.035) - 0.5) * 46.0);
         float h = aShape.x * max(lod, 0.001) * mix(1.0, 0.6, smoothstep(0.3, 0.8, woods)); float w = aShape.y; float bend = aShape.z; float r = aShape.w;
         #ifdef WRAP
           #ifndef WALK
@@ -546,7 +546,7 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
           keep *= 1.0 - smoothstep(T * 0.36, T * 0.49, dc);
           float gy = landH(root);
           float lk = hLakeK(root);
-          keep *= smoothstep(1.06, 1.2, lk) * step(${(-0.0).toFixed(1)}, gy + 0.2) * smoothstep(60.0, 110.0, coastZ(root.x) - root.y);
+          keep *= smoothstep(1.06, 1.2, lk) * step(${(-0.0).toFixed(1)}, gy + 0.2) * smoothstep(60.0, 110.0, inland(root));
           keep *= 1.0 - smoothstep(0.35, 0.7, forestAt(root));
           // not on the path, not through the desk
           keep *= smoothstep(0.9, 1.3, abs(root.x - pathX(root.y)) / pathW(root.y));

@@ -77,7 +77,7 @@ const sstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-type Range = { r0: number; r1: number; height: number; freq: number; seed: number; haze: number; snow: number; pass: [number, number]; span: [number, number] };
+type Range = { r0: number; r1: number; height: number; freq: number; seed: number; haze: number; snow: number; pass: [number, number]; span: [number, number]; massif: number };
 
 function rangeGeometry(rg: Range, segA: number, segR: number) {
   const pos: number[] = [];
@@ -99,7 +99,8 @@ function rangeGeometry(rg: Range, segA: number, segR: number) {
       const h = 0.55 * ridged(wx, wz, 5) + 0.75 * eroded(wx * 0.8, wz * 0.8, 6);
       // single great peaks and low saddles along the range
       const broad = 0.38 + 0.62 * Math.pow(noised(x * rg.freq * 0.24 + 40 + rg.seed, z * rg.freq * 0.24)[0], 1.3) * 1.5;
-      const pass = sstep(rg.pass[0], rg.pass[1], Math.abs(th - 0.14));
+      // (no pass any more: the greatest of them stand right where the desk looks, a little west of north)
+      const pass = sstep(rg.pass[0], rg.pass[1], Math.abs(th - 0.14)) * (1 + rg.massif * Math.exp(-Math.pow((th - 0.55) / 0.5, 2)));
       const ends = 1 - sstep(rg.span[0], rg.span[1], Math.abs(th));
       pos.push(x, rg.height * h * broad * env * pass * ends - 6, z);
     }
@@ -149,7 +150,7 @@ function makeRangeMaterial(rg: Range) {
         // snow: above a ragged line, on anything not too steep; a thin dusting lower in the gullies
         float line = hN + (g0 - 0.5) * 0.3;
         float sn = uSnow * smoothstep(0.5, 0.62, line) * (1.0 - smoothstep(0.3, 0.62, steep + (1.0 - hN) * 0.25));
-        alb = mix(alb, vec3(0.86, 0.89, 0.95), clamp(sn, 0.0, 1.0));
+        alb = mix(alb, vec3(0.62, 0.66, 0.74), clamp(sn, 0.0, 1.0));
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         float ndl = clamp(dot(n, uKeyDir) * 0.75 + 0.25, 0.0, 1.0);
         float cs = mix(1.0, cloudShade(vWorld), 0.7);
@@ -157,7 +158,7 @@ function makeRangeMaterial(rg: Range) {
         // their feet stand in the low haze; their heads clear of it
         vec3 d = normalize(vWorld - cameraPosition);
         float low = (1.0 - smoothstep(0.0, uTop * 0.5, vWorld.y)) * 0.3;
-        float amt = max(homeAirAmt(vWorld), clamp(uHaze + low, 0.0, 0.96));
+        float amt = max(homeAirAmt(vWorld) * mix(0.62, 0.9, smoothstep(0.5, 0.0, vWorld.y / uTop)), clamp(uHaze + low, 0.0, 0.96));
         col = mix(col, homeAirCol(d), amt);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -170,14 +171,14 @@ export function HomeMountains({ mobile }: { mobile: boolean }) {
   const layers = useMemo(() => {
     const ranges: Range[] = [
       // foothills, wooded and green, close enough to read as land you could walk to
-      { r0: 620, r1: 1080, height: 105, freq: 0.0052, seed: 3.1, haze: 0.0, snow: 0, pass: [0.17, 0.42], span: [1.5, 2.2] },
-      // the range itself
-      { r0: 1150, r1: 2150, height: 300, freq: 0.0024, seed: 11.7, haze: 0.0, snow: 0.8, pass: [0.13, 0.36], span: [1.25, 1.95] },
-      // and the giants behind it, most of the way to the sky's colour
-      { r0: 2400, r1: 4400, height: 800, freq: 0.00125, seed: 27.3, haze: 0.3, snow: 1, pass: [-1, -0.5], span: [1.0, 1.7] },
+      { r0: 430, r1: 900, height: 120, freq: 0.0058, seed: 3.1, haze: 0.0, snow: 0, pass: [-1, -0.5], span: [1.5, 2.2], massif: 0.15 },
+      // the range itself: snow on its heads, standing full in the view
+      { r0: 950, r1: 1900, height: 330, freq: 0.0027, seed: 11.7, haze: 0.0, snow: 0.9, pass: [-1, -0.5], span: [1.25, 1.95], massif: 0.45 },
+      // and the giants behind it
+      { r0: 2100, r1: 4300, height: 760, freq: 0.00125, seed: 27.3, haze: 0.16, snow: 1, pass: [-1, -0.5], span: [1.0, 1.7], massif: 0.5 },
     ];
-    const segA = mobile ? 420 : 760;
-    return ranges.map((rg) => ({ geo: rangeGeometry(rg, segA, mobile ? 22 : 36), mat: makeRangeMaterial(rg) }));
+    const segA = mobile ? 360 : 600;
+    return ranges.map((rg) => ({ geo: rangeGeometry(rg, segA, mobile ? 20 : 30), mat: makeRangeMaterial(rg) }));
   }, [mobile]);
   useEffect(
     () => () =>

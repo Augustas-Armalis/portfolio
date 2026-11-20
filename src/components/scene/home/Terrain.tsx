@@ -182,7 +182,7 @@ export function makeLandMaterial() {
           alb = mix(alb, texture2D(uSoilTex, p * 0.45).rgb * 0.36, near * 0.8);
         }
         // sand: the dunes, the beach, and the lake's rim
-        float c = coastZ(p.x) - p.y;
+        float c = inland(p);
         float sandK = 1.0 - smoothstep(34.0, 104.0, c + (vnoise(p * 0.035) - 0.5) * 46.0);
         sandK = max(sandK, (1.0 - smoothstep(0.02, 0.4, h - LAKE_Y)) * step(lk, 1.6) * 0.7);
         vec3 sand = mix(vec3(0.36, 0.3, 0.2), vec3(0.47, 0.41, 0.29), vnoise(p * 0.21) * 0.6 + vnoise(p * 2.3) * 0.4);
