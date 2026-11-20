@@ -7,7 +7,7 @@ import { ArrowUpRight, Download, FileText, Folder, Github, Info, Lock, RotateCw 
 import { useEffect, useRef, useState } from "react";
 import { bookCall, projectGroups, projects, type AppId } from "@/content";
 import { AppIcon } from "../icons";
-import { Badge, Btn, dragFile, glass, InfoGrid, List, ListRow, SectionHeader, Squircle, StatsRow, QuickLook, Toolbar, useChrome } from "../ui";
+import { Badge, Btn, dragFile, glass, InfoGrid, List, ListRow, M, SectionHeader, Squircle, StatsRow, QuickLook, Toolbar, useChrome } from "../ui";
 import { type StoryItem, CROP, ShotImg, storyImage, isShot, SHOT_BG } from "./shared";
 import { Browser } from "./browser";
 
@@ -464,7 +464,7 @@ function LiveSite({ it }: { it: StoryItem }) {
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
-                transition={{ type: "spring", bounce: 0, duration: 0.42 }}
+                transition={M.ui}
                 drag="y"
                 dragConstraints={{ top: 0, bottom: 0 }}
                 dragElastic={{ top: 0, bottom: 0.6 }}
@@ -495,7 +495,7 @@ function LiveSite({ it }: { it: StoryItem }) {
                 initial={{ x: 280, opacity: 0 }}
                 animate={{ x: 0, opacity: 1 }}
                 exit={{ x: 280, opacity: 0 }}
-                transition={{ type: "spring", bounce: 0, duration: 0.36 }}
+                transition={M.ui}
                 className="inspector w-[272px] shrink-0 overflow-auto p-5 @max-[699px]/site:absolute @max-[699px]/site:inset-y-0 @max-[699px]/site:right-0 @max-[699px]/site:z-10 @max-[699px]/site:max-w-[calc(100%-16px)] @max-[699px]/site:shadow-[var(--shadow-3)]"
               >
                 <Inspector it={it} />

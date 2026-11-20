@@ -11,7 +11,7 @@ import { DeskArt } from "../Desktop";
 import { Monogram } from "../Login";
 import { useOS, useWallpaperIndex } from "@/store";
 import { QUALITY_LABELS, setQualityChoice, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
-import { Btn, Button, IconTile, List, ListRow, SectionHeader, Squircle, sfx, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
+import { Btn, Button, IconTile, List, ListRow, M, SectionHeader, Squircle, sfx, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
 import { Empty, useOpenApp } from "./shared";
 
 export function TrashApp() {
@@ -340,7 +340,7 @@ export function Game() {
               move();
             }}
             animate={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-            transition={{ type: "spring", bounce: 0.2, duration: 0.35 }}
+            transition={M.pop}
             className="absolute h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink shadow-[0_6px_16px_-6px_rgb(0_0_0/0.5)]"
           />
         ) : (
