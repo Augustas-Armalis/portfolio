@@ -727,13 +727,48 @@ function Scene({
       cam.layers.set(0);
       HOLD.on = false;
       if (dead) return;
+      // One frame of everything, into a small throwaway picture: whatever is hidden now and shown later (the things
+      // that land on the desk at the end of the descent, tiles of grass, anything off to one side) has its
+      // buffers put on the card and its last program variants made here, behind the loader, not when it first shows.
+      try {
+        const shown: THREE.Object3D[] = [];
+        const kept: THREE.Object3D[] = [];
+        scene.traverse((o) => {
+          if (!o.visible) {
+            shown.push(o);
+            o.visible = true;
+          }
+          if (o.frustumCulled) {
+            kept.push(o);
+            o.frustumCulled = false;
+          }
+        });
+        const rt = new THREE.WebGLRenderTarget(96, 54, { depthBuffer: true });
+        const prev = gl.getRenderTarget();
+        gl.shadowMap.needsUpdate = true;
+        gl.setRenderTarget(rt);
+        gl.render(scene, cam);
+        gl.setRenderTarget(prev);
+        rt.dispose();
+        shown.forEach((o) => (o.visible = false));
+        kept.forEach((o) => (o.frustumCulled = true));
+      } catch {
+        /* first shown, first drawn, as before */
+      }
+      await wait(0);
+      if (dead) return;
       mark("compiled");
       onProgress(0.9);
       // a few hidden frames with everything compiled (a slow tab is not held to all four)
       let n = 0;
       const f0 = performance.now();
+      let lastTick = performance.now();
       const tick = () => {
         if (dead) return;
+        // (the warming frames are timed too, so a machine that cannot hold this gear is stepped down before the reveal)
+        const nowT = performance.now();
+        reportFrame((nowT - lastTick) / 1000, false);
+        lastTick = nowT;
         // (fourteen frames: the first dozen draw every tile of grass and the mirror once, so their buffers are on the card
         // before the descent needs them; a slow tab is not held to all of them)
         if (++n < 14 && !(n >= 3 && performance.now() - f0 > 1600)) requestAnimationFrame(tick);
