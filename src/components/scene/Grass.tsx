@@ -9,7 +9,7 @@ import { ORIGIN, heightGLSL, voyage, type WorldDef } from "./worlds/voyage";
 import { DESK, GLSL_NOISE, GLSL_PATH, GLSL_SKY, pathW, pathX } from "./shared";
 import { SKY_U } from "./sky";
 import { GLSL_DESK_SHADOW } from "./World";
-import { GLSL_FIELD, GLSL_HOME_AIR, GLSL_LAND, HOME_U } from "./home/land";
+import { GLSL_FIELD, GLSL_HOME_AIR, GLSL_LAND, HOLD, HOME_U, timed } from "./home/land";
 
 // Instanced grass blades (after Ghost of Tsushima / al-ro / Codrops):
 // - each blade is a tapered strip bent along a constant-length arc
@@ -21,9 +21,8 @@ import { GLSL_FIELD, GLSL_HOME_AIR, GLSL_LAND, HOME_U } from "./home/land";
 // - translucency when the sun is behind the blade, analytic desk shadow,
 //   and fog that resolves to the sky's horizon colour
 
-const SEG = 4;
-
-function bladeGeometry() {
+// (a blade is cut finer the nearer it is seen: 3 pieces by the desk, 2 in the tile round it, a single triangle far off)
+function bladeGeometry(SEG = 3) {
   const g = new THREE.InstancedBufferGeometry();
   const pos: number[] = [];
   for (let i = 0; i < SEG; i++) {
@@ -45,7 +44,7 @@ function bladeGeometry() {
 
 // Rings overlap and cross-fade (blades shrink to nothing at a ring's edge) so
 // density and blade width change without a visible seam.
-type Ring = { count: number; rMin: number; rMax: number; width: number; height: [number, number]; fadeIn?: [number, number]; fadeOut?: [number, number]; linear?: boolean; grow?: number; wrap?: number; inner?: boolean; walk?: boolean };
+type Ring = { seg?: number; far?: boolean; count: number; rMin: number; rMax: number; width: number; height: [number, number]; fadeIn?: [number, number]; fadeOut?: [number, number]; linear?: boolean; grow?: number; wrap?: number; inner?: boolean; walk?: boolean };
 const sstep = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -88,7 +87,7 @@ function scatter(g: THREE.InstancedBufferGeometry, ring: Ring, seed: number) {
     const onPath = Math.abs(off[i * 3] - pathX(pz)) / pathW(pz);
     // (the grass thins toward the path by there being fewer blades, each still a whole blade: short dark stubs
     // standing in the sand read as dirt)
-    const pathK = Math.abs(pz) < 45 ? sstep(0.5, 1.2, onPath) : 1;
+    const pathK = sstep(0.5, 1.2, onPath);
     const keep = rnd() < pathK * pathK;
     shp[i * 4] = (ring.height[0] + rnd() * (ring.height[1] - ring.height[0])) * Math.max(fade * (keep ? 0.62 + 0.38 * pathK : 0.001), 0.001);
     shp[i * 4 + 1] = ring.width * (1 + r * (ring.grow ?? 0)) * (0.7 + rnd() * 0.6);
@@ -117,10 +116,10 @@ function scatter(g: THREE.InstancedBufferGeometry, ring: Ring, seed: number) {
 
 // the fine tile that travels with the plane, and the wide one round it
 const INNER_TILE = 44;
-export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, walk = false) {
+export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, walk = false, far = false) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    defines: wrap ? (walk ? { WRAP: 1, WALK: 1 } : inner ? { WRAP: 1, INNER: 1 } : { WRAP: 1 }) : {},
+    defines: wrap ? (far ? { WRAP: 1, FAR: 1 } : walk ? { WRAP: 1, WALK: 1 } : inner ? { WRAP: 1, INNER: 1 } : { WRAP: 1 }) : {},
     uniforms: {
       uCenter: { value: new THREE.Vector2() },
       uTile: { value: wrap || 1 },
@@ -152,11 +151,16 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
           root = mod(root - uCenter + uTile * 0.5, uTile) - uTile * 0.5 + uCenter;
           float dc = length(root - uCenter);
           // out to the edge of the tile, in from where the fine blades by the desk take over
-          lod = (1.0 - smoothstep(uTile * 0.34, uTile * 0.49, dc)) * smoothstep(11.5, 16.0, length(root));
+          #ifdef FAR
+            // the far field: broad tufts from where the blades proper thin out, to a couple of hundred metres
+            lod = (1.0 - smoothstep(uTile * 0.3, uTile * 0.49, dc)) * smoothstep(26.0, 52.0, dc);
+          #else
+            lod = (1.0 - smoothstep(uTile * 0.3, uTile * 0.49, dc)) * smoothstep(8.0, 16.0, length(root));
+          #endif
           // the road stays bare as far as it runs
           float pk = abs(root.x - pathX(root.y)) / pathW(root.y);
           // (fewer blades toward it, not shorter ones)
-          lod *= mix(1.0, step(aShape.w, smoothstep(0.55, 1.25, pk)), step(root.y, 2.0) * step(uRoadEnd, root.y));
+          lod *= mix(1.0, step(aShape.w, smoothstep(0.55, 1.25, pk)), step(uRoadEnd, root.y));
           // in flight a fine tile rides with the plane and the wide one makes room for it
           #ifdef WALK
             // the fine grass underfoot, wherever one walks to
@@ -175,11 +179,17 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         // no grass in water or on bare sand; under the trees it is shorter and thinner
         float level = lk < 1.15 ? LAKE_Y : SEA;
         float woods = forestAt(root);
-        lod *= smoothstep(level + 0.03, level + 0.3, gy) * smoothstep(38.0, 100.0, coastZ(root.x) - root.y + (vnoise(root * 0.035) - 0.5) * 46.0);
+        lod *= smoothstep(level + 0.03, level + 0.3, gy) * smoothstep(38.0, 100.0, inland(root) + (vnoise(root * 0.035) - 0.5) * 46.0);
+        lod *= smoothstep(0.6, 1.5, streamD(root));
         float h = aShape.x * max(lod, 0.001) * mix(1.0, 0.6, smoothstep(0.3, 0.8, woods)); float w = aShape.y; float bend = aShape.z; float r = aShape.w;
         #ifdef WRAP
+          #ifdef FAR
+            w *= 0.7 + dc * 0.012;
+            h *= 0.62;
+          #else
           #ifndef WALK
             w *= 1.0 + dc * 0.045;
+          #endif
           #endif
         #endif
         vec2 fm = fieldMix(root);
@@ -187,7 +197,7 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         float patchN = vnoise(root * 0.11 + 3.0);
         h *= mix(0.62, 1.22, clump) * mix(0.85, 1.12, patchN);
         // taller at the lake's edge: sedge
-        h *= 1.0 + 0.7 * (1.0 - smoothstep(1.02, 1.3, lk)) * step(lk, 1.6);
+        h *= 1.0 + 0.25 * (1.0 - smoothstep(1.02, 1.3, lk)) * step(lk, 1.6);
 
         vec2 face = vec2(cos(yaw), sin(yaw));
         vec2 sideDir = vec2(-face.y, face.x);
@@ -207,6 +217,8 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         vec3 toCam = cameraPosition - vec3(root.x, gy, root.y);
         float edge = 1.0 - abs(dot(normalize(toCam.xz), face));
         float width = w * (1.0 - pow(t, 1.5)) * (1.0 + edge * 0.9);
+        // never thinner than a pixel can carry: a hair of a blade sparkles as the wind moves it
+        width = max(width, length(toCam) * 0.0011 * (1.0 - 0.55 * t) * step(0.002, lod));
         vec3 p = vec3(root.x, gy, root.y) + vec3(bdir.x * x, y, bdir.y * x) + vec3(sideDir.x, 0.0, sideDir.y) * side * width;
         // normal: across the arc, rounded over the width, then toward the sky
         vec3 tang = normalize(vec3(bdir.x * sin(a), cos(a), bdir.y * sin(a)));
@@ -262,8 +274,8 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         col *= 1.0 + vWave * 0.38 * vT;
 
         // further off every blade takes exactly the light of the field under it: no speckle, no edge, only its nap
-        vec3 nap = fieldC * (0.92 + 0.14 * vT) * (1.0 + vWave * 0.16);
-        col = mix(col, nap, smoothstep(7.0, 40.0, dist));
+        vec3 nap = fieldFar(fieldC, dist) * (0.86 + 0.24 * vT) * (0.93 + 0.14 * vRand) * (1.0 + vWave * 0.16);
+        col = mix(col, nap, smoothstep(3.5, 15.0, dist));
         col = homeAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -277,25 +289,28 @@ export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boole
     () =>
       mobile
         ? [
-            { count: Math.round(95000 * density), rMin: 0, rMax: 15, width: 0.013 / Math.sqrt(density), grow: 0.2, height: [0.2, 0.44], linear: true, fadeOut: [11, 15] },
-            { count: Math.round(30000 * density), rMin: 0, rMax: 0, wrap: 76, width: 0.06 / Math.sqrt(density), height: [0.3, 0.52] },
-            { count: Math.round(34000 * density), rMin: 0, rMax: 0, wrap: INNER_TILE, inner: true, width: 0.045 / Math.sqrt(density), height: [0.24, 0.5] },
+            { count: Math.round(95000 * density), rMin: 0, rMax: 15, width: 0.013 / Math.sqrt(density), grow: 0.2, height: [0.2, 0.44], linear: true, fadeOut: [9, 15] },
+            { seg: 2, count: Math.round(30000 * density), rMin: 0, rMax: 0, wrap: 76, width: 0.06 / Math.sqrt(density), height: [0.22, 0.46] },
+            { seg: 2, count: Math.round(34000 * density), rMin: 0, rMax: 0, wrap: INNER_TILE, inner: true, width: 0.045 / Math.sqrt(density), height: [0.24, 0.5] },
             { count: Math.round(40000 * density), rMin: 0, rMax: 0, wrap: 18, walk: true, width: 0.022 / Math.sqrt(density), height: [0.2, 0.44] },
+            { seg: 1, far: true, count: Math.round(50000 * density), rMin: 0, rMax: 0, wrap: 280, width: 0.34 / Math.sqrt(density), height: [0.3, 0.56] },
           ]
         : [
-            { count: Math.round(230000 * density), rMin: 0, rMax: 16, width: 0.011 / Math.sqrt(density), grow: 0.17, height: [0.2, 0.44], linear: true, fadeOut: [12, 16] },
-            { count: Math.round(120000 * density), rMin: 0, rMax: 0, wrap: 116, width: 0.05 / Math.sqrt(density), height: [0.3, 0.54] },
-            { count: Math.round(100000 * density), rMin: 0, rMax: 0, wrap: INNER_TILE, inner: true, width: 0.034 / Math.sqrt(density), height: [0.24, 0.5] },
+            { count: Math.round(160000 * density), rMin: 0, rMax: 16, width: 0.013 / Math.sqrt(density), grow: 0.17, height: [0.2, 0.44], linear: true, fadeOut: [9, 16] },
+            { seg: 2, count: Math.round(145000 * density), rMin: 0, rMax: 0, wrap: 104, width: 0.05 / Math.sqrt(density), height: [0.22, 0.46] },
+            { seg: 2, count: Math.round(100000 * density), rMin: 0, rMax: 0, wrap: INNER_TILE, inner: true, width: 0.034 / Math.sqrt(density), height: [0.24, 0.5] },
             { count: Math.round(120000 * density), rMin: 0, rMax: 0, wrap: 18, walk: true, width: 0.015 / Math.sqrt(density), height: [0.2, 0.44] },
+            // the far field: single broad triangles out to two hundred metres, so the meadow is grass as far as it is seen
+            { seg: 1, far: true, count: Math.round(230000 * density), rMin: 0, rMax: 0, wrap: 420, width: 0.3 / Math.sqrt(density), height: [0.3, 0.58] },
           ],
     [mobile, density],
   );
-  const mats = useMemo(() => rings.map((r) => makeGrassMaterial(fogDensity, r.wrap ?? 0, !!r.inner, !!r.walk)), [fogDensity, rings]);
+  const mats = useMemo(() => rings.map((r) => makeGrassMaterial(fogDensity, r.wrap ?? 0, !!r.inner, !!r.walk, !!r.far)), [fogDensity, rings]);
   const geos = useMemo(
     () =>
       rings.map((r, i) => {
-        const g = bladeGeometry();
-        scatter(g, r, 1234 + i * 97);
+        const g = bladeGeometry(r.seg ?? 3);
+        timed("grass", () => scatter(g, r, 1234 + i * 97));
         return g;
       }),
     [rings],
@@ -305,10 +320,13 @@ export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boole
   const walk = useRef<THREE.Mesh>(null);
   const innerOn = useRef(0);
   const walkOn = useRef(0);
+  const lastCam = useRef(new THREE.Vector2());
   const warmed = useRef(0);
   useEffect(() => () => geos.forEach((g) => g.dispose()), [geos]);
   useEffect(() => () => mats.forEach((m) => m.dispose()), [mats]);
   useFrame(({ camera }, dt) => {
+    // (while the world is held behind the loader no frame counts: the warming draws below must really be drawn)
+    if (HOLD.on) return;
     // the fine travelling tile grows in once the plane is up and away from the desk
     const d2 = camera.position.x * camera.position.x + camera.position.z * camera.position.z;
     const want = voyage.flying && d2 > 9 * 9 ? 1 : 0;
@@ -316,8 +334,20 @@ export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boole
     if (innerOn.current < 0.002 && !want) innerOn.current = 0;
     // and the finest one comes up underfoot whenever the eye is away from the desk and near the ground
     const wantW = d2 > 10 * 10 && camera.position.y < 14 ? 1 : 0;
+    const jumped = Math.hypot(camera.position.x - lastCam.current.x, camera.position.z - lastCam.current.y) > 6;
+    lastCam.current.set(camera.position.x, camera.position.z);
+    if (jumped) walkOn.current = wantW;
     walkOn.current += (wantW - walkOn.current) * (1 - Math.exp(-Math.min(dt, 0.1) * 2.2));
     if (walkOn.current < 0.002 && !wantW) walkOn.current = 0;
+    // From the sky no blade can be seen, and each still costs its vertices: the field is thinned by count with the
+    // eye's height (the blades are in random order, so fewer of them is the same field, sparser), each kind of tile
+    // over its own range. Coming down, the grass thickens under the eye instead of all being there from a kilometre up.
+    const hy = camera.position.y;
+    const sm = THREE.MathUtils.smoothstep;
+    rings.forEach((r, i) => {
+      const k = r.walk ? 1 : r.far ? 1 - sm(hy, 110, 300) : r.wrap ? 1 - sm(hy, 38, 125) : 1 - sm(hy, 16, 58);
+      geos[i].instanceCount = Math.round(r.count * k);
+    });
     mats.forEach((m) => {
       m.uniforms.uWind.value = wind;
       m.uniforms.uCenter.value.set(camera.position.x, camera.position.z);
@@ -488,14 +518,14 @@ export function WorldGrass({ def, pal, tip = [0.5, 0.5, 0.2], mobile, density = 
 // stands; where they grow is the field's own pattern of drifts (thick in a
 // drift, a stray one here and there outside it), each drift led by one colour,
 // and where the tile ends the ground carries the drifts on as specks.
-const FLOWER_TILE = 64;
+const FLOWER_TILE = 96;
 export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDensity?: number }) {
   const { geo, mat } = useMemo(() => {
     const g = new THREE.InstancedBufferGeometry();
     // a head (quad) and under it a stalk (a thin quad): aPart 0 head, 1 stalk
     g.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0, -1, 0, 1, 1, 0, 1, 1, 1, 1, -1, 1, 1], 3));
     g.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]);
-    const count = mobile ? 5000 : 15000;
+    const count = mobile ? 8000 : 27000;
     let s = 4242;
     const rnd = () => {
       s = (s * 16807) % 2147483647;
@@ -508,8 +538,8 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
       off[n * 4 + 1] = (rnd() - 0.5) * FLOWER_TILE;
       off[n * 4 + 2] = rnd();
       off[n * 4 + 3] = rnd();
-      head[n * 4] = 0.2 + rnd() * 0.3;
-      head[n * 4 + 1] = 0.012 + rnd() * rnd() * 0.024;
+      head[n * 4] = 0.22 + rnd() * 0.34;
+      head[n * 4 + 1] = 0.017 + rnd() * rnd() * 0.034;
       head[n * 4 + 2] = rnd();
       head[n * 4 + 3] = rnd() * 6.28;
     }
@@ -518,6 +548,7 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
     g.instanceCount = count;
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
     const m = new THREE.ShaderMaterial({
+      alphaToCoverage: true,
       side: THREE.DoubleSide,
       uniforms: {
         ...SKY_U,
@@ -542,11 +573,11 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
           float dc = length(root - uCenter);
           float fd = flowerDrift(root);
           // thick in a drift, one in twelve outside it
-          float keep = step(aOffset.z, 0.08 + 0.92 * fd);
+          float keep = step(aOffset.z, 0.14 + 0.86 * fd);
           keep *= 1.0 - smoothstep(T * 0.36, T * 0.49, dc);
           float gy = landH(root);
           float lk = hLakeK(root);
-          keep *= smoothstep(1.06, 1.2, lk) * step(${(-0.0).toFixed(1)}, gy + 0.2) * smoothstep(60.0, 110.0, coastZ(root.x) - root.y);
+          keep *= smoothstep(1.06, 1.2, lk) * step(${(-0.0).toFixed(1)}, gy + 0.2) * smoothstep(60.0, 110.0, inland(root));
           keep *= 1.0 - smoothstep(0.35, 0.7, forestAt(root));
           // not on the path, not through the desk
           keep *= smoothstep(0.9, 1.3, abs(root.x - pathX(root.y)) / pathW(root.y));
@@ -566,7 +597,7 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
             p = base + wd * h * (1.0 - cos(a)) / L + vec3(0.0, h * sin(a) / L, 0.0) + right * position.x * 0.0016;
           } else {
             vec3 tip = base + wd * h * (1.0 - cos(L)) / L + vec3(0.0, h * sin(L) / L, 0.0);
-            p = tip + (right * position.x + up * position.y * 0.82) * aHead.y * keep;
+            p = tip + (right * position.x + up * position.y * 0.82) * max(aHead.y, length(tip - cameraPosition) * 0.0014) * keep;
           }
           vUv = position.xy; vPart = position.z; vWorld = p; vRot = aHead.w;
           // each flower mostly its drift's colour, now and then another
@@ -583,6 +614,7 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
         ${GLSL_HOME_AIR}
         void main(){
           vec3 alb;
+          float cov = 1.0;
           if (vPart > 0.5) alb = vec3(0.1, 0.17, 0.045);
           else {
             float r = length(vUv);
@@ -590,13 +622,15 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
             // five petals, or a daisy's many
             float petals = vKind > 0.6 ? 11.0 : 5.0;
             float edge = (vKind > 0.6 ? 0.78 : 0.62) + (vKind > 0.6 ? 0.2 : 0.32) * cos(petals * a);
-            if (r > edge) discard;
+            // (the petal's edge as coverage, a pixel wide: smooth, and still as the flower nods)
+            cov = clamp((edge - r) / max(fwidth(r) * 1.3, 0.0001) + 0.5, 0.0, 1.0);
+            if (cov < 0.1) discard;
             alb = mix(vHue * (0.72 + 0.28 * r / edge), vec3(0.95, 0.68, 0.12), 1.0 - smoothstep(0.16, 0.26, r));
           }
           float sh = deskShadow(vWorld) * vShade;
           vec3 col = alb * (uSkyCol * 0.72 * deskAO(vWorld) + uKeyCol * 0.6 * sh * smoothstep(-0.02, 0.08, uKeyDir.y));
           col = homeAir(col, vWorld);
-          gl_FragColor = vec4(col, 1.0);
+          gl_FragColor = vec4(col, cov);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,

@@ -10,6 +10,8 @@ import { Birds, LightShafts, type Flock, type Shaft } from "./life";
 import { linesGeometry, makeCloudPaint, makeLineMaterial, makeRayDiscMaterial, makeSoftMaterial, paintedCloudGeometry, ribbonGeometry, softGeometry, type PCloud, type Seg, type Soft } from "./stars/forms";
 import { FIG_KINDS, constellation, heroAngel, makeGlobeGlass, makePyramidVeil, makeStarRiver, makeWaveBand, makeWaveSea, riverGeometry, wingFan } from "./stars/parts";
 import { ORIGIN, WORLDS, groundAt, pathOf } from "./voyage";
+import { useDeepLens } from "./fairy/shared";
+import { Comet } from "./stars/comet";
 
 // Sonata of the Stars (Allegro and Andante, 1908), built as a cosmos to fly through.
 //
@@ -40,6 +42,8 @@ export const GLOBE = { x: -330, z: 150, r: 150 };
 const GOLD: V3 = [1.0, 0.82, 0.46];
 
 export default function StarsWorld({ props }: { props: WorldProps }) {
+  // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
+  useDeepLens("stars");
   const wings = useRef<(THREE.Group | null)[]>([]);
   const walker = useRef<THREE.Group>(null);
   const globe = useRef<THREE.Group>(null);
@@ -391,6 +395,9 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
         <mesh key={i} geometry={w.geo} material={w.mat} renderOrder={4} />
       ))}
       <mesh geometry={b.lines} material={b.lineMat} renderOrder={5} frustumCulled={false} />
+      {/* a comet crosses the whole sky, slowly, a while after the plane has come; and another much later, higher */}
+      <Comet world="stars" id="stars-comet" from={[-1250, 430, -150]} to={[900, 300, -820]} seconds={30} after={24} again={70} tail={620} width={30} />
+      <Comet world="stars" id="stars-comet-high" from={[900, 980, 300]} to={[-1100, 760, -600]} seconds={34} after={105} tail={700} width={34} tint={[0.8, 0.9, 1]} />
       <Birds flocks={b.flocks} tint={[2.6, 2.3, 1.5]} lit />
       <points geometry={b.dust} material={b.dustMat} />
       <Halos list={b.glows} kind={2} />

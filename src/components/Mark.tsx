@@ -2,10 +2,13 @@
 
 import { useId } from "react";
 
-// The mark of Augustas OS: a half-sun on the horizon. It is the small lit world the two kings hold in
-// Karalių pasaka, and the line of light the loader opens on. One solid shape, one colour (currentColor).
-// The same drawing is public/logo.svg; the boot screen draws it from the numbers in scene/shared.ts (BOOT).
-export const MARK_PATH = "M15 36a17 17 0 0 1 34 0zM5.5 41.5h53a2.5 2.5 0 0 1 0 5h-53a2.5 2.5 0 0 1 0-5z";
+// The mark of Augustas OS: one circle, one cut. The sun above the horizon and its reflection below it: the small
+// lit world the two kings hold in Karalių pasaka, seen whole. One solid shape, one colour (currentColor), built
+// from a disc of radius 28 at the centre of a 64 grid and a straight cut at the golden section.
+// The same drawing is public/logo.svg; the tab icon and the app icons are drawn from it by
+// qa-shots/os12/tools (marks.mjs, export.mjs), in gold.
+export const MARK_PATH = "M4.889 39A28 28 0 1 1 59.111 39ZM6.251 43H57.749A28 28 0 0 1 6.251 43Z";
+export const MARK_GOLD = ["#FFD466", "#F7931E"] as const;
 
 // `size` is the height of the square the mark sits in; the drawing itself is cropped close, so it fills it.
 export function Mark({ size = 16, className = "", title }: { size?: number; className?: string; title?: string }) {
@@ -16,39 +19,30 @@ export function Mark({ size = 16, className = "", title }: { size?: number; clas
   );
 }
 
-// The menu bar's mark: the same half-sun drawn again on the pixel grid for its one size, the way a system glyph is
-// hinted. 24 by 12 points, every straight edge on a whole pixel at 1x and 2x: a sun of radius 8, a 2pt gap and a
-// 2pt horizon with round ends that reaches 4pt past the sun on each side (the proportions of the large drawing).
-// In a 24pt bar it sits 6pt from the top and bottom, the optical weight of the Apple menu glyph.
+// The menu bar's mark: the same circle drawn again on the pixel grid for its one size, the way a system glyph is
+// hinted. 14 by 14 points, the cut one whole point tall on a whole row at 1x and 2x. In a 24pt bar it sits 5pt
+// from the top and bottom, the optical weight of the Apple menu glyph.
 export function MenuMark({ className = "" }: { className?: string }) {
   return (
-    <svg width={24} height={12} viewBox="0 0 24 12" className={`block shrink-0 ${className}`} aria-hidden shapeRendering="geometricPrecision">
-      <path fill="currentColor" d="M4 8a8 8 0 0 1 16 0zM1 10h22a1 1 0 0 1 0 2H1a1 1 0 0 1 0-2z" />
+    <svg width={14} height={14} viewBox="0 0 14 14" className={`block shrink-0 ${className}`} aria-hidden shapeRendering="geometricPrecision">
+      <path fill="currentColor" d="M0.292 9A7 7 0 1 1 13.708 9ZM0.675 10H13.325A7 7 0 0 1 0.675 10Z" />
     </svg>
   );
 }
 
-// The large mark (About, the account picture): the same drawing with depth instead of a flat stamp: ink that is
-// lit from above and falls darker toward the horizon, a hairline of light along its top edge and a soft shadow
-// under it, as if pressed into the glass it sits on.
+// The large mark (About, the account picture): the same drawing in its own colour, one soft gradient from gold
+// to amber. Flat: no glow, no rim.
 export function MarkDeep({ size = 64, className = "" }: { size?: number; className?: string }) {
   const id = useId().replace(/:/g, "");
   return (
-    <svg width={size} height={size} viewBox="3 3 58 58" className={className} aria-hidden style={{ filter: "drop-shadow(0 0.5px 0 rgb(255 255 255 / 0.85)) drop-shadow(0 1px 1.5px rgb(16 18 24 / 0.22))" }}>
+    <svg width={size} height={size} viewBox="3 3 58 58" className={className} aria-hidden>
       <defs>
-        <linearGradient id={`${id}-ink`} x1="0" y1="19" x2="0" y2="46.5" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#4a4d55" />
-          <stop offset="0.55" stopColor="#1f2126" />
-          <stop offset="1" stopColor="#0b0c0e" />
-        </linearGradient>
-        <linearGradient id={`${id}-rim`} x1="0" y1="19" x2="0" y2="30" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#fff" stopOpacity="0.38" />
-          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        <linearGradient id={`${id}-g`} x1="0" y1="4" x2="0" y2="60" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor={MARK_GOLD[0]} />
+          <stop offset="1" stopColor={MARK_GOLD[1]} />
         </linearGradient>
       </defs>
-      <path fill={`url(#${id}-ink)`} d={MARK_PATH} />
-      {/* light caught on the sun's upper rim */}
-      <path fill="none" stroke={`url(#${id}-rim)`} strokeWidth="0.9" d="M15.6 36a16.4 16.4 0 0 1 32.8 0" />
+      <path fill={`url(#${id}-g)`} d={MARK_PATH} />
     </svg>
   );
 }
@@ -56,7 +50,7 @@ export function MarkDeep({ size = 64, className = "" }: { size?: number; classNa
 // ---------- the system mark ----------
 // In the menu bar and on the boot screen the mark is the Apple logo, without shipping Apple's artwork: it is the
 // character U+F8FF, which the visitor's own system font draws as the Apple logo on a Mac, an iPhone or an iPad.
-// Anywhere else that code point is empty (or another vendor's drawing), so those visitors get the half-sun.
+// Anywhere else that code point is empty (or another vendor's drawing), so those visitors get his own mark.
 // The glyph's ink is measured once on a canvas, so it can be set by its real height and centred by its real box
 // (the way the menu bar's own glyph is), not by the font's line box.
 const APPLE = "";
@@ -103,7 +97,7 @@ export function appleInk(): Ink {
     if (!(a + d > 0.5) || !(l + r > 0.4)) return inkCache;
     inkCache = { ok: true, a, d, l, r };
   } catch {
-    // no canvas: the half-sun
+    // no canvas: his own mark
   }
   return inkCache;
 }
@@ -123,7 +117,7 @@ export function AppleGlyph({ height, className = "", style }: { height: number; 
 }
 
 // Menu bar: the logo's ink is 15pt tall in a 24pt bar, as on a Mac; it sits half a point high, where the eye puts
-// the weight of the apple's body (the leaf is light). Without the glyph, the half-sun on its pixel grid.
+// the weight of the apple's body (the leaf is light). Without the glyph, his own mark on its pixel grid.
 export function SystemMenuMark({ className = "" }: { className?: string }) {
   if (appleInk().ok) return <AppleGlyph height={15} className={className} style={{ marginTop: -1 }} />;
   return <MenuMark className={className} />;
@@ -132,11 +126,11 @@ export function SystemMenuMark({ className = "" }: { className?: string }) {
 // Boot and restart: the logo 84pt tall, like a Mac starting up. `size` is the ink height.
 export function SystemBootMark({ size = 84, className = "" }: { size?: number; className?: string }) {
   if (appleInk().ok) return <AppleGlyph height={size} className={className} />;
-  return <Mark size={Math.round(size * 1.24)} className={className} />;
+  return <Mark size={Math.round(size * 1.04)} className={className} />;
 }
 
 // The same glyph as pixels, for a surface that cannot set type (the 3D display's boot frame is a shader): white on
-// clear, `height` px of ink tall, with a 2px margin. null where the glyph does not exist (draw the half-sun).
+// clear, `height` px of ink tall, with a 2px margin. null where the glyph does not exist (draw his own mark).
 export function appleLogoCanvas(height: number): { canvas: HTMLCanvasElement; w: number; h: number; pad: number } | null {
   const m = appleInk();
   if (!m.ok) return null;

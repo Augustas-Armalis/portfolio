@@ -1,11 +1,11 @@
 "use client";
 
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Environment, Html, Sparkles } from "@react-three/drei";
+import { Environment, Html } from "@react-three/drei";
 import { AnimatePresence, motion } from "motion/react";
 import { BookOpen, Camera as CameraIcon, Headphones as Headphones2, PenLine, Piano, Power, Send, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import * as THREE from "three";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { owner, type UserId } from "@/content";
 import { play } from "@/lib/sfx";
 import { DeskDust, type DustApi } from "./scene/Dust";
@@ -22,7 +22,8 @@ import { Flowers, Grass } from "./scene/Grass";
 import { CameraBody, Desk, Headphones, HeadphonesBlob, Monitor, Phone, setBlobStrength } from "./scene/models";
 import { ContactShadows } from "./scene/home/Contact";
 import { Clouds } from "./scene/home/Clouds";
-import { Butterflies, Skein } from "./scene/home/Life";
+import { Butterflies, Flock, Motes, Skein } from "./scene/home/Life";
+import { PropLights, Props } from "./scene/home/Props";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
 import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
@@ -57,12 +58,13 @@ import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
 import { Forest } from "./scene/home/Forest";
 import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
-import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
-import { Birds, Sky, makeSkyMaterial } from "./scene/World";
+import { makeArrival } from "./scene/worlds/arrive";
+import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, useWorld, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
+import { Sky, makeSkyMaterial } from "./scene/World";
 import { HomeMountains } from "./scene/home/Mountains";
 import { Land } from "./scene/home/Terrain";
 import { LakeMirror, Reeds } from "./scene/home/Water";
-import { hLakeK, homeLand } from "./scene/home/land";
+import { CALM, HOLD, hLakeK, homeLand } from "./scene/home/land";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
 // Everything on the desk does something: the display boots the OS, the piano
@@ -336,7 +338,7 @@ function PlaneHover({ spot, hoverable, onPick, children }: { spot: { pos: [numbe
   }, [hoverable]);
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.05);
-    const want = hover.current && hoverable ? 0.007 : 0;
+    const want = 0; // the plane stays put under the pointer (no lift on hover)
     const w = 15;
     vy.current += (w * w * (want - y.current) - 2 * w * vy.current) * dt;
     y.current += vy.current * dt;
@@ -484,6 +486,8 @@ function Scene({
   const introAt = useRef<number | null>(null);
   const instant = reduced || skipIntro;
   const planeApi = useRef<PlaneApi | null>(null);
+  // a world jumped to from the Worlds list is finished under the closed cloud before it opens (worlds/arrive.ts)
+  const arrival = useMemo(() => makeArrival(gl, scene, camera, () => loads.busy), [gl, scene, camera]);
   const reader = useRef<ReaderApi | null>(null);
   const sketch = useRef<SketchApi | null>(null);
   const [reading, setReading] = useState(false);
@@ -637,6 +641,16 @@ function Scene({
     });
   }, [input, cam, v]);
 
+  // Held from before the first frame: nothing is drawn until the scene's programs are ready (see below).
+  useLayoutEffect(() => {
+    HOLD.on = true;
+    cam.layers.disableAll();
+    return () => {
+      HOLD.on = false;
+      cam.layers.set(0);
+    };
+  }, [cam]);
+
   // Behind the loader: wait for the type, the cover and whatever three is
   // still fetching (textures, the sky HDRI), upload every texture, compile
   // every program, draw a few hidden frames, and only then report ready, so
@@ -650,6 +664,9 @@ function Scene({
     const finish = () => {
       if (dead || done) return;
       done = true;
+      // (whatever happened, the world is let go)
+      HOLD.on = false;
+      cam.layers.set(0);
       onReady();
     };
     const hard = window.setTimeout(finish, 9000);
@@ -670,7 +687,7 @@ function Scene({
       while (!dead && quiet < 2 && performance.now() - t0 < 4000) {
         quiet = loads.busy ? 0 : quiet + 1;
         if (loads.total > 0) onProgress(0.52 + 0.2 * (loads.done / loads.total));
-        await wait(90);
+        await wait(50);
       }
       if (dead) return;
       mark("files");
@@ -699,20 +716,65 @@ function Scene({
       mark("textures");
       await wait(30);
       if (dead) return;
+      // Every program of the scene is compiled off the main thread (the loader keeps moving, and the drivers build
+      // them side by side). The lights are gathered with the camera's layers on, then nothing is drawn again until
+      // all of them are ready: a draw would make each finish there and then.
       try {
-        gl.compile(scene, cam);
+        cam.layers.set(0);
+        const done = gl.compileAsync(scene, cam);
+        cam.layers.disableAll();
+        await Promise.race([done, wait(7000)]);
       } catch {
-        /* compile on first draw instead */
+        /* compiled on first draw instead */
       }
+      cam.layers.set(0);
+      HOLD.on = false;
+      if (dead) return;
+      // One frame of everything, into a small throwaway picture: whatever is hidden now and shown later (the things
+      // that land on the desk at the end of the descent, tiles of grass, anything off to one side) has its
+      // buffers put on the card and its last program variants made here, behind the loader, not when it first shows.
+      try {
+        const shown: THREE.Object3D[] = [];
+        const kept: THREE.Object3D[] = [];
+        scene.traverse((o) => {
+          if (!o.visible) {
+            shown.push(o);
+            o.visible = true;
+          }
+          if (o.frustumCulled) {
+            kept.push(o);
+            o.frustumCulled = false;
+          }
+        });
+        const rt = new THREE.WebGLRenderTarget(96, 54, { depthBuffer: true });
+        const prev = gl.getRenderTarget();
+        gl.shadowMap.needsUpdate = true;
+        gl.setRenderTarget(rt);
+        gl.render(scene, cam);
+        gl.setRenderTarget(prev);
+        rt.dispose();
+        shown.forEach((o) => (o.visible = false));
+        kept.forEach((o) => (o.frustumCulled = true));
+      } catch {
+        /* first shown, first drawn, as before */
+      }
+      await wait(0);
       if (dead) return;
       mark("compiled");
       onProgress(0.9);
       // a few hidden frames with everything compiled (a slow tab is not held to all four)
       let n = 0;
       const f0 = performance.now();
+      let lastTick = performance.now();
       const tick = () => {
         if (dead) return;
-        if (++n < 4 && !(n >= 2 && performance.now() - f0 > 700)) requestAnimationFrame(tick);
+        // (the warming frames are timed too, so a machine that cannot hold this gear is stepped down before the reveal)
+        const nowT = performance.now();
+        reportFrame((nowT - lastTick) / 1000, false);
+        lastTick = nowT;
+        // (fourteen frames: the first dozen draw every tile of grass and the mirror once, so their buffers are on the card
+        // before the descent needs them; a slow tab is not held to all of them)
+        if (++n < 14 && !(n >= 3 && performance.now() - f0 > 1600)) requestAnimationFrame(tick);
         else finish();
       };
       requestAnimationFrame(tick);
@@ -871,6 +933,10 @@ function Scene({
         if (stage.current === "fly") flightMusicTo(WORLDS[id].music);
       };
       gatePhase.current = "open";
+      // (a flight starts in open air, with nowhere picked)
+      voyage.landing = false;
+      voyage.next = null;
+      voyage.phase = "open";
       // flying into the kings' little world is the landing
       voyage.onHome = () => exitRef.current?.();
       planeApi.current?.launch(cam);
@@ -897,10 +963,11 @@ function Scene({
       input.current.jx = input.current.jy = 0;
       voyage.onEnter = null;
       voyage.onHome = null;
+      // (from here the way is down to the desk: the Worlds list takes no more picks)
+      voyage.landing = true;
       planeApi.current?.beginLand(cam);
       if (voyage.homing) {
         // coming home out of the light, the music comes back up, and only then lets go
-        // (the one place his own music is heard in the flight: Afterlight, for the warm return)
         flightMusicVolume(1);
         flightMusicTo("home");
         window.setTimeout(() => stage.current !== "fly" && flightMusicStop(7), 17000);
@@ -1321,6 +1388,23 @@ function Scene({
     const at = introAt.current;
     const mist = instant || (at !== null && now - at > ARR) ? 0 : cloudMist(cam.position.y);
     SKY_U.uMist.value = Math.max(mist, voyage.mist);
+    // The lens's near plane. A centimetre at the desk (things there are looked at from a hand's breadth), but with a
+    // centimetre the depth a kilometre off is good to no better than six metres: seen from the sky, the mountains'
+    // feet, the far woods and the sea all flickered against the land under them. So it moves out with the eye's
+    // distance from the desk, to metres when the eye is high. (In flight the plane sets its own.)
+    // (the two shadow passes take turns while nothing is happening: see CALM)
+    CALM.frame++;
+    CALM.on = stage.current === "idle" && !voyage.flying && at !== null && now - at > ARR + 3;
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = !CALM.on || (CALM.frame & 1) === 1;
+    if (!voyage.flying) {
+      const dd = Math.hypot(cam.position.x, cam.position.y - 1, cam.position.z);
+      const near = dd < 6 ? 0.01 : Math.min(8, 0.01 + (dd - 6) * 0.01);
+      if (Math.abs(cam.near - near) > near * 0.02) {
+        cam.near = near;
+        cam.updateProjectionMatrix();
+      }
+    }
     // the plain three fog (the desk and its things) keeps pace with the shader fog
     fog.far = Math.min(176, 3 / (FOG + mist));
     fog.near = fog.far * (20.5 / 176);
@@ -1464,6 +1548,7 @@ function Scene({
       fi.look!.dy = inp.dy / W;
       fi.look!.held = inp.dragging;
       fi.gyro = g;
+      arrival();
       planeApi.current?.fly(dt, fi, cam);
       inp.zoom = inp.dx = inp.dy = 0;
       return;
@@ -1599,7 +1684,9 @@ function Scene({
         {!mobile && q.effects > 0.5 && <LakeMirror quality={q.effects} />}
         <Grass mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} density={q.grass} />
         <Flowers mobile={mobile} wind={reduced ? 0.25 : 1} fogDensity={FOG} />
-        <Birds />
+        <Flock />
+        <Props />
+        <PropLights />
         {q.effects > 0.2 && <Butterflies count={mobile ? 20 : 46} />}
         <Skein />
       </HomeWorld>
@@ -1746,20 +1833,11 @@ function SkyEnvironment({ envSky }: { envSky: THREE.Material }) {
   );
 }
 
-// Pollen drifting in daylight, fireflies after dusk.
+// Pollen drifting in daylight, fireflies after dusk (see scene/home/Life: soft round motes that the scene can hide).
 function SkyLife({ reduced, amount }: { reduced: boolean; amount: number }) {
-  const [night, setNight] = useState(false);
-  useFrame(() => {
-    // (the fireflies come out with the dusk, before the night has fully fallen)
-    const n = SKY_U.uNight.value > 0.22;
-    if (n !== night) setNight(n);
-  });
-  // keyed by their number too: a change of graphics quality remakes them whole (drei's Sparkles left with a new count draws nothing)
-  return night ? (
-    <Sparkles key={`n${amount}`} count={Math.round(60 + 200 * amount)} scale={[26, 1.5, 26]} position={[0, 0.7, -3]} size={3.4} speed={reduced ? 0 : 0.35} opacity={0.9} color="#e4ff8f" noise={1.4} />
-  ) : (
-    <Sparkles key={`d${amount}`} count={Math.round(30 + 60 * amount)} scale={[4, 1.4, 3]} position={[0, 1.05, 0.2]} size={1.5} speed={reduced ? 0 : 0.18} opacity={0.5} color="#ffe2b0" noise={0.6} />
-  );
+  const id = useWorld();
+  if (id !== "home") return null;
+  return <Motes count={Math.round(70 + 170 * amount)} still={reduced} />;
 }
 
 // ---------- room (DOM shell) ----------
@@ -1839,7 +1917,8 @@ export default function Room({
     if (process.env.NODE_ENV !== "production") ((window as unknown as { __t: Record<string, number> }).__t.ready = performance.now());
     // the line finishes drawing before anything opens, and the loader is never
     // a flash: at least 1.3 s from navigation even when everything is cached
-    const minWait = Math.max(650, 1300 - performance.now());
+    // (a short breath once everything is ready, so the invitation does not snap in; no longer two thirds of a second)
+    const minWait = Math.max(280, 1100 - performance.now());
     // A returning visitor, or one who asked for less motion, goes straight in. Otherwise the line is across and it
     // waits for one click (or key, or tap): the arrival has sound, and sound may only begin with a gesture. If no
     // one clicks it goes in on its own after a while, silently.

@@ -9,8 +9,10 @@ import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common
 import { Kit, makePoints, makeTempera, noise2, paint, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, PaintedClouds, type Flock, type PaintedCloud } from "./life";
 import { ORIGIN, WORLDS, voyage } from "./voyage";
+import { useDeepLens } from "./fairy/shared";
+import { FUNERAL_U } from "./funeral/air";
 import { ROAD_W, funeralLand } from "./funeral/land";
-import { buildFuneralRock, makeLedgeMaterial, makeRockMaterial } from "./funeral/rock";
+import { CAVE, buildFuneralRock, makeLedgeMaterial, makeRockMaterial } from "./funeral/rock";
 import { buildSouls } from "./funeral/souls";
 
 // Funeral Symphony VI (Laidotuvių simfonija, 1903). Deep ultramarine pastel: a steep, dark, sculpted mountain,
@@ -145,6 +147,8 @@ function makeSkyGrainMaterial() {
 }
 
 export default function FuneralWorld({ props }: { props: WorldProps }) {
+  // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
+  useDeepLens("funeral");
   const shell = useRef<THREE.Mesh>(null);
   const b = useDisposable(() => {
     const L = funeralLand();
@@ -163,6 +167,19 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
     glows.push({ p: [m.x - mt[0] * 4, my + 22, m.z - mt[1] * 4], size: 90, col: [0.9, 0.6, 0.28], k: 0.05 });
     const e = L.pts[L.iEnd];
     halos.push({ p: [e.x, L.y[L.iEnd] + 16, e.z], size: 26, col: [1, 0.84, 0.5], k: 0.9 });
+    // inside the cave at the pass: candles set in niches along both walls, small and far apart, going in
+    for (let i = L.iMouth + 5; i < L.iEnd - 4; i += 7) {
+      const side = (i >> 1) % 2 ? 1 : -1;
+      const x = L.pts[i].x - L.tan[i][1] * side * (CAVE.half - 1.6);
+      const z = L.pts[i].z + L.tan[i][0] * side * (CAVE.half - 1.6);
+      halos.push({ p: [x, L.y[i] + 5.5 + (i % 3), z], size: 1.5, col: [1, 0.76, 0.36], k: 0.8 });
+      glows.push({ p: [x, L.y[i] + 5.5 + (i % 3), z], size: 9, col: [1, 0.66, 0.28], k: 0.1 });
+    }
+    // the mouth of the cave the plane comes out of: the night's blue standing in it, seen from far inside
+    {
+      const o = L.pts[L.iOut];
+      glows.push({ p: [o.x, L.y[L.iOut] + 20, o.z], size: 70, col: [0.16, 0.34, 0.9], k: 0.07 });
+    }
     // a glow over each turn of the road, where the crowd is densest to the eye
     for (const i of [L.iPass - 150, L.iPass - 320, L.iPass - 470]) {
       if (i < 0) continue;
@@ -228,7 +245,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
     const motes = pointsGeometry(
       props.mobile ? 500 : 1400,
       (i, q) => {
-        const j = Math.floor(q() * L.iMouth);
+        const j = L.iOut + Math.floor(q() * (L.iMouth - L.iOut));
         const lat = (q() - 0.5) * (ROAD_W + 10);
         const up = q();
         return [L.pts[j].x - L.tan[j][1] * lat, L.y[j] + 2.4 + up * up * 26, L.pts[j].z + L.tan[j][0] * lat, 0.5 + q() * 1.3];
@@ -268,6 +285,19 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
   useFrame(({ camera }) => {
     // made ready ahead of time, it waits
     if (voyage.cur !== "funeral") return;
+    // A bell-light passes up the procession: from the cave it comes out of, along every turn of the road, to the
+    // cave at the pass, which flares as it arrives; then, after a silence, another. (Counted on the sky's clock.)
+    {
+      const L = funeralLand();
+      const sMouth = L.iMouth * L.STEP;
+      const period = 78;
+      const t = (SKY_U.uTime.value + 52) % period;
+      const s = L.iOut * L.STEP - 160 + t * 58;
+      FUNERAL_U.uBell.value = s < sMouth + 420 ? s : -1e5;
+      const d = (s - sMouth - 60) / 240;
+      FUNERAL_U.uCaveK.value = 1 + 1.5 * Math.exp(-d * d);
+      FUNERAL_U.uBorn.value = (L.iOut - 16) * L.STEP;
+    }
     b.souls.update(camera);
     shell.current?.position.copy(camera.position).sub(ORIGIN);
     if (process.env.NODE_ENV !== "production") (window as unknown as { __funeral?: unknown }).__funeral = b.souls.stats;

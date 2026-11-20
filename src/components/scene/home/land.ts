@@ -21,10 +21,16 @@ import { pathW, pathX } from "../shared";
 // canopy) and a fine one of every crown near the desk (for the shade under
 // each tree and the long shadows they lay across the meadow at a low sun).
 
-export const SEA = -2.4;
-export const HLAKE = { x: -40, z: -66, rx: 38, rz: 17, y: -0.32 };
+export const SEA = -9;
+export const HLAKE = { x: -40, z: -66, rx: 38, rz: 17, y: -3.2 };
 export const CLOUD = { base: 420, height: 250 };
 const CLOUD_COVER = 0.4;
+// The desk stands on the brow of a meadow. In front (north-west, where it looks) the ground falls a little to the
+// lake and the valley, and beyond them the mountains stand. Behind it a short stretch of meadow, dunes, a beach,
+// and the ocean. BAY.u is the way downhill from the desk.
+export const BAY = { ux: -0.717, uz: -0.697 };
+// how far the hillside falls (m), and over what run
+const FALL = { drop: 6.5, run: 70 };
 
 const sstep = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -38,7 +44,10 @@ export function hLakeK(x: number, z: number) {
   const a = Math.atan2(qz, qx);
   return Math.hypot(qx, qz) / (1 + 0.15 * Math.sin(a * 3 + 0.7) + 0.08 * Math.sin(a * 5 + 2.1) + 0.05 * Math.sin(a * 9 + 4.0));
 }
-export const coastZ = (x: number) => 470 - 0.00042 * x * x + 46 * Math.sin(x * 0.0041 + 0.9) + 17 * Math.sin(x * 0.0127 + 2.0);
+// the shore behind the desk: z of the waterline at x (a long shallow bay, 180 m off at its nearest)
+export const coastZ = (x: number) => 150 - 0.0001 * x * x + 24 * Math.sin(x * 0.0041 + 0.9) + 8 * Math.sin(x * 0.0127 + 2.0);
+// metres inland from the sea (negative: out at sea)
+export const inland = (x: number, z: number) => coastZ(x) - z;
 // how level the ground is held: 0 on the field, the road and round the lake; 1 out in the open land
 export function landFree(x: number, z: number) {
   const r = Math.hypot(x, z);
@@ -49,6 +58,14 @@ export function landFree(x: number, z: number) {
   f *= sstep(1.3, 3.0, hLakeK(x, z));
   return f;
 }
+// The hillside: the desk stands on the brow of a meadow that falls away to the north-west, down to the lake and
+// on to the sea. Metres fallen at a point (0 on the desk's own ground, along the road and everywhere east of it).
+export function fallK(x: number, z: number) {
+  const q = x * BAY.ux + z * BAY.uz;
+  const d = Math.max(0, q - 5);
+  const west = (roadX(z) - x) / (Math.hypot(x, z) + 6);
+  return FALL.drop * (1 - Math.exp(-d / FALL.run)) * sstep(0.02, 0.3, west);
+}
 export function landH(x: number, z: number) {
   const r = Math.hypot(x, z);
   const wx = x + 18 * Math.sin(z * 0.013 + 1.7);
@@ -56,18 +73,81 @@ export function landH(x: number, z: number) {
   const k1 = Math.sin(wx * 0.021 + 0.6) * Math.sin(wz * 0.017 + 2.2);
   const k2 = Math.sin(wx * 0.047 - 1.1 + wz * 0.012) * Math.sin(wz * 0.039 + 0.4);
   const k3 = Math.sin(wx * 0.0061 + wz * 0.0083 + 3.3);
-  let h = landFree(x, z) * (2.3 + 1.3 * k1 + 0.6 * k2 + 1.7 * k3);
-  const c = coastZ(x) - z; // metres inland
-  const hill = sstep(260, 900, r) * sstep(0, 420, c);
+  const fall = fallK(x, z);
+  let h = landFree(x, z) * (2.3 + 1.3 * k1 + 0.6 * k2 + 1.7 * k3) * (1 - 0.045 * fall) - fall;
+  const c = inland(x, z); // metres inland
+  const hill = sstep(230, 760, r) * sstep(120, 520, c);
   h += hill * (15 + 12 * Math.sin(wx * 0.0023 + wz * 0.0031 + 1.0) + 9 * Math.sin(wx * 0.0052 + 2.0) * Math.sin(wz * 0.0047 + 0.3));
-  // dunes behind the beach, then down into the sea
-  h += 1.6 * Math.exp(-((c - 95) * (c - 95)) / 2200) * (0.6 + 0.4 * Math.sin(x * 0.031 + 1.0));
-  h = h + (-9 - h) * (1 - sstep(-55, 70, c));
-  // the lake's bed
+  // the lake lies on a bench of the hillside
   const lk = hLakeK(x, z);
-  h += (-1.5 - h) * (1 - sstep(0.86, 1.1, lk));
+  h += (HLAKE.y + 0.35 - h) * (1 - sstep(1.12, 2.5, lk));
+  // the shore: a low dune behind a beach, then down into the sea
+  const beach = SEA + 1.5 * sstep(0, 30, c) + (2.4 * Math.exp(-((c - 50) * (c - 50)) / 420) + 1.5 * Math.exp(-((c - 84) * (c - 84)) / 300)) * (0.6 + 0.4 * Math.sin(x * 0.031 + 1.0));
+  h = beach + (h - beach) * sstep(40, 118, c);
+  h = h + (SEA - 8 - h) * (1 - sstep(-60, 4, c));
+  // the lake's bed
+  h += (HLAKE.y - 1.2 - h) * (1 - sstep(0.86, 1.1, lk));
+  h -= 0.5 * (1 - sstep(0.3, 1.7, streamD(x, z)));
   return h;
 }
+
+// The brook: out of the wood east of the road, under the footbridge, into the lake's east end. z of its bed at x,
+// and how far a point is from it (a large number where it does not run).
+export const streamZ = (x: number) => -57 + 5 * Math.sin(x * 0.07 + 0.5) - 0.12 * x;
+export function streamD(x: number, z: number) {
+  if (x < -9 || x > 140) return 99;
+  return Math.abs(z - streamZ(x)) + Math.max(0, x - 110) * 0.05 + Math.max(0, -5 - x) * 0.3;
+}
+
+// ---------- the places of the map ----------
+// Things that stand in the land (made in Props): where they are is decided here, because the woods keep clear of
+// them, they shade the grass, and the sounds of the place are hung on them.
+function lakeRim(tx: number, tz: number) {
+  // the point of the lake's rim on the way from its middle toward (tx, tz)
+  const dx = tx - HLAKE.x;
+  const dz = tz - HLAKE.z;
+  const L = Math.hypot(dx, dz);
+  let lo = 0;
+  let hi = L;
+  for (let i = 0; i < 20; i++) {
+    const m = (lo + hi) / 2;
+    if (hLakeK(HLAKE.x + (dx / L) * m, HLAKE.z + (dz / L) * m) < 1) lo = m;
+    else hi = m;
+  }
+  return { x: HLAKE.x + (dx / L) * lo, z: HLAKE.z + (dz / L) * lo, ux: -dx / L, uz: -dz / L };
+}
+function shoreZ(x: number) {
+  return coastZ(x);
+}
+export const PLACES = (() => {
+  const pierX = 1.45 + 0.85 * Math.sin(170 * 0.15 + 0.35) + 0.6 * Math.sin(170 * 0.043 - 1.1);
+  return {
+    // the pier at the end of the footpath behind the desk, the boat moored to it, the lantern at its head
+    pier: { x: pierX, z0: shoreZ(pierX) - 7, z1: shoreZ(pierX) + 21 },
+    // a short jetty on the lake's near shore
+    jetty: lakeRim(-6, -30),
+    bridge: { x: roadX(streamZ(1.5)), z: streamZ(1.5) },
+    shrine: { x: 4.6, z: -27 },
+    hay: [[-33, -15], [-44, -21], [-39.5, -28.5], [-57, -11], [-52, -30]] as [number, number][],
+    village: { x: -64, z: -420 },
+    // a farmstead (sodyba) across the meadow west of the lake: house, granary, well with a sweep, a stork's pole
+    farm: { x: -122, z: -30 },
+    lighthouse: { x: 150, z: shoreZ(150) - 16 },
+    tower: { x: -282, z: -318 },
+    fences: [
+      [[9, -16], [10.5, -30], [10, -44], [12, -53]],
+      [[-70, -2], [-52, -4], [-36, -1], [-24, -6]],
+      [[-136, -16], [-123, -12], [-108, -15], [-103, -27]],
+      [[14, 40], [26, 58], [30, 78]],
+    ] as [number, number][][],
+  };
+})();
+// the middles of the sea, the lake and the nearest woods, for whoever hangs sounds on the map
+export const SOUNDS = {
+  sea: { x: 0, z: 185, line: (x: number) => coastZ(x) },
+  lake: { x: HLAKE.x, z: HLAKE.z, r: HLAKE.rx },
+  woods: [[-58, -24], [34, -40], [-110, -150], [60, -160]] as [number, number][],
+};
 
 // ---------- geography (GLSL: the same lines) ----------
 const f1 = (n: number) => (Number.isInteger(n) ? n.toFixed(1) : String(n));
@@ -80,7 +160,12 @@ float hLakeK(vec2 p){
   float a = atan(q.y, q.x);
   return length(q) / (1.0 + 0.15 * sin(a * 3.0 + 0.7) + 0.08 * sin(a * 5.0 + 2.1) + 0.05 * sin(a * 9.0 + 4.0));
 }
-float coastZ(float x){ return 470.0 - 0.00042 * x * x + 46.0 * sin(x * 0.0041 + 0.9) + 17.0 * sin(x * 0.0127 + 2.0); }
+float coastZ(float x){ return 150.0 - 0.0001 * x * x + 24.0 * sin(x * 0.0041 + 0.9) + 8.0 * sin(x * 0.0127 + 2.0); }
+float inland(vec2 p){ return coastZ(p.x) - p.y; }
+float streamD(vec2 p){
+  if (p.x < -9.0 || p.x > 140.0) return 99.0;
+  return abs(p.y - (-57.0 + 5.0 * sin(p.x * 0.07 + 0.5) - 0.12 * p.x)) + max(0.0, p.x - 110.0) * 0.05 + max(0.0, -5.0 - p.x) * 0.3;
+}
 float landFree(vec2 p){
   float r = length(p);
   float f = smoothstep(70.0, 210.0, r);
@@ -90,20 +175,30 @@ float landFree(vec2 p){
   f *= smoothstep(1.3, 3.0, hLakeK(p));
   return f;
 }
+float fallK(vec2 p){
+  float q = dot(p, vec2(${f1(BAY.ux)}, ${f1(BAY.uz)}));
+  float d = max(0.0, q - 5.0);
+  float west = (roadXh(p.y) - p.x) / (length(p) + 6.0);
+  return ${f1(FALL.drop)} * (1.0 - exp(-d / ${f1(FALL.run)})) * smoothstep(0.02, 0.3, west);
+}
 float landH(vec2 p){
   float r = length(p);
   vec2 w = p + 18.0 * vec2(sin(p.y * 0.013 + 1.7), sin(p.x * 0.011 + 4.1));
   float k1 = sin(w.x * 0.021 + 0.6) * sin(w.y * 0.017 + 2.2);
   float k2 = sin(w.x * 0.047 - 1.1 + w.y * 0.012) * sin(w.y * 0.039 + 0.4);
   float k3 = sin(w.x * 0.0061 + w.y * 0.0083 + 3.3);
-  float h = landFree(p) * (2.3 + 1.3 * k1 + 0.6 * k2 + 1.7 * k3);
-  float c = coastZ(p.x) - p.y;
-  float hill = smoothstep(260.0, 900.0, r) * smoothstep(0.0, 420.0, c);
+  float fall = fallK(p);
+  float h = landFree(p) * (2.3 + 1.3 * k1 + 0.6 * k2 + 1.7 * k3) * (1.0 - 0.045 * fall) - fall;
+  float c = inland(p);
+  float hill = smoothstep(230.0, 760.0, r) * smoothstep(120.0, 520.0, c);
   h += hill * (15.0 + 12.0 * sin(w.x * 0.0023 + w.y * 0.0031 + 1.0) + 9.0 * sin(w.x * 0.0052 + 2.0) * sin(w.y * 0.0047 + 0.3));
-  h += 1.6 * exp(-((c - 95.0) * (c - 95.0)) / 2200.0) * (0.6 + 0.4 * sin(p.x * 0.031 + 1.0));
-  h = mix(-9.0, h, smoothstep(-55.0, 70.0, c));
   float lk = hLakeK(p);
-  h = mix(-1.5, h, smoothstep(0.86, 1.1, lk));
+  h = mix(LAKE_Y + 0.35, h, smoothstep(1.12, 2.5, lk));
+  float beach = SEA + 1.5 * smoothstep(0.0, 30.0, c) + (2.4 * exp(-((c - 50.0) * (c - 50.0)) / 420.0) + 1.5 * exp(-((c - 84.0) * (c - 84.0)) / 300.0)) * (0.6 + 0.4 * sin(p.x * 0.031 + 1.0));
+  h = mix(beach, h, smoothstep(40.0, 118.0, c));
+  h = mix(SEA - 8.0, h, smoothstep(-60.0, 4.0, c));
+  h = mix(LAKE_Y - 1.2, h, smoothstep(0.86, 1.1, lk));
+  h -= 0.5 * (1.0 - smoothstep(0.3, 1.7, streamD(p)));
   return h;
 }
 vec3 landN(vec2 p){
@@ -202,7 +297,7 @@ export const GLSL_FIELD = /* glsl */ `
 // drifts of wildflowers: where they grow thick (0..1) and which colour leads there
 float flowerDrift(vec2 p){
   float a = vnoise(p * 0.035 + 17.0) * 0.65 + vnoise(p * 0.11 + 5.0) * 0.35;
-  return smoothstep(0.52, 0.74, a);
+  return smoothstep(0.44, 0.7, a);
 }
 vec3 flowerHue(vec2 p){
   float k = vnoise(p * 0.021 + 31.0);
@@ -227,6 +322,9 @@ vec3 fieldAlbK(vec2 m){
   return c * mix(0.74, 1.12, m.y);
 }
 vec3 fieldAlb(vec2 p){ return fieldAlbK(fieldMix(p)); }
+// seen from far off a meadow is the tops of its grass: lighter and yellower than the blade's body. The blades and
+// the ground under them both take this, so the field is one colour from the desk to the tree line
+vec3 fieldFar(vec3 c, float dist){ return c * mix(vec3(1.0), vec3(1.16, 1.09, 0.82), smoothstep(6.0, 45.0, dist)); }
 // the light of open ground (sh: 1 in the sun)
 vec3 fieldLight(float sh){
   return uSkyCol * 0.62 + uKeyCol * (0.25 + 0.75 * max(uKeyDir.y, 0.0)) * sh * smoothstep(-0.02, 0.08, uKeyDir.y);
@@ -234,6 +332,23 @@ vec3 fieldLight(float sh){
 // the wind's long waves over the grass, the same field everywhere
 float windWave(vec2 p){ return smoothstep(0.25, 0.85, vnoise(p * 0.22 - vec2(0.864, 0.503) * uTime * 0.55)); }
 `;
+
+// While this is on nothing of the world is drawn: the scene's programs are being compiled off the main thread
+// behind the loader (see the room), and a draw would force each one to finish there and then.
+export const HOLD = { on: false };
+
+// While the desk is simply being looked at, the two shadow passes (the sun's map and the contact shadows) take
+// turns, a frame each: nothing on the desk moves faster than that can follow.
+export const CALM = { on: false, frame: 0 };
+
+// how long each part of the world took to make (ms), for whoever is measuring the load: window.__gen
+export function timed<T>(name: string, fn: () => T): T {
+  const t0 = performance.now();
+  const out = fn();
+  const g = ((globalThis as unknown as { __gen?: Record<string, number> }).__gen ??= {});
+  g[name] = Math.round(((g[name] ?? 0) + performance.now() - t0) * 10) / 10;
+  return out;
+}
 
 // ---------- noise (JS) ----------
 function hash2(x: number, y: number) {
@@ -280,8 +395,8 @@ export function rng(seed: number) {
 // road's own avenue, nothing on the beach or in water.
 export function forestD(x: number, z: number) {
   const r = Math.hypot(x, z);
-  const c = coastZ(x) - z;
-  if (c < 60) return 0;
+  const c = inland(x, z);
+  if (c < 100) return 0;
   const lk = hLakeK(x, z);
   if (lk < 1.22) return 0;
   const big = fbm(x * 0.0042 + 3.1, z * 0.0042 - 7.7, 4);
@@ -297,7 +412,7 @@ export function forestD(x: number, z: number) {
   d *= 1 - 0.9 * lane;
   // the visitor's own side: a lane left open down the middle (the arrival comes down it, and the desk is come to
   // across a meadow), woods standing either side of it
-  if (z > 4) d = Math.max(d * sstep(14, 60, Math.abs(x) + Math.max(0, 60 - z) * 0.2), 0.62 * sstep(26, 60, Math.abs(x)) * (1 - sstep(120, 200, Math.abs(x))) * sstep(70, 120, z) * (0.45 + 0.55 * vnoise(x * 0.03 + 9, z * 0.03)) * sstep(60, 140, coastZ(x) - z));
+  if (z > 4) d *= sstep(16, 64, Math.abs(x) + Math.max(0, 60 - z) * 0.2);
   // the road is lined, not overgrown
   if (z < 10 && z > HOME_GATE_Z - 80) {
     const rd = Math.abs(x - roadX(z));
@@ -305,7 +420,8 @@ export function forestD(x: number, z: number) {
     // the avenue: a wood standing either side of the road, from a little way out
     d = Math.max(d, (1 - sstep(26, 70, rd)) * sstep(7.5, 10, rd) * sstep(-30, -70, z) * (0.55 + 0.45 * vnoise(x * 0.05, z * 0.03)));
   }
-  d *= sstep(60, 140, c) * sstep(1.22, 1.9, lk + mid * 0.5);
+  d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
+  d *= sstep(22, 44, Math.hypot(x - PLACES.farm.x, z - PLACES.farm.z)) * sstep(34, 70, Math.hypot(x - PLACES.village.x, z - PLACES.village.z)) * sstep(10, 26, Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z)) * sstep(1.5, 5, streamD(x, z));
   return Math.min(1, d);
 }
 
@@ -332,7 +448,7 @@ export function plantHome(amount: number): HomeTree[] {
   const push = (x: number, z: number, kind: TreeKind, s: number, lod: 0 | 1 | 2) => {
     trees.push({ x, y: landH(x, z), z, s, kind, v: Math.floor(r() * 3), rot: r() * 6.283, tint: r(), lod: lod === 0 && Math.hypot(x, z) < 82 ? -1 : lod });
   };
-  const near = (x: number, z: number): 0 | 1 => (Math.hypot(x, z) < 135 || (z < 0 && Math.abs(x - roadX(z)) < 24 && z > HOME_GATE_Z - 20) ? 0 : 1);
+  const near = (x: number, z: number): 0 | 1 => (Math.hypot(x, z) < 115 || (z < 0 && Math.abs(x - roadX(z)) < 24 && z > HOME_GATE_Z - 20) ? 0 : 1);
 
   // 1. framing the view from the desk, placed by hand: tall trees left and right, a birch by the lake
   const hand: [number, number, TreeKind, number][] = [
@@ -345,7 +461,7 @@ export function plantHome(amount: number): HomeTree[] {
     [-22, 58, "bush", 1.0], [25, 61, "bush", 1.1], [-88, 40, "birch", 1.1], [92, 36, "pine", 1.1], [18, 70, "cypress", 0.9], [-19, 132, "cypress", 1.2], [23, 141, "cypress", 1.05],
     [-12, -118, "cypress", 1.0], [-17, -124, "cypress", 1.25], [-9, -127, "cypress", 0.85], [72, -74, "cypress", 1.1], [-96, 18, "cypress", 1.15], [-101, 12, "cypress", 0.9], [84, 64, "cypress", 1.0],
   ];
-  for (const [x, z, k, s] of hand) if (hLakeK(x, z) > 1.25) push(x, z, k, s, 0);
+  for (const [x, z, k, s] of hand) if (hLakeK(x, z) > 1.25 && inland(x, z) > 96) push(x, z, k, s, 0);
 
   // 2. whole trees out to 330 m: a jittered grid, kept where the wood is
   const cell = 5.2;
@@ -357,10 +473,10 @@ export function plantHome(amount: number): HomeTree[] {
       const u2 = r();
       const d = forestD(x, z);
       const rr = Math.hypot(x, z);
-      if (rr > 330 && !(z < 0 && Math.abs(x - roadX(z)) < 80 && z > HOME_GATE_Z - 90)) continue;
+      if (rr > 240 && !(z < 0 && Math.abs(x - roadX(z)) < 80 && z > HOME_GATE_Z - 90)) continue;
       if (u > d * d * 0.8 * amount) {
         // a lone tree or a bush out in the meadow, now and then
-        if (!(u2 < 0.0035 && rr > 34 && d < 0.2 && hLakeK(x, z) > 1.3 && coastZ(x) - z > 120 && !(z > 4 && Math.abs(x) < 16) && !(z < 10 && Math.abs(x - roadX(z)) < 9))) continue;
+        if (!(u2 < 0.0035 && rr > 34 && d < 0.2 && hLakeK(x, z) > 1.3 && inland(x, z) > 120 && !(z > 4 && Math.abs(x) < 16) && !(z < 10 && Math.abs(x - roadX(z)) < 9))) continue;
         push(x, z, u2 < 0.0012 ? "cypress" : u2 < 0.0022 ? "broad" : "bush", 0.85 + r() * 0.4, near(x, z));
         continue;
       }
@@ -370,18 +486,19 @@ export function plantHome(amount: number): HomeTree[] {
     }
 
   // 3. the far woods: small soft crowns to the edge of sight
-  const cell2 = 12.5 / Math.sqrt(Math.max(0.35, amount));
+  const cell2 = 8.8 / Math.sqrt(Math.max(0.35, amount));
   for (let gx = -1700; gx < 1700; gx += cell2)
     for (let gz = -1700; gz < 900; gz += cell2) {
       const x = gx + r() * cell2;
       const z = gz + r() * cell2;
       const u = r();
       const rr = Math.hypot(x, z);
-      if (rr < 325 || rr > 1700) continue;
+      if (rr < 240 || rr > 1700) continue;
       if (z < 0 && Math.abs(x - roadX(z)) < 80 && z > HOME_GATE_Z - 90) continue;
       const d = forestD(x, z);
-      if (u > d * 0.92) {
-        if (u < 0.9985 || d > 0.2 || coastZ(x) - z < 120) continue;
+      // (inside a wood the trees stand shoulder to shoulder: a mass, not a scatter)
+      if (u > sstep(0.08, 0.5, d) * 0.97) {
+        if (u < 0.9985 || d > 0.2 || inland(x, z) < 120) continue;
         push(x, z, "cypress", 1.1 + r() * 0.6, 2);
         continue;
       }
@@ -402,7 +519,8 @@ function dataTex(data: Uint8Array, n: number, filter = true) {
 }
 
 export function bakeForestMap() {
-  const n = 512;
+  // (14 m a texel: the woods' edges are soft anyway, and it is a quarter of the work behind the loader)
+  const n = 256;
   const data = new Uint8Array(n * n * 4);
   for (let j = 0; j < n; j++)
     for (let i = 0; i < n; i++) {
@@ -441,6 +559,20 @@ export function bakeCrownMap(trees: HomeTree[]) {
         acc[k] = 1 - (1 - acc[k]) * (1 - a);
       }
   }
+  // the haystacks, the shrine and the bridge lay their shade too
+  const blot = (x: number, z: number, rad: number, a: number) => {
+    const R = rad * px;
+    const cx = (x + CROWN_SPAN) * px;
+    const cz = (z + CROWN_SPAN) * px;
+    for (let j = Math.max(0, Math.floor(cz - R)); j <= Math.min(n - 1, Math.ceil(cz + R)); j++)
+      for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(n - 1, Math.ceil(cx + R)); i++) {
+        const d = Math.hypot(i + 0.5 - cx, j + 0.5 - cz) / R;
+        if (d < 1) acc[j * n + i] = 1 - (1 - acc[j * n + i]) * (1 - a * (1 - d * d));
+      }
+  };
+  for (const [x, z] of PLACES.hay) blot(x, z, 2.1, 0.95);
+  blot(PLACES.shrine.x, PLACES.shrine.z, 0.7, 0.8);
+  blot(PLACES.bridge.x, PLACES.bridge.z, 1.6, 0.7);
   const data = new Uint8Array(n * n * 4);
   for (let k = 0; k < n * n; k++) {
     data[k * 4] = Math.round(255 * acc[k]);
@@ -538,18 +670,18 @@ export function bakeCloudTex() {
 let made: { trees: HomeTree[]; amount: number } | null = null;
 export function homeLand(amount = 1) {
   if (!made || made.amount !== amount) {
-    const trees = plantHome(amount);
+    const trees = timed("plant", () => plantHome(amount));
     HOME_U.uForestMap.value?.dispose();
     HOME_U.uCrownMap.value?.dispose();
-    HOME_U.uForestMap.value = bakeForestMap();
-    HOME_U.uCrownMap.value = bakeCrownMap(trees);
-    HOME_U.uCloudTex.value ??= bakeCloudTex();
+    HOME_U.uForestMap.value = timed("forestMap", bakeForestMap);
+    HOME_U.uCrownMap.value = timed("crownMap", () => bakeCrownMap(trees));
+    HOME_U.uCloudTex.value ??= timed("cloudTex", bakeCloudTex);
     made = { trees, amount };
   }
   return made;
 }
 export function cloudTex() {
-  return (HOME_U.uCloudTex.value ??= bakeCloudTex());
+  return (HOME_U.uCloudTex.value ??= timed("cloudTex", bakeCloudTex));
 }
 
 // the footpath (shared with the old ground): where it runs and how wide

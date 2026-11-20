@@ -3,16 +3,17 @@
 // Trash, About, Terminal, Catch and System Settings.
 
 import { motion } from "motion/react";
-import { Check, Gauge, Info, Power, Send, Trash2, Undo2, UserRound, Volume2, Wallpaper, Contrast } from "lucide-react";
+import { Check, Gauge, Info, Power, Send, Trash2, Undo2, UserRound, Wallpaper, Contrast } from "lucide-react";
+import { Sym } from "../symbols";
 import { useEffect, useRef, useState } from "react";
 import { about, apps, desktopItems, allApps, owner, projectApps, timeline, wallpapers, type AppId } from "@/content";
 import MusicShader from "../scene/MusicShader";
-import { DeskArt } from "../Desktop";
-import { Monogram } from "../Login";
+import { DeskArt, Monogram } from "../shell";
 import { useOS, useWallpaperIndex } from "@/store";
 import { QUALITY_LABELS, setQualityChoice, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { Btn, Button, IconTile, List, ListRow, M, SectionHeader, Squircle, sfx, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
 import { Empty, useOpenApp } from "./shared";
+import { useSound } from "./sound";
 
 export function TrashApp() {
   const trash = useOS((s) => s.trash);
@@ -25,11 +26,11 @@ export function TrashApp() {
     <div className="flex h-full min-h-0 flex-col" onPointerDown={() => setSel(null)}>
       <Toolbar title="Trash" sub={items.length ? `${items.length} item${items.length > 1 ? "s" : ""}` : undefined}>
         {sel && (
-          <Button size="sm" icon={<Undo2 size={14} />} onClick={() => (putBack([sel]), setSel(null))}>
+          <Button size="sm" icon={<Sym icon={Undo2} size={14} weight="medium" />} onClick={() => (putBack([sel]), setSel(null))}>
             Put Back
           </Button>
         )}
-        <Button size="sm" icon={<Trash2 size={14} />} onClick={() => items.length && (emptyTrash())}>
+        <Button size="sm" icon={<Sym icon={Trash2} size={14} weight="medium" />} onClick={() => items.length && (emptyTrash())}>
           Empty
         </Button>
       </Toolbar>
@@ -43,7 +44,7 @@ export function TrashApp() {
               onDoubleClick={() => (putBack([it.id]))}
               onContextMenu={(e) => {
                 setSel(it.id);
-                ctx.open(e, [{ label: "Put Back", run: () => (putBack([it.id])) }, "sep", { label: "Empty Trash", run: () => (emptyTrash()) }]);
+                ctx.open(e, [{ label: "Put Back", icon: Undo2, run: () => (putBack([it.id])) }, "sep", { label: "Empty Trash", icon: Trash2, run: () => (emptyTrash()) }]);
               }}
               className="flex flex-col items-center gap-1 outline-none"
             >
@@ -55,7 +56,7 @@ export function TrashApp() {
           ))}
         </div>
       ) : (
-        <Empty icon={<Trash2 size={22} />} title="Trash is empty" body="Drag an item from the desktop onto the Trash in the Dock." />
+        <Empty icon={<Sym icon={Trash2} size={22} weight="medium" />} title="Trash is empty" body="Drag an item from the desktop onto the Trash in the Dock." />
       )}
       {ctx.node}
     </div>
@@ -89,10 +90,10 @@ export function About() {
       </dl>
       {compact ? (
         <div className="mt-8 flex w-full max-w-[320px] flex-col gap-2.5">
-          <Btn variant="prominent" size="lg" capsule onClick={moreInfo} icon={<Info size={17} />}>
+          <Btn variant="prominent" size="lg" capsule onClick={moreInfo} icon={<Sym icon={Info} size={17} weight="medium" />}>
             More Info
           </Btn>
-          <Btn variant="tinted" size="lg" capsule onClick={openContact} icon={<Send size={16} />}>
+          <Btn variant="tinted" size="lg" capsule onClick={openContact} icon={<Sym icon={Send} size={16} weight="medium" />}>
             Get in Touch
           </Btn>
         </div>
@@ -123,10 +124,21 @@ function AboutPane() {
     if (st.isMobile) st.openPhoneApp(id);
     else st.open(id);
   };
-  const rows = (list: { label: string; value: string }[]) => (
+  const rows = (list: { label: string; value: string }[], stack = compact && list.some((r) => r.value.length > 18)) => (
     <List mac={!compact}>
       {list.map((r) => (
-        <ListRow mac={!compact} key={r.label} title={r.label} detail={<span className="block max-w-[26ch] truncate @md:max-w-[44ch]">{r.value}</span>} />
+        // on a phone, a list with a long value in it puts every value under its label, where it can wrap: neither is
+        // ever cut to "Desi…", and the rows of one list all read the same way
+        stack ? (
+          <div key={r.label} className="list-row">
+            <span className="list-body !block py-2.5">
+              <span className="t-foot block text-[var(--label-2)]">{r.label}</span>
+              <span className="t-body block text-[var(--label)] [text-wrap:pretty]">{r.value}</span>
+            </span>
+          </div>
+        ) : (
+          <ListRow mac={!compact} key={r.label} title={r.label} detail={<span className="block max-w-[26ch] truncate @md:max-w-[44ch]">{r.value}</span>} />
+        )
       ))}
     </List>
   );
@@ -365,6 +377,117 @@ export function Game() {
   );
 }
 
+// ---------- Settings: Sound ----------
+// One fader row, as macOS draws it: what it is, a quiet speaker, the slider, a loud speaker, and a mute button
+// (one glyph, tinted while it is on). On a phone the name sits over the slider so the slider gets the whole width.
+function Level({ label, sub, value, onChange, muted, onMute, compact }: { label: string; sub?: string; value: number; onChange: (v: number) => void; muted?: boolean; onMute?: (m: boolean) => void; compact: boolean }) {
+  const shown = muted ? 0 : value;
+  const pct = Math.round(shown * 100);
+  const slider = (
+    <span className={`flex min-w-0 flex-1 items-center text-[var(--label-2)] ${compact ? "gap-3" : "gap-2"}`}>
+      <Sym icon={shown === 0 ? "speakerOff" : "speaker1"} size={compact ? 20 : 15} />
+      <input
+        type="range"
+        aria-label={label}
+        aria-valuetext={`${pct}%`}
+        min={0}
+        max={1}
+        step={0.01}
+        value={shown}
+        onChange={(e) => onChange(+e.target.value)}
+        className="vol min-w-0 flex-1"
+        style={{ ["--p" as string]: `${pct}%` }}
+      />
+      <Sym icon="speaker2" size={compact ? 20 : 15} />
+    </span>
+  );
+  const mute = onMute && (
+    <Btn variant={muted ? "tinted" : "plain"} size={compact ? "md" : "sm"} iconOnly label={muted ? `Unmute ${label}` : `Mute ${label}`} onClick={() => onMute(!muted)} icon={<Sym icon="speakerOff" size={compact ? 19 : 15} weight="medium" />} />
+  );
+  if (compact)
+    return (
+      <div className="list-row">
+        <span className="list-body !block py-3">
+          <span className="flex items-center justify-between gap-3">
+            <span className="min-w-0">
+              <span className="t-body block text-[var(--label)]">{label}</span>
+              {sub && <span className="t-foot block text-[var(--label-2)] [text-wrap:pretty]">{sub}</span>}
+            </span>
+            <span className="t-sub shrink-0 tabular-nums text-[var(--label-2)]">{muted ? "Muted" : `${pct}%`}</span>
+          </span>
+          <span className="mt-2 flex items-center gap-2">
+            {slider}
+            {mute}
+          </span>
+        </span>
+      </div>
+    );
+  return (
+    <div className="list-row">
+      <span className="list-body !min-h-[44px]">
+        <span className="w-[150px] shrink-0">
+          <span className="m-body block truncate text-[var(--label)]">{label}</span>
+          {sub && <span className="m-sub block truncate text-[var(--label-2)]">{sub}</span>}
+        </span>
+        {slider}
+        <span className="m-sub w-[38px] shrink-0 text-right tabular-nums text-[var(--label-2)]">{muted ? "Muted" : `${pct}%`}</span>
+        <span className="flex w-7 shrink-0 justify-end">{mute}</span>
+      </span>
+    </div>
+  );
+}
+
+// Output, the field (its music and its ambience) and the Music app, with a way back to the levels the site was
+// mixed at. Every level goes through apps/sound.ts, the one file that knows where each of them lives.
+function SoundPane({ compact }: { compact: boolean }) {
+  const s = useSound();
+  const note = `mt-2 text-ink-3 ${compact ? "t-foot px-4" : "m-sub px-1"}`;
+  return (
+    <div className="space-y-6">
+      <div>
+        <SectionHeader mac={!compact}>Output</SectionHeader>
+        <List mac={!compact}>
+          <Level compact={compact} label="Output volume" value={s.output} onChange={s.setOutput} muted={s.muted} onMute={s.setMuted} />
+        </List>
+        <p className={note}>Everything this site plays: the field, the flight, the piano and the Music app.</p>
+      </div>
+      <div>
+        <SectionHeader mac={!compact}>The field</SectionHeader>
+        <List mac={!compact}>
+          <Level compact={compact} label="Field music" sub="At the desk in the meadow" value={s.music} onChange={s.setMusic} />
+          <Level compact={compact} label="Ambience" sub="Wind, waves and birds" value={s.ambience} onChange={s.setAmbience} />
+        </List>
+        <p className={note}>70% is how they were mixed; above it they are a little louder.</p>
+      </div>
+      <div>
+        <SectionHeader mac={!compact}>Music app</SectionHeader>
+        <List mac={!compact}>
+          <Level compact={compact} label="Records" sub="His recordings" value={s.player} onChange={s.setPlayer} />
+        </List>
+      </div>
+      <div className={`flex items-center justify-between gap-4 ${compact ? "px-4" : "px-1"}`}>
+        <p className={`text-ink-3 ${compact ? "t-foot" : "m-sub"}`}>The interface itself is silent: no clicks, no alerts.</p>
+        <Btn size={compact ? "md" : "sm"} disabled={!s.changed} onClick={s.reset}>
+          Reset
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+// whether this browser will give a WebGL context at all (asked once): the live wallpaper's preview is a shader
+let webgl: boolean | null = null;
+function canWebGL() {
+  if (webgl !== null) return webgl;
+  try {
+    const c = document.createElement("canvas");
+    webgl = !!(c.getContext("webgl2") ?? c.getContext("webgl"));
+  } catch {
+    webgl = false;
+  }
+  return webgl;
+}
+
 export function SettingsApp() {
   const wallpaper = useWallpaperIndex();
   const { sound, setSound, setWallpaper, appearance, setAppearance, reduceEffects, setReduceEffects, shutdown } = useOS();
@@ -380,7 +503,7 @@ export function SettingsApp() {
       {icon}
     </IconTile>
   );
-  const sz = compact ? 17 : 12;
+  const sz = compact ? 18 : 13;
   const looks: { v: "light" | "dark" | "auto"; label: string }[] = [
     { v: "light", label: "Light" },
     { v: "dark", label: "Dark" },
@@ -427,7 +550,7 @@ export function SettingsApp() {
           </List>
         </div>
         <List mac={!compact}>
-          <ListRow mac={!compact} icon={tile("#8E8E93", <Contrast size={sz} />)} title="Reduce effects" sub="Solid surfaces instead of glass, gentler motion" detail={<Switch on={reduceEffects} onChange={setReduceEffects} label="Reduce effects" />} />
+          <ListRow mac={!compact} icon={tile("#8E8E93", <Sym icon={Contrast} size={sz} weight="medium" />)} title="Reduce effects" sub="Solid surfaces instead of glass, gentler motion" detail={<Switch on={reduceEffects} onChange={setReduceEffects} label="Reduce effects" />} />
         </List>
       </div>
     ) : sel === "wallpaper" ? (
@@ -442,10 +565,11 @@ export function SettingsApp() {
                 <button type="button" key={w.src} onClick={() => setWallpaper(i)} aria-pressed={on} className="press text-left">
                   <Squircle
                     radius={12}
-                    className={`relative block aspect-[16/10] overflow-hidden bg-cover bg-center ${on ? "ring-[3px] ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-elevated)]" : "shadow-[var(--shadow-1)]"} ${live ? "bg-[#070b16]" : ""}`}
+                    className={`relative block aspect-[16/10] overflow-hidden bg-cover bg-center ${on ? "ring-[3px] ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-elevated)]" : "shadow-[var(--shadow-1)]"} ${live ? "bg-[radial-gradient(120%_100%_at_28%_18%,#2c4a8c_0%,#14204a_42%,#070b16_100%)]" : ""}`}
                     style={live ? undefined : { backgroundImage: `url(${w.src})` }}
                   >
-                    {live && (
+                    {/* the shader itself where the browser can draw it; the night gradient under it is the still */}
+                    {live && canWebGL() && (
                       <span className="absolute inset-0">
                         <MusicShader intensity={0.6} palette="night" />
                       </span>
@@ -459,9 +583,7 @@ export function SettingsApp() {
         </List>
       </div>
     ) : sel === "sound" ? (
-      <List mac={!compact}>
-        <ListRow mac={!compact} icon={tile("#FF2D55", <Volume2 size={sz} />)} title="Play sound" sub="The startup chime and music" detail={<Switch on={sound} onChange={setSound} label="Play sound" />} />
-      </List>
+      <SoundPane compact={compact} />
     ) : (
       // Graphics: the quality of the 3D world the desk sits in (src/lib/quality.ts, shared with the scene)
       <div>
@@ -474,7 +596,7 @@ export function SettingsApp() {
               onClick={() => setQualityChoice(c)}
               title={QUALITY_LABELS[c]}
               sub={c === "auto" ? `Follows this device, now ${QUALITY_LABELS[quality.preset]}` : undefined}
-              detail={choice === c ? <Check size={compact ? 18 : 14} className="bold text-[var(--accent-text)]" /> : undefined}
+              detail={choice === c ? <Sym icon={Check} size={compact ? 18 : 14} className="text-[var(--accent-text)]" weight="bold" /> : undefined}
             />
           ))}
         </List>
@@ -492,7 +614,7 @@ export function SettingsApp() {
         compact ? undefined : (
         <List className="mt-8">
           <ListRow
-            icon={tile("#FF3B30", <Power size={sz} />)}
+            icon={tile("#FF3B30", <Sym icon={Power} size={sz} weight="medium" />)}
             title="Shut Down"
             onClick={() => {
               sfx("shutdown");
@@ -512,7 +634,7 @@ export function SettingsApp() {
             {/* the phone's power control, where it is seen at once: back to the desk, with the screen off */}
             <List className="mt-5">
               <ListRow
-                icon={tile("#FF3B30", <Power size={sz} />)}
+                icon={tile("#FF3B30", <Sym icon={Power} size={sz} weight="medium" />)}
                 title="Power Off"
                 sub="Back to the desk in the field"
                 onClick={() => {
@@ -536,11 +658,11 @@ export function SettingsApp() {
       sections={[
         {
           items: [
-            { id: "about", label: "About", icon: tile("#8E8E93", <UserRound size={sz} />) },
-            { id: "appearance", label: "Appearance", icon: tile("#48484A", <Contrast size={sz} />) },
-            { id: "wallpaper", label: "Wallpaper", icon: tile("#32ADE6", <Wallpaper size={sz} />) },
-            { id: "sound", label: "Sound", icon: tile("#FF2D55", <Volume2 size={sz} />) },
-            { id: "graphics", label: "Graphics", icon: tile("#34C759", <Gauge size={sz} />) },
+            { id: "about", label: "About", icon: tile("#8E8E93", <Sym icon={UserRound} size={sz} weight="medium" />) },
+            { id: "appearance", label: "Appearance", icon: tile("#48484A", <Sym icon={Contrast} size={sz} weight="medium" />) },
+            { id: "wallpaper", label: "Wallpaper", icon: tile("#32ADE6", <Sym icon={Wallpaper} size={sz} weight="medium" />) },
+            { id: "sound", label: "Sound", icon: tile("#FF2D55", <Sym icon="speaker2" size={sz} weight="medium" />) },
+            { id: "graphics", label: "Graphics", icon: tile("#34C759", <Sym icon={Gauge} size={sz} weight="medium" />) },
           ],
         },
       ]}

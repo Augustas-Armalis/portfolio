@@ -2,6 +2,7 @@
 
 // Shots and Gallery: one Photos-style grid with Quick Look.
 
+import { ArrowUpRight, Eye } from "lucide-react";
 import { useState } from "react";
 import { novel, shots } from "@/content";
 import { Btn, dragFile, useContextMenu, QuickLook, SearchField, Segmented, Toolbar, useChrome, type LookItem } from "../ui";
@@ -63,8 +64,8 @@ function PhotosApp({ title, sub, photos, actions, credit, aspect = "square" }: {
               onClick={() => setLook(i)}
               onContextMenu={(e) =>
                 ctx.open(e, [
-                  { label: "Quick Look", hint: "Space", run: () => setLook(i) },
-                  { label: "Open in New Tab", run: () => window.open(ph.src, "_blank", "noreferrer") },
+                  { label: "Quick Look", icon: Eye, hint: "Space", run: () => setLook(i) },
+                  { label: "Open in New Tab", icon: ArrowUpRight, run: () => window.open(ph.src, "_blank", "noreferrer") },
                 ])
               }
               className={`group relative overflow-hidden bg-[var(--fill-2)] outline-none focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${wide ? "aspect-[16/10]" : "aspect-square"}`}

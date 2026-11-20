@@ -119,11 +119,11 @@ export const apps: Record<AppId, { title: string; size: Size }> = {
   filzy: { title: "Filzy", size: { w: 1100, h: 700 } },
   filzymovie: { title: "Filzy Movie", size: { w: 1100, h: 700 } },
   rug: { title: "Road Rug", size: { w: 900, h: 640 } },
-  slideskipper: { title: "Slide Skipper", size: { w: 900, h: 640 } },
-  musicengine: { title: "Music Engine", size: { w: 900, h: 640 } },
+  slideskipper: { title: "Slide Skipper", size: { w: 820, h: 440 } },
+  musicengine: { title: "Music Engine", size: { w: 820, h: 440 } },
   trackpad: { title: "Trackpad Test", size: { w: 560, h: 420 } },
-  reel: { title: "Reel", size: { w: 900, h: 640 } },
-  openwhip: { title: "OpenWhip", size: { w: 900, h: 640 } },
+  reel: { title: "Reel", size: { w: 820, h: 440 } },
+  openwhip: { title: "OpenWhip", size: { w: 820, h: 440 } },
   doom: { title: "DOOM", size: { w: 800, h: 560 } },
   blocks: { title: "Blocks", size: { w: 920, h: 620 } },
   records: { title: "Records", size: { w: 920, h: 600 } },
@@ -346,7 +346,7 @@ const allTracks: Track[] = [
     title: "Nocturne for Absent Things",
     artist: "Augustas Armalis",
     file: "/content/music/nocturne-for-absent-things.mp3",
-    cover: "/content/music/nocturne-for-absent-things.jpg",
+    cover: "/content/music/nocturne-for-absent-things.webp",
     duration: 191,
     durationLabel: "3:11",
     year: 2026,
@@ -358,7 +358,7 @@ const allTracks: Track[] = [
     title: "Afterlight",
     artist: "Augustas Armalis",
     file: "/content/music/afterlight.m4a",
-    cover: "/content/music/afterlight.jpg",
+    cover: "/content/music/afterlight.webp",
     duration: 403,
     durationLabel: "6:43",
     year: 2026,
@@ -379,8 +379,10 @@ export const novel = {
   author: "Augustas Armalis",
   illustrator: "Motiejus Varnauskas",
   years: "2025–2027",
-  cover: "/content/novel/cover.jpg",
-  logo: "/content/novel/logo.png",
+  // the cover as the book shows it (336 px wide, for a 168 pt cover) and as Quick Look opens it; the file to keep is cover.jpg
+  cover: "/content/novel/cover-thumb.webp",
+  coverFull: "/content/novel/cover.webp",
+  logo: "/content/novel/logo.webp",
   // the full text is large, so the app fetches it when it opens
   src: "/content/novel.json",
   // the finished book, as files to take away (Documents)
@@ -537,6 +539,8 @@ export type DeskItem = {
   kind: "folder" | "app" | "doc" | "image";
   // optional artwork in place of the app icon
   art?: string;
+  // a small copy of an image file for its icon (the icon is 60 px; the file can be megabytes)
+  thumb?: string;
   // what opens on double-click: an app, or a Quick Look of a document or image
   open: { app: AppId } | { look: "resume" | "image"; src?: string };
 };
@@ -545,8 +549,8 @@ export const desktopItems: DeskItem[] = [
   { id: "projects", name: "Projects", kind: "folder", open: { app: "projects" } },
   { id: "games", name: "Games", kind: "folder", open: { app: "games" } },
   { id: "resume", name: "Résumé.pdf", kind: "doc", open: { look: "resume" } },
-  { id: "novel", name: "Žiemos naktys šviesesnės", kind: "app", art: "/content/novel/logo.png", open: { app: "novel" } },
-  { id: "cover", name: "Cover.jpg", kind: "image", open: { look: "image", src: "/content/novel/cover.jpg" } },
+  { id: "novel", name: "Žiemos naktys šviesesnės", kind: "app", art: "/content/novel/logo.webp", open: { app: "novel" } },
+  { id: "cover", name: "Cover.jpg", kind: "image", thumb: "/content/novel/cover-thumb.webp", open: { look: "image", src: "/content/novel/cover.webp" } },
 ];
 
 // ---------- Finder: the folders, the same everywhere (Finder windows, Spotlight, the phone's Files) ----------
@@ -600,7 +604,7 @@ export const places: { id: PlaceId; title: string; groups: { title?: string; ite
           { id: "novel-epub", name: "Žiemos naktys šviesesnės.epub", kind: "EPUB, 4.4 MB", download: novel.epub, ext: "EPUB" },
           { id: "novel-pdf", name: "Žiemos naktys šviesesnės.pdf", kind: "PDF, 9.7 MB", download: novel.pdf, ext: "PDF" },
           { id: "brand-rules", name: "Brand rules", kind: "Note", note: "taste", ext: "TXT" },
-          { id: "cover", name: "Cover.jpg", kind: "JPEG image", look: { type: "image", src: novel.cover }, art: novel.cover },
+          { id: "cover", name: "Cover.jpg", kind: "JPEG image", look: { type: "image", src: novel.coverFull }, art: novel.cover },
         ],
       },
     ],

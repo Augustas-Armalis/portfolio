@@ -10,6 +10,8 @@ import { GLSL_AIR, Kit, WORLD_U, angel, haloGeometry, makeHaloMaterial, makePoin
 import { Birds, GreatSun, type Flock } from "./life";
 import { makeCloudPaint, paintedCloudGeometry, type PCloud } from "./stars/forms";
 import { ORIGIN, WORLDS, pathOf } from "./voyage";
+import { Kindling, useDeepLens, type Lamp } from "./fairy/shared";
+import { Comet } from "./stars/comet";
 
 // Rex (1909). Umber dusk, almost one colour. On a still sea a globe lies half
 // in the water, dark, with paler lands drifting on it; before it a blade of
@@ -33,6 +35,7 @@ const KS = 3.4;
 const SS = 4.4;
 // the globe (R), the dark sphere that holds it (B), and the shells of the sky: all struck from one axis
 export const REX = { x: 0, z: -500, r: 58 * KS, bulb: 82 * KS, portal: 62 * KS };
+const REX_CENTRE: V3 = [REX.x, 0, REX.z];
 const DROP = 197 * SS; // the shells' common centre lies this far under the water
 const SHELLS = [321 * SS, 379 * SS, 405 * SS];
 const DARK: V3 = [0.045, 0.037, 0.031];
@@ -275,6 +278,8 @@ function crescent(R: number) {
 }
 
 export default function RexWorld({ props }: { props: WorldProps }) {
+  // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
+  useDeepLens("rex");
   const comets = useRef<THREE.Group>(null);
   const sky = useRef<THREE.Group>(null);
   const b = useDisposable(() => {
@@ -282,7 +287,9 @@ export default function RexWorld({ props }: { props: WorldProps }) {
     const k = new Kit();
     const halos: Halo[] = [];
     const glows: Halo[] = [];
-    const embers: Halo[] = [];
+    // (the fires are dark from far off and come alight one after another as the plane nears the king: round the
+    // foot of the first shell from the near side to the far, then up its rim from both feet to the top)
+    const embers: Lamp[] = [];
     const X = REX.x;
     const Z = REX.z;
 
@@ -377,11 +384,11 @@ export default function RexWorld({ props }: { props: WorldProps }) {
       const a = ((i + 0.5) / nS) * Math.PI * 2;
       const p: V3 = [X + Math.sin(a) * 53.5 * KS, 166.5 * KS, Z + Math.cos(a) * 53.5 * KS];
       k.add(new THREE.ConeGeometry(0.8 * KS, 3.6 * KS, 4), [p[0], p[1] + 1.8 * KS, p[2]], FIRE, { glow: 1.6 });
-      embers.push({ p: [p[0], p[1] + 2.2 * KS, p[2]], size: 3.6 * KS, col: FIRE, k: 0.5 });
+      embers.push({ p: [p[0], p[1] + 2.2 * KS, p[2]], size: 3.6 * KS, col: FIRE, k: 0.5, at: 620 });
     }
 
     // fires along the rim of the first shell (the arc that faces the way in, and its far twin), and round its foot on the water
-    const fire = (p: V3, s: number, lean = 0) => {
+    const fire = (p: V3, s: number, lean = 0, at = 1e5) => {
       const n = 6;
       for (let j = 0; j < n; j++) {
         const o = (j - (n - 1) / 2) * 0.95 * s;
@@ -389,13 +396,13 @@ export default function RexWorld({ props }: { props: WorldProps }) {
         const h = (3.4 + r() * 4.2 + mid * 5) * s;
         k.add(new THREE.ConeGeometry((0.5 + r() * 0.3) * s, h, 5), [p[0] + o * Math.cos(lean), p[1] + h / 2 - 0.4 + o * Math.sin(lean), p[2] + (r() - 0.5) * 1.4], [0.05, 0.038, 0.03], { top: [0.2, 0.12, 0.06] });
       }
-      embers.push({ p: [p[0], p[1] + 1.8 * s, p[2]], size: 4.6 * s, col: FIRE, k: 0.7 });
+      embers.push({ p: [p[0], p[1] + 1.8 * s, p[2]], size: 4.6 * s, col: FIRE, k: 0.7, at });
     };
     const a0 = Math.asin(DROP / SHELLS[0]) + 0.05;
     const nRim = props.mobile ? 70 : 240;
     for (let i = 0; i < nRim; i++) {
       const a = a0 + ((i + 0.5) / nRim) * (Math.PI - 2 * a0);
-      for (const s of [-1, 1]) fire([X + Math.cos(a) * (SHELLS[0] - 1.5 * SS), Math.sin(a) * (SHELLS[0] - 1.5 * SS) - DROP, Z + s * 0.6 * SS], (0.34 + (i % 5 === 0 ? 0.3 : 0)) * SS, a - Math.PI / 2);
+      for (const s of [-1, 1]) fire([X + Math.cos(a) * (SHELLS[0] - 1.5 * SS), Math.sin(a) * (SHELLS[0] - 1.5 * SS) - DROP, Z + s * 0.6 * SS], (0.34 + (i % 5 === 0 ? 0.3 : 0)) * SS, a - Math.PI / 2, 1320 - 640 * (1 - Math.abs(a - Math.PI / 2) / (Math.PI / 2 - a0)));
     }
     const footR = Math.sqrt(SHELLS[0] * SHELLS[0] - DROP * DROP);
     const nFoot = props.mobile ? 50 : 190;
@@ -405,7 +412,7 @@ export default function RexWorld({ props }: { props: WorldProps }) {
       if (Math.abs(Math.sin(a)) < 0.12 && Math.cos(a) > 0) continue;
       const p: V3 = [X + Math.sin(a) * footR, 0, Z + Math.cos(a) * footR];
       k.add(new THREE.CylinderGeometry(1.1 * SS, 2.0 * SS, 1.0 * SS, 7), [p[0], 0.2 * SS, p[2]], [0.035, 0.03, 0.026], { top: [0.09, 0.07, 0.055] });
-      fire([p[0], 0.7 * SS, p[2]], (0.3 + (i % 4 === 0 ? 0.25 : 0)) * SS);
+      fire([p[0], 0.7 * SS, p[2]], (0.3 + (i % 4 === 0 ? 0.25 : 0)) * SS, 0, 1620 - 880 * (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) / Math.PI));
     }
 
     // the wings of the upper air: tall pale angels standing in a row along the third shell, before and behind
@@ -626,7 +633,9 @@ export default function RexWorld({ props }: { props: WorldProps }) {
       </group>
       <Halos list={b.glows} kind={2} />
       <Halos list={b.halos} />
-      <Halos list={b.embers} />
+      <Kindling list={b.embers} centre={REX_CENTRE} />
+      {/* and a comet of the lower air crosses before him, a while after the plane has come */}
+      <Comet world="rex" id="rex-comet" from={[-1500, 520, 0]} to={[1300, 300, -500]} seconds={34} after={28} again={80} tail={900} width={44} tint={[1, 0.78, 0.5]} />
       <Halos list={b.suns} kind={1} />
     </>
   );

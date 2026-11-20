@@ -11,9 +11,17 @@ export const FUNERAL_U = {
   uFO: { value: new THREE.Vector3().copy(ORIGIN) },
   // x: how thick the valley mist is, y: the height it lies under, z: how fast it thins above that
   uValley: { value: new THREE.Vector3(1, 10, 60) },
+  // metres along the road at which the souls come into being (inside the cave they walk out of)
+  uBorn: { value: 0 },
+  // the bell-light that passes up the procession: where its middle is (metres along the road; far below 0: none)
+  uBell: { value: -1e5 },
+  // how brightly the cave at the pass burns (1: as ever; it flares when the bell-light reaches it)
+  uCaveK: { value: 1 },
 };
 export const GLSL_FUNERAL_AIR = /* glsl */ `
-uniform vec3 uFO; uniform vec3 uValley;
+uniform vec3 uFO; uniform vec3 uValley; uniform float uBell; uniform float uCaveK; uniform float uBorn;
+// the bell-light: how much of it lies on a place s metres along the road
+float bellAt(float s){ float d = (s - uBell) / 70.0; return exp(-d * d); }
 vec3 mistCol(vec3 d){
   // moonlit from the right: a cold pale blue, a breath of green in it, warmer toward the moon
   float m = pow(max(dot(normalize(vec3(d.x, 0.0, d.z)), normalize(vec3(uKeyDir.x, 0.0, uKeyDir.z))), 0.0), 3.0);

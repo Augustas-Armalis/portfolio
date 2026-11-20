@@ -5,6 +5,7 @@ import { airState, arrivalHours, mixSky, skyState, type Air, type SkyState } fro
 import { funeralLand } from "./funeral/land";
 import { GROTTO } from "./sea/shape";
 import { FINALE_ENTRY, FINALE_GATE, FINALE_PATH, FINALE_TERRAIN } from "./seafinale/shape";
+import { SUN_CANVAS, SUN_ENTRY, SUN_GATE, SUN_OBSTACLES, SUN_PATH, SUN_SKY, SUN_TERRAIN } from "./sun/shape";
 
 // Angelų takas, the path of angels. The paper plane's flight is a pilgrimage
 // along a path of light between worlds, and every world is one painting by
@@ -20,7 +21,9 @@ import { FINALE_ENTRY, FINALE_GATE, FINALE_PATH, FINALE_TERRAIN } from "./seafin
 // enough that 32-bit floats still resolve a quarter of a millimetre.
 
 export type WorldId = "home" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "seafinale" | "funeral" | "kings";
-export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "sea", "seafinale", "funeral", "kings"];
+// (after the gate of Offering: the storm wave of the Finale, out of its curl into the calm of Tranquility, through the
+// grotto between the island's eyes and out of a cave mouth into the night of the Funeral Symphony)
+export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "seafinale", "sea", "funeral", "kings"];
 // Fairy Tale of the Kings: where the two kings stand, and the small lit world they hold between their hands
 export const KINGS = { z: -170, domeY: 70, domeR: 30 };
 export const ORIGIN = new THREE.Vector3(-2500, 0, -2700);
@@ -91,34 +94,27 @@ const T0: Terrain = { base: 0, sines: [], bumps: [], rim: [1, 2, 0] };
 const FUNERAL = funeralLand();
 
 // Colours below are scene-linear, written before the lens (ACES and the grade) sees them.
-// The Sonata of the Sun's aqueducts: each crosses the path of light at `c`, an arch centred on it; `u` runs along
-// the bridge, `n` arches of `w` metres, `H` high. Their piers by the path are obstacles (below); worlds/Sun.tsx builds them.
-export const SUN_BRIDGES: { c: [number, number]; u: [number, number]; n: number; w: number; H: number; tiers: number }[] = [
-  { c: [8, 150], u: [0.9615, -0.2747], n: 9, w: 80, H: 56, tiers: 1 },
-  { c: [-80, 15], u: [0.64, -0.768], n: 11, w: 90, H: 200, tiers: 2 },
-];
-
 const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // Sonata of the Sun: a field of dull gold under a gold-green air; one great drawn sun low ahead (the world's
   // GreatSun: the sky's own disc is not drawn) behind the bells and arches, so they stand as shade with a thread of
   // gold round every edge and its rays pour through them
   sun: {
     label: "Sonata of the Sun",
-    zenith: [0.36, 0.33, 0.2],
-    upper: [0.6, 0.44, 0.15],
-    horizon: [0.8, 0.53, 0.15],
-    glow: [1.0, 0.66, 0.2],
+    zenith: [0.3, 0.29, 0.2],
+    upper: [0.5, 0.39, 0.15],
+    horizon: [0.72, 0.49, 0.15],
+    glow: [0.92, 0.6, 0.18],
     amb: [0.46, 0.44, 0.52],
     key: [1.0, 0.78, 0.42],
     keyI: 2.1,
-    sunAz: 12,
-    sunEl: 13,
-    keyAz: 12,
-    keyEl: 19,
+    sunAz: SUN_SKY.az,
+    sunEl: SUN_SKY.el,
+    keyAz: SUN_SKY.keyAz,
+    keyEl: SUN_SKY.keyEl,
     cloudLit: [0.7, 0.6, 0.3],
     cloudShade: [0.4, 0.4, 0.26],
     night: 0,
-    exposure: 0.9,
+    exposure: 0.8,
     fx: [0.0, 0.55, 0.0, 0],
   },
   // Sonata of the Stars: a deep blue-green night; the light is gold and white, and comes from the pyramid's point
@@ -242,7 +238,7 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // Sonata of the Sea, Finale: a pale warm sky in level bands, ochre and amber; the sun low and straight ahead,
   // behind the great wave, so the water is lit through
   seafinale: {
-    label: "Sonata of the Sea. Finale",
+    label: "Sonata of the Sea: Finale",
     zenith: [0.15, 0.1, 0.05],
     upper: [0.36, 0.26, 0.12],
     horizon: [0.62, 0.47, 0.22],
@@ -264,9 +260,9 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // fine rays low over the far wall, its light cold on the rock; the gold is the procession's own
   funeral: {
     label: "Funeral Symphony VI",
-    zenith: [0.008, 0.02, 0.13],
-    upper: [0.014, 0.038, 0.2],
-    horizon: [0.02, 0.058, 0.24],
+    zenith: [0.011, 0.027, 0.165],
+    upper: [0.019, 0.05, 0.25],
+    horizon: [0.028, 0.076, 0.3],
     glow: [0.5, 0.6, 0.6],
     amb: [0.06, 0.1, 0.27],
     key: [0.72, 0.92, 0.88],
@@ -331,64 +327,21 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "sun",
     place: "sky",
     air: AIR.sun,
-    fog: [0.0005, 0.011],
-    terrain: {
-      base: 2,
-      sines: [
-        [0.011, 0.004, 0.4, 5],
-        [-0.006, 0.013, 1.9, 4],
-        [0.023, 0.017, 3.1, 1.6],
-        [0.031, -0.027, 0.7, 0.9],
-      ],
-      bumps: [
-        [0, -150, 190, 16],
-        [-260, 120, 150, 10],
-        [280, 40, 160, 12],
-      ],
-      rim: [520, 900, 40],
-    },
+    // (thin air: the bells are first seen from two and a half kilometres, and must stand in the haze, not be lost in it)
+    fog: [0.00011, 0.0042],
+    // a vast open plain, the road across it, the aqueducts and the far city of bells: the land, the way and what
+    // the plane flies round are worked out together in sun/shape.ts
+    terrain: SUN_TERRAIN,
     water: null,
     centre: [0, -40],
-    radius: 610,
-    ceil: 260,
-    // (the first aqueduct is kept low, so the first sight is the whole city of bells and its suns standing over it)
-    entry: { x: 0, z: 470, above: 34, yaw: 0 },
-    gate: { x: 150, z: -470, above: 20, yaw: -0.25 },
-    path: [
-      [0, 470, 34],
-      [4, 390, 34],
-      [8, 310, 19],
-      [18, 250, 14],
-      [20, 208, 15],
-      [8, 150, 15],
-      [-12, 96, 17],
-      [-50, 40, 22],
-      [-110, -10, 30],
-      [-180, -90, 40],
-      [-172, -192, 48],
-      [-120, -320, 50],
-      [40, -345, 42],
-      [120, -400, 28],
-      [150, -470, 20],
-      [158, -502, 20],
-    ],
-    obstacles: [
-      // the bells (see worlds/Sun.tsx BELLS)
-      { x: 30, z: -190, r: 84, h: 470, bell: true },
-      { x: -92, z: -120, r: 62, h: 330, bell: true },
-      { x: 124, z: -92, r: 54, h: 300, bell: true },
-      { x: -10, z: -40, r: 70, h: 120, bell: true },
-      { x: -210, z: -260, r: 46, h: 240, bell: true },
-      { x: 210, z: -250, r: 42, h: 210, bell: true },
-      // the towers of the two gatehouses on the way in (Sun.tsx GATEHOUSES)
-      { x: 55.7, z: 203.7, r: 13, h: 132 },
-      { x: -15.7, z: 212.3, r: 13, h: 132 },
-      { x: 23.6, z: 80.1, r: 14, h: 142 },
-      { x: -47.6, z: 111.9, r: 14, h: 142 },
-      // the piers either side of the way through each aqueduct
-      ...SUN_BRIDGES.flatMap((b) => [-1, 1].map((sd) => ({ x: b.c[0] + b.u[0] * sd * b.w * 0.5, z: b.c[1] + b.u[1] * sd * b.w * 0.5, r: b.w * 0.14 + 2, h: b.H + 12 }))),
-    ],
-    canvases: [{ painting: "sun-allegro", x: -31, z: 302, yaw: 0.65 }],
+    radius: 2060,
+    ceil: 520,
+    pace: 1.8,
+    entry: SUN_ENTRY,
+    gate: SUN_GATE,
+    path: SUN_PATH,
+    obstacles: [...SUN_OBSTACLES],
+    canvases: [{ painting: "sun-allegro", x: SUN_CANVAS.x, z: SUN_CANVAS.z, yaw: SUN_CANVAS.yaw }],
   },
   stars: {
     id: "stars",
@@ -744,21 +697,24 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // no land at all: the glass of the bay, and the island (worlds/Sea.tsx) lying across it
     terrain: null,
     water: 0,
-    centre: [200, -260],
-    radius: 960,
+    centre: [200, -120],
+    radius: 1340,
     ceil: 260,
-    entry: { x: 60, z: 520, above: 12, yaw: -0.08 },
+    // (it comes in a kilometre and a half from the island's head: a long while over the glass with the whole of it in view)
+    entry: { x: 80, z: 900, above: 14, yaw: -0.05 },
     // between the island's two eyes, at the waterline: a low grotto runs into the rock, and that is the way on
     // (no arch of light: worlds/Sea.tsx)
     gate: { x: GROTTO.x, z: GROTTO.z - 30, above: 9, yaw: 0 },
     // out over the glass toward the whole island, a little aside so it lies broadside, then in toward the head
     // as the dusk falls, down the eyes' paths and between them
     path: [
-      [60, 520, 12],
-      [70, 420, 10],
-      [64, 310, 9],
-      [30, 200, 9],
-      [-10, 80, 9],
+      [80, 900, 14],
+      [90, 770, 12],
+      [86, 640, 11],
+      [74, 510, 10],
+      [62, 380, 9],
+      [30, 240, 9],
+      [-10, 100, 9],
       [-10, -50, 9],
       [50, -170, 9],
       [170, -280, 9],
@@ -778,11 +734,11 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -500, z: -640, r: 50, h: 60, bell: true },
       { x: 720, z: -640, r: 55, h: 70, bell: true },
     ],
-    canvases: [{ painting: "tranquility", x: -70, z: 400, yaw: 0.8 }],
+    canvases: [{ painting: "tranquility", x: -40, z: 400, yaw: 0.8 }],
   },
   seafinale: {
     id: "seafinale",
-    title: "Jūros sonata. Finale",
+    title: "Sonata of the Sea: Finale",
     year: "1908",
     music: "seafinale",
     place: "sea",
@@ -804,7 +760,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
   },
   funeral: {
     id: "funeral",
-    title: "Laidotuvių simfonija VI",
+    title: "Funeral Symphony VI",
     year: "1903",
     music: "funeral",
     place: "none",
@@ -814,8 +770,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // land, the road, the path of light beside it and the way in are all worked out together in funeral/land.ts
     terrain: FUNERAL.terrain,
     water: null,
-    centre: [0, 100],
-    radius: 990,
+    centre: [0, 180],
+    radius: 1320,
     ceil: 430,
     entry: FUNERAL.entry,
     // inside the cave's mouth, where the procession goes into the mountain (no arch of light: worlds/Funeral.tsx)
@@ -997,6 +953,8 @@ export const voyage = {
   onEnter: null as ((id: WorldId) => void) | null,
   // the flight's ending: the plane has flown into the little world the kings hold, and is on its way home
   homing: false,
+  // coming down to the desk (set by Room as the landing begins, cleared at take-off): nowhere else can be picked now
+  landing: false,
   // where the plane went through the last gate, for the gate's ripple (side and height from its middle, metres)
   gateHit: null as { world: WorldId; side: number; up: number; at: number } | null,
   skyMod: null as ((s: SkyState) => SkyState) | null,
@@ -1025,17 +983,37 @@ export const useFlightFlags = () =>
   );
 // Travel straight to any world (the flight's Worlds list, and [ / ] with a keyboard): the cloud closes as at a
 // gate, the world is made under it (or simply shown, if it was made ready) and the cloud opens on its entry.
+// A pick is always taken, whatever the cloud is doing, and the last one wins:
+//   open air                      the cloud closes and leads there;
+//   the cloud closing             it leads there instead (picking the world not yet left opens it again);
+//   shut over a world just made,  the cloud closes again at once and that world is let go.
+//   or opening on it
+// The crossing itself is Plane.tsx's passage(): "closing" with `next` set is all it needs, from any phase.
+// False only when there is nothing to do: not in the air, coming in to land, or already there (or on the way there).
 export function travelTo(id: WorldId) {
-  if (!voyage.flying || voyage.phase !== "open" || voyage.homing || id === voyage.cur) return false;
-  voyage.next = id;
-  voyage.phase = "closing";
+  if (!voyage.flying || voyage.landing || voyage.homing) return false;
+  if (id === travelDest()) return false;
+  if (id === voyage.cur) {
+    // (only while the cloud is still closing on the way somewhere else: stay)
+    voyage.next = null;
+    voyage.phase = "opening";
+  } else {
+    voyage.next = id;
+    voyage.phase = "closing";
+  }
+  emit();
   return true;
 }
+// where the plane will be when the cloud next opens: the world it is in, unless the cloud is closing toward another
+export const travelDest = () => (voyage.phase === "closing" && voyage.next ? voyage.next : voyage.cur);
+// (a step is counted from where the plane is already going, so three quick presses go three worlds on)
 export function travelStep(dir: 1 | -1) {
-  const i = WORLD_ORDER.indexOf(voyage.cur);
+  const i = WORLD_ORDER.indexOf(travelDest());
   const j = Math.min(WORLD_ORDER.length - 1, Math.max(0, i + dir));
   return travelTo(WORLD_ORDER[j]);
 }
+// the world a pick is on its way to, for the list to mark; null in open air and once the plane has arrived
+export const useTravel = () => useSyncExternalStore(subscribe, () => (voyage.phase === "closing" ? voyage.next : null), () => null);
 export function setGuide(on: boolean) {
   voyage.guide = on;
   emit();

@@ -4,8 +4,7 @@
 // Not linked from anywhere. Delete when the intro is stable.
 import { MotionGlobalConfig } from "motion/react";
 import { useEffect, useState } from "react";
-import Login from "@/components/Login";
-import PhoneOS from "@/components/PhoneOS";
+import { MacShell, PhoneShell } from "@/components/Shells";
 import { useOS } from "@/store";
 import type { AppId } from "@/content";
 
@@ -39,7 +38,7 @@ export default function QA() {
   if (mobile === null) return null;
   return (
     <main className="fixed inset-0 overflow-hidden bg-page">
-      {mobile ? <PhoneOS /> : <Login />}
+      {mobile ? <PhoneShell /> : <MacShell />}
     </main>
   );
 }

@@ -1538,3 +1538,74 @@ html:not(.dark) .win[data-win="settings"] aside[data-drag] {
     transform: scaleY(0.6);
   }
 }
+
+/* ---------- Round 12 ---------- */
+/* the window overview shows every window as a picture of itself: the windows themselves step out from under it,
+   so no blurred ghost of the front one hangs behind the pictures */
+#os-window-layer[data-overlay="mission"] > div:has([data-win]) {
+  opacity: 0 !important;
+  transition: opacity 0.16s ease-out;
+}
+
+/* a level fader (Settings, Sound): Tahoe's slider, a 6px track filled with the accent up to a white knob that is
+   always there to take hold of. --p is the fill, set from the value. A finger gets a larger knob. */
+.vol {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  cursor: default;
+  touch-action: pan-y;
+}
+.vol::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent) var(--p, 0%), var(--fill) var(--p, 0%));
+}
+.vol::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent) var(--p, 0%), var(--fill) var(--p, 0%));
+}
+.vol::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.14), 0 1px 3px rgb(0 0 0 / 0.3);
+  transition: scale 120ms ease-out;
+}
+.vol::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.14), 0 1px 3px rgb(0 0 0 / 0.3);
+}
+.vol:active::-webkit-slider-thumb {
+  scale: 1.08;
+}
+.vol:focus-visible {
+  outline: none;
+}
+.vol:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.14), 0 1px 3px rgb(0 0 0 / 0.3), 0 0 0 3.5px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+@media (pointer: coarse) {
+  .vol {
+    height: 30px;
+  }
+  .vol::-webkit-slider-thumb {
+    width: 26px;
+    height: 26px;
+    margin-top: -10px;
+  }
+  .vol::-moz-range-thumb {
+    width: 26px;
+    height: 26px;
+  }
+}

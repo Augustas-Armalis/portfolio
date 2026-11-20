@@ -7,10 +7,10 @@ import { flightMusicPrime } from "@/lib/flightMusic";
 import { handoff } from "@/lib/handoff";
 import { isUp, useOS, useWallpaper } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, player, usePlayer, warmApps } from "./Apps";
-import { Bars } from "./Desktop";
-import { Monogram, PowerOverlay } from "./Login";
+import { Bars, Monogram, PowerOverlay } from "./shell";
 import { IconFace } from "./icons";
-import { Check, ChevronLeft, Pause, Play, Power, Send, X } from "lucide-react";
+import { Check, ChevronLeft, Pause, Play, Power, Send, Wifi, X } from "lucide-react";
+import { Sym } from "./symbols";
 import { Chrome, EASE_OUT, glass, M, PhoneNav, reducedMotion, SPRING_GLASS, sfx, useGlassScope, type PhoneDetail } from "./ui";
 import { useClock, useDate } from "./useClock";
 
@@ -78,7 +78,7 @@ function Island({ real }: { real: boolean }) {
           {mode === "sent" && (
             <motion.div key="s" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade} className="absolute inset-0 flex items-center justify-between px-3">
               <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#30D158] text-black">
-                <Check size={14} className="bold" />
+                <Sym icon={Check} size={14} weight="bold" />
               </span>
               <span className="text-[13px] font-semibold">Copied</span>
             </motion.div>
@@ -109,7 +109,7 @@ function Island({ real }: { real: boolean }) {
                   }}
                   className="press flex h-9 w-9 items-center justify-center"
                 >
-                  {p.playing ? <Pause size={26} fill="currentColor" /> : <Play size={26} fill="currentColor" />}
+                  {p.playing ? <Sym icon={Pause} size={26} fill /> : <Sym icon={Play} size={26} fill />}
                 </button>
               </div>
             </motion.div>
@@ -134,8 +134,12 @@ function StatusBar({ light }: { light?: boolean }) {
             <span key={h} className={`w-[3px] rounded-[1px] ${light ? "bg-white" : "bg-ink"}`} style={{ height: h }} />
           ))}
         </span>
-        <span className={`ml-[2px] flex h-[13px] w-[25px] items-center rounded-[6px] border p-[1.5px] ${light ? "border-white/45" : "border-ink/35"}`}>
-          <span className={`h-full w-[72%] rounded-[2px] ${light ? "bg-white" : "bg-ink"}`} />
+        <Sym icon={Wifi} size={17} weight="bold" className="-mt-px" />
+        <span className="flex items-center gap-[1px]">
+          <span className={`flex h-[13px] w-[25px] items-center rounded-[4.5px] border p-[1.5px] ${light ? "border-white/45" : "border-ink/35"}`}>
+            <span className={`h-full w-[72%] rounded-[2.5px] ${light ? "bg-white" : "bg-ink"}`} />
+          </span>
+          <span className={`h-[4.5px] w-[1.5px] rounded-r-[1px] ${light ? "bg-white/45" : "bg-ink/35"}`} />
         </span>
       </span>
     </div>
@@ -227,7 +231,7 @@ function Lock({ onPower }: { onPower: () => void }) {
           }}
           className={`glass-press mt-4 flex h-11 items-center gap-2 rounded-full pl-3.5 pr-4 text-[15px] font-medium tracking-[-0.015em] text-white ${glass("btn-dark")}`}
         >
-          <Power size={16} strokeWidth={2.2} />
+          <Sym icon={Power} size={16} weight="semibold" />
           Back to the desk
         </motion.button>
         <div className="mt-4 h-[5px] w-[134px] rounded-full bg-white/90" />
@@ -356,7 +360,7 @@ function PlayingWidget({ onOpen }: { onOpen: Open }) {
         onClick={() => player.toggle(track.id)}
         className="press absolute right-4 top-1/2 flex h-[52px] w-[52px] -translate-y-1/2 items-center justify-center rounded-full bg-white text-black shadow-[0_6px_16px_-6px_rgb(0_0_0/0.5)]"
       >
-        {on ? <Pause size={22} fill="currentColor" strokeWidth={0} /> : <Play size={22} fill="currentColor" strokeWidth={0} className="ml-0.5" />}
+        {on ? <Sym icon={Pause} size={22} fill /> : <Sym icon={Play} size={22} className="ml-0.5" fill />}
       </button>
     </div>
   );
@@ -472,7 +476,7 @@ function FlyWidget({ onFly }: { onFly: () => void }) {
     <button type="button" data-glass="" data-widget="fly" onClick={onFly} className={`${widget} flex ${WIDGET_H} flex-col justify-between p-4`}>
       <span aria-hidden className="absolute inset-0 bg-[radial-gradient(120%_90%_at_100%_0%,rgb(255_214_150/0.34),transparent_60%)]" />
       <span className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white text-black">
-        <Send size={18} strokeWidth={2.1} className="-ml-0.5 mt-0.5" />
+        <Sym icon={Send} size={18} weight="medium" className="-ml-0.5 mt-0.5" />
       </span>
       <span className="relative">
         <span className="block text-[20px] font-semibold leading-6 tracking-[-0.025em]">Fly</span>
@@ -676,7 +680,7 @@ function PowerSheet({ onClose }: { onClose: () => void }) {
       <motion.div className="relative flex flex-col gap-2" initial={{ y: "110%" }} animate={{ y: 0 }} exit={{ y: "110%", transition: { duration: 0.22, ease: EASE_OUT } }} transition={M.sheet} onClick={(e) => e.stopPropagation()}>
         <div data-glass="" className={`${glass("widget-dark")} flex flex-col items-center rounded-[30px] px-6 pb-3 pt-6 text-center text-white`}>
           <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-white/14">
-            <Power size={24} strokeWidth={2.1} />
+            <Sym icon={Power} size={24} weight="semibold" />
           </span>
           <span className="mt-3 text-[20px] font-semibold leading-6 tracking-[-0.025em]">Power Off</span>
           <span className="mt-1 max-w-[260px] text-[14px] leading-[19px] text-white/65">The phone goes dark and you are back at the desk in the field.</span>
@@ -745,7 +749,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
         data-glass=""
         className={`glass-press absolute right-4 top-[calc(var(--phone-top)+4px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
       >
-        <X size={20} className="bold" />
+        <Sym icon={X} size={20} weight="semibold" />
       </button>
       <AnimatePresence>
         {detail && (
@@ -761,7 +765,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
             transition={M.pop}
             className={`absolute left-4 top-[calc(var(--phone-top)+4px)] z-30 flex h-11 w-11 items-center justify-center rounded-full ${btn}`}
           >
-            <ChevronLeft size={24} strokeWidth={2.4} className="-ml-0.5" />
+            <Sym icon={ChevronLeft} size={26} className="-ml-0.5" weight="semibold" />
           </motion.button>
         )}
       </AnimatePresence>

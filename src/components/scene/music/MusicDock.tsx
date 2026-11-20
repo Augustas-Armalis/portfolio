@@ -62,6 +62,17 @@ function Dock() {
   const show = phase === "room" && m.place !== null;
   const stream = m.kind === "yt";
   const open = m.open && show;
+  // In the pill the player is laid out at a real player's size and drawn at a quarter of it, so its own
+  // controls shrink with it instead of a full-size pause button filling a 50 px frame.
+  useLayoutEffect(() => {
+    const host = streamHost();
+    const s = host.style;
+    s.transformOrigin = "0 0";
+    s.width = open ? "100%" : "200px";
+    s.height = open ? "100%" : "112px";
+    s.transform = open ? "none" : "scale(0.25)";
+    s.borderRadius = open ? "inherit" : "56px";
+  }, [open]);
   const t = m.playing;
   const waiting = stream && m.state !== "playing";
   // the field's music is waiting to be asked for by hand

@@ -24,27 +24,9 @@ const v3 = (c: V3) => `vec3(${c.map((x) => x.toFixed(4)).join(", ")})`;
 // surfaces apart at a kilometre unless they are metres from each other: far walls, steps and shores shimmer. While
 // one of these worlds is being flown the near plane stands at arm's length instead (forty times the precision), and
 // goes back the moment the plane leaves.
-const DESK_NEAR = 0.01;
-export function useDeepLens(id: WorldId, near = 0.4) {
-  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
-  useFrame(() => {
-    if (voyage.cur !== id) return;
-    const want = voyage.flying ? near : DESK_NEAR;
-    if (camera.near !== want) {
-      camera.near = want;
-      camera.updateProjectionMatrix();
-    }
-  });
-  useEffect(
-    () => () => {
-      if (camera.near !== DESK_NEAR) {
-        camera.near = DESK_NEAR;
-        camera.updateProjectionMatrix();
-      }
-    },
-    [camera],
-  );
-}
+// The near plane is now set in one place for every world (Plane.tsx: it rises with height above the ground while
+// flying, and Room.tsx sets it at the desk). This stays as a no-op so the worlds that call it need no change.
+export function useDeepLens(_id: WorldId, _near = 0.4) {}
 
 // ---------- woods ----------
 // A wood as he and the film after him drew it: thousands of small round crowns, each a soft ball lit gold-green

@@ -1,13 +1,18 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
-import { WORLD_U, haloGeometry, makeHaloMaterial, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff } from "./kit";
-import { SKY_U, airState, mixSky, type SkyState } from "../sky";
+import { GLSL_AIR, WORLD_U, haloGeometry, makeHaloMaterial, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff } from "./kit";
+import { GLSL_SKY, SKY_U, airState, mixSky, type SkyState } from "../sky";
+import { Birds, type Flock } from "./life";
+import { useMoment } from "./moments";
+import { useDeepLens } from "./fairy/shared";
+import { SEA_LIFE_U, dolphinsGeometry, makeDolphinMaterial, makeRingMaterial, ringsGeometry, type Dolphin } from "./sea/life";
 import { ORIGIN, WORLDS, voyage } from "./voyage";
 import { ISLAND_U, buildGrotto, buildIsland, makeGrottoMaterial, makeIslandMaterial } from "./sea/island";
+import { noise2 } from "./kit";
 import { EYES, GROTTO, ISLAND } from "./sea/shape";
 import { buildWisps, makeGlass, makeWispMaterial } from "./sea/water";
 
@@ -23,6 +28,10 @@ import { buildWisps, makeGlass, makeWispMaterial } from "./sea/water";
 // dusk, the stars come out above and in the water, and the two eyes kindle, brightening until their paths run
 // down the mirror to the plane; it goes in along them, the eyes on either hand, and between them, at the
 // waterline, a low dark grotto takes it into the rock: the way on (no gate of light on this water).
+//
+// What happens on the way, and only once: after a calm while a pod of dolphins comes up beside the plane and goes
+// leaping away across the bay before the island, doubled in the glass, leaving slow rings; and as the dusk falls
+// the two eyes, shut until then, blink awake: a peep, shut, another, and then they open and burn.
 
 const def = WORLDS.sea;
 export const SEA_PAL: GroundPalette = { a: [0.3, 0.27, 0.16], b: [0.36, 0.3, 0.17], c: [0.26, 0.26, 0.17] };
@@ -94,7 +103,67 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
       },
       43,
     );
+    // the pod: seven, two of them young, each with its own beat
+    const pod: Dolphin[] = [];
+    for (let i = 0; i < 7; i++) pod.push({ side: (r() - 0.2) * 26, back: i * 7 + r() * 5, size: i > 4 ? 2.4 : 3.6 + r() * 0.8, phase: r() * 5, period: 4.1 + r() * 1.6, high: i > 4 ? 2.2 : 3.0 + r() * 1.4 });
+    // skerries: a few low rocks awash off the tip of the tail and beyond the spit, each standing in the glass
+    const skerries = new THREE.BufferGeometry();
+    {
+      const parts: number[] = [];
+      const cols: number[] = [];
+      const spots: [number, number, number][] = [
+        [ISLAND.x - ISLAND.half * 1.06, ISLAND.z + 34, 11],
+        [ISLAND.x - ISLAND.half * 1.1, ISLAND.z + 6, 7],
+        [ISLAND.x - ISLAND.half * 0.98, ISLAND.z + 64, 5],
+        [ISLAND.x + ISLAND.half * 1.04, ISLAND.z + 30, 9],
+        [ISLAND.x + ISLAND.half * 1.09, ISLAND.z + 52, 5],
+        [ISLAND.x + ISLAND.half * 0.9, ISLAND.z + 96, 6],
+      ];
+      for (const [x, z, s] of spots) {
+        const g0 = new THREE.IcosahedronGeometry(1, 2).toNonIndexed();
+        const p = g0.attributes.position;
+        for (let i = 0; i < p.count; i++) {
+          const nx = p.getX(i);
+          const ny = p.getY(i);
+          const nz = p.getZ(i);
+          const k = 0.8 + 0.5 * noise2(nx * 1.7 + x, nz * 1.7 + z) + 0.2 * noise2(nx * 5 + 3, ny * 5 + z);
+          parts.push(x + nx * s * 1.5 * k, Math.max(-1.5, ny * s * 0.42 * k + s * 0.06), z + nz * s * k);
+          cols.push(0.07, 0.11, 0.075, 0.5);
+        }
+        g0.dispose();
+      }
+      skerries.setAttribute("position", new THREE.Float32BufferAttribute(parts, 3));
+      skerries.setAttribute("aCol", new THREE.Float32BufferAttribute(cols, 4));
+      skerries.computeVertexNormals();
+    }
+    // gulls wheeling far off over the tail, small in the evening
+    const flocks: Flock[] = [
+      { c: [ISLAND.x - ISLAND.half * 0.7, 70, ISLAND.z + 120], r: 170, n: props.mobile ? 5 : 9, size: 1.5, speed: 8 },
+      { c: [ISLAND.x + ISLAND.half * 0.2, 240, ISLAND.z], r: 120, n: props.mobile ? 4 : 7, size: 1.4, speed: 7 },
+    ];
     return {
+      pod: dolphinsGeometry(pod),
+      podMat: makeDolphinMaterial(),
+      podMirror: makeDolphinMaterial(true),
+      rings: ringsGeometry(pod),
+      ringMat: makeRingMaterial(),
+      skerries,
+      skerryMirror: new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        depthFunc: THREE.GreaterDepth,
+        side: THREE.DoubleSide,
+        uniforms: { ...SKY_U, ...WORLD_U },
+        vertexShader: `varying vec3 vWorld; varying float vY; void main(){ vY = position.y; vec4 wp = modelMatrix * vec4(position.x, -position.y * 1.15, position.z, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
+        fragmentShader: `varying vec3 vWorld; varying float vY;
+${GLSL_SKY}
+${GLSL_AIR}
+void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) * (uSkyCol * 0.95 + 0.04), vWorld); gl_FragColor = vec4(col, 0.9);
+#include <tonemapping_fragment>
+#include <colorspace_fragment>
+}`,
+      }),
+      flocks,
       island: buildIsland(props.mobile),
       grotto: buildGrotto(),
       post,
@@ -131,12 +200,35 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
       dusk.sky = null;
       dusk.keyK = -1;
       ISLAND_U.uEyeK.value.set(0, 0);
+      SEA_LIFE_U.uPodT.value = -1;
     };
   }, []);
+  const ev = useRef({ on: false, wake: -1, pod: false, podT0: -1 });
+  // (a moment of the flight: worlds/moments.tsx; in development __moments.fire("dolphins") brings them at once)
+  const pod = useMoment("sea", { id: "dolphins", after: 18, at: [60, 9, 330], within: 270, ease: 1, hold: 44, out: 1 });
+  useDeepLens("sea");
   useFrame(({ camera }) => {
     // made ready ahead of time, it waits: the air is still the world's before it
-    if (voyage.cur !== "sea") return;
+    const e = ev.current;
+    if (voyage.cur !== "sea") {
+      e.on = false;
+      return;
+    }
     const now = SKY_U.uTime.value;
+    if (!e.on) {
+      // each coming is the first: the eyes are shut, the pod has not been
+      e.on = true;
+      e.wake = -1;
+      e.podT0 = -1;
+    }
+    // the pod comes up once, after a calm while, close ahead and to the right, and goes with the plane toward the island for a while
+    // (the moment says when; its seconds are counted on the sky's own clock, which is the one the water runs on)
+    if (pod.on && !e.pod) {
+      SEA_LIFE_U.uPod.value.set(camera.position.x - ORIGIN.x + 24, camera.position.z - ORIGIN.z - 62, -0.08, -0.997);
+      e.podT0 = now;
+    }
+    e.pod = pod.on;
+    SEA_LIFE_U.uPodT.value = e.podT0 >= 0 && now - e.podT0 < 52 ? now - e.podT0 : -1;
     // the head of the island, from the eye
     const d = Math.hypot(camera.position.x - ORIGIN.x - GROTTO.x, camera.position.z - ORIGIN.z - ISLAND.z);
     // evening into a deep green dusk as the island comes near; the air clears as the light goes
@@ -144,7 +236,10 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
     WORLD_U.uFogD.value = 0.00007 - 0.00003 * dusk.k;
     // the eyes kindle with it; they breathe a little, slowly, never in step; and once in a long while one of
     // them closes for a moment
-    const kin = 0.1 + 0.9 * THREE.MathUtils.smoothstep(dusk.k, 0.12, 0.85);
+    // (shut until the dusk has begun; then they blink awake, the second a moment after the first)
+    if (e.wake < 0 && dusk.k > 0.3) e.wake = now;
+    const kin = 0.22 + 0.78 * THREE.MathUtils.smoothstep(dusk.k, 0.3, 0.85);
+    const waking = (tw: number) => (e.wake < 0 || tw < 0 ? 0.03 : tw < 0.22 ? 0.55 : tw < 0.75 ? 0.03 : tw < 1.0 ? 0.8 : tw < 1.35 ? 0.03 : Math.min(1, 0.3 + (tw - 1.35) * 0.5));
     const ca = b.core.getAttribute("aCol") as THREE.InstancedBufferAttribute;
     const ga = b.glow.getAttribute("aCol") as THREE.InstancedBufferAttribute;
     for (let i = 0; i < 2; i++) {
@@ -152,7 +247,7 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
       const period = 19 + i * 6.5;
       const ph = (now + i * 7.3) % period;
       const blink = 1 - Math.exp(-Math.pow((ph - period * 0.5) / 0.16, 2));
-      const k = kin * breath * blink;
+      const k = kin * breath * blink * waking(now - e.wake - i * 0.45);
       ca.setW(i, EYE_CORE[1] * k);
       ga.setW(i, EYE_GLOW[1] * k);
       ISLAND_U.uEyeK.value.setComponent(i, k);
@@ -167,7 +262,13 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
       <mesh material={b.water} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
         <planeGeometry args={[6400, 6400]} />
       </mesh>
+      <mesh geometry={b.skerries} material={b.skerryMirror} renderOrder={-3} />
+      <mesh geometry={b.pod} material={b.podMirror} frustumCulled={false} renderOrder={-3} />
+      <mesh geometry={b.pod} material={b.podMat} frustumCulled={false} renderOrder={-2} />
+      <mesh geometry={b.rings} material={b.ringMat} frustumCulled={false} renderOrder={-1} />
       <mesh geometry={b.island} material={b.rock} />
+      <mesh geometry={b.skerries} material={b.rock} />
+      <Birds flocks={b.flocks} tint={[0.07, 0.08, 0.07]} />
       <mesh geometry={b.grotto} material={b.grottoMat} />
       <mesh geometry={b.post} material={b.postMat} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
