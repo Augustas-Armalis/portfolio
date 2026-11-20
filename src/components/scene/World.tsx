@@ -165,7 +165,7 @@ export function Sky() {
   // the dome travels with the eye: the worlds of the flight lie far from the desk
   useFrame(({ camera }) => ref.current?.position.copy(camera.position));
   return (
-    <mesh ref={ref} material={mat} renderOrder={-10} frustumCulled={false} onUpdate={(m) => m.layers.enable(2)}>
+    <mesh ref={ref} material={mat} renderOrder={-10} frustumCulled={false}>
       <sphereGeometry args={[1500, 48, 24]} />
     </mesh>
   );

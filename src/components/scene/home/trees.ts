@@ -1,21 +1,24 @@
 import * as THREE from "three";
 import { rng, type TreeKind } from "./land";
 
-// The trees of the home world, modelled in code. Every tree is a real trunk
-// with limbs and a crown heaped out of many soft lumps of different sizes
-// (never one ball on a stick, never a plain cone): the lumps overlap, sky
-// shows between them, each is darker underneath and toward the heart of the
-// crown, and their normals lean toward the crown's own so the whole tree
-// takes the light as one form with a broken surface.
+// The trees of the home world, modelled in code. A tree is a real trunk with
+// boughs, and a crown made the way a painter makes one: hundreds of small
+// clumps of leaves, each a little card that always faces the eye and carries
+// a painted cluster of leaves, set on the skins of the crown's rounded lobes.
+// Every clump takes its light from the crown's own roundness (its normal
+// leans out from the heart of the crown) and from its own (it is a small
+// rounded form, lit on top), and is darker the deeper it sits. So a crown is
+// soft and broken at its edge, light above and shaded beneath, with sky
+// between the leaves, and nowhere a facet.
 //
 //   broad    an oak or a lime: a short forking trunk, a wide heaped crown
-//   birch    a white leaning stem that forks, small airy drooping crowns
-//   pine     the Lithuanian pine: a tall bare ochre trunk, flat clouds of needles carried high on branches
-//   spruce   tier on tier of drooping boughs, each a ragged skirt, to a spire
+//   birch    a slender white stem, fine boughs, light airy leaves that hang
+//   pine     the Lithuanian pine: a tall bare ochre trunk, flat clouds of needles carried high
+//   spruce   tier on tier of drooping boughs to a spire
 //   cypress  a dark narrow flame, as in his landscapes and the tower plain
 //   bush     hazel and willow at the wood's edge
 //
-// `rich` 1 is a tree seen close; 0 the same tree in fewer, coarser pieces.
+// `rich` 1 is a tree seen close; 0 the same tree in fewer, larger clumps.
 
 type V3 = [number, number, number];
 class Mesh {
@@ -23,6 +26,8 @@ class Mesh {
   nor: number[] = [];
   col: number[] = [];
   fol: number[] = [];
+  corner: number[] = [];
+  leaf: number[] = [];
   idx: number[] = [];
   get count() {
     return this.pos.length / 3;
@@ -33,68 +38,63 @@ class Mesh {
     g.setAttribute("normal", new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute("aCol", new THREE.Float32BufferAttribute(this.col, 3));
     g.setAttribute("aFol", new THREE.Float32BufferAttribute(this.fol, 1));
+    g.setAttribute("aCorner", new THREE.Float32BufferAttribute(this.corner, 2));
+    g.setAttribute("aLeaf", new THREE.Float32BufferAttribute(this.leaf, 4));
     g.setIndex(this.idx);
     g.computeBoundingSphere();
+    // (the cards reach out from their centres)
+    if (g.boundingSphere) g.boundingSphere.radius += 2.5;
     return g;
   }
 }
 
-// ---------- parts ----------
-const ICO: { v: THREE.Vector3[]; f: number[] }[] = [];
-function ico(detail: number) {
-  if (!ICO[detail]) {
-    const g = new THREE.IcosahedronGeometry(1, detail);
-    // weld: three's is unindexed
-    const p = g.attributes.position;
-    const key = new Map<string, number>();
-    const v: THREE.Vector3[] = [];
-    const f: number[] = [];
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i);
-      const y = p.getY(i);
-      const z = p.getZ(i);
-      const k = `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
-      let id = key.get(k);
-      if (id === undefined) {
-        id = v.length;
-        v.push(new THREE.Vector3(x, y, z).normalize());
-        key.set(k, id);
-      }
-      f.push(id);
-    }
-    g.dispose();
-    ICO[detail] = { v, f };
+const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+const mixc = (a: V3, b: V3, k: number): V3 => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+const CORNERS = [-1, -1, 1, -1, 1, 1, -1, 1];
+
+// One clump of leaves: a card at `c`, `size` metres from its middle to its edge, wearing cell `cell` of the leaf
+// sheet, turned by `turn` (in turns). `n` is the way it faces the light, `inner` 0 (deep in the crown) .. 1 (its skin).
+function card(m: Mesh, c: THREE.Vector3, size: number, cell: number, turn: number, n: THREE.Vector3, inner: number, col: V3) {
+  const base = m.count;
+  for (let i = 0; i < 4; i++) {
+    m.pos.push(c.x, c.y, c.z);
+    m.nor.push(n.x, n.y, n.z);
+    m.col.push(col[0], col[1], col[2]);
+    m.fol.push(1);
+    m.corner.push(CORNERS[i * 2], CORNERS[i * 2 + 1]);
+    m.leaf.push(size, turn, cell, inner);
   }
-  return ICO[detail];
+  m.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
 }
 
-// A soft lump of foliage. `heart` is the middle of the crown it belongs to:
-// its normals lean that way out, and it is darker on the side toward it.
-function puff(m: Mesh, c: THREE.Vector3, r: V3, seed: number, detail: number, lo: V3, hi: V3, heart: THREE.Vector3, heartR: number, lean = 0.5) {
-  const { v, f } = ico(detail);
-  const base = m.count;
-  const n = new THREE.Vector3();
-  const q = new THREE.Vector3();
-  for (const d of v) {
-    const lump = 1 + 0.2 * Math.sin(d.x * 4.1 + seed) * Math.sin(d.y * 3.7 + seed * 1.7) + 0.12 * Math.sin(d.z * 6.3 + seed * 2.3 + d.x * 2.9);
-    // flatter underneath
-    const under = d.y < 0 ? 0.74 : 1;
-    q.set(c.x + d.x * r[0] * lump, c.y + d.y * r[1] * lump * under, c.z + d.z * r[2] * lump);
-    m.pos.push(q.x, q.y, q.z);
-    n.set(d.x / r[0], d.y / r[1], d.z / r[2]).normalize();
-    const out = q.clone().sub(heart);
-    const far = Math.min(1, out.length() / Math.max(heartR, 1e-3));
-    out.normalize();
-    n.lerp(out, lean).normalize();
-    m.nor.push(n.x, n.y, n.z);
-    // paint: darker below and inside, lighter above and at the crown's skin
-    const up = Math.min(1, Math.max(0, d.y * 0.5 + 0.5));
-    const k = Math.min(1, Math.max(0, 0.15 + 0.5 * up + 0.45 * far * far - 0.1));
-    const ao = 0.58 + 0.42 * Math.min(1, far * 1.1) * (0.6 + 0.4 * up);
-    m.col.push((lo[0] + (hi[0] - lo[0]) * k) * ao, (lo[1] + (hi[1] - lo[1]) * k) * ao, (lo[2] + (hi[2] - lo[2]) * k) * ao);
-    m.fol.push(1);
+// A rounded lobe of a crown: clumps set on its skin (a few a little way in), and a dark heart so no sky shows
+// straight through it.
+function lobe(m: Mesh, r: () => number, c: THREE.Vector3, rad: V3, n: number, size: number, cell: number, heart: THREE.Vector3, heartR: number, lo: V3, hi: V3, spin = 1) {
+  const p = V(0, 0, 0);
+  const nn = V(0, 0, 0);
+  const d = V(0, 0, 0);
+  card(m, c, Math.max(rad[0], rad[2]) * 0.92, 3, r() * spin, V(0, 0.6, 0).add(c.clone().sub(heart).normalize().multiplyScalar(0.6)).normalize(), 0.12, mixc(lo, hi, 0.15));
+  let made = 0;
+  let guard = 0;
+  while (made < n && guard++ < n * 6) {
+    const y = 1 - 2 * r();
+    // (few clumps underneath: a crown is hollow and dark below)
+    if (y < -0.25 && r() < 0.75) continue;
+    const a = r() * Math.PI * 2;
+    const s = Math.sqrt(Math.max(0, 1 - y * y));
+    d.set(s * Math.cos(a), y, s * Math.sin(a));
+    const u = r();
+    const k = 1 - 0.42 * u * u * u;
+    p.set(c.x + d.x * rad[0] * k, c.y + d.y * rad[1] * k, c.z + d.z * rad[2] * k);
+    nn.copy(p).sub(heart);
+    const far = Math.min(1, nn.length() / Math.max(heartR, 1e-3));
+    nn.normalize().multiplyScalar(0.62).addScaledVector(d, 0.38);
+    nn.y += 0.12;
+    nn.normalize();
+    const inner = Math.min(1, Math.max(0.2, far * far * 1.05)) * (0.62 + 0.38 * (d.y * 0.5 + 0.5)) * (0.75 + 0.25 * k);
+    card(m, p, size * (0.78 + r() * 0.5), cell, (r() - 0.5) * spin, nn, inner, mixc(lo, hi, 0.25 + 0.75 * r()));
+    made++;
   }
-  for (const i of f) m.idx.push(base + i);
 }
 
 // A tapered limb along a curve, its bark running from one colour to another.
@@ -123,6 +123,8 @@ function limb(m: Mesh, pts: THREE.Vector3[], r0: number, r1: number, sides: numb
       m.nor.push(nx, ny, nz);
       m.col.push(c0[0] + (c1[0] - c0[0]) * k, c0[1] + (c1[1] - c0[1]) * k, c0[2] + (c1[2] - c0[2]) * k);
       m.fol.push(fol);
+      m.corner.push(0, 0);
+      m.leaf.push(0, 0, 0, 1);
     }
   }
   for (let i = 0; i < steps; i++)
@@ -133,50 +135,6 @@ function limb(m: Mesh, pts: THREE.Vector3[], r0: number, r1: number, sides: numb
     }
 }
 
-// One tier of a spruce: a ragged skirt of boughs hanging from the trunk, each
-// lobe a bough whose tip droops and then lifts a little.
-function skirt(m: Mesh, y: number, R: number, drop: number, lobes: number, phase: number, lo: V3, hi: V3, seed: number) {
-  const base = m.count;
-  const seg = lobes * 2;
-  const rings: [number, number, number][] = [
-    // radius (of R), height (of drop, downward), shade
-    [0.06, -0.55, 0.75],
-    [0.55, 0.12, 0.95],
-    [1.0, 1.0, 1.0],
-  ];
-  const rnd = rng(Math.floor(seed * 977) + 3);
-  const jit = Array.from({ length: seg }, () => 0.82 + rnd() * 0.36);
-  rings.forEach(([rk, hk, shade], ri) => {
-    for (let j = 0; j < seg; j++) {
-      const a = (j / seg) * Math.PI * 2 + phase;
-      const tip = j % 2 === 0;
-      const rr = R * rk * (ri === 2 ? (tip ? jit[j] : 0.58) : ri === 1 ? (tip ? 1.05 : 0.86) : 1);
-      const yy = y - drop * hk * (ri === 2 ? (tip ? 0.82 : 1.0) : 1);
-      m.pos.push(Math.cos(a) * rr, yy, Math.sin(a) * rr);
-      const n = new THREE.Vector3(Math.cos(a), 0.75 - ri * 0.2, Math.sin(a)).normalize();
-      m.nor.push(n.x, n.y, n.z);
-      const k = ri === 0 ? 0.35 : ri === 1 ? 0.75 : tip ? 1 : 0.2;
-      m.col.push((lo[0] + (hi[0] - lo[0]) * k) * shade, (lo[1] + (hi[1] - lo[1]) * k) * shade, (lo[2] + (hi[2] - lo[2]) * k) * shade);
-      m.fol.push(1);
-    }
-  });
-  for (let ri = 0; ri < 2; ri++)
-    for (let j = 0; j < seg; j++) {
-      const a0 = base + ri * seg + j;
-      const a1 = base + ri * seg + ((j + 1) % seg);
-      m.idx.push(a0, a1, a0 + seg, a1, a1 + seg, a0 + seg);
-    }
-  // the dark underside, so a tier is a solid thing from below
-  const c = m.count;
-  m.pos.push(0, y - drop * 0.55, 0);
-  m.nor.push(0, -1, 0);
-  m.col.push(lo[0] * 0.5, lo[1] * 0.5, lo[2] * 0.5);
-  m.fol.push(1);
-  for (let j = 0; j < seg; j++) m.idx.push(c, base + 2 * seg + ((j + 1) % seg), base + 2 * seg + j);
-}
-
-const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-
 // ---------- the kinds ----------
 const BARK: V3 = [0.085, 0.07, 0.058];
 const BARK2: V3 = [0.15, 0.115, 0.085];
@@ -186,31 +144,29 @@ function broad(seed: number, rich: number) {
   const m = new Mesh();
   const H = 10.5 + r() * 3.5;
   const lean = (r() - 0.5) * 0.9;
-  const fork = H * (0.27 + r() * 0.07);
-  const at = (k: number) => V(lean * k * k, fork * k, 0);
-  limb(m, [at(0), at(0.5), at(1)], 0.32, 0.21, rich ? 8 : 5, rich ? 5 : 2, BARK, BARK2, 0, 0.55);
+  const fork = H * (0.26 + r() * 0.07);
+  const at = (k: number) => V(lean * k * k + Math.sin(k * 2.2 + seed) * 0.12, fork * k, Math.cos(k * 1.7 + seed) * 0.1);
+  limb(m, [at(0), at(0.35), at(0.7), at(1)], 0.34, 0.2, rich ? 9 : 5, rich ? 6 : 2, BARK, BARK2, 0, 0.6);
   const top = at(1);
   const W = H * (0.36 + r() * 0.07);
-  // the crown is a tall rounded heap (an egg standing on its broad end), not a plate: lumps set on a dome from
-  // the lowest boughs to the top, biggest in the middle heights
+  // the crown is a tall rounded heap (an egg on its broad end): lobes set on a dome from the lowest boughs to the top
   const mid = H * 0.64;
   const heart = V(top.x + lean * 0.3, mid, 0);
-  const lo: V3 = [0.026, 0.07, 0.03];
-  const hi: V3 = [0.105, 0.185, 0.06];
-  const rings = rich ? [5, 5, 4, 1] : [3, 2, 1];
+  const lo: V3 = [0.03, 0.085, 0.03];
+  const hi: V3 = [0.075, 0.15, 0.045];
+  const rings = rich ? [5, 5, 4, 1] : [3, 3, 1];
   rings.forEach((count, ri) => {
-    const t = rings.length === 1 ? 0 : ri / (rings.length - 1); // 0 the lowest ring .. 1 the top
+    const t = ri / (rings.length - 1); // 0 the lowest ring .. 1 the top
     const y = H * (0.44 + 0.5 * t);
-    // the dome's radius at this height
-    const out = W * Math.sqrt(Math.max(0, 1 - Math.pow((y - mid) / (H * 0.42), 2))) * 0.82;
+    const out = W * Math.sqrt(Math.max(0, 1 - Math.pow((y - mid) / (H * 0.42), 2))) * 0.8;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + ri * 1.1 + r() * 0.7;
-      const d = count === 1 ? 0 : out * (0.75 + r() * 0.3);
-      const w = W * (0.4 + r() * 0.14) * (1 - 0.25 * Math.abs(t - 0.4));
+      const d = count === 1 ? 0 : out * (0.72 + r() * 0.3);
+      const w = W * (0.42 + r() * 0.14) * (1 - 0.25 * Math.abs(t - 0.4));
       const c = V(heart.x + Math.cos(a) * d, y + (r() - 0.5) * H * 0.05, heart.z + Math.sin(a) * d);
-      // a bough out to each of the lower lumps
-      if (ri < 2 && (rich || i % 2 === 0)) limb(m, [top.clone().setY(top.y - 0.3), top.clone().lerp(c, 0.5).add(V(0, H * 0.04, 0)), c.clone().setY(c.y - w * 0.3)], 0.13, 0.035, rich ? 5 : 3, rich ? 4 : 2, BARK2, BARK2);
-      puff(m, c, [w, w * (0.86 + r() * 0.2), w * (0.92 + r() * 0.16)], seed + ri * 5.3 + i * 1.7, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, W * 1.25);
+      // a bough out to each of the lower lobes
+      if (ri < 2 && (rich || i % 2 === 0)) limb(m, [top.clone().setY(top.y - 0.3), top.clone().lerp(c, 0.5).add(V(0, H * 0.04, 0)), c.clone().setY(c.y - w * 0.35)], 0.13, 0.03, rich ? 6 : 3, rich ? 4 : 2, BARK2, BARK2);
+      lobe(m, r, c, [w, w * (0.82 + r() * 0.2), w * (0.92 + r() * 0.16)], rich ? 15 : 6, w * (rich ? 0.42 : 0.62), 0, heart, W * 1.2, lo, hi);
     }
   });
   return m.geometry();
@@ -219,27 +175,46 @@ function broad(seed: number, rich: number) {
 function birch(seed: number, rich: number) {
   const r = rng(seed);
   const m = new Mesh();
-  const H = 11 + r() * 3.5;
-  const lean = (r() - 0.5) * 1.8;
+  const H = 11.5 + r() * 3.5;
+  const lean = (r() - 0.5) * 1.6;
   const at = (k: number) => V(lean * k * k + Math.sin(k * 2.4 + seed) * 0.16, H * k, Math.cos(k * 2 + seed) * 0.14);
   const white: V3 = [0.8, 0.78, 0.72];
   // the white stem runs right up through the crown
-  limb(m, [at(0), at(0.25), at(0.5), at(0.75), at(0.97)], 0.12, 0.02, rich ? 7 : 4, rich ? 10 : 4, [0.42, 0.4, 0.37], white, 0.5, 0.35);
-  const lo: V3 = [0.06, 0.125, 0.04];
-  const hi: V3 = [0.2, 0.275, 0.085];
-  const heart = at(0.72);
-  // light airy leaf masses hung round the upper stem in a loose spiral, each a little taller than wide and
-  // drooping; larger and further out low down, small at the top
-  const n = rich ? 13 : 6;
+  limb(m, [at(0), at(0.25), at(0.5), at(0.75), at(0.98)], 0.115, 0.016, rich ? 8 : 4, rich ? 12 : 4, [0.42, 0.4, 0.37], white, 0.5, 0.4);
+  const lo: V3 = [0.075, 0.15, 0.035];
+  const hi: V3 = [0.16, 0.25, 0.06];
+  const heart = at(0.7);
+  // fine boughs that rise a little and then hang; the leaves hang along them in loose strands, so the crown is a
+  // narrow airy egg with sky through it, widest two thirds of the way up
+  const n = rich ? 15 : 7;
   for (let j = 0; j < n; j++) {
-    const k = 0.42 + (j / (n - 1)) * 0.56;
+    const k = 0.4 + (j / (n - 1)) * 0.56;
     const o = at(k);
     const a = j * 2.4 + r() * 0.9;
-    const out = (1.5 - (k - 0.42) * 2.0) * (0.6 + r() * 0.5);
-    const w = (rich ? 0.62 : 0.85) * (1.25 - (k - 0.42) * 1.1) * (0.8 + r() * 0.4);
-    const c = V(o.x + Math.cos(a) * out, o.y - 0.2 - r() * 0.4, o.z + Math.sin(a) * out);
-    if (rich && j % 2 === 0) limb(m, [o, o.clone().lerp(c, 0.6).add(V(0, 0.3, 0)), c], 0.028, 0.008, 4, 2, white, [0.5, 0.47, 0.42], 0.5);
-    puff(m, c, [w, w * (1.2 + r() * 0.5), w * (0.85 + r() * 0.3)], seed + j * 2.1, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, H * 0.3, 0.35);
+    const reach = H * 0.17 * Math.sin(Math.PI * Math.pow((k - 0.36) / 0.66, 0.8)) * (0.75 + r() * 0.45) + 0.35;
+    const dir = V(Math.cos(a), 0, Math.sin(a));
+    const tip = o.clone().addScaledVector(dir, reach).add(V(0, -reach * (0.35 + r() * 0.3), 0));
+    const midp = o.clone().addScaledVector(dir, reach * 0.55).add(V(0, reach * 0.18, 0));
+    if (rich || j % 2 === 0) limb(m, [o, midp, tip], 0.026, 0.006, 4, 3, white, [0.3, 0.26, 0.22], 0.5);
+    const cards = rich ? 5 : 2;
+    for (let i = 0; i < cards; i++) {
+      const t = (i + 0.6 + r() * 0.5) / (cards + 0.6);
+      // along the bough, then hanging below it
+      const p = o.clone().lerp(midp, Math.min(1, t * 1.8)).lerp(tip, Math.max(0, t * 1.8 - 1) / 0.8);
+      p.y -= 0.15 + r() * 0.55;
+      p.x += (r() - 0.5) * 0.5;
+      p.z += (r() - 0.5) * 0.5;
+      const nn = p.clone().sub(heart).normalize();
+      nn.y += 0.35;
+      nn.normalize();
+      const far = Math.min(1, p.distanceTo(heart) / (H * 0.2));
+      card(m, p, (rich ? 0.5 : 0.82) * (0.8 + r() * 0.45), 1, (r() - 0.5) * 0.1, nn, 0.5 + 0.5 * far, mixc(lo, hi, 0.2 + 0.8 * r()));
+    }
+  }
+  // the top: a few small sprays
+  for (let i = 0; i < (rich ? 5 : 2); i++) {
+    const p = at(0.93 + r() * 0.07).add(V((r() - 0.5) * 0.7, (r() - 0.3) * 0.5, (r() - 0.5) * 0.7));
+    card(m, p, 0.42 * (0.8 + r() * 0.4), 1, (r() - 0.5) * 0.12, V((r() - 0.5) * 0.6, 1, (r() - 0.5) * 0.6).normalize(), 1, mixc(lo, hi, 0.5 + 0.5 * r()));
   }
   return m.geometry();
 }
@@ -251,7 +226,7 @@ function pine(seed: number, rich: number) {
   const lean = (r() - 0.5) * 1.5;
   const lz = (r() - 0.5) * 0.8;
   const at = (k: number) => V(lean * k * k + Math.sin(k * 3.1 + seed) * 0.18, H * k, lz * k * k);
-  limb(m, [at(0), at(0.3), at(0.6), at(0.85), at(0.97)], 0.24, 0.06, rich ? 8 : 5, rich ? 10 : 4, [0.11, 0.09, 0.08], [0.52, 0.27, 0.12], 0, 0.4);
+  limb(m, [at(0), at(0.3), at(0.6), at(0.85), at(0.97)], 0.24, 0.06, rich ? 9 : 5, rich ? 10 : 4, [0.11, 0.09, 0.08], [0.52, 0.27, 0.12], 0, 0.4);
   // bare stubs where the lower branches broke away
   if (rich)
     for (let i = 0; i < 3; i++) {
@@ -260,35 +235,25 @@ function pine(seed: number, rich: number) {
       const o = at(k);
       limb(m, [o, o.clone().add(V(Math.cos(a) * 0.6, 0.14, Math.sin(a) * 0.6)), o.clone().add(V(Math.cos(a) * 1.1, 0.05, Math.sin(a) * 1.1))], 0.035, 0.008, 4, 2, [0.2, 0.14, 0.1], [0.24, 0.17, 0.12]);
     }
-  const lo: V3 = [0.022, 0.06, 0.045];
-  const hi: V3 = [0.09, 0.155, 0.08];
+  const lo: V3 = [0.02, 0.06, 0.04];
+  const hi: V3 = [0.05, 0.105, 0.055];
   const heart = at(0.84);
-  const W = 2.6 + r() * 0.9;
-  // the crown: clouds of needles carried out on branches in a loose spiral, each a huddle of rounded lumps
-  // (never a plate), the whole a broad flat-topped head
+  const W = 2.7 + r() * 0.9;
+  // the crown: flat clouds of needles carried out on branches in a loose spiral, the whole a broad flat-topped head
   const tiers = rich ? 5 : 3;
   for (let i = 0; i < tiers; i++) {
     const t = i / (tiers - 1);
     const o = at(0.66 + t * 0.28);
-    const w = W * (0.62 - t * 0.2) * (0.85 + r() * 0.3);
+    const w = W * (0.66 - t * 0.2) * (0.85 + r() * 0.3);
     const a = i * 2.4 + r();
-    const off = W * (0.75 - t * 0.5) * (0.8 + r() * 0.3);
+    const off = W * (0.78 - t * 0.55) * (0.8 + r() * 0.3);
     const c = V(o.x + Math.cos(a) * off, o.y + 0.6 + r() * 0.5, o.z + Math.sin(a) * off);
     limb(m, [o, o.clone().lerp(c, 0.55).add(V(0, 0.3, 0)), c.clone().setY(c.y - 0.2)], 0.075, 0.02, rich ? 5 : 3, 2, [0.4, 0.22, 0.11], [0.3, 0.19, 0.1]);
-    const lumps = rich ? 4 : 2;
-    for (let j = 0; j < lumps; j++) {
-      const ww = w * (j === 0 ? 1 : 0.55 + r() * 0.3);
-      const ja = r() * 6.28;
-      const cc = j === 0 ? c : V(c.x + Math.cos(ja) * w * 0.8, c.y + (r() - 0.35) * w * 0.5, c.z + Math.sin(ja) * w * 0.8);
-      puff(m, cc, [ww, ww * (0.58 + r() * 0.16), ww * (0.9 + r() * 0.2)], seed + i * 3.3 + j, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, W * 1.5, 0.3);
-    }
+    lobe(m, r, c, [w, w * 0.46, w * 0.92], rich ? 16 : 6, w * (rich ? 0.36 : 0.56), 2, heart, W * 1.4, lo, hi);
   }
   const cap = at(0.99);
-  for (let j = 0; j < (rich ? 3 : 1); j++) {
-    const ja = r() * 6.28;
-    const ww = W * (0.4 + r() * 0.14);
-    puff(m, V(cap.x + Math.cos(ja) * W * 0.25 * j, cap.y + 0.3 - j * 0.15, cap.z + Math.sin(ja) * W * 0.25 * j), [ww, ww * 0.62, ww], seed + 40 + j, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, W * 1.5, 0.3);
-  }
+  const cw = W * 0.56;
+  lobe(m, r, V(cap.x, cap.y + 0.25, cap.z), [cw, cw * 0.5, cw], rich ? 12 : 5, cw * (rich ? 0.4 : 0.6), 2, heart, W * 1.4, lo, hi);
   return m.geometry();
 }
 
@@ -298,19 +263,32 @@ function spruce(seed: number, rich: number) {
   const H = 13 + r() * 5;
   const bend = (r() - 0.5) * 0.3;
   limb(m, [V(0, 0, 0), V(bend * 0.4, H * 0.5, 0), V(bend, H * 0.99, 0)], 0.19, 0.02, rich ? 7 : 4, rich ? 5 : 2, [0.08, 0.066, 0.058], [0.13, 0.1, 0.085], 0, 0.3);
-  const lo: V3 = [0.014, 0.04, 0.034];
-  const hi: V3 = [0.05, 0.1, 0.066];
-  const n = rich ? 11 : 6;
+  const lo: V3 = [0.012, 0.042, 0.03];
+  const hi: V3 = [0.032, 0.078, 0.045];
+  const n = rich ? 10 : 5;
   const W = H * (0.2 + r() * 0.035);
   for (let i = 0; i < n; i++) {
     const k = i / (n - 1);
-    const y = H * (0.2 + 0.78 * k);
+    const y = H * (0.17 + 0.8 * k);
     // widest low down, drawing in to the spire; not a straight cone: a slight belly
-    const w = W * (Math.pow(1 - k, 0.82) + 0.06) * (0.9 + r() * 0.2);
-    skirt(m, y, w, H * 0.11 * (1 - k * 0.5), rich ? 7 + Math.floor(r() * 3) : 5, r() * 6.28, lo, hi, seed + i);
+    const w = W * (Math.pow(1 - k, 0.82) + 0.05) * (0.9 + r() * 0.2);
+    const size = (w * 0.5 + 0.34) * (rich ? 1 : 1.35);
+    const count = Math.max(3, Math.round(((Math.PI * 2 * w) / (size * 1.25)) * (rich ? 1 : 0.7)));
+    const ph = r() * 6.28;
+    // the dark heart of the tier, at the stem
+    card(m, V(bend * k, y - size * 0.2, 0), w * 0.7 + 0.3, 3, r() * 0.2, V(0, 0.5, 0.2).normalize(), 0.1, mixc(lo, hi, 0.1));
+    for (let j = 0; j < count; j++) {
+      const a = ph + (j / count) * Math.PI * 2 + (r() - 0.5) * 0.4;
+      const rr = w * (0.62 + r() * 0.42);
+      // each bough droops toward its tip
+      const p = V(bend * k + Math.cos(a) * rr, y - rr * 0.3 - size * 0.25 + (r() - 0.5) * 0.3, Math.sin(a) * rr);
+      const nn = V(Math.cos(a), 0.62, Math.sin(a)).normalize();
+      card(m, p, size * (0.82 + r() * 0.36), 2, (r() - 0.5) * 0.08, nn, 0.45 + 0.55 * Math.min(1, rr / Math.max(w, 0.01)) * (0.5 + 0.5 * k), mixc(lo, hi, 0.2 + 0.8 * r()));
+    }
   }
   // the leader
-  limb(m, [V(bend, H * 0.96, 0), V(bend, H * 1.06, 0)], 0.05, 0.004, 4, 1, hi, hi, 1);
+  limb(m, [V(bend, H * 0.96, 0), V(bend, H * 1.06, 0)], 0.045, 0.004, 4, 1, hi, hi, 0);
+  card(m, V(bend, H * 1.0, 0), 0.5, 2, 0, V(0, 1, 0), 1, hi);
   return m.geometry();
 }
 
@@ -319,18 +297,25 @@ function cypress(seed: number, rich: number) {
   const m = new Mesh();
   const H = 11 + r() * 5;
   limb(m, [V(0, 0, 0), V(0, H * 0.25, 0)], 0.16, 0.1, rich ? 6 : 4, 1, BARK, BARK2, 0, 0.3);
-  const lo: V3 = [0.012, 0.034, 0.026];
-  const hi: V3 = [0.042, 0.085, 0.046];
-  const n = rich ? 8 : 4;
+  const lo: V3 = [0.012, 0.038, 0.026];
+  const hi: V3 = [0.03, 0.07, 0.036];
+  const n = rich ? 12 : 6;
   const W = H * 0.085;
   const heart = V(0, H * 0.5, 0);
   for (let i = 0; i < n; i++) {
     const k = i / (n - 1);
-    const y = H * (0.14 + 0.8 * k);
+    const y = H * (0.1 + 0.86 * k);
     // a flame: narrow foot, fullest a third of the way up, drawn to a point
-    const w = W * (0.55 + 1.1 * Math.sin(Math.PI * Math.pow(k, 0.62)) * (1 - k * 0.55)) * (0.9 + r() * 0.2);
-    const c = V((r() - 0.5) * W * 0.5, y, (r() - 0.5) * W * 0.5);
-    puff(m, c, [w, (H * 0.8) / n * (0.95 + r() * 0.3), w], seed + i * 1.9, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, H * 0.5, 0.25);
+    const w = W * (0.5 + 1.15 * Math.sin(Math.PI * Math.pow(k, 0.62)) * (1 - k * 0.55)) * (0.9 + r() * 0.2);
+    const count = rich ? 5 : 3;
+    const ph = r() * 6.28;
+    for (let j = 0; j < count; j++) {
+      const a = ph + (j / count) * Math.PI * 2;
+      const p = V(Math.cos(a) * w * 0.55, y + (r() - 0.5) * 0.5, Math.sin(a) * w * 0.55);
+      const nn = V(Math.cos(a), 0.3 + 0.5 * k, Math.sin(a)).normalize();
+      card(m, p, w * 0.85 * (0.85 + r() * 0.3) * (rich ? 1 : 1.25), 3, (r() - 0.5) * 0.3, nn, 0.55 + 0.45 * k, mixc(lo, hi, 0.2 + 0.8 * r()));
+    }
+    void heart;
   }
   return m.geometry();
 }
@@ -338,15 +323,15 @@ function cypress(seed: number, rich: number) {
 function bush(seed: number, rich: number) {
   const r = rng(seed);
   const m = new Mesh();
-  const lo: V3 = [0.03, 0.075, 0.03];
-  const hi: V3 = [0.11, 0.18, 0.06];
-  const n = rich ? 6 : 3;
-  const heart = V(0, 0.9, 0);
+  const lo: V3 = [0.035, 0.09, 0.03];
+  const hi: V3 = [0.085, 0.16, 0.045];
+  const n = rich ? 4 : 2;
+  const heart = V(0, 0.7, 0);
   for (let i = 0; i < n; i++) {
     const a = r() * 6.28;
-    const d = r() * 1.2;
-    const w = 0.8 + r() * 0.7;
-    puff(m, V(Math.cos(a) * d, 0.7 + r() * 1.0, Math.sin(a) * d), [w, w * (0.75 + r() * 0.3), w], seed + i * 2.3, rich > 1 ? 2 : rich ? 1 : 0, lo, hi, heart, 2.2, 0.4);
+    const d = r() * 1.1;
+    const w = 0.85 + r() * 0.6;
+    lobe(m, r, V(Math.cos(a) * d, 0.75 + r() * 0.7, Math.sin(a) * d), [w, w * 0.8, w], rich ? 11 : 6, w * (rich ? 0.44 : 0.6), i % 2 ? 0 : 3, heart, 2.3, lo, hi);
   }
   return m.geometry();
 }
@@ -358,99 +343,208 @@ export function buildTree(kind: TreeKind, variant: number, rich: number) {
   return BUILD[kind](SEEDS[kind][variant % SEEDS[kind].length], rich);
 }
 
-// ---------- the far woods ----------
-// Thousands of small crowns in one geometry: a soft lump (or a little ragged
-// cone) each, coloured and sized by its kind, with the same attributes as the
-// whole trees plus its own root (for the wind and the foot's shade).
-export function buildFarWood(trees: { x: number; y: number; z: number; s: number; kind: TreeKind; rot: number; tint: number }[]) {
-  const { v, f } = ico(0);
-  const per: Record<TreeKind, { lo: V3; hi: V3; w: number; h: number; lift: number; cone: boolean }> = {
-    broad: { lo: [0.026, 0.07, 0.03], hi: [0.1, 0.18, 0.06], w: 4.4, h: 8.4, lift: 2.0, cone: false },
-    birch: { lo: [0.058, 0.12, 0.04], hi: [0.19, 0.265, 0.085], w: 2.8, h: 8.6, lift: 3.0, cone: false },
-    pine: { lo: [0.022, 0.06, 0.045], hi: [0.085, 0.15, 0.08], w: 3.6, h: 7.0, lift: 6.5, cone: false },
-    spruce: { lo: [0.014, 0.04, 0.034], hi: [0.048, 0.098, 0.066], w: 2.9, h: 13.5, lift: 1.8, cone: true },
-    cypress: { lo: [0.012, 0.034, 0.026], hi: [0.04, 0.082, 0.046], w: 1.5, h: 12, lift: 1.0, cone: true },
-    bush: { lo: [0.03, 0.075, 0.03], hi: [0.105, 0.175, 0.06], w: 2.2, h: 1.8, lift: 1.2, cone: false },
-  };
-  const CONE = 6;
-  let nv = 0;
-  let ni = 0;
-  for (const t of trees) {
-    const p = per[t.kind];
-    nv += p.cone ? CONE * 2 + 1 : v.length;
-    ni += p.cone ? CONE * 9 : f.length;
-  }
-  const pos = new Float32Array(nv * 3);
-  const nor = new Float32Array(nv * 3);
-  const col = new Float32Array(nv * 3);
-  const fol = new Float32Array(nv);
-  const root = new Float32Array(nv * 3);
-  const idx = new Uint32Array(ni);
-  let a = 0;
-  let b = 0;
-  for (const t of trees) {
-    const p = per[t.kind];
-    const cs = Math.cos(t.rot);
-    const sn = Math.sin(t.rot);
-    const warm = 0.88 + t.tint * 0.28;
-    const cool = 0.9 - t.tint * 0.14;
-    const put = (x: number, y: number, z: number, nx: number, ny: number, nz: number, k: number, shade: number) => {
-      pos[a * 3] = t.x + (x * cs + z * sn) * t.s;
-      pos[a * 3 + 1] = t.y + y * t.s;
-      pos[a * 3 + 2] = t.z + (-x * sn + z * cs) * t.s;
-      nor[a * 3] = nx * cs + nz * sn;
-      nor[a * 3 + 1] = ny;
-      nor[a * 3 + 2] = -nx * sn + nz * cs;
-      col[a * 3] = (p.lo[0] + (p.hi[0] - p.lo[0]) * k) * shade * warm;
-      col[a * 3 + 1] = (p.lo[1] + (p.hi[1] - p.lo[1]) * k) * shade * (0.92 + t.tint * 0.14);
-      col[a * 3 + 2] = (p.lo[2] + (p.hi[2] - p.lo[2]) * k) * shade * cool;
-      fol[a] = 1;
-      root[a * 3] = t.x;
-      root[a * 3 + 1] = t.y;
-      root[a * 3 + 2] = t.z;
-      a++;
-    };
-    const base = a;
-    if (p.cone) {
-      // two ragged rings and a tip
-      for (let ring = 0; ring < 2; ring++)
-        for (let j = 0; j < CONE; j++) {
-          const ang = (j / CONE) * Math.PI * 2 + ring * 0.5;
-          const rr = p.w * (ring === 0 ? (j % 2 ? 0.72 : 1) : 0.55) * (t.kind === "cypress" && ring === 0 ? 0.7 : 1);
-          const yy = p.lift + (ring === 0 ? 0 : p.h * 0.42);
-          put(Math.cos(ang) * rr, yy, Math.sin(ang) * rr, Math.cos(ang) * 0.8, 0.6, Math.sin(ang) * 0.8, ring === 0 ? 0.25 : 0.7, ring === 0 ? 0.62 : 0.9);
-        }
-      put(0, p.lift + p.h, 0, 0, 1, 0, 1, 1);
-      for (let j = 0; j < CONE; j++) {
-        const j1 = (j + 1) % CONE;
-        idx[b++] = base + j;
-        idx[b++] = base + CONE + j;
-        idx[b++] = base + j1;
-        idx[b++] = base + j1;
-        idx[b++] = base + CONE + j;
-        idx[b++] = base + CONE + j1;
-        idx[b++] = base + CONE + j;
-        idx[b++] = base + CONE * 2;
-        idx[b++] = base + CONE + j1;
-      }
-    } else {
-      const seed = t.tint * 40;
-      for (const d of v) {
-        const lump = 1 + 0.22 * Math.sin(d.x * 4.1 + seed) * Math.sin(d.y * 3.7 + seed * 1.7);
-        const under = d.y < 0 ? 0.6 : 1;
-        const up = d.y * 0.5 + 0.5;
-        put(d.x * p.w * lump, p.lift + d.y * p.h * 0.5 * lump * under + p.h * 0.3, d.z * p.w * lump, d.x, d.y * 0.8 + 0.3, d.z, 0.15 + 0.85 * up, 0.55 + 0.45 * up);
-      }
-      for (const i of f) idx[b++] = base + i;
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  g.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
-  g.setAttribute("aCol", new THREE.BufferAttribute(col, 3));
-  g.setAttribute("aFol", new THREE.BufferAttribute(fol, 1));
-  g.setAttribute("aRoot", new THREE.BufferAttribute(root, 3));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
-  g.computeBoundingSphere();
-  return g;
+// ---------- the painted sheets ----------
+function sheet(size: number) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d")!;
+  g.clearRect(0, 0, size, size);
+  return { c, g };
 }
+function finish(c: HTMLCanvasElement) {
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  t.premultiplyAlpha = false;
+  t.flipY = false;
+  t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.anisotropy = 4;
+  t.needsUpdate = true;
+  return t;
+}
+
+// Four clumps of leaves, 2 x 2: broad leaves, a hanging birch spray, a tuft of needles, a dense round mass.
+// Alpha is the leaves; the green channel is each leaf's own tone (those on top are lighter).
+export function makeLeafTexture() {
+  const S = 256;
+  const { c, g } = sheet(S * 2);
+  const r = rng(733);
+  const leaf = (x: number, y: number, rx: number, ry: number, rot: number, v: number) => {
+    g.save();
+    g.translate(x, y);
+    g.rotate(rot);
+    const tone = Math.round(255 * v);
+    g.fillStyle = `rgb(${tone},${tone},${tone})`;
+    g.beginPath();
+    // a leaf: pointed at both ends
+    g.moveTo(-rx, 0);
+    g.quadraticCurveTo(0, -ry * 1.5, rx, 0);
+    g.quadraticCurveTo(0, ry * 1.5, -rx, 0);
+    g.fill();
+    g.restore();
+  };
+  const cell = (i: number, draw: (cx: number, cy: number) => void) => {
+    g.save();
+    const ox = (i % 2) * S;
+    const oy = Math.floor(i / 2) * S;
+    g.beginPath();
+    g.rect(ox, oy, S, S);
+    g.clip();
+    draw(ox + S / 2, oy + S / 2);
+    g.restore();
+  };
+  // 0: broad leaves, a ragged round clump
+  cell(0, (cx, cy) => {
+    for (let i = 0; i < 95; i++) {
+      const a = r() * 6.283;
+      const d = 100 * Math.pow(r(), 0.62);
+      if (d > 66 && r() < (d - 66) / 52) continue;
+      leaf(cx + Math.cos(a) * d * 0.98, cy + Math.sin(a) * d * 0.94, 15 + r() * 9, 7 + r() * 4, r() * 6.283, 0.45 + 0.55 * (i / 95) * (0.7 + 0.3 * r()));
+    }
+  });
+  // 1: a birch spray: small leaves hanging, with air between
+  cell(1, (cx, cy) => {
+    for (let i = 0; i < 64; i++) {
+      const x = (r() - 0.5) * 2;
+      const y = (r() - 0.5) * 2;
+      if (x * x * 1.5 + y * y > 0.92 + r() * 0.2) continue;
+      leaf(cx + x * 92, cy + y * 108, 11 + r() * 6, 6.5 + r() * 3, Math.PI / 2 + (r() - 0.5) * 1.1, 0.5 + 0.5 * (i / 64) * (0.7 + 0.3 * r()));
+    }
+  });
+  // 2: needles: sprigs fanning out from the middle
+  cell(2, (cx, cy) => {
+    g.lineCap = "round";
+    for (let i = 0; i < 34; i++) {
+      const a = r() * 6.283;
+      const d = 78 * Math.pow(r(), 0.7);
+      const sx = cx + Math.cos(a) * d;
+      const sy = cy + Math.sin(a) * d * 0.92;
+      const out = a + (r() - 0.5) * 1.2;
+      const tone = Math.round(255 * (0.45 + 0.55 * (i / 34) * (0.7 + 0.3 * r())));
+      g.strokeStyle = `rgb(${tone},${tone},${tone})`;
+      for (let j = 0; j < 9; j++) {
+        const fa = out + (j / 8 - 0.5) * 1.9;
+        const len = 20 + r() * 14;
+        g.lineWidth = 3.4 + r() * 1.8;
+        g.beginPath();
+        g.moveTo(sx, sy);
+        g.lineTo(sx + Math.cos(fa) * len, sy + Math.sin(fa) * len);
+        g.stroke();
+      }
+    }
+  });
+  // 3: a dense round mass (the heart of a lobe, a cypress, a hedge)
+  cell(3, (cx, cy) => {
+    for (let i = 0; i < 150; i++) {
+      const a = r() * 6.283;
+      const d = 104 * Math.pow(r(), 0.55);
+      if (d > 86 && r() < (d - 86) / 26) continue;
+      leaf(cx + Math.cos(a) * d, cy + Math.sin(a) * d, 12 + r() * 6, 8 + r() * 4, r() * 6.283, 0.4 + 0.6 * (i / 150) * (0.7 + 0.3 * r()));
+    }
+  });
+  return finish(c);
+}
+
+// Four whole trees for the far woods, 2 x 2, each standing on the bottom of its cell: a broad crown, a pine, a
+// spruce, a narrow flame. Red is which way the form faces across (left 0 .. right 1), green how much it looks up
+// (the tops of its lumps are light, their undersides dark), blue 1 for leaves and 0 for bark.
+export function makeFarTreeTexture() {
+  const S = 256;
+  const { c, g } = sheet(S * 2);
+  const r = rng(1291);
+  const blob = (x: number, y: number, rad: number, nx: number, top: number) => {
+    const R = Math.round(255 * Math.min(1, Math.max(0, nx * 0.5 + 0.5)));
+    const gr = g.createRadialGradient(x, y - rad * 0.55, rad * 0.1, x, y, rad);
+    const hi = Math.round(255 * Math.min(1, top + 0.22));
+    const lo = Math.round(255 * Math.max(0, top - 0.42));
+    gr.addColorStop(0, `rgb(${R},${hi},255)`);
+    gr.addColorStop(0.55, `rgb(${R},${Math.round((hi + lo) / 2)},255)`);
+    gr.addColorStop(1, `rgb(${R},${lo},255)`);
+    g.fillStyle = gr;
+    g.beginPath();
+    g.arc(x, y, rad, 0, 6.2832);
+    g.fill();
+  };
+  const trunk = (x: number, y0: number, y1: number, w0: number, w1: number, bend = 0) => {
+    g.fillStyle = "rgb(128,110,0)";
+    g.beginPath();
+    g.moveTo(x - w0, y0);
+    g.quadraticCurveTo(x - w1 + bend, (y0 + y1) / 2, x - w1 + bend * 0.6, y1);
+    g.lineTo(x + w1 + bend * 0.6, y1);
+    g.quadraticCurveTo(x + w1 + bend, (y0 + y1) / 2, x + w0, y0);
+    g.fill();
+  };
+  const at = (i: number, draw: (ox: number, oy: number) => void) => {
+    g.save();
+    const ox = (i % 2) * S;
+    const oy = Math.floor(i / 2) * S;
+    g.beginPath();
+    g.rect(ox, oy, S, S);
+    g.clip();
+    draw(ox, oy);
+    g.restore();
+  };
+  // a heap of lumps inside an outline, the lower ones drawn first so the upper lie over them
+  const heap = (ox: number, oy: number, cx: number, cy: number, rx: number, ry: number, n: number, rad: [number, number], flat = 1) => {
+    const list: [number, number, number][] = [];
+    let guard = 0;
+    while (list.length < n && guard++ < n * 20) {
+      const x = (r() - 0.5) * 2;
+      const y = (r() - 0.5) * 2;
+      if (x * x + y * y > 1) continue;
+      list.push([x, y, rad[0] + r() * (rad[1] - rad[0])]);
+    }
+    list.sort((a, b) => b[1] - a[1]);
+    for (const [x, y, rr] of list) blob(ox + cx + x * rx, oy + cy + y * ry * flat, rr, x * 0.95, 0.5 - y * 0.42 + (r() - 0.5) * 0.12);
+  };
+  // 0: a broad crown on a short trunk
+  at(0, (ox, oy) => {
+    trunk(ox + 128, oy + 256, oy + 170, 9, 6);
+    heap(ox, oy, 128, 124, 104, 92, 60, [22, 34]);
+  });
+  // 1: a pine: bare trunk, a flat-topped head
+  at(1, (ox, oy) => {
+    trunk(ox + 128, oy + 256, oy + 70, 6, 3.5, 6);
+    heap(ox, oy, 132, 62, 72, 34, 20, [15, 23]);
+    heap(ox, oy, 104, 96, 30, 14, 5, [11, 15]);
+  });
+  // 2: a spruce: tiers narrowing to a spire
+  at(2, (ox, oy) => {
+    trunk(ox + 128, oy + 256, oy + 200, 5, 4);
+    for (let i = 0; i < 9; i++) {
+      const k = i / 8;
+      const y = 226 - k * 196;
+      const w = 62 * Math.pow(1 - k, 0.85) + 5;
+      const n = Math.max(1, Math.round(w / 9));
+      for (let j = 0; j < n; j++) {
+        const x = n === 1 ? 0 : (j / (n - 1)) * 2 - 1;
+        blob(ox + 128 + x * w, oy + y + Math.abs(x) * 9 + (r() - 0.5) * 4, 10 + (1 - k) * 6 + r() * 3, x * 0.95, 0.5 + (r() - 0.5) * 0.15);
+      }
+    }
+  });
+  // 3: a narrow flame (a cypress, or far off a birch)
+  at(3, (ox, oy) => {
+    trunk(ox + 128, oy + 256, oy + 210, 4, 3);
+    for (let i = 0; i < 16; i++) {
+      const k = i / 15;
+      const y = 232 - k * 214;
+      const w = 30 * (0.45 + 1.1 * Math.sin(Math.PI * Math.pow(k, 0.62)) * (1 - k * 0.55));
+      for (let j = 0; j < 3; j++) {
+        const x = j - 1 + (r() - 0.5) * 0.4;
+        blob(ox + 128 + x * w * 0.62, oy + y + (r() - 0.5) * 6, w * 0.5 + 5, x * 0.9, 0.5 + (r() - 0.5) * 0.18);
+      }
+    }
+  });
+  return finish(c);
+}
+
+// what a far tree is: which drawing it wears, how wide and tall, its two greens
+export const FAR_KIND: Record<TreeKind, { cell: number; w: number; h: number; lo: V3; hi: V3 }> = {
+  broad: { cell: 0, w: 11.5, h: 12.5, lo: [0.03, 0.085, 0.03], hi: [0.075, 0.15, 0.045] },
+  birch: { cell: 3, w: 5.2, h: 12.5, lo: [0.075, 0.15, 0.035], hi: [0.16, 0.25, 0.06] },
+  pine: { cell: 1, w: 12, h: 15.5, lo: [0.02, 0.06, 0.04], hi: [0.05, 0.105, 0.055] },
+  spruce: { cell: 2, w: 9, h: 15, lo: [0.012, 0.042, 0.03], hi: [0.032, 0.078, 0.045] },
+  cypress: { cell: 3, w: 4.6, h: 13, lo: [0.012, 0.038, 0.026], hi: [0.03, 0.07, 0.036] },
+  bush: { cell: 0, w: 4.4, h: 3.2, lo: [0.035, 0.09, 0.03], hi: [0.085, 0.16, 0.045] },
+};
