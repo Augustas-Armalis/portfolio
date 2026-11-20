@@ -1,6 +1,9 @@
 import * as THREE from "three";
 import { useSyncExternalStore } from "react";
-import { roadX, roadY, HOME_GATE_Z } from "../flightPath";
+import { roadY } from "../flightPath";
+import { CAVE, JOURNEY } from "../home/journey";
+import { landH } from "../home/land";
+import { homeWater } from "../homeGround";
 import { airState, arrivalHours, mixSky, skyState, type Air, type SkyState } from "../sky";
 import { funeralLand } from "./funeral/land";
 import { GROTTO } from "./sea/shape";
@@ -315,8 +318,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     radius: 1300,
     ceil: 170,
     entry: { x: 1.4, z: -40, above: 6, yaw: 0 },
-    gate: { x: roadX(HOME_GATE_Z), z: HOME_GATE_Z, above: roadY(HOME_GATE_Z), yaw: 0 },
-    path: [], // follows the road: see pathOf()
+    // the way on is the arch carved into the mountain at the forest's end (home/journey.ts), a little inside its mouth
+    gate: { x: CAVE.x - Math.sin(CAVE.yaw) * 10, z: CAVE.z - Math.cos(CAVE.yaw) * 10, above: landH(CAVE.x, CAVE.z) + CAVE.above, yaw: CAVE.yaw },
+    path: [], // the journey: up the road, over the lake, down the river through the town, the forest, the cave (see pathOf())
     obstacles: [],
     canvases: [],
   },
@@ -918,8 +922,8 @@ export function pathOf(id: WorldId) {
   const def = WORLDS[id];
   const ctl: THREE.Vector3[] = [];
   if (id === "home") {
-    // out along the road through the avenue to the first gate
-    for (let z = -14; z >= HOME_GATE_Z - 36; z -= 12) ctl.push(new THREE.Vector3(roadX(z), roadY(z), z));
+    // off the desk as the road climbs, then over the land and the water at the height each point asks for
+    JOURNEY.forEach(([x, z, a], i) => ctl.push(new THREE.Vector3(x, i < 2 ? roadY(z) : Math.max(landH(x, z), homeWater(x, z)) + a, z)));
   } else for (const [x, z, a] of def.path) ctl.push(new THREE.Vector3(x, groundAt(def, x, z) + a, z));
   const curve = new THREE.CatmullRomCurve3(ctl, !!def.loop, "centripetal");
   const len = curve.getLength();

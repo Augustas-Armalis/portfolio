@@ -78,7 +78,7 @@ export function makeLandMaterial() {
         // slopes gather a soft shade, brows and crests stay open to the sky
         float e = 7.0 + length(position.xz) * 0.02;
         vCav = ((landH(p + vec2(e, 0.0)) + landH(p - vec2(e, 0.0)) + landH(p + vec2(0.0, e)) + landH(p - vec2(0.0, e))) * 0.25 - h) / e;
-        float level = hLakeK(p) < 1.15 ? LAKE_Y : SEA;
+        float level = max(hLakeK(p) < 1.15 ? LAKE_Y : SEA, riverLevel(p));
         vWorld = vec3(p.x, max(h, level), p.y);
         vN = landN(p);
         gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
@@ -121,6 +121,11 @@ export function makeLandMaterial() {
         float lk = hLakeK(p);
         bool isLake = lk < 1.15;
         float level = isLake ? LAKE_Y : SEA;
+        // the river (journey.ts): still water like the lake's, running west, with no mirror of its own
+        float rLev = riverLevel(p);
+        bool isRiver = rLev > level;
+        if (isRiver) level = rLev;
+        bool still = isLake || isRiver;
         vec3 V = normalize(cameraPosition - vWorld);
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         vec3 col;
@@ -183,6 +188,30 @@ export function makeLandMaterial() {
           earth = mix(earth, vec3(0.5, 0.47, 0.41), step(0.955, ph) * (1.0 - smoothstep(0.18, 0.4, length(fract(pc) - 0.5))) * (1.0 - smoothstep(0.03, 0.12, fw)));
           alb = mix(alb, earth, onPath);
         }
+        // the town's streets (journey.ts): cobbles set in packed earth, worn smooth down the middle
+        {
+          float st = townStreet(p);
+          if (st > 0.001) {
+            vec2 cq = p * 2.6; vec2 ci = floor(cq + vec2(0.0, floor(cq.x) * 0.5)); vec2 cf = fract(cq + vec2(0.0, floor(cq.x) * 0.5)) - 0.5;
+            float cob = 1.0 - smoothstep(0.28, 0.48, length(cf));
+            float keepC = 1.0 - smoothstep(0.06, 0.2, fw);
+            vec3 stone = vec3(0.33, 0.31, 0.28) * (0.75 + 0.45 * hash12(ci));
+            vec3 earthS = vec3(0.3, 0.25, 0.18) * (0.85 + 0.3 * vnoise(p * 0.7));
+            vec3 sc = mix(earthS, mix(earthS * 0.8, stone, cob), keepC * 0.85);
+            sc = mix(sc, (earthS + stone) * 0.5, 1.0 - keepC);
+            float edge = st * (1.0 - smoothstep(0.35, 0.75, vnoise(p * 1.4) * 0.5 + (1.0 - st)));
+            alb = mix(alb, sc, clamp(st * 1.15 - 0.1 + edge * 0.0, 0.0, 1.0));
+            onPath = max(onPath, st);
+          }
+          // the forest's track: dark earth, needles, moss creeping in from its edges
+          float tr = forestTrack(p);
+          if (tr > 0.001) {
+            vec3 tc = mix(vec3(0.09, 0.065, 0.045), vec3(0.16, 0.11, 0.07), vnoise(p * 1.9)) * (0.8 + 0.3 * vnoise(p * 7.0));
+            tc = mix(tc, vec3(0.05, 0.08, 0.03), smoothstep(0.5, 0.8, vnoise(p * 0.9 + 4.0)) * 0.6);
+            alb = mix(alb, tc, tr * 0.92);
+            onPath = max(onPath, tr);
+          }
+        }
         // the soil between the blades, only where the eye is close enough to see between them
         {
           float near = (1.0 - smoothstep(2.5, 15.0, dist)) * (1.0 - onPath);
@@ -227,7 +256,7 @@ export function makeLandMaterial() {
         // ----- water -----
         if (h < level) {
           float depth = level - h;
-          float seaK = isLake ? 0.0 : 1.0;
+          float seaK = still ? 0.0 : 1.0;
           vec3 P = vec3(p.x, level, p.y);
           // how much of the wave pattern a pixel can still carry: beyond that it is averaged, never sampled (no sparkle of
           // aliasing, no crawling), so the water is still at any distance and from any height
@@ -236,8 +265,9 @@ export function makeLandMaterial() {
           float keep1 = (1.0 - smoothstep(0.6, 3.5, fw)) * (1.0 - smoothstep(50.0, 260.0, dist));   // ripples (metres)
           float keep2 = (1.0 - smoothstep(4.0, 22.0, fw)) * (1.0 - smoothstep(260.0, 1300.0, dist));  // chop and swell
           // two scales of travelling waves, and on the sea a long swell coming in to the beach
-          vec2 w1 = p / 3.1 + vec2(uTime * 0.021, uTime * 0.013);
-          vec2 w2 = p / 11.0 - vec2(uTime * 0.012, -uTime * 0.008);
+          vec2 pf = isRiver ? p + vec2(uTime * 0.42, -uTime * 0.42 * riverSlope(p.x)) : p;
+          vec2 w1 = pf / 3.1 + vec2(uTime * 0.021, uTime * 0.013);
+          vec2 w2 = pf / 11.0 - vec2(uTime * 0.012, -uTime * 0.008);
           vec2 w3 = p / 47.0 + vec2(uTime * 0.006, uTime * 0.004);
           const float E = 0.012;
           float a0 = texture2D(uCloudTex, w1).b, b0 = texture2D(uCloudTex, w2).b, c0 = texture2D(uCloudTex, w3).b;
@@ -306,7 +336,7 @@ export function makeLandMaterial() {
             wcol = mix(wcol, vec3(0.92, 0.95, 0.96) * (uSkyCol * 0.9 + uKeyCol * 0.6 * sunUp), clamp(foam, 0.0, 1.0) * (1.0 - smoothstep(0.8, 5.0, fw)));
           }
           // a soft edge where water meets land, and the sand dark with wet beside it
-          col = mix(col * mix(0.72, 1.0, smoothstep(0.0, 0.12, -depth + 0.12)), wcol, smoothstep(0.0, isLake ? 0.035 : 0.06, depth));
+          col = mix(col * mix(0.72, 1.0, smoothstep(0.0, 0.12, -depth + 0.12)), wcol, smoothstep(0.0, still ? 0.035 : 0.06, depth));
         } else {
           // wet sand and earth along any waterline
           col *= mix(0.74, 1.0, smoothstep(0.0, 0.22, h - level));

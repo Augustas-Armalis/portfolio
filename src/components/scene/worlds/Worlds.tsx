@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { postCtl } from "../Post";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
+import { CAVE } from "../home/journey";
 import { LightGate, LightPath, type WorldProps } from "./common";
 import { Birds, type Flock } from "./life";
 import { PlayFrame } from "./play";
@@ -293,7 +294,8 @@ export function Worlds(props: WorldProps) {
       {id === "home" && (
         <>
           <LightPath id="home" def={WORLDS.home} angels effects={props.effects} from={10} />
-          <LightGate id="home" def={WORLDS.home} />
+          {/* the home gate is the veil inside the cave's arch (home/journey.ts, home/Cave.tsx draw the stone) */}
+          <LightGate id="home" def={WORLDS.home} look="veil" half={CAVE.half} rise={CAVE.rise} />
           {/* a small flock over the road that parts round the plane as it passes (worlds/play.tsx) */}
           {props.effects > 0.25 && <Birds flocks={HOME_FLOCKS} scatter={15} seed={11} />}
         </>
