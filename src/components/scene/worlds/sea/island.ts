@@ -144,6 +144,10 @@ export const ISLAND_U = {
   // how far the eyes have kindled (each its own, 0..1)
   uEyeK: { value: new THREE.Vector2(0, 0) },
   uOriginL: { value: new THREE.Vector3() },
+  // how far the grotto's mouth has opened (0: the face is whole rock, nothing shows; 1: open)
+  uOpen: { value: 0 },
+  // the magic of the night: light kindled on the water (0..1)
+  uMagic: { value: 0 },
 };
 const GROTTO_GLSL = /* glsl */ `
   const vec4 GRT = vec4(${GROTTO.x.toFixed(1)}, ${GROTTO.z.toFixed(1)}, ${GROTTO.half.toFixed(1)}, ${GROTTO.top.toFixed(1)});
@@ -168,7 +172,7 @@ export function makeIslandMaterial() {
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: /* glsl */ `
-      uniform vec3 uEyes[2]; uniform vec2 uEyeK;
+      uniform vec3 uEyes[2]; uniform vec2 uEyeK; uniform float uOpen;
       varying vec3 vWorld; varying vec3 vLocal; varying vec3 vN; varying vec4 vCol;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -177,7 +181,12 @@ export function makeIslandMaterial() {
       void main(){
         // the way in: cut out of the face
         float gin = vLocal.z > ${(ISLAND.z + 20).toFixed(1)} ? grottoIn(vLocal) : -99.0;
-        if (gin > 0.0) discard;
+        // (shut, the face is whole rock and nothing shows of it from the bay; it opens from the waterline, a low
+        // arch that widens and rises as the plane comes in under the head at night)
+        if (gin > 0.0 && uOpen > 0.01) {
+          float ou = (vLocal.x - GRT.x) / (GRT.z * (0.3 + 0.7 * uOpen));
+          if (abs(ou) < 1.0 && vLocal.y < GRT.w * uOpen * sqrt(max(0.0, 1.0 - ou * ou))) discard;
+        }
         vec3 n = normalize(vN);
         vec3 V = normalize(cameraPosition - vWorld);
         float dist = length(vWorld - cameraPosition);
@@ -243,7 +252,7 @@ export function makeIslandMaterial() {
           col += (warm * 3.4 + 0.004) * k * facing * 200.0 / (d2 + 200.0) * (0.4 + 0.6 * exp(-d2 * 0.0006));
         }
         // the dark of the grotto shades the rock round its mouth
-        col *= 1.0 - 0.55 * smoothstep(-9.0, 0.0, gin) * step(${(ISLAND.z + 20).toFixed(1)}, vLocal.z);
+        col *= 1.0 - 0.55 * uOpen * smoothstep(-9.0, 0.0, gin) * step(${(ISLAND.z + 20).toFixed(1)}, vLocal.z);
         col = applyAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         ${END}
@@ -266,13 +275,19 @@ export function makeGrottoMaterial() {
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: /* glsl */ `
-      uniform vec2 uEyeK;
+      uniform vec2 uEyeK; uniform float uOpen;
       varying vec3 vWorld; varying vec3 vLocal; varying vec3 vK;
       ${GLSL_NOISE}
       ${GLSL_SKY}
       ${GLSL_AIR}
       void main(){
         float deep = vK.x;
+        if (uOpen < 0.02) discard;
+        if (deep < 0.005) {
+          // (the lip of the mouth is only where the mouth has opened)
+          float ou = (vLocal.x - ${GROTTO.x.toFixed(1)}) / (${GROTTO.half.toFixed(1)} * (0.3 + 0.7 * uOpen) + 1.5);
+          if (abs(ou) >= 1.0 || vLocal.y > ${GROTTO.top.toFixed(1)} * uOpen * sqrt(max(0.0, 1.0 - ou * ou)) + 1.5) discard;
+        }
         float rib = vnoise(vec2(vLocal.x * 0.3 + vLocal.z * 0.21, vLocal.y * 0.22)) * 0.6 + vnoise(vLocal.xz * 0.9 + vLocal.y * 0.8) * 0.4;
         vec3 alb = vec3(0.022, 0.042, 0.034) * (0.45 + 1.2 * rib);
         vec3 col = alb * uSkyCol * (1.0 - 0.85 * smoothstep(0.0, 0.35, deep));
