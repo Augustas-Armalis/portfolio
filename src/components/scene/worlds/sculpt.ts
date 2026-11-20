@@ -10,12 +10,21 @@ import type { V3 } from "./kit";
 // Every vertex carries
 //   aCol  rgb, and a (the paint's kind: whatever the material makes of it)
 //   aPat  along and across the lump it mostly belongs to, in metres, for
-//         patterns that should run with a sleeve or the fall of a robe
+//         patterns that should run with a sleeve or the fall of a robe (taken
+//         only from lumps of the paint group that is strongest there, so a
+//         sleeve's pattern does not swirl where it meets the body)
+//   aWhat what it is, as four weights the paints give (a figure: robe, sleeve,
+//         skin, hair), run together where lumps meet
+//   aAO   how open it lies: 1 in the open, toward 0 in creases and hollows
+//
+// `detail` is carved into the clay close to its surface before the skin is
+// drawn (folds of cloth, strands of hair): metres, positive cuts in.
 
 const edgeTable = ET as unknown as Int32Array;
 const triTable = TT as unknown as Int32Array;
 
-export type Paint = { col: V3; kind: number };
+export type Paint = { col: V3; kind: number; what?: [number, number, number, number]; grp?: number };
+export type MeshOpt = { detail?: (x: number, y: number, z: number) => number; band?: number };
 type Lump = {
   a: THREE.Vector3;
   b: THREE.Vector3;
@@ -147,7 +156,7 @@ export class Clay {
   }
   // The same, as work that can be put down and picked up: it yields whenever it has run for `budget` milliseconds,
   // so a figure can be made a little each frame while something else is on screen.
-  *meshSteps(voxel: number, paints: Paint[], box?: { min: V3; max: V3 }, budget = Infinity): Generator<void, THREE.BufferGeometry, void> {
+  *meshSteps(voxel: number, paints: Paint[], box?: { min: V3; max: V3 }, budget = Infinity, opt: MeshOpt = {}): Generator<void, THREE.BufferGeometry, void> {
     let began = performance.now();
     const solid = this.lumps.filter((l) => l.mode !== 2);
     const lo: V3 = [1e9, 1e9, 1e9];
@@ -204,6 +213,27 @@ export class Clay {
           }
         }
       }
+
+    // folds, strands: worked into the clay only near its surface
+    if (opt.detail) {
+      const band = opt.band ?? voxel * 3;
+      for (let k = 0; k < nz; k++) {
+        if (performance.now() - began > budget) {
+          yield;
+          began = performance.now();
+        }
+        const z = o[2] + k * voxel;
+        for (let j = 0; j < ny; j++) {
+          const y = o[1] + j * voxel;
+          let q = j * nx + k * nxy;
+          for (let i = 0; i < nx; i++, q++) {
+            const f = field[q];
+            if (f > band || f < -band) continue;
+            field[q] = f + opt.detail(o[0] + i * voxel, y, z) * (1 - Math.abs(f) / band);
+          }
+        }
+      }
+    }
 
     // marching cubes, the corners and edges numbered as three's own tables number them
     const CO = [0, 1, nx, nx + 1, nxy, nxy + 1, nxy + nx, nxy + nx + 1];
@@ -288,7 +318,31 @@ export class Clay {
     const nv = pos.length / 3;
     const col = new Float32Array(nv * 4);
     const pat = new Float32Array(nv * 2);
+    const what = new Float32Array(nv * 4);
+    const aoA = new Float32Array(nv);
     const painted = this.lumps.filter((l) => l.mode !== 1);
+    // the clay's own field, read between its samples: how much room there is above a point of the skin
+    const sample = (x: number, y: number, z: number) => {
+      const fx = Math.min(nx - 1.001, Math.max(0, (x - o[0]) / voxel));
+      const fy = Math.min(ny - 1.001, Math.max(0, (y - o[1]) / voxel));
+      const fz = Math.min(nz - 1.001, Math.max(0, (z - o[2]) / voxel));
+      const ix = Math.floor(fx);
+      const iy = Math.floor(fy);
+      const iz = Math.floor(fz);
+      const tx = fx - ix;
+      const ty = fy - iy;
+      const tz = fz - iz;
+      const q = ix + iy * nx + iz * nxy;
+      const a = field[q] + (field[q + 1] - field[q]) * tx;
+      const b = field[q + nx] + (field[q + nx + 1] - field[q + nx]) * tx;
+      const c = field[q + nxy] + (field[q + nxy + 1] - field[q + nxy]) * tx;
+      const d = field[q + nxy + nx] + (field[q + nxy + nx + 1] - field[q + nxy + nx]) * tx;
+      return a + (b - a) * ty + (c + (d - c) * ty - a - (b - a) * ty) * tz;
+    };
+    const AO_D = [voxel * 1.6, voxel * 4, voxel * 9];
+    const gW = [0, 0, 0, 0];
+    const gS = [0, 0, 0, 0];
+    const gC = [0, 0, 0, 0];
     for (let v = 0; v < nv; v++) {
       if ((v & 255) === 0 && performance.now() - began > budget) {
         yield;
@@ -302,8 +356,13 @@ export class Clay {
       let g = 0;
       let b = 0;
       let kd = 0;
-      let ps = 0;
-      let pc = 0;
+      let w0 = 0;
+      let w1 = 0;
+      let w2 = 0;
+      let w3 = 0;
+      gW[0] = gW[1] = gW[2] = gW[3] = 0;
+      gS[0] = gS[1] = gS[2] = gS[3] = 0;
+      gC[0] = gC[1] = gC[2] = gC[3] = 0;
       for (const l of painted) {
         const m = l.k + l.soft * 4 + 1;
         if (x < l.min[0] - m || x > l.max[0] + m || y < l.min[1] - m || y > l.max[1] + m || z < l.min[2] - m * l.flat || z > l.max[2] + m * l.flat) continue;
@@ -320,23 +379,47 @@ export class Clay {
         const dx = x - l.a.x;
         const dy = y - l.a.y;
         const dz = z - l.a.z;
-        ps += (l.s0 + (l.ell ? l.ell.r[1] : 0) + dx * l.ax.x + dy * l.ax.y + dz * l.ax.z) * wt;
-        pc += (dx * l.perp.x + dy * l.perp.y + dz * l.perp.z) * wt;
+        // (paint laid over clay takes the clay's own run: it has none itself)
+        if (l.mode !== 2) {
+          const gi = p.grp ?? 0;
+          gW[gi] += wt;
+          gS[gi] += (l.s0 + (l.ell ? l.ell.r[1] : 0) + dx * l.ax.x + dy * l.ax.y + dz * l.ax.z) * wt;
+          gC[gi] += (dx * l.perp.x + dy * l.perp.y + dz * l.perp.z) * wt;
+        }
+        if (p.what) {
+          w0 += p.what[0] * wt;
+          w1 += p.what[1] * wt;
+          w2 += p.what[2] * wt;
+          w3 += p.what[3] * wt;
+        }
       }
       if (w > 0) {
         col[v * 4] = r / w;
         col[v * 4 + 1] = g / w;
         col[v * 4 + 2] = b / w;
         col[v * 4 + 3] = kd / w;
-        pat[v * 2] = ps / w;
-        pat[v * 2 + 1] = pc / w;
+        let gi = 0;
+        for (let i = 1; i < 4; i++) if (gW[i] > gW[gi]) gi = i;
+        if (gW[gi] > 0) {
+          pat[v * 2] = gS[gi] / gW[gi];
+          pat[v * 2 + 1] = gC[gi] / gW[gi];
+        }
+        what[v * 4] = w0 / w;
+        what[v * 4 + 1] = w1 / w;
+        what[v * 4 + 2] = w2 / w;
+        what[v * 4 + 3] = w3 / w;
       }
+      let ao = 0;
+      for (const d of AO_D) ao += Math.min(1, Math.max(0, sample(x + nor[v * 3] * d, y + nor[v * 3 + 1] * d, z + nor[v * 3 + 2] * d) / d));
+      aoA[v] = ao / AO_D.length;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
     geo.setAttribute("aCol", new THREE.BufferAttribute(col, 4));
     geo.setAttribute("aPat", new THREE.BufferAttribute(pat, 2));
+    geo.setAttribute("aWhat", new THREE.BufferAttribute(what, 4));
+    geo.setAttribute("aAO", new THREE.BufferAttribute(aoA, 1));
     geo.setIndex(idx);
     geo.computeBoundingSphere();
     return geo;

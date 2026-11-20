@@ -770,7 +770,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "kings",
     place: "none",
     air: AIR.kings,
-    fog: [0.00042, 0.003],
+    // (the wood has its own mist: worlds/kings/light.ts)
+    fog: [0.00002, 0.003],
     terrain: {
       base: 0,
       sines: [
@@ -778,30 +779,48 @@ export const WORLDS: Record<WorldId, WorldDef> = {
         [-0.012, 0.021, 1.9, 1.2],
         [0.041, 0.033, 2.7, 0.4],
       ],
-      bumps: [[0, KINGS.z, 150, 5]],
-      rim: [620, 1000, 30],
+      // the rise the kings stand on; then hollows, which hold water: a stream wandering down the aisle from pool to
+      // pool, a wider one in the clearing, and the still pool before the kings that the little world lies mirrored in
+      bumps: [
+        [0, KINGS.z, 150, 5],
+        [-10, 655, 34, -3.2],
+        [-76, 578, 30, -3],
+        [-70, 500, 34, -3.3],
+        [-26, 432, 30, -3],
+        [44, 352, 62, -4.2],
+        [60, 284, 30, -3],
+        [32, 220, 32, -3.2],
+        [-8, 158, 30, -3],
+        [0, 70, 42, -3.4],
+        [0, -30, 86, -4.6],
+      ],
+      rim: [760, 1200, 30],
     },
     water: null,
-    centre: [0, 120],
-    radius: 520,
+    centre: [0, 200],
+    radius: 620,
     ceil: 150,
-    entry: { x: 0, z: 540, above: 13, yaw: 0 },
+    entry: { x: 0, z: 700, above: 14, yaw: 0 },
     gate: null,
-    // up the aisle between the great trunks, rising to the height of the kings' hands, and between them into the light
-    // low and straight, so the kings stand over the plane like hills for the whole of the approach; only at the
-    // last does it climb to their hands
+    // a long way in: the path winds wide between the great trunks, so that from the entry the kings are hidden and
+    // their light is only glimpsed through the wood, now on one side, now on the other;
+    // then it straightens into the glade, low, so the kings stand over the plane like hills for the whole of the
+    // approach; only at the last does it climb to their hands, and between them into the light
     path: [
-      [0, 540, 13],
-      [5, 470, 14],
-      [10, 400, 15],
-      [6, 330, 16],
-      [0, 260, 18],
-      [0, 190, 20],
-      [0, 120, 24],
-      [0, 50, 31],
-      [0, -20, 42],
-      [0, -70, 55],
-      [0, -108, 68],
+      [0, 700, 14],
+      [-30, 632, 14],
+      [-66, 560, 15],
+      [-62, 490, 15],
+      [-22, 420, 16],
+      [36, 350, 16],
+      [52, 285, 17],
+      [30, 222, 19],
+      [6, 156, 22],
+      [0, 80, 27],
+      [0, 20, 34],
+      [0, -40, 46],
+      [0, -85, 58],
+      [0, -112, 68],
       [0, KINGS.z + KINGS.domeR + 5, KINGS.domeY + KINGS.domeR * 0.3],
       [0, KINGS.z, KINGS.domeY + KINGS.domeR * 0.28],
       [0, KINGS.z - 40, KINGS.domeY + KINGS.domeR * 0.28],
@@ -810,7 +829,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -114, z: KINGS.z, r: 60, h: 190 },
       { x: 114, z: KINGS.z, r: 60, h: 190 },
     ],
-    canvases: [{ painting: "kings", x: -30, z: 372, yaw: 0.46 }],
+    canvases: [{ painting: "kings", x: -66, z: 648, yaw: 0.5 }],
   },
 };
 
@@ -834,7 +853,10 @@ export const kingsDome = () => {
   return { x: 0, y, z: KINGS.z, heart: y + KINGS.domeR * 0.3 };
 };
 // It goes slowly here, and slowest where the whole picture stands in the frame.
-export const kingsPace = (ahead: number) => 0.4 + 0.35 * smooth01((ahead - 330) / 150) + 0.12 * smooth01((110 - ahead) / 80);
+// (briskly through the outer wood, easing as the light grows, slowest of all under the kings; the last of it a glide)
+export const kingsPace = (ahead: number) => 0.42 + 0.3 * smooth01((ahead - 270) / 170) + 0.38 * smooth01((ahead - 520) / 220) + 0.08 * smooth01((90 - ahead) / 60);
+// the level of the still water that lies in the wood's hollows
+export const KINGS_WATER = -1.3;
 // The eye is raised from the plane's own line toward the middle of the picture (between the dome and the
 // crowns) and the lens opens a little as they come near, so both crowned heads stay in the frame until the
 // plane is almost at their hands; then it comes down to the light.
@@ -843,7 +865,9 @@ export function kingsView(y: number, ahead: number) {
   const mid = kingsDome().y + KINGS.domeR * (1.85 + 0.25 * smooth01((230 - ahead) / 130));
   // how far above level the eye should look, and how much of that it has taken up
   const elev = Math.atan2(mid - y, Math.max(ahead, 30));
-  const fov = 50 + 16 * smooth01((330 - ahead) / 190) - 10 * smooth01((95 - ahead) / 60);
+  // (a tall narrow screen sees less to either side: there the lens opens further, so both kings are still in it)
+  const tall = typeof window !== "undefined" && window.innerHeight > window.innerWidth * 1.15;
+  const fov = 50 + (tall ? 30 : 16) * smooth01((330 - ahead) / 190) - (tall ? 16 : 10) * smooth01((95 - ahead) / 60);
   return { w, elev, fov };
 }
 // How much of the frame the little world's light has taken: nothing until the plane is close, all of it at the glass.
