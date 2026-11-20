@@ -102,7 +102,10 @@ function rangeGeometry(rg: Range, segA: number, segR: number) {
       // (no pass any more: the greatest of them stand right where the desk looks, a little west of north)
       const pass = sstep(rg.pass[0], rg.pass[1], Math.abs(th - 0.14)) * (1 + rg.massif * Math.exp(-Math.pow((th - 0.55) / 0.5, 2)));
       const ends = 1 - sstep(rg.span[0], rg.span[1], Math.abs(th));
-      pos.push(x, rg.height * h * broad * env * pass * ends - 6, z);
+      // (where a range runs out low, toward the coasts and at its feet, it dives well under the land and the sea: two
+      // surfaces a few metres apart, seen from kilometres off, flicker against each other)
+      const hm = rg.height * h * broad * env * pass * ends;
+      pos.push(x, hm - 6 - 80 * (1 - sstep(0, 0.14 * rg.height + 14, hm)), z);
     }
   }
   const row = segA + 1;

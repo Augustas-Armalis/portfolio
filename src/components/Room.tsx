@@ -684,7 +684,7 @@ function Scene({
       while (!dead && quiet < 2 && performance.now() - t0 < 4000) {
         quiet = loads.busy ? 0 : quiet + 1;
         if (loads.total > 0) onProgress(0.52 + 0.2 * (loads.done / loads.total));
-        await wait(90);
+        await wait(50);
       }
       if (dead) return;
       mark("files");
@@ -1344,6 +1344,18 @@ function Scene({
     const at = introAt.current;
     const mist = instant || (at !== null && now - at > ARR) ? 0 : cloudMist(cam.position.y);
     SKY_U.uMist.value = Math.max(mist, voyage.mist);
+    // The lens's near plane. A centimetre at the desk (things there are looked at from a hand's breadth), but with a
+    // centimetre the depth a kilometre off is good to no better than six metres: seen from the sky, the mountains'
+    // feet, the far woods and the sea all flickered against the land under them. So it moves out with the eye's
+    // distance from the desk, to metres when the eye is high. (In flight the plane sets its own.)
+    if (!voyage.flying) {
+      const dd = Math.hypot(cam.position.x, cam.position.y - 1, cam.position.z);
+      const near = dd < 6 ? 0.01 : Math.min(8, 0.01 + (dd - 6) * 0.01);
+      if (Math.abs(cam.near - near) > near * 0.02) {
+        cam.near = near;
+        cam.updateProjectionMatrix();
+      }
+    }
     // the plain three fog (the desk and its things) keeps pace with the shader fog
     fog.far = Math.min(176, 3 / (FOG + mist));
     fog.near = fog.far * (20.5 / 176);
@@ -1855,7 +1867,8 @@ export default function Room({
     if (process.env.NODE_ENV !== "production") ((window as unknown as { __t: Record<string, number> }).__t.ready = performance.now());
     // the line finishes drawing before anything opens, and the loader is never
     // a flash: at least 1.3 s from navigation even when everything is cached
-    const minWait = Math.max(650, 1300 - performance.now());
+    // (a short breath once everything is ready, so the invitation does not snap in; no longer two thirds of a second)
+    const minWait = Math.max(280, 1100 - performance.now());
     // A returning visitor, or one who asked for less motion, goes straight in. Otherwise the line is across and it
     // waits for one click (or key, or tap): the arrival has sound, and sound may only begin with a gesture. If no
     // one clicks it goes in on its own after a while, silently.
