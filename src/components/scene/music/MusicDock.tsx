@@ -19,7 +19,8 @@ import { GLASS_SPRING, Glass, GlassStyles } from "../Glass";
 // blocker), the pill says so quietly: "Play field music". Pressing it tries again inside the press and opens the
 // player's own frame, whose play button works everywhere. Nothing else is ever played in its place.
 //
-// It sits at the top of the view beside the sound pill (on a phone, beside the corner button), clear of the
+// It sits at the top of the view beside the sound pill (on a phone, beside the corner button; in flight on a phone
+// one row down at the left, so it never lies under the world's name in the middle of the top), clear of the
 // controls at the foot. It lives in a root of its own (made once, on the first music of the visit) so the frames in it are never
 // moved or remounted as the scene's own chrome comes and goes: a moved frame would start its recording again.
 
@@ -85,7 +86,7 @@ function Dock() {
     <div
       ref={root}
       className={`${geist.className} pointer-events-none fixed z-40 text-white`}
-      style={{ letterSpacing: TRACK.body, ...(coarse ? { top: SAFE.t, left: `calc(${SAFE.l} + 52px)` } : { right: 60, top: 16 }) }}
+      style={{ letterSpacing: TRACK.body, ...(coarse ? (m.place === "flight" ? { top: `calc(${SAFE.t} + 52px)`, left: SAFE.l } : { top: SAFE.t, left: `calc(${SAFE.l} + 52px)` }) : { right: 60, top: 16 }) }}
       data-music-dock={open ? "open" : "closed"}
       onPointerDown={(e) => e.stopPropagation()}
     >

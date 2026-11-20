@@ -462,7 +462,9 @@ export function startAmbience() {
   if (typeof window === "undefined" || typeof AudioContext === "undefined") return;
   if (running) {
     // called again from a later gesture: a context the browser would not wake on the first touch is woken now
+    // (and the field's music, if it was refused for want of a gesture, is asked for again inside this one)
     resumeAudio();
+    deskMusicPrime();
     return;
   }
   try {
