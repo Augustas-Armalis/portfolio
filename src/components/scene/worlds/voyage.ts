@@ -953,6 +953,8 @@ export const voyage = {
   onEnter: null as ((id: WorldId) => void) | null,
   // the flight's ending: the plane has flown into the little world the kings hold, and is on its way home
   homing: false,
+  // coming down to the desk (set by Room as the landing begins, cleared at take-off): nowhere else can be picked now
+  landing: false,
   // where the plane went through the last gate, for the gate's ripple (side and height from its middle, metres)
   gateHit: null as { world: WorldId; side: number; up: number; at: number } | null,
   skyMod: null as ((s: SkyState) => SkyState) | null,
@@ -981,17 +983,37 @@ export const useFlightFlags = () =>
   );
 // Travel straight to any world (the flight's Worlds list, and [ / ] with a keyboard): the cloud closes as at a
 // gate, the world is made under it (or simply shown, if it was made ready) and the cloud opens on its entry.
+// A pick is always taken, whatever the cloud is doing, and the last one wins:
+//   open air                      the cloud closes and leads there;
+//   the cloud closing             it leads there instead (picking the world not yet left opens it again);
+//   shut over a world just made,  the cloud closes again at once and that world is let go.
+//   or opening on it
+// The crossing itself is Plane.tsx's passage(): "closing" with `next` set is all it needs, from any phase.
+// False only when there is nothing to do: not in the air, coming in to land, or already there (or on the way there).
 export function travelTo(id: WorldId) {
-  if (!voyage.flying || voyage.phase !== "open" || voyage.homing || id === voyage.cur) return false;
-  voyage.next = id;
-  voyage.phase = "closing";
+  if (!voyage.flying || voyage.landing || voyage.homing) return false;
+  if (id === travelDest()) return false;
+  if (id === voyage.cur) {
+    // (only while the cloud is still closing on the way somewhere else: stay)
+    voyage.next = null;
+    voyage.phase = "opening";
+  } else {
+    voyage.next = id;
+    voyage.phase = "closing";
+  }
+  emit();
   return true;
 }
+// where the plane will be when the cloud next opens: the world it is in, unless the cloud is closing toward another
+export const travelDest = () => (voyage.phase === "closing" && voyage.next ? voyage.next : voyage.cur);
+// (a step is counted from where the plane is already going, so three quick presses go three worlds on)
 export function travelStep(dir: 1 | -1) {
-  const i = WORLD_ORDER.indexOf(voyage.cur);
+  const i = WORLD_ORDER.indexOf(travelDest());
   const j = Math.min(WORLD_ORDER.length - 1, Math.max(0, i + dir));
   return travelTo(WORLD_ORDER[j]);
 }
+// the world a pick is on its way to, for the list to mark; null in open air and once the plane has arrived
+export const useTravel = () => useSyncExternalStore(subscribe, () => (voyage.phase === "closing" ? voyage.next : null), () => null);
 export function setGuide(on: boolean) {
   voyage.guide = on;
   emit();
