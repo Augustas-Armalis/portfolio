@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { HOME_GATE_Z, roadX } from "../flightPath";
 import { pathW, pathX } from "../shared";
-import { CHURCH, GLSL_RIVER, TOWN, journeyWood, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
+import { CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
 
 // The land the desk stands in, written once and read by everything that
 // stands on it. The desk is at the origin and the visitor looks north (-z).
@@ -170,6 +170,8 @@ float streamD(vec2 p){
   return abs(p.y - (-57.0 + 5.0 * sin(p.x * 0.07 + 0.5) - 0.12 * p.x)) + max(0.0, p.x - 110.0) * 0.05 + max(0.0, -5.0 - p.x) * 0.3;
 }
 ${GLSL_RIVER}
+${GLSL_TRACK}
+${GLSL_CAVE}
 float landFree(vec2 p){
   float r = length(p);
   float f = smoothstep(70.0, 210.0, r);
@@ -429,7 +431,7 @@ export function forestD(x: number, z: number) {
   d = Math.max(d, journeyWood(x, z) * (0.82 + 0.18 * mid));
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
   // the town's ground and the river's banks are open
-  d *= sstep(TOWN.r - 18, TOWN.r + 26, Math.hypot(x - TOWN.x, z - TOWN.z));
+  d *= sstep(TOWN.r - 18, TOWN.r + 26, Math.hypot(x - TOWN.x, z - TOWN.z)) * sstep(HILL.foot - 18, HILL.foot + 8, Math.hypot(x - HILL.x, z - HILL.z));
   const rd = riverD(x, z);
   if (rd < 40) d *= sstep(riverW(x) + 2, riverW(x) + 22, rd);
   d *= sstep(22, 44, Math.hypot(x - PLACES.farm.x, z - PLACES.farm.z)) * sstep(34, 70, Math.hypot(x - PLACES.village.x, z - PLACES.village.z)) * sstep(10, 26, Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z)) * sstep(1.5, 5, streamD(x, z));
@@ -526,7 +528,7 @@ export function plantHome(amount: number): HomeTree[] {
       if (rr < 240 || rr > 1700) continue;
       if (z < 0 && Math.abs(x - roadX(z)) < 80 && z > HOME_GATE_Z - 90) continue;
       // (the journey's own forest is planted whole, by its own hand: see JourneyWoods)
-      if (journeyWood(x, z) > 0.02) continue;
+      if (journeyWood(x, z) > 0.02 && laneD(x, z).d < 62) continue;
       const d = forestD(x, z);
       // (inside a wood the trees stand shoulder to shoulder: a mass, not a scatter)
       if (u > sstep(0.08, 0.5, d) * 0.97) {

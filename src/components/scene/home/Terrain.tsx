@@ -188,6 +188,30 @@ export function makeLandMaterial() {
           earth = mix(earth, vec3(0.5, 0.47, 0.41), step(0.955, ph) * (1.0 - smoothstep(0.18, 0.4, length(fract(pc) - 0.5))) * (1.0 - smoothstep(0.03, 0.12, fw)));
           alb = mix(alb, earth, onPath);
         }
+        // the town's streets (journey.ts): cobbles set in packed earth, worn smooth down the middle
+        {
+          float st = townStreet(p);
+          if (st > 0.001) {
+            vec2 cq = p * 2.6; vec2 ci = floor(cq + vec2(0.0, floor(cq.x) * 0.5)); vec2 cf = fract(cq + vec2(0.0, floor(cq.x) * 0.5)) - 0.5;
+            float cob = 1.0 - smoothstep(0.28, 0.48, length(cf));
+            float keepC = 1.0 - smoothstep(0.06, 0.2, fw);
+            vec3 stone = vec3(0.33, 0.31, 0.28) * (0.75 + 0.45 * hash12(ci));
+            vec3 earthS = vec3(0.3, 0.25, 0.18) * (0.85 + 0.3 * vnoise(p * 0.7));
+            vec3 sc = mix(earthS, mix(earthS * 0.8, stone, cob), keepC * 0.85);
+            sc = mix(sc, (earthS + stone) * 0.5, 1.0 - keepC);
+            float edge = st * (1.0 - smoothstep(0.35, 0.75, vnoise(p * 1.4) * 0.5 + (1.0 - st)));
+            alb = mix(alb, sc, clamp(st * 1.15 - 0.1 + edge * 0.0, 0.0, 1.0));
+            onPath = max(onPath, st);
+          }
+          // the forest's track: dark earth, needles, moss creeping in from its edges
+          float tr = forestTrack(p);
+          if (tr > 0.001) {
+            vec3 tc = mix(vec3(0.09, 0.065, 0.045), vec3(0.16, 0.11, 0.07), vnoise(p * 1.9)) * (0.8 + 0.3 * vnoise(p * 7.0));
+            tc = mix(tc, vec3(0.05, 0.08, 0.03), smoothstep(0.5, 0.8, vnoise(p * 0.9 + 4.0)) * 0.6);
+            alb = mix(alb, tc, tr * 0.92);
+            onPath = max(onPath, tr);
+          }
+        }
         // the soil between the blades, only where the eye is close enough to see between them
         {
           float near = (1.0 - smoothstep(2.5, 15.0, dist)) * (1.0 - onPath);

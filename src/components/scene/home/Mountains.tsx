@@ -78,7 +78,7 @@ const sstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-type Range = { r0: number; r1: number; height: number; freq: number; seed: number; haze: number; snow: number; pass: [number, number]; span: [number, number]; massif: number; valley?: boolean };
+export type Range = { r0: number; r1: number; height: number; freq: number; seed: number; haze: number; snow: number; pass: [number, number]; span: [number, number]; massif: number; valley?: boolean };
 
 function rangeGeometry(rg: Range, segA: number, segR: number) {
   const pos: number[] = [];
@@ -124,7 +124,7 @@ function rangeGeometry(rg: Range, segA: number, segR: number) {
   return g;
 }
 
-function makeRangeMaterial(rg: Range) {
+export function makeRangeMaterial(rg: Range) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
     uniforms: { ...SKY_U, ...HOME_U, uHaze: { value: rg.haze }, uSnow: { value: rg.snow }, uTop: { value: rg.height } },

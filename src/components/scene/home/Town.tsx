@@ -1,0 +1,1141 @@
+"use client";
+
+import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
+import { GLSL_NOISE } from "../shared";
+import { GLSL_SKY, SKY_U } from "../sky";
+import { voyage } from "../worlds/voyage";
+import { makeHomeTreeMaterial } from "./Forest";
+import { CHURCH, HILL, SQUARE, TOWN, hillRoadA, riverD, riverSlope, riverW, riverWL, riverZ, sst } from "./journey";
+import { GLSL_HOME_AIR, HOME_U, landH, rng, timed, type TreeKind } from "./land";
+import { buildTree, makeLeafTexture } from "./trees";
+
+// The town on the river (journey.ts): a Lithuanian wooden town as at Rumšiškės or in old Kėdainiai, and over it a
+// red-brick castle on its hill as at Trakai. Log houses with steep shingled or thatched roofs, carved white window
+// surrounds and coloured shutters, crossed horse-head boards (žirgeliai) on the gables; the houses stand along both
+// quays and climb the castle hill in terraces. On the south bank the market square with its well and stalls, and the
+// white wooden church with its tower; over the river an arched wooden footbridge; at the rapids a watermill whose
+// wheel turns; roofed pole shrines (koplytstulpiai) at the town's ends; storks on their nests and in the air;
+// smoke from the chimneys; and lanterns that kindle one after another ahead of the plane as it comes down the river.
+//
+// All the stone, wood and paint is one mesh and one small shader: the logs, boards, shingles, bricks and windows are
+// painted at the pixel from each face's own metres (so nothing is laid on anything and nothing can fight for
+// depth), and every pattern fades to its average before it is finer than a pixel.
+
+type V3 = [number, number, number];
+type M4 = [number, number, number, number];
+// kinds of surface (the shader paints each)
+const K = { paint: 0, logs: 1, boards: 2, shingle: 3, trim: 4, lamp: 5, stone: 6, brick: 7, tile: 8, thatch: 9 } as const;
+
+class TB {
+  pos: number[] = [];
+  nor: number[] = [];
+  col: number[] = [];
+  uv: number[] = [];
+  mat: number[] = [];
+  ao: number[] = [];
+  idx: number[] = [];
+  private ox = 0;
+  private oy = 0;
+  private oz = 0;
+  private c = 1;
+  private s = 0;
+  at(x: number, y: number, z: number, rot = 0) {
+    this.ox = x;
+    this.oy = y;
+    this.oz = z;
+    this.c = Math.cos(rot);
+    this.s = Math.sin(rot);
+    return this;
+  }
+  // a local point to the world
+  w(p: V3): V3 {
+    return [this.ox + p[0] * this.c + p[2] * this.s, this.oy + p[1], this.oz - p[0] * this.s + p[2] * this.c];
+  }
+  private v(p: V3, n: THREE.Vector3, col: V3, uv: [number, number], m: M4) {
+    const q = this.w(p);
+    this.pos.push(q[0], q[1], q[2]);
+    this.nor.push(n.x * this.c + n.z * this.s, n.y, -n.x * this.s + n.z * this.c);
+    this.col.push(col[0], col[1], col[2]);
+    this.uv.push(uv[0], uv[1]);
+    this.mat.push(m[0], m[1], m[2], m[3]);
+    this.ao.push(q[1] - landH(q[0], q[2]));
+    return this.pos.length / 3 - 1;
+  }
+  // a quad a b c d, with its uv in metres (by default u along a->b, v along a->d)
+  quad(a: V3, b: V3, c: V3, d: V3, col: V3, m: M4, uv?: [number, number][]) {
+    const n = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).cross(new THREE.Vector3(d[0] - a[0], d[1] - a[1], d[2] - a[2])).normalize();
+    const lu = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    const lv = Math.hypot(d[0] - a[0], d[1] - a[1], d[2] - a[2]);
+    const u = uv ?? [
+      [0, 0],
+      [lu, 0],
+      [lu, lv],
+      [0, lv],
+    ];
+    const i = this.v(a, n, col, u[0], m);
+    this.v(b, n, col, u[1], m);
+    this.v(c, n, col, u[2], m);
+    this.v(d, n, col, u[3], m);
+    this.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+  }
+  tri(a: V3, b: V3, c: V3, col: V3, m: M4, uv: [number, number][]) {
+    const n = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).cross(new THREE.Vector3(c[0] - a[0], c[1] - a[1], c[2] - a[2])).normalize();
+    const i = this.v(a, n, col, uv[0], m);
+    this.v(b, n, col, uv[1], m);
+    this.v(c, n, col, uv[2], m);
+    this.idx.push(i, i + 1, i + 2);
+  }
+  // a wall from (x0, z0) to (x1, z1), y0 to y1; windows every `win` m (style: 0 house, 1 church, 2 castle slit, 3 one gable window)
+  wall(x0: number, z0: number, x1: number, z1: number, y0: number, y1: number, col: V3, kind: number, win = 0, accent = 0, style = 0) {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    this.quad([x0, y0, z0], [x1, y0, z1], [x1, y1, z1], [x0, y1, z0], col, [kind, win, len, accent + style * 10]);
+  }
+  box(cx: number, cy: number, cz: number, sx: number, sy: number, sz: number, col: V3, kind: number = K.paint, top = true) {
+    const x0 = cx - sx / 2;
+    const x1 = cx + sx / 2;
+    const z0 = cz - sz / 2;
+    const z1 = cz + sz / 2;
+    const y0 = cy - sy / 2;
+    const y1 = cy + sy / 2;
+    const m: M4 = [kind, 0, 0, 0];
+    this.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], col, m);
+    this.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], col, m);
+    this.quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], col, m);
+    this.quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], col, m);
+    if (top) this.quad([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0], col, m);
+  }
+  // an upright round thing r0 -> r1 over h (a cone when r1 is 0); uv: round the girth, up the side
+  cyl(cx: number, y0: number, cz: number, r0: number, r1: number, h: number, sides: number, col: V3, kind: number = K.paint, win = 0, cap = true) {
+    const girth = 2 * Math.PI * r0;
+    const sl = Math.hypot(h, r0 - r1);
+    const p = (a: number, r: number, y: number): V3 => [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r];
+    for (let i = 0; i < sides; i++) {
+      const a0 = (i / sides) * Math.PI * 2;
+      const a1 = ((i + 1) / sides) * Math.PI * 2;
+      const u0 = (i / sides) * girth;
+      const u1 = ((i + 1) / sides) * girth;
+      this.quad(p(a1, r0, y0), p(a0, r0, y0), p(a0, r1, y0 + h), p(a1, r1, y0 + h), col, [kind, win, girth / sides, 20], [
+        [u1, 0],
+        [u0, 0],
+        [u0, sl],
+        [u1, sl],
+      ]);
+    }
+    if (cap && r1 > 0.01)
+      for (let i = 0; i < sides; i++) {
+        const a0 = (i / sides) * Math.PI * 2;
+        const a1 = ((i + 1) / sides) * Math.PI * 2;
+        this.tri([cx, y0 + h, cz], p(a1, r1, y0 + h), p(a0, r1, y0 + h), col, [kind, 0, 0, 0], [
+          [0, 0],
+          [r1, 0],
+          [0, r1],
+        ]);
+      }
+  }
+  geometry() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute("normal", new THREE.Float32BufferAttribute(this.nor, 3));
+    g.setAttribute("aCol", new THREE.Float32BufferAttribute(this.col, 3));
+    g.setAttribute("aUV", new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setAttribute("aMat", new THREE.Float32BufferAttribute(this.mat, 4));
+    g.setAttribute("aAO", new THREE.Float32BufferAttribute(this.ao, 1));
+    g.setIndex(this.idx);
+    g.computeBoundingSphere();
+    return g;
+  }
+}
+
+// ---------- palette (linear, before the lens) ----------
+const LOG: V3 = [0.17, 0.115, 0.075];
+const LOG_GREY: V3 = [0.2, 0.18, 0.155];
+const WHITE: V3 = [0.78, 0.76, 0.7];
+const SHINGLE: V3 = [0.2, 0.18, 0.16];
+const THATCH: V3 = [0.3, 0.25, 0.14];
+const TILE: V3 = [0.24, 0.095, 0.06];
+const STONE: V3 = [0.33, 0.31, 0.28];
+const BRICK: V3 = [0.25, 0.1, 0.065];
+const DARK: V3 = [0.07, 0.055, 0.045];
+const WOOD: V3 = [0.26, 0.2, 0.14];
+const PAINTED: V3[] = [
+  [0.42, 0.33, 0.16], // ochre
+  [0.28, 0.34, 0.28], // pale green
+  [0.3, 0.35, 0.4], // pale blue
+  [0.46, 0.41, 0.32], // sand
+];
+
+const ground = (x: number, z: number) => landH(x, z);
+// the lowest and highest ground under a footprint (a local box round the builder's origin)
+function footRange(b: TB, hx: number, hz: number) {
+  let lo = 1e9;
+  let hi = -1e9;
+  for (const [x, z] of [
+    [-hx, -hz],
+    [hx, -hz],
+    [hx, hz],
+    [-hx, hz],
+    [0, 0],
+    [0, hz],
+    [0, -hz],
+    [hx, 0],
+    [-hx, 0],
+  ]) {
+    const q = b.w([x, 0, z]);
+    const g = ground(q[0], q[2]);
+    lo = Math.min(lo, g);
+    hi = Math.max(hi, g);
+  }
+  return { lo, hi };
+}
+
+// A wooden house: its long side L along local x, depth D along z (front at +z), walls `h` high, a steep gabled roof.
+type HouseOpt = { roof: "shingle" | "thatch" | "tile"; wall: "logs" | "painted" | "grey"; accent: number; porch: boolean; chimney: boolean; horses: boolean; storey?: number };
+function house(b: TB, x: number, z: number, rot: number, L: number, D: number, h: number, o: HouseOpt) {
+  b.at(x, 0, z, rot);
+  const hx = L / 2;
+  const hz = D / 2;
+  const { lo, hi } = footRange(b, hx + 0.3, hz + 0.3);
+  // (on a slope the house is set into it: the uphill side's foot is buried a little, the downhill side stands on stone)
+  const c0 = b.w([0, 0, 0]);
+  const floor = Math.max(ground(c0[0], c0[2]) + 0.4, hi - 1.3);
+  b.at(x, floor, z, rot);
+  // the stone footing, down into the lowest ground
+  const fh = floor - lo + 0.5;
+  b.box(0, -fh / 2, 0, L + 0.3, fh, D + 0.3, STONE, K.stone, false);
+  const wallCol = o.wall === "logs" ? LOG : o.wall === "grey" ? LOG_GREY : PAINTED[o.accent % PAINTED.length];
+  const wk = o.wall === "painted" ? K.boards : K.logs;
+  const H = h * (o.storey ?? 1);
+  // walls: the long sides have windows, the gable ends one or two
+  b.wall(-hx, hz, hx, hz, 0, H, wallCol, wk, 2.4, o.accent);
+  b.wall(hx, -hz, -hx, -hz, 0, H, wallCol, wk, 2.9, o.accent);
+  b.wall(hx, hz, hx, -hz, 0, H, wallCol, wk, D > 6.5 ? 2.6 : 99, o.accent);
+  b.wall(-hx, -hz, -hx, hz, 0, H, wallCol, wk, 99, o.accent);
+  // log ends standing out at the corners
+  if (wk === K.logs)
+    for (const [cx, cz] of [
+      [-hx, -hz],
+      [hx, -hz],
+      [hx, hz],
+      [-hx, hz],
+    ])
+      b.box(cx, H / 2, cz, 0.4, H, 0.4, [wallCol[0] * 0.8, wallCol[1] * 0.8, wallCol[2] * 0.8], K.logs);
+  // the roof: steep, the ridge along x, deep eaves
+  const rh = D * (o.roof === "thatch" ? 0.8 : 0.7);
+  const e = o.roof === "thatch" ? 0.75 : 0.5;
+  const rk = o.roof === "thatch" ? K.thatch : o.roof === "tile" ? K.tile : K.shingle;
+  const rc = o.roof === "thatch" ? THATCH : o.roof === "tile" ? TILE : SHINGLE;
+  const ex = hx + e;
+  const ez = hz + e;
+  const ey = H - e * (rh / hz);
+  const slope = Math.hypot(ez, H + rh - ey);
+  const ruv: [number, number][] = [
+    [0, 0],
+    [2 * ex, 0],
+    [2 * ex, slope],
+    [0, slope],
+  ];
+  b.quad([-ex, ey, ez], [ex, ey, ez], [ex, H + rh, 0], [-ex, H + rh, 0], rc, [rk, 0, 0, 0], ruv);
+  b.quad([ex, ey, -ez], [-ex, ey, -ez], [-ex, H + rh, 0], [ex, H + rh, 0], rc, [rk, 0, 0, 0], ruv);
+  if (o.roof === "thatch") {
+    // a thatch is thick: its eaves show
+    b.quad([-ex, ey - 0.35, ez], [ex, ey - 0.35, ez], [ex, ey, ez], [-ex, ey, ez], rc, [K.thatch, 0, 0, 0]);
+    b.quad([ex, ey - 0.35, -ez], [-ex, ey - 0.35, -ez], [-ex, ey, -ez], [ex, ey, -ez], rc, [K.thatch, 0, 0, 0]);
+  }
+  // the gables: vertical boards, one small window, white carved barge boards along the roof's edges
+  const gc: V3 = o.wall === "painted" ? wallCol : [wallCol[0] * 1.15, wallCol[1] * 1.1, wallCol[2] * 1.05];
+  const gt = H + rh * (hz / ez) * 0.98;
+  for (const sx of [-1, 1]) {
+    const gx = sx * hx;
+    const m: M4 = [K.boards, 99, D, o.accent + 30];
+    if (sx > 0) b.tri([gx, H, hz], [gx, H, -hz], [gx, gt, 0], gc, m, [[0, 0], [D, 0], [hz, gt - H]]);
+    else b.tri([gx, H, -hz], [gx, H, hz], [gx, gt, 0], gc, m, [[0, 0], [D, 0], [hz, gt - H]]);
+    const bx = sx * (ex + 0.03);
+    for (const sz of [-1, 1]) {
+      const a: V3 = [bx, ey - 0.05, sz * (ez + 0.03)];
+      const c: V3 = [bx, H + rh + 0.06, 0];
+      b.quad(a, c, [c[0], c[1] - 0.34, 0], [a[0], a[1] - 0.34, a[2]], WHITE, [K.trim, 0, 0, 0]);
+    }
+    // žirgeliai: two boards crossing over the ridge's end, carved as horses' heads looking out
+    if (o.horses)
+      for (const sz of [-1, 1]) {
+        const p0: V3 = [bx, H + rh - 0.7, sz * 0.62];
+        const p1: V3 = [bx, H + rh + 0.95, -sz * 0.45];
+        b.quad(p0, p1, [p1[0], p1[1] - 0.22, p1[2] + sz * 0.1], [p0[0], p0[1] - 0.22, p0[2] + sz * 0.1], WHITE, [K.trim, 0, 0, 0]);
+        b.quad([bx, p1[1] - 0.25, p1[2]], [bx, p1[1] - 0.18, p1[2] - sz * 0.45], [bx, p1[1] + 0.05, p1[2] - sz * 0.5], [bx, p1[1] + 0.08, p1[2]], WHITE, [K.trim, 0, 0, 0]);
+      }
+  }
+  if (o.chimney) {
+    b.box(hx * 0.35, H + rh * 0.55 + 0.6, -0.6, 0.75, rh * 1.1 + 1.2, 0.75, WHITE, K.paint);
+    b.box(hx * 0.35, H + rh + 1.2, -0.6, 0.95, 0.16, 0.95, DARK, K.paint);
+  }
+  if (o.porch) {
+    // a small porch at the front with carved posts and its own little gable
+    const px = -hx * 0.35;
+    b.box(px, 0.12, hz + 0.9, 2.2, 0.24, 1.8, WOOD, K.boards);
+    for (const sx of [-1, 1]) b.box(px + sx * 0.95, 1.2, hz + 1.65, 0.14, 2.3, 0.14, WHITE, K.trim);
+    const ph = 2.35;
+    b.quad([px - 1.2, ph, hz + 1.9], [px, ph + 0.9, hz + 1.9], [px, ph + 0.9, hz], [px - 1.2, ph, hz], rc, [rk, 0, 0, 0]);
+    b.quad([px, ph + 0.9, hz + 1.9], [px + 1.2, ph, hz + 1.9], [px + 1.2, ph, hz], [px, ph + 0.9, hz], rc, [rk, 0, 0, 0]);
+    b.tri([px - 1.1, ph, hz + 1.88], [px + 1.1, ph, hz + 1.88], [px, ph + 0.82, hz + 1.88], WHITE, [K.trim, 0, 0, 0], [[0, 0], [2.2, 0], [1.1, 0.8]]);
+  }
+  return { floor, top: floor + H + rh };
+}
+
+// a lantern on a post; its light (x, y, z, size, the plane's x at which it kindles) goes in `lamps`
+function lantern(b: TB, x: number, z: number, lamps: number[][], kindle: number) {
+  const g = ground(x, z);
+  b.at(x, g - 0.2, z, 0);
+  b.cyl(0, 0, 0, 0.09, 0.07, 3.4, 6, DARK);
+  b.box(0, 3.58, 0, 0.36, 0.42, 0.36, [1.0, 0.72, 0.36], K.lamp);
+  b.cyl(0, 3.79, 0, 0.32, 0.02, 0.38, 4, DARK);
+  lamps.push([x, g - 0.2 + 3.58, z, 0.9, kindle]);
+}
+
+// a roofed pole shrine (koplytstulpis): a carved oak post, on it a little house with a tent roof and an iron sun
+function shrine(b: TB, x: number, z: number, rot: number, lamps: number[][]) {
+  const g = ground(x, z);
+  b.at(x, g - 0.3, z, rot);
+  b.box(0, 1.9, 0, 0.32, 3.8, 0.32, [0.24, 0.19, 0.14], K.boards);
+  for (let i = 0; i < 3; i++) b.box(0, 1.2 + i * 0.9, 0, 0.42, 0.12, 0.42, [0.3, 0.24, 0.17], K.boards);
+  b.box(0, 4.15, 0, 0.9, 0.7, 0.9, [0.27, 0.21, 0.15], K.boards);
+  b.quad([-0.25, 3.9, 0.452], [0.25, 3.9, 0.452], [0.25, 4.4, 0.452], [-0.25, 4.4, 0.452], [1.0, 0.75, 0.42], [K.lamp, x + 20, 0, 0]);
+  b.cyl(0, 4.5, 0, 0.82, 0.0, 0.85, 4, SHINGLE, K.shingle);
+  // the iron sun on top: a cross in a ring of rays
+  b.box(0, 5.75, 0, 0.05, 0.9, 0.05, DARK);
+  b.box(0, 5.85, 0, 0.5, 0.05, 0.05, DARK);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    b.box(Math.cos(a) * 0.24, 5.85 + Math.sin(a) * 0.24, 0, 0.16, 0.025, 0.025, DARK);
+  }
+  lamps.push([...b.w([0, 4.15, 0.6]), 0.35, x + 20]);
+}
+
+// a rowing boat on the water, its axis along the stream
+function boat(b: TB, x: number, z: number, rot: number) {
+  b.at(x, riverWL(x) + 0.05, z, rot);
+  const L = 3.8;
+  const W = 0.62;
+  const N = 8;
+  const wAt = (u: number) => W * Math.pow(Math.sin(Math.PI * (0.04 + u * 0.92)), 0.6);
+  for (let i = 0; i < N; i++) {
+    const u0 = i / N;
+    const u1 = (i + 1) / N;
+    const zA = (u0 - 0.5) * L;
+    const zB = (u1 - 0.5) * L;
+    for (const s of [-1, 1]) b.quad([s * wAt(u0), 0.35, zA], [s * wAt(u1), 0.35, zB], [s * wAt(u1) * 0.55, -0.12, zB], [s * wAt(u0) * 0.55, -0.12, zA], [0.12, 0.09, 0.07], [K.boards, 0, 0, 0]);
+    b.quad([-wAt(u0) * 0.55, -0.1, zA], [wAt(u0) * 0.55, -0.1, zA], [wAt(u1) * 0.55, -0.1, zB], [-wAt(u1) * 0.55, -0.1, zB], [0.3, 0.24, 0.16], [K.boards, 0, 0, 0]);
+  }
+  b.box(0, 0.12, 0.2, W * 1.6, 0.05, 0.28, [0.35, 0.28, 0.19], K.boards);
+}
+
+const BRIDGE_X = -258;
+const MILL_X = -132;
+
+function buildTown() {
+  const b = new TB();
+  const r = rng(9157);
+  const lamps: number[][] = [];
+  const smoke: number[][] = [];
+  const nests: V3[] = [];
+  const gardens: [number, number, TreeKind, number][] = [];
+  const taken: [number, number, number][] = [];
+  const free = (x: number, z: number, rad: number) => taken.every(([tx, tz, tr]) => Math.hypot(x - tx, z - tz) > rad + tr);
+  const take = (x: number, z: number, rad: number) => taken.push([x, z, rad]);
+  // the river's frame at x: along it (downstream, toward -x) and across it (toward the south bank)
+  const frame = (x: number) => {
+    const sl = riverSlope(x);
+    const n = Math.sqrt(1 + sl * sl);
+    return { ax: -1 / n, az: -sl / n, nx: -sl / n, nz: 1 / n };
+  };
+  const bankPt = (x: number, side: number, off: number): [number, number] => {
+    const f = frame(x);
+    return [x + f.nx * side * off, riverZ(x) + f.nz * side * off];
+  };
+  // kept clear: the castle's head, the square, the church, the mill
+  take(HILL.x, HILL.z, HILL.top + 3);
+  take(SQUARE.x, SQUARE.z, 19);
+  take(CHURCH.x, CHURCH.z, 17);
+
+  // ----- the castle on the hill: a curtain wall with round corner towers, a gate tower, the tall keep -----
+  {
+    const gy = ground(HILL.x, HILL.z) - 0.5;
+    // turned so its gate looks down toward the river
+    const rot = Math.atan2(TOWN.x - HILL.x, TOWN.z - HILL.z);
+    b.at(HILL.x, gy, HILL.z, rot);
+    const W = 13;
+    const Dp = 11;
+    const wh = 9.5;
+    const corners: [number, number][] = [
+      [-W, -Dp],
+      [W, -Dp],
+      [W, Dp],
+      [-W, Dp],
+    ];
+    for (let i = 0; i < 4; i++) {
+      const [x0, z0] = corners[i];
+      const [x1, z1] = corners[(i + 1) % 4];
+      b.wall(x0, z0, x1, z1, -2.5, wh, BRICK, K.brick, 0);
+      b.wall(x1 * 0.93, z1 * 0.9, x0 * 0.93, z0 * 0.9, -2.5, wh, BRICK, K.brick, 0);
+      const n = Math.round(Math.hypot(x1 - x0, z1 - z0) / 1.6);
+      for (let k = 0; k < n; k += 2) {
+        const t = (k + 0.5) / n;
+        b.box(x0 + (x1 - x0) * t, wh + 0.45, z0 + (z1 - z0) * t, 0.8, 0.9, 0.8, BRICK, K.brick);
+      }
+    }
+    b.quad([-W, wh, Dp], [W, wh, Dp], [W, wh, -Dp], [-W, wh, -Dp], [0.22, 0.17, 0.13], [K.stone, 0, 0, 0]);
+    // round towers with tall cones of red tile
+    for (const [cx, cz] of corners) {
+      b.cyl(cx, -2.5, cz, 3.1, 2.8, wh + 7.5, 12, BRICK, K.brick, 3.2);
+      b.cyl(cx, wh + 5, cz, 3.5, 0.0, 9.5, 12, TILE, K.tile);
+      b.cyl(cx, wh + 14.4, cz, 0.06, 0.03, 1.4, 4, DARK);
+    }
+    // the gate tower, its pointed arch facing the town
+    b.box(0, wh / 2 + 2.5, Dp, 6.5, wh + 10, 5, BRICK, K.brick);
+    b.cyl(0, wh + 7.5, Dp, 4.6, 0, 7, 4, TILE, K.tile);
+    b.quad([-1.5, -0.5, Dp + 2.53], [1.5, -0.5, Dp + 2.53], [1.5, 3.4, Dp + 2.53], [-1.5, 3.4, Dp + 2.53], DARK, [K.paint, 0, 0, 0]);
+    b.tri([-1.5, 3.4, Dp + 2.53], [1.5, 3.4, Dp + 2.53], [0, 5.0, Dp + 2.53], DARK, [K.paint, 0, 0, 0], [[0, 0], [3, 0], [1.5, 1.6]]);
+    // the keep: tall and square, its own steep roof and a slim spire
+    b.box(-3, 12, -3, 9, 29, 9, BRICK, K.brick, false);
+    b.wall(-7.5, 1.52, 1.5, 1.52, 4, 25, BRICK, K.brick, 2.6, 0, 2);
+    b.wall(1.52, 1.5, 1.52, -7.5, 4, 25, BRICK, K.brick, 2.6, 0, 2);
+    b.cyl(-3, 26.5, -3, 6.6, 0, 11, 4, TILE, K.tile);
+    b.cyl(-3, 37, -3, 0.08, 0.02, 3, 4, DARK);
+    // a hall along the far wall
+    b.box(5, 5.0, -6, 14, 11, 7, BRICK, K.brick, false);
+    b.wall(-2, -2.48, 12, -2.48, 1.5, 10, BRICK, K.brick, 2.4, 0, 2);
+    const hq = 10.5;
+    b.quad([-2.3, hq, -2.2], [12.3, hq, -2.2], [12.3, hq + 4.5, -6], [-2.3, hq + 4.5, -6], TILE, [K.tile, 0, 0, 0]);
+    b.quad([12.3, hq, -9.8], [-2.3, hq, -9.8], [-2.3, hq + 4.5, -6], [12.3, hq + 4.5, -6], TILE, [K.tile, 0, 0, 0]);
+    // lights round the walk and at the gate: the lights seen from the river
+    for (const [cx, cz] of corners) lamps.push([...b.w([cx * 0.86, wh + 1.6, cz * 0.86]), 0.8, HILL.x + 40]);
+    lamps.push([...b.w([-2.3, 4.0, Dp + 2.9]), 0.7, HILL.x + 50]);
+    lamps.push([...b.w([2.3, 4.0, Dp + 2.9]), 0.7, HILL.x + 50]);
+    smoke.push([...b.w([5, 15, -6]), 1]);
+  }
+
+  // ----- the houses climbing the hill: on its terraces, facing out and down -----
+  for (let k = 1; k <= 5; k++) {
+    // the radius where the dome stands k steps high (the middle of a flat)
+    const want = k * HILL.step;
+    let lo = HILL.top;
+    let hi = HILL.foot;
+    for (let i = 0; i < 24; i++) {
+      const m = (lo + hi) / 2;
+      if (HILL.h * (1 - sst(HILL.top, HILL.foot, m)) > want) lo = m;
+      else hi = m;
+    }
+    const rad = (lo + hi) / 2 - 1.5;
+    const n = Math.floor((2 * Math.PI * rad) / 12.5);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + k * 0.7 + r() * 0.12;
+      const x = HILL.x + Math.cos(a) * rad;
+      const z = HILL.z + Math.sin(a) * rad;
+      // the back of the hill, toward the forest, is left to its trees
+      if (Math.sin(a) < -0.5 && Math.cos(a) < 0.3) continue;
+      // (the winding street up to the castle keeps clear)
+      const ra = Math.abs(((a - hillRoadA(rad) + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * rad;
+      if (ra < 7.5) continue;
+      if (r() < 0.12) {
+        gardens.push([x, z, r() < 0.5 ? "broad" : "birch", 0.62 + r() * 0.25]);
+        continue;
+      }
+      const L = 7 + r() * 3.5;
+      const D = 5.6 + r() * 1.2;
+      if (!free(x, z, L * 0.55)) continue;
+      take(x, z, L * 0.55);
+      const u = r();
+      const res = house(b, x, z, Math.PI / 2 - a, L, D, 2.9 + r() * 0.4, {
+        roof: u < 0.4 ? "shingle" : u < 0.78 ? "tile" : "thatch",
+        wall: r() < 0.5 ? "logs" : r() < 0.6 ? "painted" : "grey",
+        accent: Math.floor(r() * 4),
+        porch: r() < 0.4,
+        chimney: r() < 0.7,
+        horses: r() < 0.55,
+      });
+      if (r() < 0.2) smoke.push([...b.w([L * 0.175, res.top - res.floor + 1.3, -0.6]), 0.7 + r() * 0.5]);
+      // a fruit tree or a birch in the yard between this house and the next
+      if (r() < 0.65) {
+        const ga = a + (Math.PI / n) * (0.9 + r() * 0.3);
+        const gr = rad + (r() - 0.5) * 3;
+        const gx = HILL.x + Math.cos(ga) * gr;
+        const gz = HILL.z + Math.sin(ga) * gr;
+        if (free(gx, gz, 2.2)) {
+          take(gx, gz, 2.2);
+          const u2 = r();
+          gardens.push([gx, gz, u2 < 0.55 ? "broad" : u2 < 0.85 ? "birch" : "bush", 0.5 + r() * 0.3]);
+        }
+      }
+      // a lantern on the street below each third house: the hill sparkles at dusk
+      if (i % 3 === 0) lantern(b, HILL.x + Math.cos(a + 0.18) * (rad + 6), HILL.z + Math.sin(a + 0.18) * (rad + 6), lamps, HILL.x + 60 - k * 6);
+    }
+  }
+
+  // ----- trees on the slopes between the terraces: the hill is green between its roofs -----
+  for (let k = 0; k <= 5; k++) {
+    const want = (k + 0.5) * HILL.step;
+    let lo = HILL.top;
+    let hi = HILL.foot;
+    for (let i = 0; i < 24; i++) {
+      const m = (lo + hi) / 2;
+      if (HILL.h * (1 - sst(HILL.top, HILL.foot, m)) > want) lo = m;
+      else hi = m;
+    }
+    const rad = (lo + hi) / 2;
+    const n = Math.floor((2 * Math.PI * rad) / 5.5);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + r() * 0.1;
+      if (r() < 0.38) continue;
+      const gr = rad + (r() - 0.5) * 2;
+      const gx = HILL.x + Math.cos(a) * gr;
+      const gz = HILL.z + Math.sin(a) * gr;
+      const ra = Math.abs(((a - hillRoadA(gr) + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * gr;
+      if (ra < 4.5 || !free(gx, gz, 1.8)) continue;
+      take(gx, gz, 1.8);
+      const u = r();
+      gardens.push([gx, gz, u < 0.5 ? "broad" : u < 0.8 ? "birch" : "bush", 0.5 + r() * 0.35]);
+    }
+  }
+
+  // ----- the quays: houses along both banks, a street between them and the water -----
+  for (const side of [-1, 1]) {
+    let x = -168 - r() * 6;
+    while (x > -324) {
+      const L = 8 + r() * 5;
+      const D = 6 + r() * 1.5;
+      const gableOn = r() < 0.45;
+      const along = gableOn ? D : L;
+      const cx = x - along / 2;
+      x -= along + 2.0 + r() * 3.0;
+      if (Math.abs(cx - BRIDGE_X) < 8 + along / 2) continue;
+      if (Math.abs(cx - MILL_X) < 18) continue;
+      for (let row = 0; row < 3; row++) {
+        const deep = gableOn ? L : D;
+        const off = riverW(cx) + 12 + deep / 2 + row * (deep + 10) + r() * 2;
+        const [hx, hz] = bankPt(cx, side, off);
+        if (Math.hypot(hx - TOWN.x, hz - TOWN.z) > TOWN.r + 14) continue;
+        if (row > 0 && r() < 0.25) continue;
+        const rad = Math.max(L, D) * 0.55;
+        if (!free(hx, hz, rad)) continue;
+        take(hx, hz, rad);
+        const f = frame(cx);
+        // the front looks across the river
+        const rot = Math.atan2(-f.nx * side, -f.nz * side) + (gableOn ? Math.PI / 2 : 0);
+        const u = r();
+        const res = house(b, hx, hz, rot, gableOn ? D : L, gableOn ? L : D, 3.0 + r() * 0.5, {
+          roof: u < 0.45 ? "shingle" : u < 0.8 ? "tile" : "thatch",
+          wall: r() < 0.5 ? "painted" : r() < 0.7 ? "logs" : "grey",
+          accent: Math.floor(r() * 4),
+          porch: !gableOn && r() < 0.5,
+          chimney: r() < 0.75,
+          horses: r() < 0.5,
+          storey: row === 0 && r() < 0.3 ? 1.75 : 1,
+        });
+        if (r() < 0.22) smoke.push([...b.w([(gableOn ? D : L) * 0.175, res.top - res.floor + 1.3, -0.6]), 0.7 + r() * 0.5]);
+        if (r() < 0.45) {
+          const [gx, gz] = bankPt(cx + (r() - 0.5) * along, side, off + (gableOn ? L : D) / 2 + 3 + r() * 3);
+          if (free(gx, gz, 2)) {
+            take(gx, gz, 2);
+            gardens.push([gx, gz, r() < 0.6 ? "broad" : "birch", 0.5 + r() * 0.3]);
+          }
+        }
+        if (nests.length < 3 && r() < 0.1) nests.push(b.w([(gableOn ? D : L) * 0.175, res.top - res.floor + 1.35, -0.6]));
+      }
+      // lanterns along the quay
+      if (r() < 0.6) {
+        const [lx, lz] = bankPt(cx + along / 2 + 1, side, riverW(cx) + 7.5);
+        lantern(b, lx, lz, lamps, lx + 26);
+      }
+    }
+  }
+
+  // ----- the market square: houses round it, a well with a sweep, stalls, lanterns -----
+  {
+    const f = frame(SQUARE.x);
+    const out = Math.atan2(f.nz, f.nx);
+    for (let i = 0; i < 11; i++) {
+      // round the square's far side (the river side stays open to the bridge)
+      const a = out - Math.PI * 0.62 + i * Math.PI * 0.124;
+      const x = SQUARE.x + Math.cos(a) * 25;
+      const z = SQUARE.z + Math.sin(a) * 25;
+      if (riverD(x, z) < riverW(x) + 12) continue;
+      const L = 8 + r() * 3;
+      if (!free(x, z, L * 0.5)) continue;
+      take(x, z, L * 0.5);
+      house(b, x, z, Math.atan2(SQUARE.x - x, SQUARE.z - z) - Math.PI / 2, L, 6.5, 3.2, {
+        roof: r() < 0.6 ? "tile" : "shingle",
+        wall: "painted",
+        accent: i % 4,
+        porch: false,
+        chimney: true,
+        horses: false,
+        storey: r() < 0.5 ? 1.75 : 1,
+      });
+    }
+    // the well with its sweep
+    const g = ground(SQUARE.x, SQUARE.z);
+    b.at(SQUARE.x, g - 0.2, SQUARE.z, 0.4);
+    b.cyl(0, 0, 0, 0.85, 0.85, 1.0, 10, STONE, K.stone);
+    b.cyl(0, 0.95, 0, 0.92, 0.92, 0.12, 10, WOOD, K.boards);
+    b.box(2.2, 2.2, 0, 0.22, 4.4, 0.22, WOOD, K.boards);
+    b.quad([2.1, 4.3, 0.05], [-3.6, 6.6, 0.05], [-3.6, 6.5, -0.05], [2.1, 4.2, -0.05], WOOD, [K.boards, 0, 0, 0]);
+    b.box(0.2, 2.9, 0, 0.04, 3.3, 0.04, DARK);
+    // stalls under striped canvas
+    for (let i = 0; i < 4; i++) {
+      const a = i * 1.57 + 0.5;
+      const sx = SQUARE.x + Math.cos(a) * 10;
+      const sz = SQUARE.z + Math.sin(a) * 10;
+      b.at(sx, ground(sx, sz) - 0.1, sz, a);
+      for (const [px, pz] of [
+        [-1.3, -0.9],
+        [1.3, -0.9],
+        [1.3, 0.9],
+        [-1.3, 0.9],
+      ])
+        b.box(px, 1.1, pz, 0.08, 2.2, 0.08, WOOD, K.boards);
+      b.box(0, 0.85, 0, 2.6, 0.08, 1.6, [0.32, 0.25, 0.17], K.boards);
+      b.quad([-1.5, 2.15, 1.1], [1.5, 2.15, 1.1], [1.5, 2.6, -1.0], [-1.5, 2.6, -1.0], i % 2 ? [0.62, 0.2, 0.12] : [0.7, 0.62, 0.42], [K.paint, 0, 0, 0]);
+      for (let k = 0; k < 3; k++) b.box(-0.8 + k * 0.8, 1.05, 0.1, 0.45, 0.3, 0.45, [0.4 + r() * 0.2, 0.3, 0.12], K.paint);
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.3;
+      lantern(b, SQUARE.x + Math.cos(a) * 17, SQUARE.z + Math.sin(a) * 15, lamps, SQUARE.x + 34 - i * 3);
+    }
+  }
+
+  // ----- the white wooden church on the south bank: nave, apse, tower with a stepped cap -----
+  {
+    const rot = Math.atan2(SQUARE.x - CHURCH.x, SQUARE.z - CHURCH.z);
+    b.at(CHURCH.x, 0, CHURCH.z, rot);
+    const fr = footRange(b, 7, 16);
+    const fl = fr.hi + 0.4;
+    b.at(CHURCH.x, fl, CHURCH.z, rot);
+    b.box(0, -(fl - fr.lo + 0.6) / 2, 1.5, 13, fl - fr.lo + 0.6, 30, STONE, K.stone, false);
+    const W = 6;
+    const H = 7.5;
+    b.wall(-W, -12, -W, 10, 0, H, WHITE, K.boards, 3.6, 0, 1);
+    b.wall(W, 10, W, -12, 0, H, WHITE, K.boards, 3.6, 0, 1);
+    b.wall(-W, 10, W, 10, 0, H, WHITE, K.boards, 0);
+    b.wall(W, -12, -W, -12, 0, H, WHITE, K.boards, 0);
+    const rh = 7;
+    const ex = W + 0.6;
+    const ruv: [number, number][] = [
+      [0, 0],
+      [23, 0],
+      [23, 9.6],
+      [0, 9.6],
+    ];
+    b.quad([-ex, H - 0.4, 10.5], [-ex, H - 0.4, -12.5], [0, H + rh, -12.5], [0, H + rh, 10.5], SHINGLE, [K.shingle, 0, 0, 0], ruv);
+    b.quad([ex, H - 0.4, -12.5], [ex, H - 0.4, 10.5], [0, H + rh, 10.5], [0, H + rh, -12.5], SHINGLE, [K.shingle, 0, 0, 0], ruv);
+    b.tri([-W, H, -12], [W, H, -12], [0, H + rh * 0.95, -12], WHITE, [K.boards, 0, 0, 0], [[0, 0], [12, 0], [6, 7]]);
+    // the apse
+    b.cyl(0, 0, -12, 4.4, 4.4, H - 1, 8, WHITE, K.boards, 3.2);
+    b.cyl(0, H - 1, -12, 5.0, 0.3, 4, 8, SHINGLE, K.shingle);
+    // the tower over the door: square, white, stepped; its cap a bell, a lantern, a cross
+    const T = 3.4;
+    b.box(0, (H + 8) / 2, 12.2, T * 2, H + 8, T * 2, WHITE, K.boards);
+    b.quad([-1.0, 0, 15.62], [1.0, 0, 15.62], [1.0, 2.8, 15.62], [-1.0, 2.8, 15.62], [0.16, 0.11, 0.07], [K.boards, 0, 0, 0]);
+    b.box(0, H + 8.2, 12.2, T * 2 + 0.7, 0.4, T * 2 + 0.7, SHINGLE, K.shingle);
+    b.box(0, H + 10.4, 12.2, T * 1.5, 4.2, T * 1.5, WHITE, K.boards);
+    b.cyl(0, H + 12.5, 12.2, 3.2, 1.1, 2.4, 8, SHINGLE, K.shingle);
+    b.cyl(0, H + 14.9, 12.2, 1.1, 1.6, 1.0, 8, SHINGLE, K.shingle, 0, false);
+    b.cyl(0, H + 15.9, 12.2, 1.6, 0.25, 2.2, 8, SHINGLE, K.shingle);
+    b.cyl(0, H + 18.1, 12.2, 0.3, 0.3, 0.8, 6, [0.55, 0.45, 0.2], K.paint);
+    b.cyl(0, H + 18.9, 12.2, 0.45, 0.0, 1.0, 6, SHINGLE, K.shingle);
+    b.box(0, H + 21.0, 12.2, 0.1, 2.4, 0.1, [0.6, 0.5, 0.22]);
+    b.box(0, H + 21.5, 12.2, 1.0, 0.1, 0.1, [0.6, 0.5, 0.22]);
+    lamps.push([...b.w([0, 3.2, 16.0]), 0.6, CHURCH.x + 40]);
+  }
+
+  // ----- the footbridge: an arched wooden deck on trestles, railings, a lantern at each end -----
+  {
+    const x = BRIDGE_X;
+    const f = frame(x);
+    const wl = riverWL(x);
+    const half = riverW(x) + 4.5;
+    const rot = Math.atan2(f.nx, f.nz);
+    const N = 18;
+    const yAt = (t: number) => wl + 1.35 + 1.6 * Math.sin(Math.PI * t);
+    b.at(x, 0, riverZ(x), rot);
+    for (let i = 0; i < N; i++) {
+      const t0 = i / N;
+      const t1 = (i + 1) / N;
+      const z0 = -half + 2 * half * t0;
+      const z1 = -half + 2 * half * t1;
+      b.quad([-1.3, yAt(t0), z0], [1.3, yAt(t0), z0], [1.3, yAt(t1), z1], [-1.3, yAt(t1), z1], [0.3, 0.24, 0.16], [K.boards, 0, 0, 0]);
+      b.quad([1.3, yAt(t0) - 0.3, z0], [-1.3, yAt(t0) - 0.3, z0], [-1.3, yAt(t1) - 0.3, z1], [1.3, yAt(t1) - 0.3, z1], DARK, [K.paint, 0, 0, 0]);
+      for (const sx of [-1, 1]) {
+        b.quad([sx * 1.3, yAt(t0) - 0.3, z0], [sx * 1.3, yAt(t1) - 0.3, z1], [sx * 1.3, yAt(t1), z1], [sx * 1.3, yAt(t0), z0], [0.2, 0.15, 0.1], [K.boards, 0, 0, 0]);
+        b.quad([sx * 1.25, yAt(t0) + 0.92, z0], [sx * 1.25, yAt(t1) + 0.92, z1], [sx * 1.25, yAt(t1) + 1.05, z1], [sx * 1.25, yAt(t0) + 1.05, z0], [0.3, 0.24, 0.16], [K.boards, 0, 0, 0]);
+        if (i % 3 === 0) b.box(sx * 1.25, yAt(t0) + 0.5, z0, 0.12, 1.1, 0.12, [0.26, 0.2, 0.14], K.boards);
+      }
+    }
+    for (const t of [0.25, 0.5, 0.75])
+      for (const sx of [-1, 1]) {
+        const z = -half + 2 * half * t;
+        b.box(sx * 1.0, (wl - 1.2 + yAt(t)) / 2, z, 0.25, yAt(t) - wl + 1.2, 0.25, [0.14, 0.11, 0.08], K.boards);
+      }
+    for (const sz of [-1, 1]) {
+      b.at(x, 0, riverZ(x), rot);
+      const p = b.w([1.6, 0, sz * (half + 0.8)]);
+      lantern(b, p[0], p[2], lamps, x + 30);
+    }
+  }
+
+  // ----- the mill at the rapids, on the north bank; its wheel stands in the stream (it turns: see Town) -----
+  const f = frame(MILL_X);
+  const w = riverW(MILL_X);
+  const [mx, mz] = bankPt(MILL_X, -1, w + 7);
+  house(b, mx, mz, Math.atan2(f.nx, f.nz) + Math.PI / 2, 10, 7.5, 4.4, { roof: "thatch", wall: "logs", accent: 1, porch: false, chimney: false, horses: true });
+  take(mx, mz, 7);
+  const [wx, wz] = bankPt(MILL_X, -1, w - 0.8);
+  const mill = { x: wx, y: riverWL(MILL_X) + 1.5, z: wz, rot: Math.atan2(f.ax, f.az) };
+
+  // ----- roofed pole shrines: where the town begins, by the square, at the forest's edge, at the far quay -----
+  {
+    const [ax, az] = bankPt(-168, 1, riverW(-168) + 8);
+    shrine(b, ax, az, 0.3, lamps);
+    shrine(b, SQUARE.x + 14, SQUARE.z - 12, 2.0, lamps);
+    shrine(b, -323, -218, -1.2, lamps);
+    const [bx, bz] = bankPt(-312, -1, riverW(-312) + 9);
+    shrine(b, bx, bz, 1.0, lamps);
+  }
+
+  // ----- boats moored along the quays -----
+  for (const [x, side] of [
+    [-196, 1],
+    [-232, -1],
+    [-284, 1],
+    [-302, -1],
+  ] as [number, number][]) {
+    const ff = frame(x);
+    const [bx, bz] = bankPt(x, side, riverW(x) - 1.3);
+    boat(b, bx, bz, Math.atan2(ff.ax, ff.az) + (r() - 0.5) * 0.2);
+  }
+
+  // ----- storks: a nest on a tall pole in the meadow by the mill, and on a few chimneys -----
+  {
+    const [px, pz] = bankPt(-150, 1, riverW(-150) + 16);
+    const g = ground(px, pz);
+    b.at(px, g - 0.3, pz, 0);
+    b.cyl(0, 0, 0, 0.14, 0.1, 9.5, 6, [0.25, 0.2, 0.15], K.boards);
+    nests.push([px, g + 9.2, pz]);
+  }
+  for (const n of nests) {
+    b.at(n[0], n[1], n[2], r() * 6);
+    b.cyl(0, -0.2, 0, 0.75, 0.95, 0.5, 9, [0.24, 0.19, 0.12], K.thatch);
+    // the stork: white body, black wings folded along its back, long neck, red bill and legs
+    const SW: V3 = [0.85, 0.84, 0.8];
+    const RED: V3 = [0.7, 0.18, 0.08];
+    b.box(0, 0.75, 0, 0.32, 0.3, 0.62, SW);
+    b.box(0, 0.86, -0.05, 0.36, 0.14, 0.6, DARK);
+    b.box(0, 1.1, 0.3, 0.09, 0.5, 0.09, SW);
+    b.box(0, 1.36, 0.36, 0.14, 0.13, 0.2, SW);
+    b.box(0, 1.33, 0.6, 0.04, 0.04, 0.32, RED);
+    b.box(0.07, 0.42, 0, 0.03, 0.5, 0.03, RED);
+    b.box(-0.07, 0.42, 0, 0.03, 0.5, 0.03, RED);
+  }
+
+  return { geo: b.geometry(), lamps, smoke, mill, gardens };
+}
+
+// ---------- the shader ----------
+function makeTownMaterial() {
+  return new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    uniforms: { ...SKY_U, ...HOME_U, uFront: { value: 1e4 } },
+    vertexShader: /* glsl */ `
+      attribute vec3 aCol; attribute vec2 aUV; attribute vec4 aMat; attribute float aAO;
+      varying vec3 vWorld; varying vec3 vN; varying vec3 vCol; varying vec2 vUV; varying vec4 vMat; varying float vAO;
+      void main(){
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorld = wp.xyz; vN = mat3(modelMatrix) * normal; vCol = aCol; vUV = aUV; vMat = aMat; vAO = aAO;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uFront;
+      varying vec3 vWorld; varying vec3 vN; varying vec3 vCol; varying vec2 vUV; varying vec4 vMat; varying float vAO;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${GLSL_HOME_AIR}
+      vec3 accentCol(float i){
+        i = mod(i, 4.0);
+        return i < 0.5 ? vec3(0.08, 0.2, 0.42) : i < 1.5 ? vec3(0.1, 0.26, 0.16) : i < 2.5 ? vec3(0.42, 0.26, 0.06) : vec3(0.36, 0.08, 0.06);
+      }
+      // a soft-edged box (1 inside), its edge as wide as a pixel
+      float boxK(vec2 q, vec2 hw, float aa){ vec2 d = abs(q) - hw; float sd = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); return 1.0 - smoothstep(-aa, aa, sd); }
+      void main(){
+        vec3 n = normalize(vN);
+        if (!gl_FrontFacing) n = -n;
+        float kind = floor(vMat.x + 0.5);
+        vec2 uv = vUV;
+        vec2 fwv = fwidth(uv);
+        float fw = max(max(fwv.x, fwv.y), 1e-4);
+        float aa = fw * 0.75;
+        // how much fine pattern a pixel can still carry (each fades to its average before it is finer than a pixel)
+        float fine = 1.0 - smoothstep(0.05, 0.2, fw);
+        float mid = 1.0 - smoothstep(0.2, 0.6, fw);
+        vec3 alb = vCol;
+        float glow = 0.0;
+        float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
+        float dusk = smoothstep(0.1, 0.5, uNight + (1.0 - sunUp));
+        float g = vnoise(vWorld.xz * 3.0 + vWorld.y * 2.0) * 0.6 + vnoise(vWorld.xy * 11.0 + vWorld.z * 9.0) * 0.4;
+        alb *= 0.88 + 0.24 * mix(0.5, g, fine);
+        if (kind == 1.0) {
+          // logs: rounded, a dark seam between each, grain along them
+          float lv = uv.y / 0.27; float row = floor(lv); float f = fract(lv);
+          float k = mix(0.5, 1.08, smoothstep(0.0, 0.55, sin(3.14159 * f))) * (0.88 + 0.24 * hash12(vec2(row, floor(uv.x / 3.0))));
+          float grain = vnoise(vec2(uv.x * 2.2, row * 5.3)) * 0.2;
+          alb *= mix(0.86, k * (0.92 + grain), fine);
+        } else if (kind == 2.0) {
+          // upright boards with a batten over each joint
+          float f = fract(uv.x / 0.19);
+          float k = mix(0.72, 1.0, smoothstep(0.0, 0.1, f) * smoothstep(1.0, 0.86, f));
+          alb *= mix(0.92, k * (0.95 + 0.1 * hash12(vec2(floor(uv.x / 0.19), 3.0))), fine);
+        } else if (kind == 3.0 || kind == 8.0) {
+          // shingles, or clay tiles: courses up the slope, staggered, each its own tone; moss low on the roof
+          float rh = kind == 3.0 ? 0.26 : 0.32;
+          float row = floor(uv.y / rh); float f = fract(uv.y / rh);
+          float cw = kind == 3.0 ? 0.16 : 0.26;
+          float cell = floor(uv.x / cw + row * 0.5);
+          float fx = fract(uv.x / cw + row * 0.5);
+          float shade = mix(0.55, 1.0, smoothstep(0.0, 0.35, f));
+          if (kind == 8.0) shade *= mix(0.72, 1.06, sin(3.14159 * fx));
+          else shade *= mix(0.8, 1.0, smoothstep(0.0, 0.06, fx) * smoothstep(1.0, 0.94, fx));
+          alb *= mix(mix(0.86, 0.95, mid), shade * (0.8 + 0.35 * hash12(vec2(cell, row))), fine);
+          float moss = smoothstep(0.55, 0.8, vnoise(uv * 0.6 + vWorld.xz * 0.05)) * (1.0 - smoothstep(0.0, 4.0, uv.y)) * 0.6;
+          alb = mix(alb, vec3(0.1, 0.13, 0.05), moss * (kind == 3.0 ? 1.0 : 0.5));
+        } else if (kind == 9.0) {
+          // thatch: long straw down the slope, combed in layers
+          float s1 = vnoise(vec2(uv.x * 9.0, uv.y * 0.8)) * 0.6 + vnoise(vec2(uv.x * 23.0, uv.y * 1.5)) * 0.4;
+          float layer = smoothstep(0.0, 0.3, fract(uv.y / 0.55));
+          alb *= mix(0.9, (0.72 + 0.45 * s1) * mix(0.75, 1.0, layer), fine);
+          alb = mix(alb, vec3(0.16, 0.15, 0.08), smoothstep(0.5, 0.85, vnoise(uv * 0.4 + 7.0)) * 0.45);
+        } else if (kind == 4.0) {
+          // white carving: notches along the board
+          float f = fract(uv.x / 0.35);
+          alb *= mix(0.95, mix(0.78, 1.0, smoothstep(0.1, 0.3, abs(f - 0.5) * 2.0)), fine);
+        } else if (kind == 6.0) {
+          // coursed fieldstone
+          float row = floor(uv.y / 0.34);
+          float cell = floor(uv.x / 0.55 + row * 0.37);
+          vec2 f = vec2(fract(uv.x / 0.55 + row * 0.37), fract(uv.y / 0.34));
+          float mortar = smoothstep(0.0, 0.3, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)));
+          alb *= mix(0.86, mix(0.6, 0.85 + 0.35 * hash12(vec2(cell, row)), mortar), fine);
+        } else if (kind == 7.0) {
+          // red brick in Gothic bond, darker headers, a pale mortar line, streaks of weather
+          float row = floor(uv.y / 0.09);
+          float bw = mod(row, 2.0) < 1.0 ? 0.28 : 0.14;
+          float cell = floor(uv.x / bw + row * 0.5);
+          vec2 f = vec2(fract(uv.x / bw + row * 0.5), fract(uv.y / 0.09));
+          float mortar = smoothstep(0.0, 0.12, min(f.y, 1.0 - f.y)) * smoothstep(0.0, 0.05, min(f.x, 1.0 - f.x));
+          vec3 brick = vCol * (0.75 + 0.4 * hash12(vec2(cell, row))) * (mod(cell, 3.0) < 1.0 ? 0.72 : 1.0);
+          float bfine = 1.0 - smoothstep(0.012, 0.05, fw);
+          alb = mix(alb * 0.92, mix(vec3(0.42, 0.38, 0.33), brick, mortar), bfine);
+          alb *= 1.0 - 0.2 * smoothstep(0.5, 0.8, vnoise(vec2(uv.x * 0.7, uv.y * 0.08)));
+        } else if (kind == 5.0) {
+          // a lamp's glass: kindled ahead of the plane, and after dusk
+          float on = max(dusk, smoothstep(vMat.y, vMat.y - 22.0, uFront));
+          glow = on * (0.85 + 0.15 * sin(uTime * 6.0 + vWorld.x));
+          alb = vec3(0.3, 0.26, 0.2);
+        }
+        // windows: a white carved surround, coloured shutters, small panes; warm behind the glass after dusk
+        float win = vMat.y;
+        if (win > 0.0 && (kind == 1.0 || kind == 2.0 || kind == 7.0)) {
+          float len = vMat.z;
+          float style = floor(vMat.w / 10.0);
+          float accent = mod(vMat.w, 10.0);
+          float one = step(50.0, win);
+          float nwin = one > 0.5 ? 1.0 : max(1.0, floor((len - 0.8) / win));
+          float first = one > 0.5 ? len * 0.5 : (len - (nwin - 1.0) * win) * 0.5;
+          float wi = clamp(floor((uv.x - first) / win + 0.5), 0.0, nwin - 1.0);
+          float cx = first + wi * win;
+          vec2 hw = style < 0.5 ? vec2(0.42, 0.6) : style < 1.5 ? vec2(0.55, 1.45) : style < 2.5 ? vec2(0.22, 0.75) : vec2(0.3, 0.38);
+          float cy = style < 0.5 ? 1.55 : style < 1.5 ? 3.4 : style < 2.5 ? 2.0 : 1.1;
+          float vy = style > 1.5 && style < 2.5 ? mod(uv.y, 4.2) : uv.y;
+          vec2 q = vec2(uv.x - cx, vy - cy);
+          float inner = boxK(q, hw, aa);
+          // (a church window ends in a round head)
+          if (style > 0.5 && style < 1.5) {
+            float s = hw.y - hw.x;
+            inner = q.y > s ? 1.0 - smoothstep(-aa, aa, length(vec2(q.x, q.y - s)) - hw.x) : boxK(q, hw, aa);
+          }
+          float frame = clamp(boxK(q, hw + 0.11, aa) - inner, 0.0, 1.0) * (style > 1.5 && style < 2.5 ? 0.0 : 1.0);
+          float shut = style < 0.5 ? boxK(vec2(abs(q.x) - hw.x - 0.36, q.y), vec2(0.24, hw.y + 0.02), aa) : 0.0;
+          float bars = clamp((1.0 - smoothstep(0.025, 0.025 + aa, abs(q.x))) + (1.0 - smoothstep(0.025, 0.025 + aa, abs(q.y - hw.y * 0.25))), 0.0, 1.0);
+          vec3 V = normalize(cameraPosition - vWorld);
+          vec3 glass = skyBase(reflect(-V, n)) * 0.3 + vec3(0.02, 0.025, 0.03);
+          float someone = step(0.35, hash12(vec2(wi + 3.0, floor(vWorld.x * 0.3) + floor(vWorld.z * 0.3) * 17.0)));
+          float on = dusk * someone;
+          vec3 wc = mix(glass, vec3(1.0, 0.62, 0.28) * 0.5, on);
+          wc = mix(wc, vec3(0.8, 0.78, 0.72), bars * fine * (1.0 - on * 0.6));
+          glow = max(glow, inner * on * 0.75 * mid);
+          alb = mix(alb, vec3(0.78, 0.76, 0.7), frame * mid);
+          alb = mix(alb, accentCol(accent) * (0.85 + 0.2 * step(0.5, fract(q.y * 2.5))), shut * mid);
+          alb = mix(alb, wc, inner * mid);
+          // far off a window is a darker patch of the wall
+          alb *= 1.0 - 0.14 * (1.0 - mid) * (1.0 - step(hw.y, abs(vy - cy)));
+        }
+        float ndl = max(dot(n, uKeyDir), 0.0);
+        float ao = mix(0.5, 1.0, smoothstep(0.0, 1.2, vAO)) * mix(0.72, 1.0, n.y * 0.5 + 0.5);
+        vec3 col = alb * (uSkyCol * (0.55 + 0.45 * n.y) * ao + uKeyCol * ndl * 0.95 * cloudShade(vWorld) * sunUp * mix(0.75, 1.0, ao));
+        col = mix(col, vec3(1.0, 0.66, 0.32) * (1.0 + glow * 0.8), clamp(glow, 0.0, 1.0) * 0.9);
+        col = homeAir(col, vWorld);
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
+// The lamps' light: soft halos facing the eye, kindled with their glass.
+function makeHalos(lamps: number[][]) {
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  const at = new Float32Array(lamps.length * 4);
+  const key = new Float32Array(lamps.length);
+  lamps.forEach((l, i) => {
+    at.set([l[0], l[1], l[2], l[3] * 2.4], i * 4);
+    key[i] = l[4];
+  });
+  g.setAttribute("aAt", new THREE.InstancedBufferAttribute(at, 4));
+  g.setAttribute("aKey", new THREE.InstancedBufferAttribute(key, 1));
+  g.instanceCount = lamps.length;
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(TOWN.x, 0, TOWN.z), 260);
+  const m = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: { ...SKY_U, uFront: { value: 1e4 } },
+    vertexShader: /* glsl */ `
+      attribute vec4 aAt; attribute float aKey; varying vec2 vUv; varying float vK;
+      uniform float uTime; uniform float uNight; uniform vec3 uKeyDir; uniform float uFront;
+      void main(){
+        vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+        vec3 U = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+        float dusk = smoothstep(0.1, 0.5, uNight + (1.0 - smoothstep(-0.02, 0.08, uKeyDir.y)));
+        float k = smoothstep(aKey, aKey - 22.0, uFront);
+        // (by day a kindled lamp is a small warm glow; after dusk a pool of light)
+        vK = max(k * 0.4, dusk) * (0.9 + 0.1 * sin(uTime * 5.0 + aAt.x * 3.0));
+        float dist = length(aAt.xyz - cameraPosition);
+        // (never smaller than a few pixels: further off it dims instead)
+        float grow = max(1.0, dist * 0.005);
+        vK /= grow;
+        vUv = position.xy;
+        vec3 wp = aAt.xyz + (R * position.x + U * position.y) * aAt.w * grow * (vK > 0.002 ? 1.0 : 0.0);
+        gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv; varying float vK;
+      void main(){
+        float r = length(vUv);
+        float a = (exp(-r * r * 10.0) * 0.8 + exp(-r * r * 2.6) * 0.25) * (1.0 - smoothstep(0.7, 1.0, r)) * vK;
+        gl_FragColor = vec4(vec3(1.0, 0.66, 0.3) * a, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  return { g, m };
+}
+
+// Chimney smoke: soft puffs that rise, widen and thin, leaning with the wind.
+function makeSmoke(src: number[][]) {
+  const PER = 7;
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  const at = new Float32Array(src.length * PER * 4);
+  src.forEach((s, i) => {
+    for (let k = 0; k < PER; k++) at.set([s[0], s[1], s[2], k / PER + i * 0.37], (i * PER + k) * 4);
+  });
+  g.setAttribute("aAt", new THREE.InstancedBufferAttribute(at, 4));
+  g.instanceCount = src.length * PER;
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(TOWN.x, 20, TOWN.z), 260);
+  const m = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: { ...SKY_U, ...HOME_U },
+    vertexShader: /* glsl */ `
+      attribute vec4 aAt; varying vec2 vUv; varying float vA; varying vec3 vWorld;
+      uniform float uTime;
+      void main(){
+        vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+        vec3 U = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+        float t = fract(uTime * 0.045 + aAt.w);
+        vec3 c = aAt.xyz + vec3(-0.864 * t * 9.0, t * 11.0, -0.503 * t * 9.0) + vec3(sin(uTime * 0.3 + aAt.w * 9.0), 0.0, cos(uTime * 0.27 + aAt.w * 7.0)) * t * 1.5;
+        float size = 0.6 + t * 3.4;
+        vA = smoothstep(0.0, 0.12, t) * (1.0 - smoothstep(0.45, 1.0, t)) * 0.26;
+        vUv = position.xy;
+        vWorld = c + (R * position.x + U * position.y) * size;
+        gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv; varying float vA; varying vec3 vWorld;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${GLSL_HOME_AIR}
+      void main(){
+        float r = length(vUv);
+        float a = exp(-r * r * 3.2) * (1.0 - smoothstep(0.75, 1.0, r)) * vA;
+        vec3 col = vec3(0.75, 0.74, 0.72) * (uSkyCol * 0.9 + uKeyCol * 0.45);
+        col = homeAir(col, vWorld);
+        gl_FragColor = vec4(col, a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  return { g, m };
+}
+
+// Storks in the air over the town: three soaring in slow wide circles, now and then a few slow beats.
+function makeStorks() {
+  const b = new TB();
+  b.at(0, 0, 0, 0);
+  const SW: V3 = [0.86, 0.85, 0.8];
+  const RED: V3 = [0.7, 0.18, 0.08];
+  b.box(0, 0, 0, 0.3, 0.26, 1.0, SW);
+  b.box(0, 0.03, -0.75, 0.08, 0.08, 0.6, SW);
+  b.box(0, 0.03, -1.2, 0.04, 0.04, 0.34, RED);
+  b.box(0, -0.02, 0.85, 0.03, 0.03, 0.7, RED);
+  for (const s of [-1, 1]) {
+    // the inner wing white, the outer black (aMat.y: how far out, for the beat)
+    b.quad([s * 0.14, 0.05, -0.25], [s * 1.0, 0.05, -0.22], [s * 1.0, 0.05, 0.25], [s * 0.14, 0.05, 0.25], SW, [0, 0.5, 0, 0]);
+    b.quad([s * 1.0, 0.05, -0.22], [s * 2.0, 0.05, -0.1], [s * 2.05, 0.05, 0.3], [s * 1.0, 0.05, 0.25], DARK, [0, 1.0, 0, 0]);
+  }
+  const geo = b.geometry();
+  const ig = new THREE.InstancedBufferGeometry();
+  ig.index = geo.index;
+  for (const k of ["position", "normal", "aCol", "aMat"]) ig.setAttribute(k, geo.getAttribute(k));
+  ig.setAttribute("aSeed", new THREE.InstancedBufferAttribute(new Float32Array([0, 2.1, 4.3]), 1));
+  ig.instanceCount = 3;
+  ig.boundingSphere = new THREE.Sphere(new THREE.Vector3(TOWN.x, 40, TOWN.z), 200);
+  const m = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    uniforms: { ...SKY_U, ...HOME_U },
+    vertexShader: /* glsl */ `
+      attribute vec3 aCol; attribute vec4 aMat; attribute float aSeed;
+      uniform float uTime;
+      varying vec3 vCol; varying vec3 vN; varying vec3 vWorld;
+      void main(){
+        float t = uTime * 0.09 + aSeed;
+        float R = 50.0 + 12.0 * sin(aSeed * 3.0);
+        vec3 c = vec3(${TOWN.x.toFixed(1)} + cos(t) * R, 44.0 + 6.0 * sin(t * 0.7 + aSeed) + aSeed * 3.0, ${TOWN.z.toFixed(1)} - 20.0 + sin(t) * R * 0.8);
+        vec3 fwd = normalize(vec3(-sin(t), 0.0, cos(t) * 0.8));
+        vec3 right = normalize(cross(fwd, vec3(0.0, 1.0, 0.0)));
+        vec3 up = normalize(vec3(0.0, 1.0, 0.0) + right * 0.35);
+        vec3 p = position * 1.3;
+        float beat = sin(uTime * 3.2 + aSeed * 5.0) * smoothstep(0.6, 0.9, sin(uTime * 0.21 + aSeed * 2.0));
+        p.y += aMat.y * abs(p.x) * 0.45 * beat;
+        vec3 wp = c + right * p.x + up * p.y + fwd * -p.z;
+        vCol = aCol; vN = up; vWorld = wp;
+        gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec3 vCol; varying vec3 vN; varying vec3 vWorld;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${GLSL_HOME_AIR}
+      void main(){
+        float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
+        vec3 col = vCol * (uSkyCol * 0.8 + uKeyCol * (0.4 + 0.6 * abs(dot(normalize(vN), uKeyDir))) * sunUp);
+        col = homeAir(col, vWorld);
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  return { g: ig, m, geo };
+}
+
+// the mill's wheel: two rims, spokes, paddles across them
+function makeWheel() {
+  const b = new TB();
+  b.at(0, 0, 0, 0);
+  const R = 2.3;
+  const col: V3 = [0.2, 0.15, 0.1];
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    b.quad([-0.6, s * R, c * R], [0.6, s * R, c * R], [0.6, s * (R - 0.7), c * (R - 0.7)], [-0.6, s * (R - 0.7), c * (R - 0.7)], col, [K.boards, 0, 0, 0]);
+    if (i % 2 === 0) for (const x of [-0.55, 0.55]) b.quad([x, 0, 0], [x, 0.1 * c, -0.1 * s], [x, s * R + 0.1 * c, c * R - 0.1 * s], [x, s * R, c * R], col, [K.boards, 0, 0, 0]);
+  }
+  for (const x of [-0.55, 0.55])
+    for (let i = 0; i < 24; i++) {
+      const a0 = (i / 24) * Math.PI * 2;
+      const a1 = ((i + 1) / 24) * Math.PI * 2;
+      b.quad([x, Math.sin(a0) * R, Math.cos(a0) * R], [x, Math.sin(a1) * R, Math.cos(a1) * R], [x, Math.sin(a1) * (R - 0.25), Math.cos(a1) * (R - 0.25)], [x, Math.sin(a0) * (R - 0.25), Math.cos(a0) * (R - 0.25)], col, [K.boards, 0, 0, 0]);
+    }
+  return b.geometry();
+}
+
+// the gardens' trees: the home world's own trees (Forest.tsx), small, one instanced draw per kind
+function makeGardens(list: [number, number, TreeKind, number][], mobile: boolean) {
+  const leaves = makeLeafTexture();
+  const mat = makeHomeTreeMaterial(leaves);
+  const o = new THREE.Object3D();
+  const col = new THREE.Color();
+  const r = rng(77);
+  const meshes: THREE.InstancedMesh[] = [];
+  for (const kind of ["broad", "birch", "bush"] as TreeKind[]) {
+    const mine = list.filter((g) => g[2] === kind);
+    if (!mine.length) continue;
+    const im = new THREE.InstancedMesh(buildTree(kind, 1, mobile ? 0 : 1), mat, mine.length);
+    mine.forEach(([x, z, , s], i) => {
+      o.position.set(x, landH(x, z) - 0.06, z);
+      o.rotation.set(0, r() * 6.28, 0);
+      o.scale.setScalar(s);
+      o.updateMatrix();
+      im.setMatrixAt(i, o.matrix);
+      im.setColorAt(i, col.setRGB(0.9 + r() * 0.2, 0.95 + r() * 0.1, 0.85 + r() * 0.1));
+    });
+    im.instanceMatrix.needsUpdate = true;
+    if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    im.computeBoundingSphere();
+    meshes.push(im);
+  }
+  return { meshes, mat, leaves };
+}
+
+export function Town({ mobile = false }: { mobile?: boolean }) {
+  const t = useMemo(() => {
+    const built = timed("town", buildTown);
+    return { ...built, mat: makeTownMaterial(), halos: makeHalos(built.lamps), smoke: makeSmoke(built.smoke), storks: makeStorks(), wheel: makeWheel(), garden: makeGardens(built.gardens, mobile) };
+  }, [mobile]);
+  useEffect(
+    () => () => {
+      for (const x of [t.geo, t.mat, t.halos.g, t.halos.m, t.smoke.g, t.smoke.m, t.storks.g, t.storks.m, t.storks.geo, t.wheel, t.garden.mat, t.garden.leaves]) x.dispose();
+      t.garden.meshes.forEach((m) => {
+        m.geometry.dispose();
+        m.dispose();
+      });
+    },
+    [t],
+  );
+  const wheel = useRef<THREE.Mesh>(null);
+  const front = useRef(1e4);
+  useFrame((_, dt) => {
+    // the plane's furthest progress down the river (west), for the lamps; reset while it is not flying at home
+    const flying = voyage.cur === "home" && voyage.flying && voyage.planePos.y > -100;
+    front.current = flying ? Math.min(front.current, voyage.planePos.x) : 1e4;
+    t.mat.uniforms.uFront.value = front.current;
+    t.halos.m.uniforms.uFront.value = front.current;
+    if (wheel.current) wheel.current.rotation.x -= Math.min(dt, 0.1) * 0.55;
+  });
+  return (
+    <>
+      <mesh geometry={t.geo} material={t.mat} />
+      <group position={[t.mill.x, t.mill.y, t.mill.z]} rotation={[0, t.mill.rot + Math.PI / 2, 0]}>
+        <mesh ref={wheel} geometry={t.wheel} material={t.mat} />
+      </group>
+      <mesh geometry={t.halos.g} material={t.halos.m} renderOrder={6} frustumCulled={false} />
+      <mesh geometry={t.smoke.g} material={t.smoke.m} renderOrder={5} />
+      <mesh geometry={t.storks.g} material={t.storks.m} />
+      {t.garden.meshes.map((m, i) => (
+        <primitive key={i} object={m} />
+      ))}
+    </>
+  );
+}

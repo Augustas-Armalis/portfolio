@@ -32,10 +32,21 @@ export function riverD(x: number, z: number) {
 }
 
 // ---------- the town ----------
-// A wooden town on both banks: its market square on the south bank, the church on a rise on the north bank.
+// A wooden town on both banks. On the south bank the market square and the white wooden church; on the north bank
+// the town climbs a hill in terraces, and on the hill's head stands the red-brick castle (as Trakai, or Kaunas's).
 export const TOWN = { x: -246, z: riverZ(-246), r: 92 };
-export const CHURCH = { x: -238, z: riverZ(-238) - 46 };
 export const SQUARE = { x: -262, z: riverZ(-262) + 34 };
+export const CHURCH = { x: -270, z: riverZ(-270) + 60 };
+export const HILL = { x: -212, z: riverZ(-212) - 92, h: 27, top: 20, foot: 80, step: 4.5, terr: 0.9 };
+// the street that winds up the hill from the quay to the castle's gate: its angle round the hill at a radius
+export const hillRoadA = (r: number) => Math.atan2(TOWN.z - HILL.z, TOWN.x - HILL.x) + (r - HILL.top) * 0.045;
+// the hill's own height over the valley floor: a dome, its flanks gently terraced so houses stand on the flats
+export function hillH(x: number, z: number) {
+  const r = Math.hypot(x - HILL.x, z - HILL.z);
+  if (r >= HILL.foot) return 0;
+  const H = HILL.h * (1 - sst(HILL.top, HILL.foot, r));
+  return H - (HILL.terr * HILL.step * Math.sin((2 * Math.PI * H) / HILL.step)) / (2 * Math.PI);
+}
 
 // The land of the river valley and the town, given the land's own height there. Near the river the ground is a
 // low bank a metre above the water, the bed a metre under it; in the town it is a gently rising terrace, the
@@ -45,16 +56,14 @@ export function riverLand(h: number, x: number, z: number) {
   const d = riverD(x, z);
   const tw = Math.hypot(x - TOWN.x, z - TOWN.z);
   const wv = Math.max(1 - sst(26, 70, d), 1 - sst(TOWN.r, TOWN.r + 55, tw));
-  if (wv <= 0) return h;
+  if (wv <= 0) return h + hillH(x, z);
   const w = riverW(x);
   const wl = riverWL(x);
   const bank = wl + 1.15 * sst(w, w + 3.5, d) + 0.03 * Math.max(0, d - w - 3.5);
   const bed = wl - 1.05 * (1 - (d / w) * (d / w));
-  const ch = Math.hypot(x - CHURCH.x, z - CHURCH.z);
-  const rise = 3.4 * Math.exp(-(ch * ch) / 900);
-  let v = (d < w ? bed : bank) + rise;
+  let v = d < w ? bed : bank;
   // (out at the valley's edge it rises with the land; the river's own cut always wins near the water)
-  v = h + (v - h) * wv;
+  v = h + (v - h) * wv + hillH(x, z);
   return Math.min(v, d < w + 3.5 ? bank : 1e9);
 }
 
@@ -71,20 +80,40 @@ float riverD(vec2 p){
   float s = riverSlope(p.x);
   return abs(p.y - riverZ(p.x)) / sqrt(1.0 + s * s);
 }
+float hillH(vec2 p){
+  float r = length(p - vec2(${f(HILL.x)}, ${f(HILL.z)}));
+  if (r >= ${f(HILL.foot)}) return 0.0;
+  float H = ${f(HILL.h)} * (1.0 - sst(${f(HILL.top)}, ${f(HILL.foot)}, r));
+  return H - ${f(HILL.terr)} * ${f(HILL.step)} * sin(6.2831853 * H / ${f(HILL.step)}) / 6.2831853;
+}
+// the town's streets (0..1): the quays along both banks, the market square, the street winding up the castle hill
+float townStreet(vec2 p){
+  if (length(p - vec2(${f(TOWN.x)}, ${f(TOWN.z)})) > ${f(TOWN.r + 40)}) return 0.0;
+  float k = 0.0;
+  float d = riverD(p);
+  float w = riverW(p.x);
+  k = max(k, (1.0 - sst(2.2, 3.4, abs(d - w - 7.2))) * (1.0 - sst(${f(TOWN.r - 6)}, ${f(TOWN.r + 14)}, length(p - vec2(${f(TOWN.x)}, ${f(TOWN.z)})))));
+  vec2 sq = p - vec2(${f(SQUARE.x)}, ${f(SQUARE.z)});
+  k = max(k, 1.0 - sst(17.0, 20.0, length(sq * vec2(1.0, 1.12))));
+  vec2 hq = p - vec2(${f(HILL.x)}, ${f(HILL.z)});
+  float r = length(hq);
+  float a0 = atan(${f(TOWN.z)} - ${f(HILL.z)}, ${f(TOWN.x)} - ${f(HILL.x)}) + (r - ${f(HILL.top)}) * 0.045;
+  float da = abs(mod(atan(hq.y, hq.x) - a0 + 3.14159265, 6.2831853) - 3.14159265) * r;
+  k = max(k, (1.0 - sst(1.8, 2.8, da)) * step(${f(HILL.top - 4)}, r) * (1.0 - sst(${f(HILL.foot - 4)}, ${f(HILL.foot + 6)}, r)));
+  return k;
+}
 float riverLand(float h, vec2 p){
   if (p.x > ${f(RIVER.x0 - 2)} || p.x < ${f(RIVER.x1)}) return h;
   float d = riverD(p);
   float tw = length(p - vec2(${f(TOWN.x)}, ${f(TOWN.z)}));
   float wv = max(1.0 - sst(26.0, 70.0, d), 1.0 - sst(${f(TOWN.r)}, ${f(TOWN.r + 55)}, tw));
-  if (wv <= 0.0) return h;
+  if (wv <= 0.0) return h + hillH(p);
   float w = riverW(p.x);
   float wl = riverWL(p.x);
   float bank = wl + 1.15 * sst(w, w + 3.5, d) + 0.03 * max(0.0, d - w - 3.5);
   float bed = wl - 1.05 * (1.0 - (d / w) * (d / w));
-  vec2 cq = p - vec2(${f(CHURCH.x)}, ${f(CHURCH.z)});
-  float rise = 3.4 * exp(-dot(cq, cq) / 900.0);
-  float v = (d < w ? bed : bank) + rise;
-  v = h + (v - h) * wv;
+  float v = d < w ? bed : bank;
+  v = h + (v - h) * wv + hillH(p);
   return min(v, d < w + 3.5 ? bank : 1e9);
 }
 // the river's surface over a point (-1e4 where there is none)
@@ -96,7 +125,16 @@ export const riverLevel = (x: number, z: number) => (riverD(x, z) < riverW(x) + 
 // The cave: its mouth's middle on the ground, and the way it faces (the plane flies in toward -z, yaw as the gates')
 export const CAVE = { x: -366, z: -668, yaw: 0.06, half: 12.5, rise: 25, above: 9 };
 // the mountain the cave is cut into: its heart, how high its head stands over the cave's floor
-export const PEAK = { x: -392, z: -812, h: 205 };
+export const PEAK = { x: -392, z: -812, h: 185 };
+// the arch cut into the cliff: its half-width at the legs, where the arch springs and where its point stands, over
+// the cave's floor (the veil inside is the gate's own: CAVE.half, CAVE.rise)
+export const ARCH = { half: 14, spring: CAVE.above + 2, apex: CAVE.above + CAVE.rise + 2.5, depth: 112 };
+// the cave's frame: a point by its distance across (u, + to the right looking in) and into the mountain (a)
+export const caveAt = (u: number, a: number) => {
+  const c = Math.cos(CAVE.yaw);
+  const s = Math.sin(CAVE.yaw);
+  return { x: CAVE.x + c * u - s * a, z: CAVE.z - s * u - c * a };
+};
 // The forest's flight line: from the town's last houses north to the cave. The forest stands either side of it
 // and keeps a lane open along it, under the crowns.
 export const FOREST_LINE: [number, number][] = [
@@ -164,3 +202,34 @@ export const JOURNEY: [number, number, number][] = [
   [-367, -690, 9],
   [-368, -712, 9],
 ];
+
+// the forest's track (GLSL): a path of dark earth and needles winding along the flight line from the town's edge to the
+// mountain's foot (0..1). Included by land.ts after GLSL_RIVER.
+const segLines = FOREST_LINE.slice(0, -1)
+  .map(([ax, az], i) => {
+    const [bx, bz] = FOREST_LINE[i + 1];
+    return `  { vec2 a = vec2(${f(ax)}, ${f(az)}); vec2 ab = vec2(${f(bx - ax)}, ${f(bz - az)}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); vec2 e = q - ab * t; float d = length(e); if (d < best) { best = d; sd = sign(ab.x * q.y - ab.y * q.x) * d; al = ${f(i)} + t; } }`;
+  })
+  .join("\n");
+export const GLSL_TRACK = /* glsl */ `
+float forestTrack(vec2 p){
+  if (p.x > -250.0 || p.x < -420.0 || p.y > -160.0 || p.y < -690.0) return 0.0;
+  float best = 1e9; float sd = 0.0; float al = 0.0;
+${segLines}
+  if (best > 8.0) return 0.0;
+  float off = 1.8 * sin(al * 2.3) + 0.9 * sin(al * 5.1 + 1.0);
+  float ends = sst(0.25, 0.7, al) * (1.0 - sst(8.2, 8.9, al));
+  return (1.0 - sst(1.1, 2.0, abs(sd - off))) * ends;
+}
+`;
+
+// the cave's floor and the steps up to it keep the grass out (GLSL)
+export const GLSL_CAVE = /* glsl */ `
+float caveIn(vec2 p){
+  vec2 q = p - vec2(${f(CAVE.x)}, ${f(CAVE.z)});
+  float c = cos(${f(CAVE.yaw)}), s = sin(${f(CAVE.yaw)});
+  float u = c * q.x - s * q.y;
+  float a = -s * q.x - c * q.y;
+  return (1.0 - sst(${f(ARCH.half + 5)}, ${f(ARCH.half + 8)}, abs(u))) * sst(-19.0, -15.0, a) * (1.0 - sst(${f(ARCH.depth + 2)}, ${f(ARCH.depth + 6)}, a));
+}
+`;
