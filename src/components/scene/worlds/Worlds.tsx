@@ -9,6 +9,7 @@ import { GLSL_SKY, SKY_U } from "../sky";
 import { LightGate, LightPath, type WorldProps } from "./common";
 import { WORLD_U } from "./kit";
 import FairyWorld from "./Fairy";
+import FuneralWorld from "./Funeral";
 import GateWorld from "./Gate";
 import KingsWorld, { dropKings, prepareKings } from "./Kings";
 import ParadiseWorld from "./Paradise";
@@ -81,7 +82,7 @@ function Veil() {
   return <mesh ref={ref} geometry={geo} material={mat} frustumCulled={false} renderOrder={1000} visible={false} />;
 }
 
-const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld, kings: KingsWorld };
+const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld, funeral: FuneralWorld, kings: KingsWorld };
 
 // While the plane flies through one world the next is made ready behind it, a little at a time, so that
 // passing the gate is only cloud closing and opening:

@@ -16,8 +16,8 @@ import { airState, arrivalHours, mixSky, skyState, type Air, type SkyState } fro
 // that neither can see the other (the camera's far plane is 3000 m), near
 // enough that 32-bit floats still resolve a quarter of a millimetre.
 
-export type WorldId = "home" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "kings";
-export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "sea", "kings"];
+export type WorldId = "home" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "funeral" | "kings";
+export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "sea", "funeral", "kings"];
 // Fairy Tale of the Kings: where the two kings stand, and the small lit world they hold between their hands
 export const KINGS = { z: -170, domeY: 70, domeR: 30 };
 export const ORIGIN = new THREE.Vector3(-2500, 0, -2700);
@@ -231,6 +231,26 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
     night: 0,
     exposure: 0.95,
     fx: [0.0, 0.0, 0.0, 0.3],
+  },
+  // Funeral Symphony VI: a vast deep-ultramarine night, a thin moon, the procession's hoods catching a faint gold
+  funeral: {
+    label: "Funeral Symphony VI",
+    zenith: [0.006, 0.012, 0.07],
+    upper: [0.014, 0.03, 0.14],
+    horizon: [0.04, 0.07, 0.2],
+    glow: [0.62, 0.55, 0.32],
+    amb: [0.07, 0.11, 0.26],
+    key: [0.95, 0.84, 0.5],
+    keyI: 0.95,
+    sunAz: 0,
+    sunEl: -24,
+    keyAz: 38,
+    keyEl: 30,
+    cloudLit: [0.12, 0.14, 0.26],
+    cloudShade: [0.02, 0.03, 0.08],
+    night: 0.8,
+    exposure: 1.35,
+    fx: [0.0, 0.0, 0.0, 0.55],
   },
   // Fairy Tale of the Kings: a night wood, brown-black and teal; the only strong light is the little world
   kings: {
@@ -653,6 +673,63 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -173, z: -640, r: 48, h: 48, bell: true },
     ],
     canvases: [{ painting: "tranquility", x: -15, z: 327, yaw: 0.69 }],
+  },
+  funeral: {
+    id: "funeral",
+    title: "Laidotuvių simfonija VI",
+    year: "1903",
+    music: "funeral",
+    place: "none",
+    air: AIR.funeral,
+    fog: [0.0005, 0.016],
+    // dark hills the road winds over and along, a great dark mountain to the left and a cliff to the right, as in the picture
+    terrain: {
+      base: 2,
+      sines: [
+        [0.009, 0.006, 0.4, 9],
+        [-0.007, 0.011, 2.1, 7],
+        [0.019, 0.014, 1.2, 2.6],
+        [0.031, -0.023, 3.3, 1.1],
+      ],
+      bumps: [
+        [-420, -160, 230, 150],
+        [430, -40, 200, 120],
+        [-300, 300, 150, 40],
+        [260, 320, 150, 34],
+        [0, -470, 110, 40],
+      ],
+      rim: [600, 950, 60],
+    },
+    water: null,
+    centre: [0, 0],
+    radius: 640,
+    ceil: 220,
+    entry: { x: 0, z: 500, above: 18, yaw: 0 },
+    gate: { x: 0, z: -470, above: 16, yaw: 0 },
+    // low along the road, over the procession, as it snakes over the hills and along the cliff edges to the pass
+    path: [
+      [0, 500, 18],
+      [30, 400, 15],
+      [-50, 310, 14],
+      [-150, 240, 14],
+      [-130, 140, 14],
+      [-10, 90, 14],
+      [120, 40, 14],
+      [170, -60, 14],
+      [80, -150, 15],
+      [-70, -180, 15],
+      [-150, -270, 16],
+      [-90, -370, 16],
+      [0, -430, 16],
+      [0, -470, 16],
+      [0, -505, 16],
+    ],
+    // the two cypresses at the pass and the rock of the cave (worlds/Funeral.tsx)
+    obstacles: [
+      { x: -22, z: -440, r: 4, h: 44 },
+      { x: 22, z: -446, r: 4, h: 40 },
+    ],
+    canvases: [{ painting: "funeral-vi", x: -46, z: 430, yaw: 0.6 }],
   },
   kings: {
     id: "kings",

@@ -468,6 +468,7 @@ const WORLD_OF: [RegExp, WorldId][] = [
   [/^paradise|^angel|^spring/, "paradise"],
   [/^offering/, "gate"],
   [/^sea|^tranquil/, "sea"],
+  [/^funeral/, "funeral"],
   [/^kings/, "kings"],
 ];
 const worldOfPainting = (id: string) => WORLD_OF.find(([re]) => re.test(id))?.[1] ?? null;
@@ -584,6 +585,7 @@ const HANG: Record<WorldId, { wall: V3; ink: "dark" | "light"; plain?: boolean }
   paradise: { wall: [0.86, 0.78, 0.5], ink: "dark" },
   gate: { wall: [0.3, 0.26, 0.26], ink: "light" },
   sea: { wall: [0.28, 0.28, 0.22], ink: "light" },
+  funeral: { wall: [0.1, 0.13, 0.24], ink: "light" },
   kings: { wall: [0.2, 0.26, 0.27], ink: "light", plain: true },
 };
 
