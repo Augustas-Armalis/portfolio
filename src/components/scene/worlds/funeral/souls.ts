@@ -61,7 +61,9 @@ const MID_PROFILE: [number, number][] = [
 ];
 
 const ROAD_GLSL = /* glsl */ `
-  uniform sampler2D uRoad; uniform vec4 uRd; uniform float uWalk; uniform vec3 uFO;
+  uniform sampler2D uRoad; uniform vec4 uRd; uniform float uWalk; uniform vec3 uFO; uniform float uBorn; uniform float uBell;
+  // (a soul comes into being inside the cave the road comes out of, rising out of the dark over a few steps)
+  float born(float s){ return smoothstep(uBorn, uBorn + 12.0, s); }
   // the road at s metres along it: its middle, and the way it runs
   vec3 roadAt(float s, out vec2 tn){
     float f = clamp(s / uRd.y, 0.0, uRd.x - 1.001);
@@ -108,7 +110,7 @@ function makeSoulMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: n
         vec3 fwd = vec3(tn.x, 0.0, tn.y); vec3 right = vec3(-tn.y, 0.0, tn.x);
         float seed = aI.z;
         vec3 base = c + right * (aI.y + sin(uTime * 0.09 + seed * 50.0) * 0.14) + uFO;
-        float H = ${HEIGHT.toFixed(1)} * aI.w;
+        float H = ${HEIGHT.toFixed(1)} * aI.w * born(uRd.z + along);
         float girth = 0.9 + 0.24 * fract(seed * 3.7);
         // the slow walk: a rise and fall with each step, the weight going from foot to foot, the bowed head nodding
         float ph = (aI.x + walked) * 4.4 + seed * 6.2832;
@@ -193,7 +195,10 @@ function makeLampMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: n
         mv.xy += position.xy * size;
         vUv = position.xy;
         float flick = 0.82 + 0.18 * sin(uTime * (5.0 + seed * 4.0) + seed * 40.0) * sin(uTime * 2.3 + seed * 17.0);
-        vK = flick * smoothstep(1.5, 7.0, d) * (2.6 / size) * (2.6 / size) * (1.0 + 0.5 * smoothstep(60.0, 300.0, d));
+        float sRoad = aL.x * uRd.w + along;
+        float bd = (sRoad - uBell) / 70.0;
+        // (the bell-light: as it passes, every light it reaches burns up, and sinks again behind it)
+        vK = flick * smoothstep(1.5, 7.0, d) * (2.6 / size) * (2.6 / size) * (1.0 + 0.5 * smoothstep(60.0, 300.0, d)) * born(sRoad - 4.0) * (1.0 + 2.4 * exp(-bd * bd));
         vWorld = base;
         gl_Position = projectionMatrix * mv;
       }`,
@@ -233,7 +238,8 @@ function makeBierMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: n
         float ph = (aL.y + walked) * 4.4;
         // borne on the shoulders: it rides a little with the bearers' step
         vec3 base = c + right * aL.z + vec3(0.0, ${(HEIGHT * 0.86).toFixed(2)} + abs(sin(ph)) * 0.03, 0.0) + uFO;
-        vec3 wp = base + right * (position.x + sin(ph * 0.5) * 0.03) + vec3(0.0, position.y, 0.0) + fwd * position.z;
+        float bk = born(aL.x * uRd.w + along - 2.0);
+        vec3 wp = base + (right * (position.x + sin(ph * 0.5) * 0.03) + vec3(0.0, position.y, 0.0) + fwd * position.z) * bk - vec3(0.0, (1.0 - bk) * 3.0, 0.0);
         vWorld = wp; vP = position;
         vN = normalize(right * normal.x + vec3(0.0, normal.y, 0.0) + fwd * normal.z);
         gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);

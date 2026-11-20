@@ -260,9 +260,9 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // fine rays low over the far wall, its light cold on the rock; the gold is the procession's own
   funeral: {
     label: "Funeral Symphony VI",
-    zenith: [0.008, 0.02, 0.13],
-    upper: [0.014, 0.038, 0.2],
-    horizon: [0.02, 0.058, 0.24],
+    zenith: [0.011, 0.027, 0.165],
+    upper: [0.019, 0.05, 0.25],
+    horizon: [0.028, 0.076, 0.3],
     glow: [0.5, 0.6, 0.6],
     amb: [0.06, 0.1, 0.27],
     key: [0.72, 0.92, 0.88],
@@ -770,8 +770,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // land, the road, the path of light beside it and the way in are all worked out together in funeral/land.ts
     terrain: FUNERAL.terrain,
     water: null,
-    centre: [0, 100],
-    radius: 990,
+    centre: [0, 180],
+    radius: 1320,
     ceil: 430,
     entry: FUNERAL.entry,
     // inside the cave's mouth, where the procession goes into the mountain (no arch of light: worlds/Funeral.tsx)
