@@ -134,3 +134,24 @@ export function SystemBootMark({ size = 84, className = "" }: { size?: number; c
   if (appleInk().ok) return <AppleGlyph height={size} className={className} />;
   return <Mark size={Math.round(size * 1.24)} className={className} />;
 }
+
+// The same glyph as pixels, for a surface that cannot set type (the 3D display's boot frame is a shader): white on
+// clear, `height` px of ink tall, with a 2px margin. null where the glyph does not exist (draw the half-sun).
+export function appleLogoCanvas(height: number): { canvas: HTMLCanvasElement; w: number; h: number; pad: number } | null {
+  const m = appleInk();
+  if (!m.ok) return null;
+  const fs = height / (m.a + m.d);
+  const pad = 2;
+  const w = Math.ceil((m.l + m.r) * fs) + pad * 2;
+  const h = Math.ceil(height) + pad * 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.font = `${fs}px ${SYSTEM_FONT}`;
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "#fff";
+  ctx.fillText(APPLE, pad + m.l * fs, pad + m.a * fs);
+  return { canvas, w, h, pad };
+}
