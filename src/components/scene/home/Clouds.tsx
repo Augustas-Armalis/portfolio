@@ -109,7 +109,9 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
           float b0 = n3(lp);
           vec3 bg = vec3(n3(lp + vec3(0.3, 0.0, 0.0)), n3(lp + vec3(0.0, 0.3, 0.0)), n3(lp + vec3(0.0, 0.0, 0.3))) - b0;
           float fine = 1.0 - smoothstep(4000.0, 11000.0, dist);
-          n = normalize(n - bg * 1.7 * fine);
+          // (on the tops and flanks; the underside is one soft shade, with no sparks of sun in it)
+          float topK = smoothstep(-0.25, 0.4, n.y);
+          n = normalize(n - bg * 1.7 * fine * topK);
           // the rim: thinning away through a grain, and broken by the billows
           float facing = abs(dot(normalize(vN), V));
           float edge = smoothstep(0.0, 0.2, facing + (b0 - 0.5) * 0.2 * fine);
@@ -121,7 +123,7 @@ export function Clouds({ mobile, amount = 1 }: { mobile: boolean; amount?: numbe
           vec3 L = normalize(mix(uMoonDir, vec3(uSunDir.x, max(uSunDir.y, 0.02), uSunDir.z), smoothstep(-0.14, -0.03, uSunDir.y)));
           float keyUp = mix(0.42 * uNight, 1.0, smoothstep(-0.14, -0.03, uSunDir.y));
           float ndl = dot(n, L);
-          float lit = smoothstep(-0.3, 0.85, ndl) * (0.45 + 0.55 * vOpen);
+          float lit = smoothstep(-0.3, 0.85, ndl) * (0.45 + 0.55 * vOpen) * (0.25 + 0.75 * topK);
           float up = n.y * 0.5 + 0.5;
           // shade: the sky's own blue-violet from above, darker and a little warmer (the land's light) underneath
           vec3 col = uCloudShade * (0.52 + 0.5 * up) * (0.72 + 0.28 * vOpen);

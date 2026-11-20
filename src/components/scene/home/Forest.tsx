@@ -94,7 +94,7 @@ export function makeHomeTreeMaterial(merged: boolean) {
         alb = mix(alb, vec3(dot(alb, vec3(0.3, 0.5, 0.2))) * vec3(0.42, 0.56, 0.62), uNight * 0.7 * fol);
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         float ndl = dot(n, uKeyDir);
-        float lit = mix(max(ndl, 0.0), smoothstep(-0.42, 0.62, ndl), fol) * sunUp;
+        float lit = mix(max(ndl, 0.0), smoothstep(-0.6, 0.85, ndl), fol) * sunUp;
         float cs = cloudShade(vWorld);
         // inside a wood the trunks and lower boughs stand in the wood's own shade
         float woods = forestAt(vWorld.xz);
@@ -135,7 +135,8 @@ export function Forest({ amount, mobile }: { amount: number; mobile: boolean }) 
           // (a phone has no close cuts: every whole tree is the coarse one)
           const list = trees.filter((t: HomeTree) => t.kind === kind && t.v % VARIANTS === v && (mobile ? t.lod !== 2 && lod === 1 : t.lod === lod));
           if (!list.length) continue;
-          const geo = buildTree(kind, v, lod === -1 ? 2 : lod === 0 ? 1 : 0);
+          // (the finest cut is for a machine with room to spare: below High the nearest trees are the ordinary whole ones)
+          const geo = buildTree(kind, v, lod === -1 ? (amount >= 1 ? 2 : 1) : lod === 0 ? 1 : 0);
           geos.push(geo);
           const im = new THREE.InstancedMesh(geo, mat, list.length);
           list.forEach((t, i) => {

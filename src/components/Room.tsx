@@ -1592,7 +1592,7 @@ function Scene({
       {/* the desk's own field: not drawn while the plane is away in another world */}
       <HomeWorld>
         <HomeMountains mobile={mobile} />
-        <Clouds mobile={mobile} amount={q.effects < 0.5 ? 0.6 : 1} />
+        <Clouds mobile={mobile} amount={q.effects < 0.5 ? 0.5 : q.effects < 1 ? 0.7 : 1} />
         <Forest amount={q.trees} mobile={mobile} />
         <Land mobile={mobile} />
         <Reeds mobile={mobile} />
