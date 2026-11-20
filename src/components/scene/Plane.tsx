@@ -5,7 +5,7 @@ import { useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { DESK, clamp01, easeInOutCubic, nowS, spring } from "./shared";
 import { arriveGolden } from "./sky";
-import { KINGS, WORLDS, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
+import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
 // A folded paper plane that lives on the desk. Click it and it takes off down
 // the road, and from there it is yours: it glides. The pointer (or A / D, or a
@@ -18,7 +18,22 @@ import { KINGS, WORLDS, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsV
 // go at once. Passing a gate, cloud closes, the next world is made under it,
 // and the cloud opens.
 
-export type FlightInput = { sx: number; sy: number; thr?: number; climb?: number; wheel?: number; moved?: number; keys?: boolean };
+// `soft`: the stick is a thumb on glass, so it is eased before the plane hears it; `auto`: there is no stick while
+// the path is followed (a phone), so the quiet hand has the plane at once. `look` is a drag across the view and
+// `gyro` the phone's own turning: both only turn the eye, never the plane.
+export type FlightInput = {
+  sx: number;
+  sy: number;
+  thr?: number;
+  climb?: number;
+  wheel?: number;
+  moved?: number;
+  keys?: boolean;
+  soft?: boolean;
+  auto?: boolean;
+  look?: { dx: number; dy: number; held: boolean };
+  gyro?: { yaw: number; pitch: number } | null;
+};
 export type PlaneApi = {
   launch: (cam: THREE.PerspectiveCamera) => void;
   fly: (dt: number, input: FlightInput, cam: THREE.PerspectiveCamera) => void;
@@ -106,6 +121,18 @@ export function Plane({
       gateSide: -1,
       camYaw: 0,
       camPitch: 0,
+      // free look: where the eye is turned from straight behind the plane, and where it is turning to
+      lookYaw: 0,
+      lookPitch: 0,
+      lookTY: 0,
+      lookTP: 0,
+      lookIdle: 9,
+      // the stick as the plane hears it, and the cruise pace as it comes on
+      sx: 0,
+      sy: 0,
+      cruise: 0,
+      gateAlong: NaN,
+      tmp3: new THREE.Vector3(),
       camFrom: new THREE.Vector3(),
       lookFrom: new THREE.Vector3(),
       fov: 36,
@@ -154,8 +181,12 @@ export function Plane({
     st.camYaw += wrap(st.yaw - st.camYaw) * (1 - Math.exp(-dt * 3.2));
     st.camPitch = damp(st.camPitch, st.pitch * 0.55, 2.6, dt);
     const dist = 1.32 + st.speed * 0.022;
-    const cp = Math.cos(st.camPitch);
-    const want = st.tmp2.set(st.pos.x + Math.sin(st.camYaw) * cp * dist, st.pos.y - Math.sin(st.camPitch) * dist + 0.44 + Math.sin(st.t * 1.7) * 0.02, st.pos.z + Math.cos(st.camYaw) * cp * dist);
+    // the eye may be turned away from the plane's own line: it swings round the plane on the same boom
+    const lw = smooth01(Math.hypot(st.lookYaw, st.lookPitch) / 0.5);
+    const yawC = st.camYaw + st.lookYaw;
+    const pitC = THREE.MathUtils.clamp(st.camPitch + st.lookPitch, -1.45, 1.45);
+    const cp = Math.cos(pitC);
+    const want = st.tmp2.set(st.pos.x + Math.sin(yawC) * cp * dist, st.pos.y - Math.sin(pitC) * dist + 0.44 * (1 - 0.75 * lw) + Math.sin(st.t * 1.7) * 0.02, st.pos.z + Math.cos(yawC) * cp * dist);
     // the lens keeps clear of the ground too
     const id = voyage.cur;
     const o = originOf(id);
@@ -169,13 +200,52 @@ export function Plane({
     if (kv) st.tmp.y += (cam.position.y + Math.tan(kv.elev) * Math.hypot(st.tmp.x - cam.position.x, st.tmp.z - cam.position.z) - st.tmp.y) * kv.w;
     st.look.lerp(st.tmp, st.snap ? 1 : 1 - Math.exp(-dt * 8));
     st.snap = false;
-    const lean = Math.sin(st.roll) * 0.26;
+    const lean = Math.sin(st.roll) * 0.26 * (1 - lw);
     cam.up.set(Math.cos(st.camYaw) * lean, 1, -Math.sin(st.camYaw) * lean).normalize();
-    cam.lookAt(st.look);
+    if (lw > 0.001) {
+      // turned: it looks where it was turned to, past the plane (and keeps that line even where the ground holds the lens up)
+      st.tmp3.set(cam.position.x - Math.sin(yawC) * cp * 9, cam.position.y + Math.sin(pitC) * 9, cam.position.z - Math.cos(yawC) * cp * 9);
+      cam.lookAt(st.tmp3.lerpVectors(st.look, st.tmp3, lw));
+    } else cam.lookAt(st.look);
     const fovT = Math.max(kv ? kv.fov : 0, 50 + clamp01((st.speed - SPEED.min) / (SPEED.max - SPEED.min)) * 16);
     st.fov += (fovT - st.fov) * (1 - Math.exp(-dt * 2.4));
     cam.fov = st.fov;
     cam.updateProjectionMatrix();
+  };
+
+  // Free look. A drag turns the eye round the plane (what is under the finger follows it), nearly a whole sphere:
+  // up into the sky, back down the way it came. Let go and after a few seconds it eases back behind the plane,
+  // unless the view is locked. With the phone as the eye, its own turning is the look.
+  const lookStep = (dt: number, input: FlightInput | null) => {
+    const L = input?.look;
+    if (!input) {
+      st.lookTY = damp(st.lookTY, 0, 2.5, dt);
+      st.lookTP = damp(st.lookTP, 0, 2.5, dt);
+    } else if (input.gyro) {
+      st.lookTY = input.gyro.yaw;
+      st.lookTP = THREE.MathUtils.clamp(input.gyro.pitch, -1.15, 1.35);
+      st.lookIdle = 0;
+    } else if (L) {
+      if (L.dx || L.dy) {
+        st.lookTY = THREE.MathUtils.clamp(st.lookTY + L.dx * 0.0052, -2.95, 2.95);
+        st.lookTP = THREE.MathUtils.clamp(st.lookTP + L.dy * 0.0044, -1.15, 1.35);
+        st.lookIdle = 0;
+      } else if (!L.held) st.lookIdle += dt;
+      if (!voyage.lockView && st.lookIdle > 2.6) {
+        const k = 1 - Math.exp(-dt * 1.15);
+        st.lookTY -= st.lookTY * k;
+        st.lookTP -= st.lookTP * k;
+      }
+    }
+    const k = 1 - Math.exp(-dt * 9);
+    st.lookYaw += wrap(st.lookTY - st.lookYaw) * k;
+    st.lookPitch += (st.lookTP - st.lookPitch) * k;
+  };
+
+  const gates = new Map<WorldId, ReturnType<typeof gateOf>>();
+  const gateAt = (id: WorldId) => {
+    if (!gates.has(id)) gates.set(id, gateOf(id));
+    return gates.get(id) ?? null;
   };
 
   const place = (id: WorldId, lp: THREE.Vector3, yaw: number) => {
@@ -185,6 +255,7 @@ export function Plane({
     st.pathI = 0;
     st.seek = 0;
     st.gateSide = -1;
+    st.gateAlong = NaN;
     st.snap = true;
     updateNose();
   };
@@ -235,15 +306,18 @@ export function Plane({
 
     // the stick, with a soft centre so small corrections are small
     const shape = (v: number) => v * (0.5 + 0.5 * v * v);
-    let sx = shape(input.sx);
-    let sy = shape(input.sy);
+    // a thumb's stick is eased on its way to the plane, so a quick thumb is never a twitch
+    st.sx = damp(st.sx, input.sx, input.soft ? 7.5 : 60, dt);
+    st.sy = damp(st.sy, input.sy, input.soft ? 7.5 : 60, dt);
+    let sx = shape(st.sx);
+    let sy = shape(st.sy);
     const climb = input.climb ?? 0;
     const touching = Math.abs(input.sx) > 0.03 || Math.abs(input.sy) > 0.03 || climb !== 0;
     // a pointer lying still off-centre is not steering: after a while it is let go of
     const stale = !input.keys && performance.now() - (input.moved ?? 0) > 7000;
     if (touching && !stale && !opts.hands) st.idle = 0;
     else st.idle += dt;
-    const want = opts.hands || opts.launching || (voyage.guide && st.idle > 3.2) ? 1 : 0;
+    const want = opts.hands || opts.launching || (voyage.guide && (st.idle > 3.2 || (input.auto && !touching))) ? 1 : 0;
     voyage.assist = damp(voyage.assist, want, want ? 0.85 : 5.5, dt);
     noteAssist();
     const a = voyage.assist;
@@ -263,6 +337,24 @@ export function Plane({
       const ay = THREE.MathUtils.clamp((Math.atan2(tp.y - st.pos.y, Math.hypot(dx, dz) + 6) / 0.5) * 1.5, -1, 1);
       sx = sx * (1 - a) + ax * a;
       sy = sy * (1 - a) + ay * a;
+    }
+
+    // near the gate, and headed for it, the plane is drawn gently to its middle: nobody misses the way on
+    const gate = gateAt(id);
+    if (gate && voyage.phase === "open" && a < 0.98) {
+      const rx = lx - gate.pos.x;
+      const rz = lz - gate.pos.z;
+      const along = -Math.sin(gate.yaw) * rx - Math.cos(gate.yaw) * rz;
+      const side = Math.cos(gate.yaw) * rx - Math.sin(gate.yaw) * rz;
+      if (along < 0 && along > -150 && Math.abs(side) < 80) {
+        const err = wrap(Math.atan2(rx, rz) - st.yaw);
+        if (Math.abs(err) < 1.25) {
+          const k = smooth01((150 + along) / 80) * smooth01((80 - Math.abs(side)) / 45) * 0.6 * (1 - a);
+          sx = sx * (1 - k) + THREE.MathUtils.clamp(-err * 1.5, -1, 1) * k;
+          const ay = THREE.MathUtils.clamp((Math.atan2(gate.pos.y - st.pos.y, Math.hypot(rx, rz) + 6) / 0.5) * 1.5, -1, 1);
+          sy = sy * (1 - k) + ay * k;
+        }
+      }
     }
 
     // the edge of the world leans the plane back toward its middle
@@ -332,7 +424,9 @@ export function Plane({
     st.yaw -= st.roll * (0.8 + 2.2 / Math.max(st.speed, 3)) * dt;
     // speed follows the throttle; diving gathers a little, climbing spends a little
     // the kings' wood is gone through slowly
-    const pace = id === "kings" ? kingsPace(lz - KINGS.z) : 1;
+    // and at a cruise the quiet hand takes its time everywhere
+    st.cruise = damp(st.cruise, voyage.cruise ? 1 : 0, 1.4, dt);
+    const pace = (id === "kings" ? kingsPace(lz - KINGS.z) : 1) * (1 - 0.55 * st.cruise * a);
     const vT = opts.launching ? Math.min(speedOf(voyage.throttle), 2 + st.t * 3.6) : speedOf(voyage.throttle) * pace - Math.sin(st.pitch) * 5 * pace;
     st.speed = damp(st.speed, Math.max(SPEED.min * 0.8, vT), opts.launching ? 1.8 : 0.9, dt);
     updateNose();
@@ -365,20 +459,25 @@ export function Plane({
           return;
         }
       }
-      const gate = gateOf(id);
+      // The gate is forgiving: the whole lit opening counts, from the ground under it to above its point and a
+      // little either side, and so does the air just round it. Going through it either way, at any pace, is the way on.
+      const gate = gateAt(id);
       if (gate) {
         const o = originOf(id);
         const rx = st.pos.x - o.x - gate.pos.x;
         const ry = st.pos.y - gate.pos.y;
         const rz = st.pos.z - o.z - gate.pos.z;
         const along = -Math.sin(gate.yaw) * rx - Math.cos(gate.yaw) * rz;
-        const lateral = Math.hypot(Math.cos(gate.yaw) * rx - Math.sin(gate.yaw) * rz, ry);
-        const side = along < 0 ? -1 : 1;
-        const through = lateral < 14 && ((st.gateSide < 0 && side > 0) || (Math.abs(along) < 3 && lateral < 10));
-        st.gateSide = lateral < 30 ? side : st.gateSide;
+        const side = Math.abs(Math.cos(gate.yaw) * rx - Math.sin(gate.yaw) * rz);
+        const inside = side < 19 && ry < 26;
+        const crossed = Number.isFinite(st.gateAlong) && st.gateAlong < 0 !== along < 0 && Math.abs(along - st.gateAlong) < 40;
+        const through = inside && (crossed || Math.abs(along) < 3.5);
+        if (process.env.NODE_ENV !== "production" && crossed && !inside) console.warn(`[voyage] ${id}: passed the gate's plane outside it (${side.toFixed(1)} m aside, ${ry.toFixed(1)} m above its middle)`);
+        st.gateAlong = along;
         if (through) {
           voyage.next = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1] ?? null;
           if (voyage.next) voyage.phase = "closing";
+          else if (process.env.NODE_ENV !== "production") console.error(`[voyage] ${id}: through the gate, but no world follows`);
         }
       }
     } else if (voyage.phase === "closing") {
@@ -427,6 +526,10 @@ export function Plane({
       st.camPitch = 0;
       st.look.copy(rest);
       st.landPhase = 0;
+      st.lookYaw = st.lookPitch = st.lookTY = st.lookTP = 0;
+      st.lookIdle = 9;
+      st.sx = st.sy = st.cruise = 0;
+      st.gateAlong = NaN;
       voyage.flying = true;
       voyage.assist = 1;
       voyage.throttle = 0.42;
@@ -439,7 +542,9 @@ export function Plane({
       const hands = st.t < 0.9 || voyage.phase === "closing";
       const edge = glide(dt, hands ? { ...input, sx: 0, sy: 0, climb: 0 } : input, { launching, hands });
       passage(dt);
+      crossingStep(dt);
       airOf(edge);
+      lookStep(dt, st.t < 1.7 ? null : input);
       chase(dt, cam, easeInOutCubic(clamp01(st.t / 1.7)));
       sync();
     },
@@ -471,6 +576,7 @@ export function Plane({
         glide(dt, { sx: 0, sy: 0 }, { hands: true });
         voyage.veil = Math.min(1, voyage.veil + dt / 1.0);
         airOf(0);
+        lookStep(dt, null);
         chase(dt, cam);
         sync();
         if (voyage.veil >= 1) {

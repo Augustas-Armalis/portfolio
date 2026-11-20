@@ -775,6 +775,9 @@ export const voyage = {
   lastSky: null as SkyState | null,
   throttle: 0.42,
   guide: true, // the "follow the path" assist is allowed to take over
+  cruise: false, // while the quiet hand flies, it flies slowly: time to look about
+  lockView: false, // the eye stays where it was turned instead of easing back behind the plane
+  gyro: false, // the phone itself is the eye: turning it looks about
   assist: 0, // 0..1 how much of the steering the assist has right now
   flying: false,
   enteredAt: 0, // performance.now() of the last arrival, for the title card
@@ -797,11 +800,15 @@ export const useVoyageTick = () => useSyncExternalStore(subscribe, () => voyage.
 export const useFlightFlags = () =>
   useSyncExternalStore(
     subscribe,
-    () => (voyage.guide ? 1 : 0) + (voyage.assist > 0.5 ? 2 : 0),
+    () => (voyage.guide ? 1 : 0) + (voyage.assist > 0.5 ? 2 : 0) + (voyage.cruise ? 4 : 0) + (voyage.lockView ? 8 : 0) + (voyage.gyro ? 16 : 0),
     () => 1,
   );
 export function setGuide(on: boolean) {
   voyage.guide = on;
+  emit();
+}
+export function setFlight(o: Partial<Pick<typeof voyage, "cruise" | "lockView" | "gyro">>) {
+  Object.assign(voyage, o);
   emit();
 }
 let assistShown = false;
@@ -855,4 +862,33 @@ export function voyageSky(live: SkyState, dt: number): SkyState {
   voyage.lastSky = s;
   return s;
 }
+// ---------- how long a crossing takes ----------
+// Measured from the gate to open air on the far side: seconds of flight under each part of the cloud, and the
+// real time the main thread was held making the new world (from the change to its third drawn frame).
+// Development: every crossing is logged and kept in window.__crossings.
+export type Crossing = { from: WorldId; to: WorldId; close: number; hold: number; open: number; total: number; buildMs: number; warm: boolean };
+const xing = { on: false, from: "home" as WorldId, to: "home" as WorldId, close: 0, hold: 0, open: 0, swapAt: 0, buildMs: -1, warm: false };
+export const crossings: Crossing[] = [];
+export function crossingStep(dt: number, warm = false) {
+  if (voyage.phase === "open") {
+    if (!xing.on) return;
+    xing.on = false;
+    const c: Crossing = { from: xing.from, to: xing.to, close: +xing.close.toFixed(2), hold: +xing.hold.toFixed(2), open: +xing.open.toFixed(2), total: +(xing.close + xing.hold + xing.open).toFixed(2), buildMs: Math.round(xing.buildMs), warm: xing.warm };
+    crossings.push(c);
+    if (process.env.NODE_ENV !== "production") console.info(`[voyage] ${c.from} -> ${c.to}: ${c.total} s (cloud closing ${c.close}, closed ${c.hold}, opening ${c.open}); new world made in ${c.buildMs} ms${c.warm ? " (it was warm)" : ""}`);
+    return;
+  }
+  if (!xing.on) Object.assign(xing, { on: true, from: voyage.cur, to: voyage.next ?? voyage.cur, close: 0, hold: 0, open: 0, swapAt: 0, buildMs: -1, warm });
+  if (voyage.phase === "closing") {
+    xing.close += dt;
+    xing.to = voyage.next ?? xing.to;
+    xing.warm = warm;
+  } else if (voyage.phase === "hold") {
+    xing.hold += dt;
+    if (!xing.swapAt) xing.swapAt = performance.now();
+    if (xing.buildMs < 0 && voyage.frames >= 3) xing.buildMs = performance.now() - xing.swapAt;
+  } else xing.open += dt;
+}
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __crossings: crossings });
+
 export const voyageBusy = () => voyage.cur !== "home" || voyage.skyFrom !== null || voyage.phase !== "open" || arrivalHours() !== null;

@@ -2,11 +2,12 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, Download, Grid3x3, Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { Check, ChevronsUp, Download, Grid3x3, LocateFixed, Lock, LockOpen, Pause, PlaneLanding, Play, SkipBack, SkipForward, Smartphone } from "lucide-react";
+import { gyroAvailable, gyroCentre, gyroStart, gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { play } from "@/lib/sfx";
-import { WORLDS, setGuide, useFlightFlags, useVoyageTick, useWorld, voyage } from "./worlds/voyage";
+import { WORLDS, setFlight, setGuide, useFlightFlags, useVoyageTick, useWorld, voyage } from "./worlds/voyage";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
 import { photoCtl, postCtl, type Capture } from "./Post";
 
@@ -755,14 +756,160 @@ export function SketchUI({ onExit, onClear, onSave }: { onExit: () => void; onCl
 
 // ---------- flight ----------
 
-// The flight's few controls: how fast, whether the quiet hand may take over,
-// and the way home. On entering a world its name is shown for a while, quietly.
-export function FlightUI({ onLand, mobile, flying }: { onLand: () => void; mobile: boolean; flying: boolean }) {
+// Safe-area insets, so glass never sits under a notch, a rounded corner or the home bar.
+const SAFE = {
+  t: "max(12px, env(safe-area-inset-top))",
+  b: "max(12px, env(safe-area-inset-bottom))",
+  l: "max(14px, env(safe-area-inset-left))",
+  r: "max(14px, env(safe-area-inset-right))",
+};
+
+// The stick, for a thumb: a glass dish with a bead in it. The bead follows the thumb to the rim and springs back
+// when it lifts; a small dead middle means resting a thumb on it does nothing. What it sends is eased again by
+// the plane itself, so nothing here can make it twitch.
+function Stick({ onStick }: { onStick: (x: number, y: number) => void }) {
+  const knob = useRef<HTMLDivElement>(null);
+  const id = useRef<number | null>(null);
+  const R = 38;
+  const DEAD = 0.14;
+  const put = (e: React.PointerEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > R) {
+      dx *= R / len;
+      dy *= R / len;
+    }
+    if (knob.current) {
+      knob.current.style.transition = "none";
+      knob.current.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+    }
+    const m = Math.min(1, len / R);
+    const k = m < DEAD ? 0 : (m - DEAD) / (1 - DEAD) / Math.max(m, 1e-3);
+    // a little less than full bank and a gentler climb: a thumb is a blunt thing
+    onStick((dx / R) * k * 0.86, (-dy / R) * k * 0.78);
+  };
+  const lift = (e: React.PointerEvent) => {
+    if (id.current !== e.pointerId) return;
+    id.current = null;
+    if (knob.current) {
+      knob.current.style.transition = "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)";
+      knob.current.style.transform = "translate(0px, 0px)";
+    }
+    onStick(0, 0);
+  };
+  useEffect(() => () => onStick(0, 0), [onStick]);
+  return (
+    <Glass
+      lens={false}
+      className="pointer-events-auto grid h-[116px] w-[116px] touch-none place-items-center"
+      initial={GLASS_IN}
+      animate={GLASS_ON}
+      exit={GLASS_IN}
+      transition={GLASS_SPRING}
+      role="application"
+      aria-label="Steer: drag to bank, climb and dive"
+      data-flight="stick"
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        if (id.current !== null) return;
+        id.current = e.pointerId;
+        put(e);
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch {
+          /* a pointer that cannot be captured still steers while it stays over the control */
+        }
+      }}
+      onPointerMove={(e) => {
+        if (id.current === e.pointerId) put(e);
+      }}
+      onPointerUp={lift}
+      onPointerCancel={lift}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="pointer-events-none absolute inset-[14px] rounded-full bg-black/14 shadow-[inset_0_1px_3px_rgb(0_0_0/0.28)]" />
+      <div ref={knob} className="pointer-events-none relative h-[50px] w-[50px] rounded-full bg-white/92 shadow-[0_4px_14px_rgb(0_0_0/0.3),inset_0_-2px_4px_rgb(0_0_0/0.08)]" />
+    </Glass>
+  );
+}
+
+// The throttle, for the other thumb: an upright glass slot on the right edge. Up is fast, the foot is a glide
+// that barely moves. It takes the thumb wherever it lands and follows it.
+function Throttle({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const id = useRef<number | null>(null);
+  const PAD = 22;
+  const put = (e: React.PointerEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    onChange(Math.min(1, Math.max(0, 1 - (e.clientY - r.top - PAD) / Math.max(1, r.height - PAD * 2))));
+  };
+  return (
+    <Glass
+      lens={false}
+      className="pointer-events-auto relative h-[176px] w-12 touch-none landscape:h-[min(176px,calc(100dvh-150px))]"
+      initial={GLASS_IN}
+      animate={GLASS_ON}
+      exit={GLASS_IN}
+      transition={GLASS_SPRING}
+      role="slider"
+      tabIndex={0}
+      aria-label="Speed"
+      aria-orientation="vertical"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(value * 100)}
+      aria-valuetext={value < 0.2 ? "Slow glide" : value < 0.6 ? "Cruise" : "Fast"}
+      data-flight="throttle"
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        id.current = e.pointerId;
+        put(e);
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch {
+          /* a pointer that cannot be captured still steers while it stays over the control */
+        }
+      }}
+      onPointerMove={(e) => {
+        if (id.current === e.pointerId) put(e);
+      }}
+      onPointerUp={() => (id.current = null)}
+      onPointerCancel={() => (id.current = null)}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          e.preventDefault();
+          e.stopPropagation();
+          onChange(Math.min(1, Math.max(0, value + (e.key === "ArrowUp" ? 0.08 : -0.08))));
+        }
+      }}
+    >
+      <span className="pointer-events-none absolute inset-x-0 top-[9px] grid place-items-center text-white/70">
+        <ChevronsUp size={15} strokeWidth={2.2} />
+      </span>
+      <span className="pointer-events-none absolute inset-x-[21px] bottom-[22px] top-[26px] rounded-full bg-black/20 shadow-[inset_0_1px_2px_rgb(0_0_0/0.3)]">
+        <span className="absolute inset-x-0 bottom-0 rounded-full bg-white/85" style={{ height: `${value * 100}%` }} />
+      </span>
+      <span className="pointer-events-none absolute inset-x-0 bottom-[22px] top-[26px]">
+        <span className="absolute left-1/2 h-[22px] w-9 -translate-x-1/2 translate-y-1/2 rounded-full bg-white shadow-[0_3px_10px_rgb(0_0_0/0.32)]" style={{ bottom: `${value * 100}%` }} />
+      </span>
+    </Glass>
+  );
+}
+
+// The flight's controls. On a phone: a stick under the left thumb while you fly it yourself, a throttle under the
+// right, one small pill of switches at the foot, and Land at the top; a drag anywhere else turns the eye. With a
+// mouse: the same switches in one bar. On entering a world its name is shown for a while, quietly.
+export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => void; mobile: boolean; flying: boolean; onStick: (x: number, y: number) => void }) {
   const world = useWorld();
   const entered = useVoyageTick();
   const flags = useFlightFlags();
   const guide = (flags & 1) > 0;
   const guided = (flags & 2) > 0;
+  const cruise = (flags & 4) > 0;
+  const locked = (flags & 8) > 0;
+  const gyro = (flags & 16) > 0;
   // the throttle is also worked from the keys and the wheel: the slider follows
   const [thr, setThr] = useState(voyage.throttle);
   useEffect(() => {
@@ -775,6 +922,10 @@ export function FlightUI({ onLand, mobile, flying }: { onLand: () => void; mobil
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, []);
+  const throttle = (v: number) => {
+    voyage.throttle = v;
+    setThr(v);
+  };
   // the title card: once the cloud has opened on a world, for a few seconds
   const [card, setCard] = useState(false);
   useEffect(() => {
@@ -790,14 +941,96 @@ export function FlightUI({ onLand, mobile, flying }: { onLand: () => void; mobil
       setCard(false);
     };
   }, [world, entered, flying]);
+  // the phone as the eye: asked for from this tap (iOS wants that); where there are no sensors the button goes away
+  const [canGyro, setCanGyro] = useState(false);
+  useEffect(() => setCanGyro(gyroAvailable()), []);
+  const toggleGyro = async () => {
+    if (gyro) {
+      gyroStop();
+      setFlight({ gyro: false });
+      return;
+    }
+    if (await gyroStart()) setFlight({ gyro: true });
+    else setCanGyro(false);
+  };
+  useEffect(() => () => gyroStop(), []);
   const def = WORLDS[world];
   const sub = world === "home" ? "The path of angels" : def.year ? `M. K. Čiurlionis, ${def.year}` : "";
+  const dot = <span className={`h-1.5 w-1.5 rounded-full transition-colors duration-500 ${guide && guided ? "bg-amber-500" : guide ? "bg-black/25" : "bg-white/35"}`} />;
+  const caption = (
+    <AnimatePresence mode="wait">
+      {card && (
+        <Glass key={world} radius={22} lens={false} className="px-4 py-2.5" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING}>
+          <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em]">{def.title}</div>
+          {sub && <div className="mt-0.5 text-[12.5px] leading-tight text-white/70">{sub}</div>}
+        </Glass>
+      )}
+    </AnimatePresence>
+  );
+  const stop = { onClick: (e: React.MouseEvent) => e.stopPropagation(), onPointerDown: (e: React.PointerEvent) => e.stopPropagation() };
+
+  if (mobile) {
+    const chip = (on: boolean) => `lg-btn pointer-events-auto flex h-11 items-center gap-1.5 whitespace-nowrap px-3.5 text-[13.5px] font-medium ${on ? "lg-on" : "text-white/92"}`;
+    const round = (on: boolean) => `lg-btn pointer-events-auto grid h-11 w-11 shrink-0 place-items-center ${on ? "lg-on" : "text-white/92"}`;
+    return (
+      <>
+        {/* the way home: always in the same corner */}
+        <div className="pointer-events-none absolute z-30" style={{ top: SAFE.t, left: SAFE.l }}>
+          <Glass initial={{ ...GLASS_IN, y: -10 }} animate={GLASS_ON} exit={{ ...GLASS_IN, y: -10 }} transition={GLASS_SPRING} {...stop}>
+            <button type="button" className="lg-btn pointer-events-auto flex h-11 items-center gap-2 pl-3.5 pr-4 text-[14px] font-semibold tracking-[-0.02em] text-white" data-flight="land" onClick={(e) => (e.stopPropagation(), onLand())}>
+              <PlaneLanding size={17} strokeWidth={2} />
+              Land
+            </button>
+          </Glass>
+        </div>
+        {/* where you are: under Land when the phone is upright, between the corners when it is on its side */}
+        <div className="pointer-events-none absolute z-30 flex landscape:inset-x-0 landscape:justify-center portrait:left-0" style={{ top: `calc(${SAFE.t} + var(--cap-top))`, paddingLeft: SAFE.l, paddingRight: SAFE.r }} data-flight="caption">
+          <style>{`[data-flight="caption"]{--cap-top:56px}@media (orientation:landscape){[data-flight="caption"]{--cap-top:0px}}`}</style>
+          {caption}
+        </div>
+        {/* the stick: only while you fly it yourself */}
+        <div className="pointer-events-none absolute z-30 bottom-[calc(max(12px,env(safe-area-inset-bottom))+66px)] landscape:bottom-[max(12px,env(safe-area-inset-bottom))]" style={{ left: SAFE.l }}>
+          <AnimatePresence>{flying && !guide && <Stick key="stick" onStick={onStick} />}</AnimatePresence>
+        </div>
+        <div className="pointer-events-none absolute z-30 bottom-[calc(max(12px,env(safe-area-inset-bottom))+66px)] landscape:bottom-[max(12px,env(safe-area-inset-bottom))]" style={{ right: SAFE.r }}>
+          <Throttle value={thr} onChange={throttle} />
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 z-30 flex justify-center" style={{ bottom: SAFE.b }}>
+          <Glass className="pointer-events-auto flex items-center gap-0.5 p-1" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={{ ...GLASS_SPRING, delay: 0.06 }} data-flight="switches" {...stop}>
+            <button type="button" aria-pressed={guide} aria-label="Follow the path" className={chip(guide)} onClick={() => setGuide(!guide)}>
+              {dot}
+              Auto
+            </button>
+            <button type="button" aria-pressed={cruise} aria-label="Slow cruise while the path is followed" className={chip(cruise)} onClick={() => setFlight({ cruise: !cruise })}>
+              Cruise
+            </button>
+            {canGyro && (
+              <button type="button" aria-pressed={gyro} aria-label="Look by moving your phone" className={round(gyro)} onClick={toggleGyro}>
+                <Smartphone size={18} strokeWidth={2} />
+              </button>
+            )}
+            {gyro ? (
+              <button type="button" aria-label="Recentre the view" className={round(false)} onClick={() => gyroCentre()}>
+                <LocateFixed size={18} strokeWidth={2} />
+              </button>
+            ) : (
+              <button type="button" aria-pressed={locked} aria-label="Keep the view where you turn it" className={round(locked)} onClick={() => setFlight({ lockView: !locked })}>
+                {locked ? <Lock size={17} strokeWidth={2} /> : <LockOpen size={17} strokeWidth={2} />}
+              </button>
+            )}
+          </Glass>
+        </div>
+      </>
+    );
+  }
+
+  const chip = (on: boolean) => `lg-btn pointer-events-auto flex h-7 items-center gap-1.5 whitespace-nowrap px-3 text-[12.5px] font-medium ${on ? "lg-on" : "lg-chip text-white/90"}`;
   return (
     <>
-      <TopBar title="Paper plane" hint={mobile ? "Drag to steer" : "Mouse steers · W S or scroll for speed"} exitLabel="Land" onExit={onLand} />
+      <TopBar title="Paper plane" hint="Mouse steers · drag to look around · W S or scroll for speed" exitLabel="Land" onExit={onLand} />
       <Bottom>
-        <Glass className="pointer-events-auto flex items-center gap-2.5 p-1 pl-4" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-          <label className="flex items-center gap-2.5">
+        <Glass className="pointer-events-auto flex items-center gap-1.5 p-1 pl-4" {...stop}>
+          <label className="mr-1 flex items-center gap-2.5">
             <span className="text-[12.5px] font-medium text-white/75">Speed</span>
             <input
               type="range"
@@ -805,39 +1038,27 @@ export function FlightUI({ onLand, mobile, flying }: { onLand: () => void; mobil
               max={1}
               step={0.01}
               value={thr}
-              onChange={(e) => {
-                voyage.throttle = +e.target.value;
-                setThr(+e.target.value);
-              }}
-              className="h-1 w-28 min-w-0 cursor-pointer accent-white max-sm:w-24"
+              onChange={(e) => throttle(+e.target.value)}
+              className="h-1 w-28 min-w-0 cursor-pointer accent-white"
               aria-label="Speed"
               aria-valuetext={thr < 0.2 ? "Slow glide" : thr < 0.6 ? "Cruise" : "Fast"}
             />
           </label>
-          <button
-            type="button"
-            aria-pressed={guide}
-            title="When you let go of the controls for a moment, the plane follows the path of light on its own"
-            className={`lg-btn pointer-events-auto flex h-7 items-center gap-1.5 whitespace-nowrap px-3 text-[12.5px] font-medium ${guide ? "lg-on" : "lg-chip text-white/90"}`}
-            onClick={() => setGuide(!guide)}
-          >
+          <button type="button" aria-pressed={guide} title="When you let go of the controls for a moment, the plane follows the path of light on its own" className={chip(guide)} onClick={() => setGuide(!guide)}>
             {/* lit while the quiet hand has the plane */}
-            <span className={`h-1.5 w-1.5 rounded-full transition-colors duration-500 ${guide && guided ? "bg-amber-500" : guide ? "bg-black/25" : "bg-white/35"}`} />
+            {dot}
             Follow the path
+          </button>
+          <button type="button" aria-pressed={cruise} title="While the plane follows the path it takes its time, so you can look around" className={chip(cruise)} onClick={() => setFlight({ cruise: !cruise })}>
+            Cruise
+          </button>
+          <button type="button" aria-pressed={locked} title="Keep the view where you drag it, instead of easing back behind the plane" className={chip(locked)} onClick={() => setFlight({ lockView: !locked })}>
+            Lock view
           </button>
         </Glass>
       </Bottom>
       {/* where you are: the painting this world is built from */}
-      <div className="pointer-events-none absolute bottom-6 left-5 z-30 max-sm:bottom-20 max-sm:left-3">
-        <AnimatePresence mode="wait">
-          {card && (
-            <Glass key={world} radius={22} lens={false} className="px-4 py-2.5" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING}>
-              <div className="text-[15px] font-semibold leading-tight tracking-[-0.03em]">{def.title}</div>
-              {sub && <div className="mt-0.5 text-[12.5px] leading-tight text-white/70">{sub}</div>}
-            </Glass>
-          )}
-        </AnimatePresence>
-      </div>
+      <div className="pointer-events-none absolute bottom-6 left-5 z-30">{caption}</div>
     </>
   );
 }

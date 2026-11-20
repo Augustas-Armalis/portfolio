@@ -32,8 +32,11 @@ export default function Experience() {
   const first = useRef(true);
 
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const set = () => setMobile(mq.matches);
+    // a phone is a phone on its side too: narrow, or a touch screen that is short
+    const mq = window.matchMedia("(max-width: 767px), (pointer: coarse) and (max-height: 500px)");
+    // (development: ?mobile=1 holds the phone layout at any size, for stills of a phone on its side)
+    const force = process.env.NODE_ENV !== "production" && /[?&]mobile=1(&|$)/.test(window.location.search);
+    const set = () => setMobile(force || mq.matches);
     set();
     mq.addEventListener("change", set);
     const rm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

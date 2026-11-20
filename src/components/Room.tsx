@@ -12,6 +12,7 @@ import { useOS } from "@/store";
 import { ambienceMuted, ambienceScene, onAmbienceChange, setAmbienceMuted, startAmbience } from "@/lib/ambience";
 import { music, sampleMusic, stopOwner } from "@/lib/audio";
 import { flightMusicStop, flightMusicTo, flightMusicVolume } from "@/lib/flightMusic";
+import { gyroLook, gyroNudge, gyroStop } from "@/lib/gyro";
 import { getQuality, getQualityChoice, reportFrame, setQualityChoice, useQuality, type Quality } from "@/lib/quality";
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { DeskModel } from "./scene/glb";
@@ -52,7 +53,7 @@ import { makeLockScreen } from "./scene/lock";
 import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/sky";
 import { Trees } from "./scene/Trees";
 import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
-import { KINGS, ORIGIN, WORLDS, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
+import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
 import { Birds, Ground, Lake, MistBands, Mountains, Sky, makeSkyMaterial } from "./scene/World";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
@@ -63,7 +64,7 @@ import { Birds, Ground, Lake, MistBands, Mountains, Sky, makeSkyMaterial } from 
 
 type Stage = "idle" | "approach" | "boot" | "done" | "wake" | "focus" | "unfocus" | "fly" | "land";
 export type Mode = "none" | "piano" | "camera" | "music" | "book" | "sketch" | "plane";
-type Input = { dx: number; dy: number; zoom: number; dragging: boolean; last: number; px: number; py: number; moved: boolean; sx: number; sy: number; tx: number; ty: number; pinch: number; keys: Set<string> };
+type Input = { dx: number; dy: number; zoom: number; dragging: boolean; last: number; px: number; py: number; moved: boolean; sx: number; sy: number; tx: number; ty: number; pinch: number; keys: Set<string>; jx: number; jy: number };
 
 const DUR = { approach: 1.55, push: 1.05, hold: 0.12, wake: 2.3, wakeDelay: 0.35, focus: 1.15 };
 const FOG = 0.016;
@@ -375,7 +376,7 @@ function Scene({
   }, [scene, fog]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.(), __worlds: { defs: WORLDS, origin: ORIGIN }, __q: { get: getQuality, choice: getQualityChoice, set: setQualityChoice, report: reportFrame } });
+    if (process.env.NODE_ENV !== "production") Object.assign(window, { __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.(), __worlds: { defs: WORLDS, origin: ORIGIN, WORLDS, ORIGIN, gateOf, groundAt }, __q: { get: getQuality, choice: getQualityChoice, set: setQualityChoice, report: reportFrame } });
     if (process.env.NODE_ENV === "production") return;
     // window.__scene: scrub the world deterministically and save stills.
     //   step(seconds, dt)  run the simulation forward in fixed steps (the pane itself only paints ~2 fps)
@@ -672,6 +673,9 @@ function Scene({
   const exit = () => {
     const s = stage.current;
     if (s === "fly") {
+      gyroStop();
+      setFlight({ gyro: false });
+      input.current.jx = input.current.jy = 0;
       voyage.onEnter = null;
       voyage.onHome = null;
       planeApi.current?.beginLand(cam);
@@ -1172,13 +1176,21 @@ function Scene({
       const inp = input.current;
       // the pointer (or a finger) is the stick; A / D bank, W / S and the wheel work the throttle, E / Q climb and sink
       const k = inp.keys;
-      let sx = inp.sx;
+      // (on a phone the stick is the glass one under the left thumb, and a drag anywhere else turns the eye)
+      let sx = mobile ? inp.jx : inp.sx;
       const bank = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
       if (bank) sx = bank;
       const thr = (k.has("w") || k.has("arrowup") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0);
       const climb = (k.has("e") || k.has(" ") ? 1 : 0) - (k.has("q") || k.has("shift") ? 1 : 0);
-      planeApi.current?.fly(dt, { sx, sy: inp.sy, thr, climb, wheel: inp.zoom, moved: inp.last, keys: bank !== 0 || climb !== 0 }, cam);
-      inp.zoom = 0;
+      // with the phone as the eye a drag moves what "straight ahead" is
+      const g = voyage.gyro ? gyroLook() : null;
+      if (g && (inp.dx || inp.dy)) gyroNudge(inp.dx * 0.0052, inp.dy * 0.0044);
+      planeApi.current?.fly(
+        dt,
+        { sx, sy: mobile ? inp.jy : inp.sy, thr, climb, wheel: inp.zoom, moved: inp.last, keys: mobile || bank !== 0 || climb !== 0, soft: mobile, auto: mobile, look: { dx: inp.dx, dy: inp.dy, held: inp.dragging }, gyro: g },
+        cam,
+      );
+      inp.zoom = inp.dx = inp.dy = 0;
       return;
     }
     if (s === "land") {
@@ -1479,7 +1491,7 @@ export default function Room({
   const enterRef = useRef<((m: Mode) => void) | null>(null);
   const exitRef = useRef<(() => void) | null>(null);
   const apiRef = useRef<SceneApi | null>(null);
-  const input = useRef<Input>({ dx: 0, dy: 0, zoom: 0, dragging: false, last: 0, px: 0, py: 0, moved: false, sx: 0, sy: 0, tx: 0, ty: 0, pinch: 0, keys: new Set() });
+  const input = useRef<Input>({ dx: 0, dy: 0, zoom: 0, dragging: false, last: 0, px: 0, py: 0, moved: false, sx: 0, sy: 0, tx: 0, ty: 0, pinch: 0, keys: new Set(), jx: 0, jy: 0 });
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const down = useRef({ x: 0, y: 0, pinch: 0 });
   const [stage, setStage] = useState<Stage>("idle");
@@ -1607,18 +1619,15 @@ export default function Room({
     if (mode === "plane" && !isMobile) {
       // the pointer is the stick: distance from centre steers
       const dz = (v: number) => (Math.abs(v) < 0.09 ? 0 : THREE.MathUtils.clamp((v - Math.sign(v) * 0.09) * 1.45, -1, 1));
-      inp.sx = dz(inp.px);
-      inp.sy = dz(-inp.py);
+      // while the mouse is held and dragged it turns the eye instead, and the plane flies on level
+      const looking = pointers.current.size > 0 && inp.moved;
+      inp.sx = looking ? 0 : dz(inp.px);
+      inp.sy = looking ? 0 : dz(-inp.py);
       inp.last = performance.now();
     }
     const prev = pointers.current.get(e.pointerId);
     if (!prev) return;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (mode === "plane" && isMobile) {
-      inp.sx = THREE.MathUtils.clamp((e.clientX - down.current.x) / 90, -1, 1);
-      inp.sy = THREE.MathUtils.clamp(-(e.clientY - down.current.y) / 90, -1, 1);
-      return;
-    }
     if (mode === "sketch") return; // the page takes the pointer
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
@@ -1653,10 +1662,6 @@ export default function Room({
     if (pointers.current.size === 0) {
       input.current.dragging = false;
       setDragging(false);
-      if (mode === "plane" && isMobile) {
-        input.current.sx = 0;
-        input.current.sy = 0;
-      }
     }
     input.current.last = performance.now();
   };
@@ -1827,7 +1832,18 @@ export default function Room({
           />
         )}
         {mode === "sketch" && <SketchUI key="sketch" onExit={exit} onClear={() => apiRef.current?.sketch.current?.clear()} onSave={() => apiRef.current?.sketch.current?.save()} />}
-        {mode === "plane" && <FlightUI key="plane" onLand={exit} mobile={isMobile} flying={stage === "fly"} />}
+        {mode === "plane" && (
+          <FlightUI
+            key="plane"
+            onLand={exit}
+            mobile={isMobile}
+            flying={stage === "fly"}
+            onStick={(x, y) => {
+              input.current.jx = x;
+              input.current.jy = y;
+            }}
+          />
+        )}
       </AnimatePresence>
 
       {/* the place has a sound of its own; one small pill silences it */}
@@ -1835,7 +1851,8 @@ export default function Room({
         {revealed && introDone && active && stage !== "boot" && stage !== "approach" && stage !== "done" && (
           <Glass
             key="mute"
-            className="!absolute right-4 top-4 z-30 max-sm:right-3"
+            className={`!absolute z-30 ${isMobile ? "" : "right-4 top-4"}`}
+            style={isMobile ? { top: "max(12px, env(safe-area-inset-top))", right: "max(14px, env(safe-area-inset-right))" } : undefined}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
@@ -1846,7 +1863,7 @@ export default function Room({
               type="button"
               aria-label={quiet ? "Turn ambient sound on" : "Mute ambient sound"}
               aria-pressed={quiet}
-              className="lg-btn grid h-9 w-9 place-items-center text-white"
+              className={`lg-btn grid place-items-center text-white ${isMobile ? "h-11 w-11" : "h-9 w-9"}`}
               onClick={(e) => {
                 e.stopPropagation();
                 startAmbience();
