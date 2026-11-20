@@ -63,7 +63,7 @@ import { Sky, makeSkyMaterial } from "./scene/World";
 import { HomeMountains } from "./scene/home/Mountains";
 import { Land } from "./scene/home/Terrain";
 import { LakeMirror, Reeds } from "./scene/home/Water";
-import { HOLD, hLakeK, homeLand } from "./scene/home/land";
+import { CALM, HOLD, hLakeK, homeLand } from "./scene/home/land";
 
 // The intro: a desk in a field under a live sky (the visitor's local time).
 // Everything on the desk does something: the display boots the OS, the piano
@@ -1348,6 +1348,11 @@ function Scene({
     // centimetre the depth a kilometre off is good to no better than six metres: seen from the sky, the mountains'
     // feet, the far woods and the sea all flickered against the land under them. So it moves out with the eye's
     // distance from the desk, to metres when the eye is high. (In flight the plane sets its own.)
+    // (the two shadow passes take turns while nothing is happening: see CALM)
+    CALM.frame++;
+    CALM.on = stage.current === "idle" && !voyage.flying && at !== null && now - at > ARR + 3;
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = !CALM.on || (CALM.frame & 1) === 1;
     if (!voyage.flying) {
       const dd = Math.hypot(cam.position.x, cam.position.y - 1, cam.position.z);
       const near = dd < 6 ? 0.01 : Math.min(8, 0.01 + (dd - 6) * 0.01);
