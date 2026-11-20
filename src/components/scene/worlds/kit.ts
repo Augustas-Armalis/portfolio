@@ -218,6 +218,8 @@ export type GroundPalette = {
   high?: V3; // on high ground
   highAt?: [number, number];
   bands?: number; // 0..1 contour bands, as in the Sonata of the Stars
+  // a world's own light on its ground: GLSL declared once (decl), then run on `col` before the air (lit) and after it (air)
+  hook?: { uniforms?: Record<string, THREE.IUniform>; decl: string; lit?: string; air?: string };
 };
 const v3 = (c: V3) => `vec3(${c.map((x) => x.toFixed(4)).join(", ")})`;
 // The colour of the ground at a point: the terrain and the far grass share it exactly.
@@ -254,7 +256,7 @@ export function terrainGeometry(t: Terrain, size: number, seg: number) {
 export function makeTerrainMaterial(def: WorldDef, pal: GroundPalette) {
   const water = def.water ?? -1e4;
   return new THREE.ShaderMaterial({
-    uniforms: { ...SKY_U, ...WORLD_U },
+    uniforms: { ...SKY_U, ...WORLD_U, ...(pal.hook?.uniforms ?? {}) },
     vertexShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vLocal; varying vec3 vN;
       void main(){
@@ -268,6 +270,7 @@ export function makeTerrainMaterial(def: WorldDef, pal: GroundPalette) {
       ${GLSL_SKY}
       ${GLSL_AIR}
       ${groundGLSL(pal)}
+      ${pal.hook?.decl ?? ""}
       void main(){
         vec3 n = normalize(vN);
         vec2 p = vLocal.xz;
@@ -305,7 +308,9 @@ export function makeTerrainMaterial(def: WorldDef, pal: GroundPalette) {
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         float ndl = clamp(dot(n, uKeyDir), 0.0, 1.0);
         vec3 col = alb * (uSkyCol * 0.7 + uKeyCol * (0.22 + 0.5 * max(uKeyDir.y, 0.0)) * mix(1.0, ndl / max(uKeyDir.y, 0.2), 0.55) * sunUp);
+        ${pal.hook?.lit ?? ""}
         col = applyAir(col, vWorld);
+        ${pal.hook?.air ?? ""}
         gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,

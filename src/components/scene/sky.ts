@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { nowS } from "./shared";
 
 // Live sky tied to the visitor's clock. A stylised day (sunrise 06:30, noon
 // 13:00, sunset 19:30) so every visitor gets a full cycle whatever the season.
@@ -24,6 +25,28 @@ export function clockHours(): number {
   }
   const d = new Date();
   return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+}
+
+// Coming home out of the kings' little world, the field is found at golden hour whatever the hour really
+// is: the light the dome was full of. It is held a few breaths, then the day drifts back to the visitor's
+// own time over a minute, the short way round the clock. (Choosing an hour by hand ends it.)
+export const GOLDEN_HOUR = 19.1;
+const ARRIVAL = { hold: 12, drift: 60 };
+let arrivedAt: number | null = null;
+export function arriveGolden() {
+  arrivedAt = nowS();
+}
+// the hour the home sky should show while that lasts; null when it is simply the clock's
+export function arrivalHours(): number | null {
+  if (arrivedAt === null) return null;
+  const t = (nowS() - arrivedAt - ARRIVAL.hold) / ARRIVAL.drift;
+  if (override !== null || t >= 1) {
+    arrivedAt = null;
+    return null;
+  }
+  const k = t <= 0 ? 0 : t * t * t * (t * (t * 6 - 15) + 10);
+  const delta = ((((clockHours() - GOLDEN_HOUR) % 24) + 36) % 24) - 12;
+  return (((GOLDEN_HOUR + delta * k) % 24) + 24) % 24;
 }
 
 const deg = Math.PI / 180;

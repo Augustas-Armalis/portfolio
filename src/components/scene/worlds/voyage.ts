@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { useSyncExternalStore } from "react";
 import { roadX, roadY, HOME_GATE_Z } from "../flightPath";
-import { airState, mixSky, type Air, type SkyState } from "../sky";
+import { airState, arrivalHours, mixSky, skyState, type Air, type SkyState } from "../sky";
 
 // Angelų takas, the path of angels. The paper plane's flight is a pilgrimage
 // along a path of light between worlds, and every world is one painting by
@@ -19,7 +19,7 @@ import { airState, mixSky, type Air, type SkyState } from "../sky";
 export type WorldId = "home" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "kings";
 export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "sea", "kings"];
 // Fairy Tale of the Kings: where the two kings stand, and the small lit world they hold between their hands
-export const KINGS = { z: -170, domeY: 58, domeR: 24 };
+export const KINGS = { z: -170, domeY: 70, domeR: 30 };
 export const ORIGIN = new THREE.Vector3(-2500, 0, -2700);
 
 // ---------- the ground ----------
@@ -663,24 +663,29 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     entry: { x: 0, z: 540, above: 13, yaw: 0 },
     gate: null,
     // up the aisle between the great trunks, rising to the height of the kings' hands, and between them into the light
+    // low and straight, so the kings stand over the plane like hills for the whole of the approach; only at the
+    // last does it climb to their hands
     path: [
       [0, 540, 13],
-      [6, 460, 14],
-      [14, 380, 20],
-      [4, 300, 32],
-      [-10, 220, 44],
-      [-6, 140, 52],
-      [4, 60, 56],
-      [2, -20, 57],
-      [0, -100, 56],
-      [0, KINGS.z, KINGS.domeY - 3],
-      [0, KINGS.z - 40, KINGS.domeY - 3],
+      [5, 470, 14],
+      [10, 400, 15],
+      [6, 330, 16],
+      [0, 260, 18],
+      [0, 190, 20],
+      [0, 120, 24],
+      [0, 50, 31],
+      [0, -20, 42],
+      [0, -70, 55],
+      [0, -108, 68],
+      [0, KINGS.z + KINGS.domeR + 5, KINGS.domeY + KINGS.domeR * 0.3],
+      [0, KINGS.z, KINGS.domeY + KINGS.domeR * 0.28],
+      [0, KINGS.z - 40, KINGS.domeY + KINGS.domeR * 0.28],
     ],
     obstacles: [
-      { x: -118, z: KINGS.z, r: 56, h: 190 },
-      { x: 118, z: KINGS.z, r: 56, h: 190 },
+      { x: -114, z: KINGS.z, r: 60, h: 190 },
+      { x: 114, z: KINGS.z, r: 60, h: 190 },
     ],
-    canvases: [{ painting: "kings", x: -30, z: 428, yaw: 0.56 }],
+    canvases: [{ painting: "kings", x: -34, z: 404, yaw: 0.52 }],
   },
 };
 
@@ -694,6 +699,34 @@ const ZERO = new THREE.Vector3();
 export function groundAt(def: WorldDef, x: number, z: number) {
   const h = def.terrain ? heightAt(def.terrain, x, z) : 0;
   return def.water !== null ? Math.max(h, def.water) : h;
+}
+
+// ---------- the kings' wood: how the plane comes to them ----------
+// All in the world's own coordinates; `ahead` is how far the kings still are.
+const smooth01 = (t: number) => sstep(0, 1, t);
+export const kingsDome = () => {
+  const y = groundAt(WORLDS.kings, 0, KINGS.z) + KINGS.domeY;
+  return { x: 0, y, z: KINGS.z, heart: y + KINGS.domeR * 0.3 };
+};
+// It goes slowly here, and slowest where the whole picture stands in the frame.
+export const kingsPace = (ahead: number) => 0.4 + 0.35 * smooth01((ahead - 330) / 150) + 0.12 * smooth01((110 - ahead) / 80);
+// The eye is raised from the plane's own line toward the middle of the picture (between the dome and the
+// crowns) and the lens opens a little as they come near, so both crowned heads stay in the frame until the
+// plane is almost at their hands; then it comes down to the light.
+export function kingsView(y: number, ahead: number) {
+  const w = smooth01((500 - ahead) / 170) * (1 - smooth01((100 - ahead) / 60));
+  const mid = kingsDome().y + KINGS.domeR * (1.85 + 0.25 * smooth01((230 - ahead) / 130));
+  // how far above level the eye should look, and how much of that it has taken up
+  const elev = Math.atan2(mid - y, Math.max(ahead, 30));
+  const fov = 50 + 16 * smooth01((330 - ahead) / 190) - 10 * smooth01((95 - ahead) / 60);
+  return { w, elev, fov };
+}
+// How much of the frame the little world's light has taken: nothing until the plane is close, all of it at the glass.
+export function kingsBloom(x: number, y: number, z: number) {
+  const c = kingsDome();
+  const d = Math.hypot(x - c.x, y - c.heart, z - c.z);
+  const b = smooth01((KINGS.domeR * 3.2 - d) / (KINGS.domeR * 2.1));
+  return { d, veil: b * b * 0.62 };
 }
 
 // The path of light as a smooth curve in the world's own coordinates.
@@ -806,6 +839,10 @@ export function voyageSky(live: SkyState, dt: number): SkyState {
     let a = airCache.get(def.id);
     if (!a) airCache.set(def.id, (a = airState(def.air)));
     target = a;
+  } else {
+    // home, just come to out of the kings' light: golden hour, whatever the clock (or the music's evening) says
+    const h = arrivalHours();
+    if (h !== null) target = skyState(h);
   }
   let s = target;
   if (voyage.skyFrom) {
@@ -818,4 +855,4 @@ export function voyageSky(live: SkyState, dt: number): SkyState {
   voyage.lastSky = s;
   return s;
 }
-export const voyageBusy = () => voyage.cur !== "home" || voyage.skyFrom !== null || voyage.phase !== "open";
+export const voyageBusy = () => voyage.cur !== "home" || voyage.skyFrom !== null || voyage.phase !== "open" || arrivalHours() !== null;

@@ -351,10 +351,11 @@ const WORLD_OF: [RegExp, WorldId][] = [
 const worldOfPainting = (id: string) => WORLD_OF.find(([re]) => re.test(id))?.[1] ?? null;
 
 // The label: title, painter, year, set small in Geist. Dark ink on a pale wall, pale on a dark one.
-function captionTexture(title: string, year: string, ink: "dark" | "light") {
+// (`line`: the whole label as one larger line, "Title, year", for a picture hung without a wall)
+function captionTexture(title: string, year: string, ink: "dark" | "light", line = false) {
   const c = document.createElement("canvas");
   c.width = 1536;
-  c.height = 384;
+  c.height = line ? 236 : 384;
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
@@ -365,6 +366,19 @@ function captionTexture(title: string, year: string, ink: "dark" | "light") {
     g.textBaseline = "alphabetic";
     const spaced = g as unknown as { letterSpacing: string };
     g.fillStyle = `rgba(${rgb},0.94)`;
+    if (line) {
+      const text = year ? `${title}, ${year}` : title;
+      let size = 156;
+      do {
+        g.font = `500 ${size}px ${GEIST}`;
+        spaced.letterSpacing = `${(-size * 0.022).toFixed(1)}px`;
+        size -= 4;
+      } while (g.measureText(text).width > c.width - 24 && size > 60);
+      g.textAlign = "center";
+      g.fillText(text, c.width / 2, 164);
+      tex.needsUpdate = true;
+      return;
+    }
     // a long title steps down a size rather than running off the wall
     let size = 104;
     do {
@@ -439,7 +453,7 @@ function makePoolMaterial(kind: "wall" | "floor", size: [number, number], hole: 
 
 // How each world hangs its painting: the stone of the wall (it is lit by that
 // world's own sky, so it belongs there) and the ink of the label.
-const HANG: Record<WorldId, { wall: V3; ink: "dark" | "light" }> = {
+const HANG: Record<WorldId, { wall: V3; ink: "dark" | "light"; plain?: boolean }> = {
   home: { wall: [0.6, 0.58, 0.54], ink: "dark" },
   sun: { wall: [0.62, 0.64, 0.68], ink: "dark" },
   stars: { wall: [0.2, 0.19, 0.25], ink: "light" },
@@ -448,7 +462,7 @@ const HANG: Record<WorldId, { wall: V3; ink: "dark" | "light" }> = {
   paradise: { wall: [0.86, 0.78, 0.5], ink: "dark" },
   gate: { wall: [0.3, 0.26, 0.26], ink: "light" },
   sea: { wall: [0.28, 0.28, 0.22], ink: "light" },
-  kings: { wall: [0.2, 0.26, 0.27], ink: "light" },
+  kings: { wall: [0.2, 0.26, 0.27], ink: "light", plain: true },
 };
 
 const CANVAS_H = 18;
@@ -469,6 +483,42 @@ function CanvasStand({ p, x, z, y, yaw, world, lift }: { p: PaintingInfo; x: num
     const k = new Kit();
     const hang = HANG[world];
     const wall = hang.wall;
+    // In the kings' wood there is no wall: the picture stands in a plain dark frame on two posts, a slim lamp
+    // over it, its name beneath in one line.
+    if (hang.plain) {
+      const dk: V3 = [0.034, 0.028, 0.025];
+      const B = 0.62;
+      const cy = lift + H / 2;
+      for (const sy of [-1, 1]) k.box(W + B * 2, B, 0.7, [0, cy + sy * (H / 2 + B / 2), 0.1], dk, { top: [0.06, 0.048, 0.04] });
+      for (const sx of [-1, 1]) k.box(B, H, 0.7, [sx * (W / 2 + B / 2), cy, 0.1], dk);
+      // a hair of dull gold against the canvas, so the dark picture has an edge in the dark
+      for (const sy of [-1, 1]) k.box(W + 0.12, 0.06, 0.1, [0, cy + sy * (H / 2 + 0.03), 0.42], [0.5, 0.34, 0.14], { glow: 0.1 });
+      for (const sx of [-1, 1]) k.box(0.06, H + 0.12, 0.1, [sx * (W / 2 + 0.03), cy, 0.42], [0.5, 0.34, 0.14], { glow: 0.1 });
+      k.box(W + 0.3, H + 0.3, 0.3, [0, cy, -0.1], [0.02, 0.018, 0.016]);
+      for (const sx of [-1, 1]) k.box(0.5, lift + 8, 0.5, [sx * (W / 2 - 1.4), (lift - 8) / 2, -0.2], dk);
+      const ly = cy + H / 2 + B + 1.3;
+      k.box(W * 0.46, 0.1, 0.18, [0, ly, 2.1], [1, 0.86, 0.62], { glow: 0.55 });
+      for (const sx of [-1, 1]) k.box(0.06, 0.06, 2.1, [sx * W * 0.16, ly + 0.06, 1.05], dk);
+      const capH = (W + B * 2) * (236 / 1536);
+      return {
+        map,
+        state,
+        canvas: makeCanvasMaterial(map),
+        cap: captionTexture(title, year, hang.ink, true),
+        stand: k.build(),
+        tempera: makeTempera({ amb: 1, key: 0.3, dab: 0.5 }),
+        wallPool: null,
+        floorPool: null,
+        cy,
+        WW: W + B * 2,
+        WH: 0,
+        FD: 0,
+        capX: 0,
+        capY: lift - B - 0.25 - capH / 2,
+        capW: W + B * 2,
+        capH,
+      };
+    }
     const mul = (c: V3, f: number): V3 => [c[0] * f, c[1] * f, c[2] * f];
     const gilt: V3 = [0.8, 0.58, 0.25];
     const mat: V3 = [0.86, 0.82, 0.72];
@@ -517,6 +567,8 @@ function CanvasStand({ p, x, z, y, yaw, world, lift }: { p: PaintingInfo; x: num
       FD,
       capX: -fw / 2 + 6,
       capY: base - (MAT + BAR) - 2.3,
+      capW: 12,
+      capH: 3,
     };
   }, [p.file, world, lift]);
   useFrame((_, dt) => {
@@ -530,15 +582,19 @@ function CanvasStand({ p, x, z, y, yaw, world, lift }: { p: PaintingInfo; x: num
         <planeGeometry args={[W, H]} />
       </mesh>
       <mesh position={[b.capX, b.capY, 0.02]} renderOrder={2}>
-        <planeGeometry args={[12, 3]} />
+        <planeGeometry args={[b.capW, b.capH]} />
         <meshBasicMaterial map={b.cap} transparent toneMapped={false} depthWrite={false} fog={false} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-80} />
       </mesh>
-      <mesh position={[0, b.WH / 2, 0.5]} material={b.wallPool} renderOrder={3}>
-        <planeGeometry args={[b.WW, b.WH]} />
-      </mesh>
-      <mesh position={[0, 0.32, (b.FD - 2.6) / 2 + 0.05]} rotation={[-Math.PI / 2, 0, 0]} material={b.floorPool} renderOrder={3}>
-        <planeGeometry args={[b.WW + 9, b.FD - 2.6]} />
-      </mesh>
+      {b.wallPool && (
+        <mesh position={[0, b.WH / 2, 0.5]} material={b.wallPool} renderOrder={3}>
+          <planeGeometry args={[b.WW, b.WH]} />
+        </mesh>
+      )}
+      {b.floorPool && (
+        <mesh position={[0, 0.32, (b.FD - 2.6) / 2 + 0.05]} rotation={[-Math.PI / 2, 0, 0]} material={b.floorPool} renderOrder={3}>
+          <planeGeometry args={[b.WW + 9, b.FD - 2.6]} />
+        </mesh>
+      )}
     </group>
   );
 }

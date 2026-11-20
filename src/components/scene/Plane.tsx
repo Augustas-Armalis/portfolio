@@ -4,7 +4,8 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { DESK, clamp01, easeInOutCubic, nowS, spring } from "./shared";
-import { KINGS, WORLDS, entryOf, gateOf, groundAt, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
+import { arriveGolden } from "./sky";
+import { KINGS, WORLDS, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
 // A folded paper plane that lives on the desk. Click it and it takes off down
 // the road, and from there it is yours: it glides. The pointer (or A / D, or a
@@ -163,12 +164,15 @@ export function Plane({
     if (blend < 1) cam.position.lerpVectors(st.camFrom, want, blend);
     else cam.position.copy(want);
     st.tmp.copy(st.pos).addScaledVector(st.nose, 2.4);
+    // before the kings the eye is lifted to the whole picture, and the lens opens to hold it
+    const kv = id === "kings" && !voyage.homing ? kingsView(st.pos.y, st.pos.z - o.z - KINGS.z) : null;
+    if (kv) st.tmp.y += (cam.position.y + Math.tan(kv.elev) * Math.hypot(st.tmp.x - cam.position.x, st.tmp.z - cam.position.z) - st.tmp.y) * kv.w;
     st.look.lerp(st.tmp, st.snap ? 1 : 1 - Math.exp(-dt * 8));
     st.snap = false;
     const lean = Math.sin(st.roll) * 0.26;
     cam.up.set(Math.cos(st.camYaw) * lean, 1, -Math.sin(st.camYaw) * lean).normalize();
     cam.lookAt(st.look);
-    const fovT = 50 + clamp01((st.speed - SPEED.min) / (SPEED.max - SPEED.min)) * 16;
+    const fovT = Math.max(kv ? kv.fov : 0, 50 + clamp01((st.speed - SPEED.min) / (SPEED.max - SPEED.min)) * 16);
     st.fov += (fovT - st.fov) * (1 - Math.exp(-dt * 2.4));
     cam.fov = st.fov;
     cam.updateProjectionMatrix();
@@ -327,7 +331,9 @@ export function Plane({
     // the bank is the turn: slow flight turns tighter
     st.yaw -= st.roll * (0.8 + 2.2 / Math.max(st.speed, 3)) * dt;
     // speed follows the throttle; diving gathers a little, climbing spends a little
-    const vT = opts.launching ? Math.min(speedOf(voyage.throttle), 2 + st.t * 3.6) : speedOf(voyage.throttle) - Math.sin(st.pitch) * 5;
+    // the kings' wood is gone through slowly
+    const pace = id === "kings" ? kingsPace(lz - KINGS.z) : 1;
+    const vT = opts.launching ? Math.min(speedOf(voyage.throttle), 2 + st.t * 3.6) : speedOf(voyage.throttle) * pace - Math.sin(st.pitch) * 5 * pace;
     st.speed = damp(st.speed, Math.max(SPEED.min * 0.8, vT), opts.launching ? 1.8 : 0.9, dt);
     updateNose();
     st.pos.addScaledVector(st.nose, st.speed * dt);
@@ -346,10 +352,13 @@ export function Plane({
     const id = voyage.cur;
     if (voyage.phase === "open") {
       // the flight's end: into the little world between the kings' hands, and home
+      // its light grows over the frame as the plane comes up to it, so there is no moment of going in: only more light
       if (id === "kings" && !voyage.homing) {
         const o = originOf(id);
-        const d = Math.hypot(st.pos.x - o.x, st.pos.y - KINGS.domeY, st.pos.z - o.z - KINGS.z);
-        if (d < KINGS.domeR + 5) {
+        const b = kingsBloom(st.pos.x - o.x, st.pos.y, st.pos.z - o.z);
+        voyage.veil = b.veil;
+        voyage.warm = b.veil > 0 ? 1 : 0;
+        if (b.d < KINGS.domeR * 1.1) {
           voyage.homing = true;
           voyage.warm = 1;
           voyage.onHome?.();
@@ -394,7 +403,8 @@ export function Plane({
     }
   };
   const airOf = (edge: number) => {
-    const v = voyage.veil;
+    // (the kings' light is not cloud: it thickens no air)
+    const v = voyage.warm > 0 ? 0 : voyage.veil;
     voyage.mist = v * v * 0.03 + edge * edge * 0.004;
   };
 
@@ -464,6 +474,8 @@ export function Plane({
         chase(dt, cam);
         sync();
         if (voyage.veil >= 1) {
+          // out of the little world's light, home is found in that same light
+          if (voyage.homing) arriveGolden();
           swapWorld("home");
           st.landPhase = 1;
           voyage.held = 0;
@@ -537,7 +549,8 @@ export function Plane({
       cam.lookAt(st.look);
       st.fov += (36 - st.fov) * Math.min(1, dt * 3);
       cam.fov = st.fov;
-      if (st.landMode === "cloud") voyage.veil = Math.max(0, voyage.veil - dt / 1.7);
+      // (the light of the kings' little world thins more slowly than cloud)
+      if (st.landMode === "cloud") voyage.veil = Math.max(0, voyage.veil - dt / (voyage.homing ? 2.6 : 1.7));
       airOf(0);
       sync();
       const done = u >= 1 && voyage.veil <= 0;
