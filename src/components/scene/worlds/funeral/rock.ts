@@ -97,6 +97,8 @@ export function buildFuneralRock(mobile: boolean) {
   const near = roadIndex();
   const mouth = L.pts[L.iMouth];
   const mt = L.tan[L.iMouth];
+  const omouth = L.pts[L.iOut];
+  const ot = L.tan[L.iOut];
 
   // ---------- the mountains ----------
   const SEG = mobile ? 230 : 340;
@@ -129,7 +131,9 @@ export function buildFuneralRock(mobile: boolean) {
         const side = q.v > 0 ? 1 : 0;
         const c = L.crest[ri * 2 + side];
         const beyond = mt[0] * (x - mouth.x) + mt[1] * (z - mouth.z);
-        if (ri >= L.iMouth - 1 && beyond > 0) {
+        // (and the same over the cave the road comes out of, at its southern end)
+        const before = -(ot[0] * (x - omouth.x) + ot[1] * (z - omouth.z));
+        if ((ri >= L.iMouth - 1 && beyond > 0) || (ri <= L.iOut + 1 && before > 0)) {
           // over the cave: the mountain as it would be had no notch been cut, but for the slot the tunnel lies in
           if (q.d < 41) h = Math.min(h, ry - 3);
           else h = L.baseAt(x, z) - carveAt(x, z, L.baseAt(x, z), q.d + 60);
@@ -141,7 +145,7 @@ export function buildFuneralRock(mobile: boolean) {
             h = Math.min(h, target) - 3.2 * c * (1 - Math.min(1, Math.max(0, (e - 60) / 26)));
           }
           h -= carveAt(x, z, h, q.d);
-          gold = Math.exp(-Math.max(e, 0) / 26) * (ri < L.iMouth ? 1 : 0);
+          gold = Math.exp(-Math.max(e, 0) / 26) * (ri < L.iMouth ? 1 : 0) * Math.min(1, Math.max(0, (ri - L.iOut) / 20));
         }
       } else h -= carveAt(x, z, h, 1e6, Math.min(1, Math.max(0, (1250 - Math.max(Math.abs(x), Math.abs(z - CZ))) / 250)));
       const o = (j * NV + i) * 3;
@@ -230,7 +234,8 @@ export function buildFuneralRock(mobile: boolean) {
       lk.push(0, u, 0, i * L.STEP);
     }
     for (const side of [-1, 1]) {
-      const c = i >= L.iMouth - 2 ? 0 : L.crest[i * 2 + (side > 0 ? 1 : 0)];
+      const inCave = i >= L.iMouth - 2 || i <= L.iOut + 2;
+      const c = inCave ? 0 : L.crest[i * 2 + (side > 0 ? 1 : 0)];
       const D = cliffD(i);
       SK.forEach(([e, d], k) => {
         if (k === CLIFF) {
@@ -245,7 +250,7 @@ export function buildFuneralRock(mobile: boolean) {
           const z = p.z + nz * side * (HALF + e);
           const g = L.ground(x, z);
           const last = k === SK.length - 1;
-          const yy = i >= L.iMouth - 3 ? y - 6 - e * 0.1 : c < 0.03 ? g - 4 : Math.min(y - c * (D * 1.05 + (e - 8.4) * 0.78), g + 0.7) - (last ? 7 : 0);
+          const yy = i >= L.iMouth - 3 || i <= L.iOut + 3 ? y - 6 - e * 0.1 : c < 0.03 ? g - 4 : Math.min(y - c * (D * 1.05 + (e - 8.4) * 0.78), g + 0.7) - (last ? 7 : 0);
           lp.push(x, yy, z);
           lk.push(5, side, 1, i * L.STEP);
           return;
@@ -281,17 +286,24 @@ export function buildFuneralRock(mobile: boolean) {
   ledge.computeVertexNormals();
   ledge.computeBoundingSphere();
 
-  // ---------- the cave ----------
-  // (everything here is laid out on the road's own frame at the mouth: u across, y up, w along the way in)
+  // ---------- the caves ----------
+  // Two of them, built the same way: the one in the north wall that the procession goes into (lit from within), and
+  // the one in the southern mountain that it, and the plane, come out of (dark, the night's blue at its mouth).
+  // (everything is laid out on the road's own frame at the mouth: u across, y up, w along the way in)
   const cp: number[] = [];
   const ck: number[] = [];
   const ci: number[] = [];
+  // iM: the road's sample at the mouth. sg: which way along the road is into the rock. iFar: where the vault ends.
+  const tunnel = (iM: number, sg: 1 | -1, iFar: number, dark: boolean) => {
+  const mouth = L.pts[iM];
+  const mt: [number, number] = [L.tan[iM][0] * sg, L.tan[iM][1] * sg];
+  const flag = dark ? 1 : 0;
   const mx = -mt[1];
   const mz = mt[0];
-  const my = L.y[L.iMouth];
+  const my = L.y[iM];
   const put = (u: number, y: number, w: number, kind: number, a: number, b: number) => {
     cp.push(mouth.x + mx * u + mt[0] * w, my + y, mouth.z + mz * u + mt[1] * w);
-    ck.push(kind, a, b, 0);
+    ck.push(kind, a, b, flag);
   };
   // the face of the mountain round the mouth: rings from the arch out to the rock on either side and above
   {
@@ -329,19 +341,20 @@ export function buildFuneralRock(mobile: boolean) {
   {
     const NA = 28;
     const base = cp.length / 3;
-    const i0 = L.iMouth - 2;
-    const rows = iLast - i0;
-    for (let i = i0; i <= iLast; i++) {
+    const i0 = iM - 2 * sg;
+    const rows = Math.abs(iFar - i0);
+    for (let st = 0; st <= rows; st++) {
+      const i = i0 + st * sg;
       const p = L.pts[i];
       const nx = -L.tan[i][1];
       const nz = L.tan[i][0];
-      const deep = (i - L.iMouth) / (iLast - L.iMouth);
+      const deep = Math.max(0, ((i - iM) * sg) / Math.abs(iFar - iM));
       for (let a = 0; a <= NA; a++) {
         const [au, ay] = archPoint(a / NA);
         const rough = 1 + (noise2(a * 0.5, i * 0.21) - 0.5) * 0.16 + (noise2(a * 1.7 + 4, i * 0.6) - 0.5) * 0.05;
         const y = a === 0 || a === NA ? -1.5 : ay * rough;
         cp.push(p.x + nx * au * rough, L.y[i] + y, p.z + nz * au * rough);
-        ck.push(3, deep, ay / CAVE.top, 0);
+        ck.push(3, deep, ay / CAVE.top, flag);
       }
     }
     for (let r = 0; r < rows; r++)
@@ -358,7 +371,7 @@ export function buildFuneralRock(mobile: boolean) {
         [0, 1.34],
         [5, 1.42],
       ] as const) {
-        const i = i0 + di;
+        const i = i0 + di * sg;
         const p = L.pts[i];
         const nx = -L.tan[i][1];
         const nz = L.tan[i][0];
@@ -368,7 +381,7 @@ export function buildFuneralRock(mobile: boolean) {
           const u = au * rough * (sc === 1 ? 1 : sc);
           const y = a === 0 || a === NA ? -1.5 : 16 + (ay - 16) * rough * (sc === 1 ? 1 : sc);
           cp.push(p.x + nx * u, L.y[i] + y, p.z + nz * u);
-          ck.push(2, sc === 1 ? 0.03 : 0.3, ay / 160, 0);
+          ck.push(2, sc === 1 ? 0.03 : 0.3, ay / 160, flag);
         }
       }
       for (let rr = 0; rr < 2; rr++)
@@ -378,17 +391,17 @@ export function buildFuneralRock(mobile: boolean) {
           ci.push(p0, p1, p0 + 1, p1, p1 + 1, p0 + 1);
         }
     }
-    // its far end: only light
+    // its far end: only light (or, where the road comes out of the rock, only dark)
     const e0 = cp.length / 3;
-    const p = L.pts[iLast];
-    const nx = -L.tan[iLast][1];
-    const nz = L.tan[iLast][0];
-    cp.push(p.x, L.y[iLast] + 18, p.z);
-    ck.push(4, 1, 0, 0);
+    const p = L.pts[iFar];
+    const nx = -L.tan[iFar][1];
+    const nz = L.tan[iFar][0];
+    cp.push(p.x, L.y[iFar] + 18, p.z);
+    ck.push(dark ? 3 : 4, 1, 0, flag);
     for (let a = 0; a <= NA; a++) {
       const [au, ay] = archPoint(a / NA);
-      cp.push(p.x + nx * au * 1.1, L.y[iLast] + ay * 1.1 - 2, p.z + nz * au * 1.1);
-      ck.push(4, 1, 1, 0);
+      cp.push(p.x + nx * au * 1.1, L.y[iFar] + ay * 1.1 - 2, p.z + nz * au * 1.1);
+      ck.push(dark ? 3 : 4, 1, 1, flag);
     }
     for (let a = 0; a < NA; a++) ci.push(e0, e0 + 1 + a, e0 + 2 + a);
   }
@@ -396,9 +409,10 @@ export function buildFuneralRock(mobile: boolean) {
   {
     const base = cp.length / 3;
     const COLS = 9;
-    const i0 = L.iMouth - 1;
-    const rows = iLast - i0;
-    for (let i = i0; i <= iLast; i++) {
+    const i0 = iM - sg;
+    const rows = Math.abs(iFar - i0);
+    for (let st = 0; st <= rows; st++) {
+      const i = i0 + st * sg;
       const p = L.pts[i];
       const nx = -L.tan[i][1];
       const nz = L.tan[i][0];
@@ -408,7 +422,7 @@ export function buildFuneralRock(mobile: boolean) {
         const z = p.z + nz * u;
         const b = L.baseAt(x, z);
         cp.push(x, b - carveAt(x, z, b, 200) + 1.2 - Math.abs(u) * 0.05, z);
-        ck.push(2, 1, 1, 0);
+        ck.push(2, 1, 1, flag);
       }
     }
     for (let r = 0; r < rows; r++)
@@ -418,6 +432,9 @@ export function buildFuneralRock(mobile: boolean) {
         ci.push(p0, p1, p0 + 1, p1, p1 + 1, p0 + 1);
       }
   }
+  };
+  tunnel(L.iMouth, 1, iLast, false);
+  tunnel(L.iOut, -1, 0, true);
   const cave = new THREE.BufferGeometry();
   cave.setAttribute("position", new THREE.Float32BufferAttribute(cp, 3));
   cave.setAttribute("aK", new THREE.Float32BufferAttribute(ck, 4));
@@ -477,14 +494,33 @@ export function makeRockMaterial() {
         vec3 n = normalize(vN);
         vec3 V = normalize(cameraPosition - vWorld);
         float dist = length(vWorld - cameraPosition);
+        // The faces are not smooth: great ribs run down them and beds lie across, as his strokes model the rock.
+        // A height worked out from the place on the mountain turns the light by its slope (the surface's own
+        // derivatives); it is given up where a pixel could no longer carry it, so nothing crawls far off.
+        vec3 l = vLocal;
+        float steep = smoothstep(0.15, 0.6, 1.0 - n.y);
+        float ribN = vnoise(vec2((l.x + l.z * 0.6) * 0.03 + vnoise(l.xz * 0.004) * 3.0, l.y * 0.005));
+        float rib = abs(ribN - 0.5) * 2.0;
+        float bedN = fract(l.y * 0.02 + vnoise(l.xz * 0.006) * 1.5);
+        float bed = smoothstep(0.0, 0.25, bedN) * (1.0 - smoothstep(0.85, 1.0, bedN));
+        float relief = (rib * 1.5 + bed * 0.45) * steep;
+        float rk = (1.0 - smoothstep(900.0, 2600.0, dist)) * (1.0 - smoothstep(0.2, 0.6, fwidth(relief)));
+        if (rk > 0.01) {
+          vec3 sx = dFdx(vWorld); vec3 sy = dFdy(vWorld);
+          vec3 r1 = cross(sy, n); vec3 r2 = cross(n, sx);
+          float det = dot(sx, r1);
+          vec3 grad = sign(det) * (dFdx(relief) * r1 + dFdy(relief) * r2);
+          n = normalize(abs(det) * n - grad * 5.0 * rk);
+        }
         vec3 alb = rockAlb(vLocal.xz, vLocal.y, n) * chalk(vLocal, dist);
+        alb *= mix(1.0, mix(0.66, 1.16, smoothstep(0.05, 0.6, rib)), steep * rk);
         float lam = clamp(dot(n, uKeyDir) * 0.55 + 0.45, 0.0, 1.0);
-        vec3 col = alb * (uSkyCol * (0.72 + 0.28 * n.y) * 1.25 + uKeyCol * lam * lam * 0.42);
+        vec3 col = alb * (uSkyCol * (0.72 + 0.28 * n.y) * 1.25 + uKeyCol * lam * lam * 0.75);
         // his green-blue line of light along every crest, and a breath of it where a form turns from the eye
         float crest = smoothstep(0.16, 0.75, vK.x);
         float fres = pow(1.0 - max(dot(n, V), 0.0), 5.0);
         float toMoon = smoothstep(-0.2, 0.7, dot(n, uKeyDir));
-        col += TEAL * (crest * 0.5 * (0.25 + 0.75 * toMoon) + fres * 0.1 * toMoon) * (0.6 + 0.8 * vnoise(vLocal.xz * 0.05 + vLocal.y * 0.03));
+        col += TEAL * (crest * 0.72 * (0.25 + 0.75 * toMoon) + fres * 0.14 * toMoon) * (0.6 + 0.8 * vnoise(vLocal.xz * 0.05 + vLocal.y * 0.03));
         // the gullies hold darker chalk
         col *= 1.0 - 0.4 * smoothstep(0.04, 0.5, -vK.x);
         // the gold the procession carries, on the rock beside it
@@ -532,7 +568,8 @@ export function makeLedgeMaterial() {
           vec3 alb = mix(vec3(0.02, 0.03, 0.1), vec3(0.05, 0.055, 0.1), 0.4 + 0.6 * dab);
           col = alb * (uSkyCol * 1.2 + uKeyCol * 0.16);
           float mid = 1.0 - smoothstep(0.55, 1.0, abs(vK.y));
-          col += GOLD * (0.04 + 0.2 * smoothstep(0.25, 0.8, pool)) * (0.45 + 0.55 * dab) * mid * glowK() * 2.2;
+          // (no gold where no one walks yet: far inside the cave the road comes out of it is bare dark rock)
+          col += GOLD * (0.04 + 0.2 * smoothstep(0.25, 0.8, pool) + 0.5 * bellAt(vK.w)) * (0.45 + 0.55 * dab) * mid * glowK() * 2.2 * smoothstep(uBorn - 6.0, uBorn + 40.0, vK.w);
         } else if (kind < 1.5) {
           // the cliff under the road's edge: dark indigo rock drawn in long upright strokes, its lip catching the
           // gold from above, its foot going down into green-black
@@ -560,22 +597,34 @@ export function makeLedgeMaterial() {
           col = alb * (uSkyCol * 1.15 + uKeyCol * lam * 0.42);
           float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
           col += TEAL * fres * 0.45 * smoothstep(-0.3, 0.6, dot(n, uKeyDir));
-          col += GOLD * exp(-vK.y * 18.0) * 0.22 * (0.7 + 0.3 * sin(uTime * 0.4)) * glowK() * 2.0;
+          col += GOLD * exp(-vK.y * 18.0) * 0.22 * (0.7 + 0.3 * sin(uTime * 0.4)) * glowK() * 2.0 * uCaveK * (1.0 - vK.w);
         } else if (kind < 3.5) {
           // inside: dark rock, the light of whatever lies at the end growing along the vault, pulsing very slowly
           float deep = vK.y;
           float rib = vnoise(vec2(vLocal.x * 0.2 + vLocal.z * 0.2, vLocal.y * 0.12)) * 0.6 + vnoise(vLocal.xz * 0.7 + vLocal.y) * 0.4;
           float bed = vnoise(vec2(vLocal.y * 0.5 + rib * 3.0, (vLocal.x + vLocal.z) * 0.03));
           vec3 alb = vec3(0.012, 0.018, 0.07) * (0.35 + rib) * (0.6 + 0.8 * bed);
-          col = alb * uSkyCol * (1.3 - deep);
-          float breath = 0.85 + 0.15 * sin(uTime * 0.33);
-          col += GOLD * (0.004 + 0.1 * deep * deep * deep) * (0.2 + 1.1 * rib * bed * 2.0) * (1.0 - 0.5 * vK.z) * breath * glowK() * 2.0;
-          col += GOLD * exp(-vK.z * 7.0) * 0.035 * glowK() * 2.0;
+          if (vK.w > 0.5) {
+            // the cave the road comes out of: black rock, and only the night's own blue reaching in from the mouth,
+            // along the wet beds of the vault, less and less
+            float reach = exp(-deep * 4.2);
+            col = alb * uSkyCol * (0.1 + 3.4 * reach);
+            col += vec3(0.03, 0.09, 0.3) * reach * reach * (0.25 + 1.6 * rib * bed) * 0.5;
+            // the feet of the walls take a little gold from the lights that go by
+            col += GOLD * exp(-vK.z * 9.0) * 0.012 * smoothstep(0.55, 0.2, deep) * glowK() * 2.0;
+          } else {
+            col = alb * uSkyCol * (1.3 - deep);
+            float breath = (0.85 + 0.15 * sin(uTime * 0.33)) * uCaveK;
+            // (veins in the rock that take the light: it runs along them in threads)
+            float vein = 1.0 - smoothstep(0.0, 0.05, abs(vnoise(vec2(vLocal.x * 0.09 + vLocal.z * 0.07 + bed, vLocal.y * 0.2)) - 0.5));
+            col += GOLD * (0.004 + 0.1 * deep * deep * deep) * (0.2 + 1.1 * rib * bed * 2.0 + 1.4 * vein) * (1.0 - 0.5 * vK.z) * breath * glowK() * 2.0;
+            col += GOLD * exp(-vK.z * 7.0) * 0.035 * glowK() * 2.0 * uCaveK;
+          }
         } else {
-          col = vec3(1.0, 0.8, 0.45) * mix(1.6, 0.25, vK.z) * (0.85 + 0.15 * sin(uTime * 0.33)) * glowK() * 2.0;
+          col = vec3(1.0, 0.8, 0.45) * mix(1.6, 0.25, vK.z) * (0.85 + 0.15 * sin(uTime * 0.33)) * glowK() * 2.0 * uCaveK;
         }
         if (kind < 2.5 || kind > 4.5) col = funeralAir(col, vWorld);
-        else col = mix(col, vec3(1.0, 0.7, 0.34) * 0.05 * glowK() * 2.0, (1.0 - exp(-dist * 0.004)) * 0.6);
+        else if (vK.w < 0.5) col = mix(col, vec3(1.0, 0.7, 0.34) * 0.05 * glowK() * 2.0, (1.0 - exp(-dist * 0.004)) * 0.6);
         gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,

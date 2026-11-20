@@ -15,6 +15,10 @@ const END = /* glsl */ `
   #include <tonemapping_fragment>
   #include <colorspace_fragment>`;
 
+// how far the great wave has risen (it stands a third lower when the plane arrives and rears to its full height as
+// it comes: the drawn water is never above the height field the plane flies by)
+export const FINALE_U = { uRise: { value: 1 } };
+
 const WAVE_GLSL = /* glsl */ `
   const float W_BASE = ${WAVE.base.toFixed(1)};
   float ridgeZ(float s){ return ${WAVE.z0.toFixed(1)} + ${WAVE.bend.toFixed(6)} * s * s; }
@@ -35,12 +39,18 @@ const LACE_GLSL = /* glsl */ `
       if (dd < f1) { f2 = f1; f1 = dd; id = hash12(i + g + 3.7); } else if (dd < f2) f2 = dd;
     }
     float e = sqrt(f2) - sqrt(f1);
-    return vec3(1.0 - smoothstep(0.03, 0.15, e), id, 1.0 - smoothstep(0.0, 0.5, sqrt(f1)));
+    // (a wall is never thinner than the pixel that must draw it, and where a pixel covers a whole cell the lace
+    // is only its own mean paleness: nothing crawls as the eye or the water moves)
+    float w = length(fwidth(p));
+    float wall = 1.0 - smoothstep(0.03, 0.15 + w * 1.7, e);
+    wall = mix(wall, 0.3, smoothstep(0.16, 0.6, w));
+    return vec3(wall, id, 1.0 - smoothstep(0.0, 0.5, sqrt(f1)));
   }
   // a string of beads along the lace's walls
   float beads(vec2 p, float wall){
-    vec2 c = fract(p * 30.0) - 0.5;
-    return smoothstep(0.8, 0.96, wall) * (1.0 - smoothstep(0.2, 0.34, length(c)));
+    vec2 c = fract(p * 46.0) - 0.5;
+    float w = length(fwidth(p)) * 46.0;
+    return smoothstep(0.8, 0.96, wall) * mix(1.0 - smoothstep(0.2, 0.34 + w, length(c)), 0.22, smoothstep(0.3, 0.9, w));
   }
   const vec3 W_DEEP = vec3(0.03, 0.03, 0.012);
   const vec3 W_GREEN = vec3(0.1, 0.17, 0.03);
@@ -98,16 +108,16 @@ export function buildSea(mobile: boolean) {
 
 export function makeSeaMaterial(sign: THREE.Texture) {
   return new THREE.ShaderMaterial({
-    uniforms: { ...SKY_U, ...WORLD_U, uSign: { value: sign } },
+    uniforms: { ...SKY_U, ...WORLD_U, ...FINALE_U, uSign: { value: sign } },
     vertexShader: /* glsl */ `
-      uniform float uTime;
+      uniform float uTime; uniform float uRise;
       varying vec3 vWorld; varying vec3 vLocal; varying vec3 vN; varying vec3 vW;
       ${heightGLSL(FINALE_TERRAIN, "fieldH")}
       ${SWELL_GLSL}
-      float surf(vec2 p){ float b = fieldH(p) - ${WAVE.base.toFixed(1)}; return b + swellH(p, uTime) * swellDamp(b); }
+      float surf(vec2 p){ float b = (fieldH(p) - ${WAVE.base.toFixed(1)}) * uRise; return b + swellH(p, uTime) * swellDamp(b); }
       void main(){
         vec2 p = position.xz;
-        float b = fieldH(p) - ${WAVE.base.toFixed(1)};
+        float b = (fieldH(p) - ${WAVE.base.toFixed(1)}) * uRise;
         float sw = swellH(p, uTime) * swellDamp(b);
         float y = b + sw;
         float e = 2.5;
@@ -118,7 +128,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: /* glsl */ `
-      uniform sampler2D uSign;
+      uniform sampler2D uSign; uniform float uRise;
       varying vec3 vWorld; varying vec3 vLocal; varying vec3 vN; varying vec3 vW;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -134,7 +144,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         float s = p.x;
         float sl = 2.0 * ${WAVE.bend.toFixed(6)} * s;
         float f = (p.y - ridgeZ(s)) / sqrt(1.0 + sl * sl) / waveRho(s);
-        float up = clamp(body / max(waveH(s), 1.0), 0.0, 1.0);
+        float up = clamp(body / max(waveH(s) * uRise, 1.0), 0.0, 1.0);
         float onWave = smoothstep(5.0, 46.0, body);
         float front = step(0.0, f);
         // the small work of the surface: chop that thins out with distance and smooths up the face
@@ -163,13 +173,13 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         col *= 1.0 + (line - 0.5) * 1.2 * onWave * front;
         // under the overhanging crest the face stands in the wave's own shade: umber, as he painted the hollow
         float hollow = smoothstep(0.5, 0.72, up + (line - 0.5) * 0.16) * (1.0 - smoothstep(0.88, 0.99, up)) * onWave * front * smoothstep(900.0, 700.0, abs(s));
-        col = mix(col, vec3(0.085, 0.052, 0.022) * (0.5 + 1.1 * line) * (uSkyCol * 1.1 + uKeyCol * 0.12), hollow * 0.82);
+        col = mix(col, vec3(0.062, 0.036, 0.015) * (0.45 + 1.1 * line) * (uSkyCol * 1.05 + uKeyCol * 0.1), hollow * 0.93);
         // the sky in it: strongly at a grazing eye on the open sea, hardly at all on the lit face
         vec3 r = reflect(-V, n); r.y = abs(r.y) + 0.002; r = normalize(r);
         float fres = 0.03 + 0.97 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
-        col = mix(col, skyBase(r), fres * (1.0 - 0.75 * onWave * front));
+        col = mix(col, skyBase(r), fres * (1.0 - 0.75 * onWave * front) * (1.0 - 0.85 * hollow));
         // the sun's road on the open water
-        col += uKeyCol * pow(max(dot(r, L), 0.0), 140.0) * 0.9 * (1.0 - onWave) * smoothstep(-0.02, 0.06, L.y);
+        col += uKeyCol * pow(max(dot(r, L), 0.0), 60.0) * 0.5 * (1.0 - onWave) * smoothstep(-0.02, 0.06, L.y);
         // far down in the open water, the lights of ships that went under long ago (the sonata's Andante): seen
         // only looking down into it, never at a distance
         {
@@ -183,27 +193,29 @@ export function makeSeaMaterial(sign: THREE.Texture) {
           }
         }
         // ---- foam ----
-        vec2 drift = vec2(uTime * 0.6, -uTime * 2.4);
-        vec3 l1 = lace((p + drift) * 0.19, uTime * 0.3);
-        vec3 l2 = lace((p + drift * 0.6) * 0.52 + 7.0, uTime * 0.45);
+        // (the net lies almost rigid on the water and is carried slowly: its cells do not boil)
+        vec2 drift = vec2(uTime * 0.15, -uTime * 0.6);
+        vec3 l1 = lace((p + drift) * 0.19, uTime * 0.05);
+        vec3 l2 = lace((p + drift * 0.6) * 0.52 + 7.0, uTime * 0.07);
         float ragged = smoothstep(0.35, 0.65, fbm((p + drift * 0.8) * 0.018 + 3.0));
         // on the swell: on the crests and streaming down their backs
         float crest = smoothstep(1.6, 4.8, sw + (c0 - 0.8) * 2.4) * (1.0 - onWave) * (0.35 + 0.65 * ragged);
         // the broad band of lace at the wave's foot, where the ships ride
         float band = smoothstep(2.9, 2.3, f) * smoothstep(1.35, 1.9, f) * smoothstep(1050.0, 600.0, abs(s)) * front * (0.45 + 0.55 * ragged);
         // drawn up the face in long ragged tongues, thinning as they climb
-        vec3 l3 = lace(vec2(s * 0.24, body * 0.24 - uTime * 0.3), uTime * 0.2);
+        vec3 l3 = lace(vec2(s * 0.24, body * 0.24 - uTime * 0.15), uTime * 0.05);
         float tongue = smoothstep(0.52, 0.76, vnoise(vec2(s * 0.02 + up * 2.6 + 2.0, up * 3.4 - uTime * 0.03)) * 0.7 + vnoise(vec2(s * 0.07 - up * 3.0, up * 8.0 - uTime * 0.05)) * 0.3) * smoothstep(0.02, 0.2, up) * (1.0 - smoothstep(0.5, 0.86, up)) * onWave * front;
         // and where the crest leaves the face it is all foam
-        float shoulder = smoothstep(0.76, 0.9, up) * onWave * front;
+        // (only at the very lip: under it the hollow stays dark)
+        float shoulder = smoothstep(0.9, 0.985, up) * onWave * front;
         // (foam is a paleness with the lace's cells standing open in it, most open at its edges)
-        float foam = crest * (0.4 + 0.6 * l1.x) * (0.6 + 0.4 * l2.x) + band * mix(max(l1.x * 0.9, l2.x * 0.6), 0.62 + 0.38 * l2.x, smoothstep(0.55, 0.85, ragged)) + tongue * (0.42 + 0.58 * l3.x) + shoulder * (0.6 + 0.4 * l2.x);
+        float foam = crest * (0.4 + 0.6 * l1.x) * (0.6 + 0.4 * l2.x) + band * mix(0.3 + 0.6 * max(l1.x * 0.9, l2.x * 0.6), 0.66 + 0.34 * l2.x, smoothstep(0.5, 0.8, ragged)) + tongue * (0.42 + 0.58 * l3.x) + shoulder * (0.6 + 0.4 * l2.x);
         // (far off the lace is only a paleness)
         foam = mix(foam, (crest * 0.5 + band * 0.5 + tongue * 0.3 + shoulder * 0.8), smoothstep(160.0, 700.0, dist));
         // ---- strings of beads: amber, on the green of the face ----
         vec2 bp = vec2(s * 0.052, body * 0.052 - uTime * 0.03) + 3.0;
         vec3 l4 = lace(bp, uTime * 0.1);
-        float bead = beads(bp, l4.x) * smoothstep(0.1, 0.26, up) * (1.0 - smoothstep(0.62, 0.84, up)) * onWave * front * (1.0 - smoothstep(90.0, 520.0, dist) * 0.85);
+        float bead = beads(bp, l4.x) * smoothstep(0.1, 0.26, up) * (1.0 - smoothstep(0.62, 0.84, up)) * onWave * front * (1.0 - smoothstep(90.0, 520.0, dist) * 0.85) * smoothstep(8.0, 36.0, dist);
         // ---- his initials, in beads, on the face (as on the picture) ----
         vec2 sg = vec2((s - 150.0) / 84.0, (up - 0.36) / 0.125);
         float sign = 0.0;
@@ -213,7 +225,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
           sign = m * (1.0 - smoothstep(0.22, 0.36, length(bc))) * onWave * front;
         }
         vec3 foamCol = W_FOAM * (uSkyCol * 0.85 + uKeyCol * (0.3 + 0.25 * toSun));
-        col = mix(col, foamCol, clamp(foam, 0.0, 1.0) * 0.92);
+        col = mix(col, foamCol, clamp(foam, 0.0, 1.0) * 0.8);
         col = mix(col, vec3(0.95, 0.52, 0.1) * (uSkyCol * 0.8 + uKeyCol * (0.35 + 0.6 * toSun)), clamp(bead, 0.0, 1.0) * 0.75);
         col = mix(col, foamCol * 1.1, sign);
         col = applyAir(col, vWorld);
@@ -330,13 +342,14 @@ export function buildCrest(mobile: boolean) {
 export function makeCrestMaterial() {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, ...WORLD_U },
+    uniforms: { ...SKY_U, ...WORLD_U, ...FINALE_U },
     vertexShader: /* glsl */ `
       attribute vec4 aUv;
-      uniform float uTime;
+      uniform float uTime; uniform float uRise;
       varying vec3 vWorld; varying vec3 vN; varying vec4 vUv;
       void main(){
         vec3 p = position;
+        p.y *= uRise;
         // the hanging part is never still: it sways along the crest and breathes up and down
         float hang = smoothstep(0.45, 1.0, aUv.y) * aUv.w;
         p.x += sin(uTime * 0.5 + aUv.x * 0.021) * 5.0 * hang * hang;
@@ -367,8 +380,8 @@ export function makeCrestMaterial() {
         float inF = fz < 0.0 ? 1.0 : max(step(abs(fu), fw) * step(fz, flen), step(abs(fu2), fw2) * step(fz, flen2));
         float edgeD = fz < 0.0 ? 1.0 : min(max(fw - abs(fu), 0.0) * 44.0, (flen - fz) * 90.0);
         // ---- the lace: the further from the shoulder, the more it is holes ----
-        vec3 l1 = lace(vec2(s * 0.06, v * 20.0 - uTime * 0.05), uTime * 0.25);
-        vec3 l2 = lace(vec2(s * 0.19 + 5.0, v * 62.0 - uTime * 0.11), uTime * 0.4);
+        vec3 l1 = lace(vec2(s * 0.06, v * 20.0 - uTime * 0.05), uTime * 0.06);
+        vec3 l2 = lace(vec2(s * 0.19 + 5.0, v * 62.0 - uTime * 0.11), uTime * 0.08);
         // (whole cells of the lace are open: a net, not a sieve; none near the shoulder, most at the fingers' ends)
         float open = smoothstep(0.72, 1.0, v);
         float hole = step(l1.x, 0.45) * step(l1.y, open * 0.4);
@@ -384,7 +397,8 @@ export function makeCrestMaterial() {
         vec3 water = waterCol(0.3 + 0.7 * thin * (0.65 + 0.35 * pow(toSun, 2.0)));
         vec3 col = water * (uSkyCol * 0.95 + uKeyCol * (0.2 + (0.5 + 1.3 * pow(toSun, 2.0)) * (0.3 + 0.7 * thin)));
         // seen from under, in the hollow, it is the wave's own shade with the light coming through in lines
-        col = mix(col, col * vec3(0.6, 0.42, 0.26), under * (1.0 - 0.6 * pow(toSun, 3.0)) * 0.75);
+        // (umber, as he painted the hollow: the lace hangs pale over the dark)
+        col = mix(col, col * vec3(0.3, 0.2, 0.11), under * (1.0 - 0.45 * pow(toSun, 3.0)) * 0.9);
         // the sun itself, seen through the sheet
         col += uKeyCol * vec3(0.95, 1.0, 0.55) * pow(toSun, 46.0) * (0.25 + 0.75 * thin) * 1.2;
         // falling water: long lines down the sheet
@@ -438,22 +452,26 @@ export function makeSprayMaterial() {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    uniforms: { ...SKY_U, ...WORLD_U },
+    uniforms: { ...SKY_U, ...WORLD_U, ...FINALE_U },
     vertexShader: /* glsl */ `
       attribute vec3 aV; attribute vec3 aT;
-      uniform float uTime;
+      uniform float uTime; uniform float uRise;
       varying float vA; varying float vK; varying vec3 vWorld;
       void main(){
         float life = aT.y;
         float age = fract(uTime / life + aT.x);
         float tt = age * life;
-        vec3 p = position + aV * tt + vec3(0.0, -2.6 * tt * tt, 0.0);
+        vec3 p = position * vec3(1.0, uRise, 1.0) + aV * tt + vec3(0.0, -2.6 * tt * tt, 0.0);
         vec4 wp = modelMatrix * vec4(p, 1.0);
         vec4 mv = viewMatrix * wp;
         vWorld = wp.xyz;
         vK = fract(aT.z * 7.31);
         vA = smoothstep(0.0, 0.06, age) * (1.0 - smoothstep(0.7, 1.0, age)) * step(1.0, p.y);
-        gl_PointSize = clamp(aT.z * 300.0 / -mv.z, 1.0, 26.0);
+        // (never large: close to, a drop is a small bead, and it thins away as the eye passes through)
+        float raw = aT.z * 210.0 / -mv.z;
+        gl_PointSize = clamp(raw, 2.0, 11.0);
+        // (far off a drop is never less than two pixels: it dims instead, so the crest's spray is a haze, not sparks)
+        vA *= smoothstep(3.0, 14.0, -mv.z) * min(1.0, raw * raw * 0.25) * (1.0 - 0.7 * smoothstep(300.0, 900.0, -mv.z));
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */ `
