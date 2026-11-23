@@ -245,10 +245,11 @@ float forestTrack(vec2 p){
 ${segLines}
   if (best > 8.0) return 0.0;
   float off = 1.8 * sin(al * 2.3) + 0.9 * sin(al * 5.1 + 1.0);
-  float ends = 1.0 - sst(8.2, 8.9, al);
+  // (its first stretch, from the flight line's start over the water, is not walked: the way comes in from the quay)
+  float ends = sst(0.95, 1.1, al) * (1.0 - sst(8.2, 8.9, al));
   float tr = (1.0 - sst(1.1, 2.0, abs(sd - off))) * ends;
   // (it begins where the town's north quay ends: a short way joins the two)
-  vec2 ca = vec2(${f(QN[0])}, ${f(QN[1])}); vec2 cb = vec2(${f(FOREST_LINE[0][0])}, ${f(FOREST_LINE[0][1])});
+  vec2 ca = vec2(${f(QN[0])}, ${f(QN[1])}); vec2 cb = vec2(${f(FOREST_LINE[1][0])}, ${f(FOREST_LINE[1][1])});
   vec2 cq = p - ca; vec2 cab = cb - ca; float ct = clamp(dot(cq, cab) / dot(cab, cab), 0.0, 1.0);
   return max(tr, 1.0 - sst(1.1, 2.0, length(cq - cab * ct)));
 }
