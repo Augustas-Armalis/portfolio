@@ -206,7 +206,11 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
         onMount.push({ p: [x, y - sz * 0.15, z], r: sz, h: 1.1 + r() * 0.6, seed: r() });
       }
     }
-    const slopes = crownMesh(onMount, wood, true);
+    // (the plane comes up the front and passes the right flank: the woods of the far side and the back are only
+    // ever seen across the valley, and are drawn with the plain's coarse crowns)
+    const farSide = (c: Crown) => c.p[0] < -110 || (c.p[2] < -60 && c.p[0] < 150);
+    const slopes = crownMesh(onMount.filter((c) => !farSide(c)), wood, true);
+    const slopesFar = crownMesh(onMount.filter(farSide), wood, false);
 
     // ---- the woods of the plain: thick near the way and round the mountain's foot, bigger and fewer far off
     const plain: Crown[] = [];
@@ -540,6 +544,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       castleGlows: castle.glows,
       tips: castle.tips.filter((_, i) => i % (props.mobile ? 5 : 2) === 0),
       slopes,
+      slopesFar,
       wood,
       plain: crownMesh(plain, wood, false),
       leaves,
@@ -576,6 +581,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
         <mesh geometry={b.peaks} material={b.rock} />
         <mesh geometry={b.castle} material={b.stone} />
         <primitive object={b.slopes} />
+        <primitive object={b.slopesFar} />
         <Pennants tips={b.tips} />
         <Kindling list={b.windows} centre={[0, 520, 60]} />
         <Procession road={b.road} n={props.mobile ? 30 : 90} speed={1.3} scale={2.6} robe={[0.5, 0.36, 0.3]} wing={[0.36, 0.26, 0.3]} glow={0.04} seed={5} />
