@@ -602,7 +602,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
         { x: 646 + Math.cos(-0.363) * sd * 34, z: -1335 - Math.sin(-0.363) * sd * 34, r: 9.5, h: 118 },
       ]),
     ],
-    canvases: [{ painting: "fairy-tale", x: -46, z: 1290, yaw: 0.5 }],
+    // (on the right of the way, clear of the pale road that bears away left across the plain)
+    canvases: [{ painting: "fairy-tale", x: 48, z: 1290, yaw: -0.5 }],
   },
   paradise: {
     id: "paradise",

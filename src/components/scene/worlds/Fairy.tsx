@@ -8,7 +8,7 @@ import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, 
 import { Birds, type Flock } from "./life";
 import { buildCastle } from "./fairy/castle";
 import { MT, PEAKS, WARDS, buildMountain, buildPeaks, buildRamp, mountainCrowns, peakRadius, rampLine, roadLine, surfaceY } from "./fairy/mountain";
-import { GLSL_GROUND_LIFE, Kindling, SunShafts, type Beam, archGeometry, leafyMesh, makeLeafyMaterial, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp } from "./fairy/shared";
+import { GLSL_GROUND_LIFE, Kindling, SunShafts, type Beam, archGeometry, leafyMesh, makeLeafyMaterial, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp, type Wood } from "./fairy/shared";
 import { WORLDS, gateOf, groundAt, pathOf } from "./voyage";
 import { GLSL_ROAD_AX, GLSL_WAYS, RAMP_FOOT, ROAD_AX, clearOfWays, makeWayField, roadAxAt, wayA, wayB, wayDist } from "./fairy/track";
 
@@ -24,6 +24,8 @@ import { GLSL_ROAD_AX, GLSL_WAYS, RAMP_FOOT, ROAD_AX, clearOfWays, makeWayField,
 // away from it.)
 
 const def = WORLDS.fairy;
+// the green of every tree here, near or far (makeCrownMaterial, and makeLeafyMaterial's `wood`)
+const WOOD: Wood = { a: [0.055, 0.125, 0.035], b: [0.13, 0.18, 0.04], shade: [0.012, 0.04, 0.046] };
 const f4 = (n: number) => n.toFixed(4);
 
 // ---------- the plain: where the woods stand, and where the fields are ----------
@@ -292,7 +294,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       for (const pk of PEAKS) if (Math.hypot(p.x - pk.x, p.z - pk.z) < peakRadius(pk, p.y) + 4) return true;
       return false;
     };
-    const wood = makeCrownMaterial({ a: [0.055, 0.125, 0.035], b: [0.13, 0.18, 0.04], shade: [0.012, 0.04, 0.046] });
+    const wood = makeCrownMaterial(WOOD);
     const onMount = mountainCrowns(Math.round(7000 * few), r, rel, skip);
     // planting where the castle's stone meets the hill: trees close under the drums and bastions, so no wall rises out of bare ground
     for (const [wi, n] of [
@@ -452,9 +454,10 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     offWays(birchNear, 9);
     offWays(ferns, 5);
     const leaves = makeLeafTexture();
-    const leafy = makeLeafyMaterial(leaves);
+    // one palette for every crown of this world, the leaf-clump trees by the way and the far woods alike
+    const leafy = makeLeafyMaterial(leaves, { wood: WOOD });
     const bushGeo = buildTree("bush", 1, props.mobile ? 0 : 1);
-    const fernMesh = leafyMesh(ferns, bushGeo, makeLeafyMaterial(leaves, { lit: [1.5, 1.55, 0.8], shade: [1.5, 1.7, 1.0] }), 1.3);
+    const fernMesh = leafyMesh(ferns, bushGeo, makeLeafyMaterial(leaves, { wood: { ...WOOD, gold: 0.6 } }), 1.3);
     bushGeo.dispose();
     const birchRich = buildTree("birch", 0, props.mobile ? 0 : 1);
     const birchMeshes = [leafyMesh(birchNear, birchRich, leafy)];
@@ -777,7 +780,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
   }, [props.mobile, props.trees, props.far, props.effects > 0.5, props.grass, props.reduced]);
   return (
     <>
-      <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={b.base} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} mask={GRASS_MASK} tall={1.3} groundSize={14000} angels={false} gate="veil" gateSize={[16, 24]} />
+      <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={b.base} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} mask={GRASS_MASK} tall={1.3} groundSize={14000} angels={false} gate="veil" gateSize={[18, 27]} />
       <RayedSun />
       {/* the mountain, measured from its own foot */}
       <group position={[MT.x, b.y0, MT.z]}>

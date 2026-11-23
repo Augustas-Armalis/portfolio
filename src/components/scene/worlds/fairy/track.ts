@@ -29,13 +29,13 @@ export const ROAD_A: P2[] = [
   [-53, 1920],
   [-45, 1860],
   [-34, 1800],
-  [-17, 1738],
-  [0, 1676],
-  [13, 1612],
-  [16, 1552],
-  [9, 1494],
-  [-2, 1436],
-  [-18, 1372],
+  [-20, 1738],
+  [-6, 1676],
+  [5, 1612],
+  [9, 1552],
+  [5, 1494],
+  [-4, 1436],
+  [-20, 1372],
   [-52, 1290],
   [-104, 1188],
   [-186, 1068],
@@ -253,14 +253,14 @@ const herm = (t: number, m0: number, m1: number) => {
 // peaks at the crest and falls away, and a plane that followed it would rise and fall with it): low over the track,
 // lifted over the crest so the whole plain and the mountain arrive at once, then held, then easing to the long glide
 const LOW: [z: number, y: number][] = [
-  [1920, 12],
-  [1850, 14],
-  [1800, 20],
-  [1750, 27.5],
-  [1700, 35.5],
-  [1650, 45],
-  [1600, 55.5],
-  [1550, 66],
+  [1920, 9],
+  [1850, 11.5],
+  [1800, 19.5],
+  [1750, 26.5],
+  [1700, 34.5],
+  [1650, 43.5],
+  [1600, 54],
+  [1550, 67.5],
   [1500, 76],
   [1450, 83.5],
   [1400, 87],
@@ -299,9 +299,7 @@ export function flightPlan(ground: (x: number, z: number) => number): [x: number
   const fly: P2[] = [];
   // the wood and the crest: the plane rides the track (the first stretch of road A, down to the crest)
   const rideA = wayA.pts.filter((p) => p.y <= 1900 && p.y >= 1450);
-  // (a little straightened: the plane's line is the track's, eased toward a straight one, so it banks gently)
-  const ease = (p: P2): P2 => [p[0] * 0.6 + (-45 + (45 * (1840 - p[1])) / 455) * 0.4, p[1]];
-  fly.push([-45, 1840], ...pick(rideA, 58).filter((p) => p[1] < 1830 && p[1] > 1450).map(ease));
+  fly.push([-45, 1840], ...pick(rideA, 58).filter((p) => p[1] < 1830 && p[1] > 1450));
   // then straight at the castle and easing out to its right flank (a long, gentle bend)
   fly.push([-1, 1385], [4, 1290], [11, 1190], [20, 1075], [32, 940], [47, 790], [66, 630], [89, 460], [114, 290], [141, 120], [168, -40], [194, -190], [219, -330]);
   // and along the way out, road B, to the gate and a little beyond it
