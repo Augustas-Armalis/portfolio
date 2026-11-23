@@ -418,7 +418,12 @@ export function makeWater(o: { def: WorldDef; lights?: THREE.Vector3[]; lightCol
   const lights = o.lights ?? [];
   const n = Math.max(1, lights.length);
   const arr = lights.length ? lights : [new THREE.Vector3(0, -999, 0)];
+  // (pulled a little toward the eye in depth: where a beach lies within the depth buffer's grain of the water, far off
+  // or with the near plane moving, the two no longer take turns from frame to frame; the water wins, steadily)
   return new THREE.ShaderMaterial({
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -2,
     uniforms: {
       ...SKY_U,
       ...WORLD_U,
@@ -448,9 +453,18 @@ export function makeWater(o: { def: WorldDef; lights?: THREE.Vector3[]; lightCol
         vec2 q = vLocal.xz;
         vec2 fl = vec2(uTime * 0.04, uTime * 0.025);
         float e = 0.35;
-        float h0 = fbm(q * 0.11 + fl) + 0.35 * fbm(q * 0.7 - fl * 3.0);
-        float hx = fbm((q + vec2(e, 0.0)) * 0.11 + fl) + 0.35 * fbm((q + vec2(e, 0.0)) * 0.7 - fl * 3.0);
-        float hz = fbm((q + vec2(0.0, e)) * 0.11 + fl) + 0.35 * fbm((q + vec2(0.0, e)) * 0.7 - fl * 3.0);
+        // (each scale of ripple only where a pixel can still hold it: beyond, it is its mean, flat. A ripple smaller
+        // than a pixel was sampled anew each frame: far water sparkled and crawled, worst under the sun's glint)
+        float fw = max(fwidth(q.x), fwidth(q.y));
+        float k1 = 1.0 - smoothstep(0.3, 0.8, fw * 0.11);
+        float k2 = 1.0 - smoothstep(0.3, 0.8, fw * 0.7);
+        float h0 = 0.0, hx = 0.0, hz = 0.0;
+        if (k1 > 0.0) {
+          h0 += k1 * fbm(q * 0.11 + fl); hx += k1 * fbm((q + vec2(e, 0.0)) * 0.11 + fl); hz += k1 * fbm((q + vec2(0.0, e)) * 0.11 + fl);
+        }
+        if (k2 > 0.0) {
+          h0 += k2 * 0.35 * fbm(q * 0.7 - fl * 3.0); hx += k2 * 0.35 * fbm((q + vec2(e, 0.0)) * 0.7 - fl * 3.0); hz += k2 * 0.35 * fbm((q + vec2(0.0, e)) * 0.7 - fl * 3.0);
+        }
         float calm = uCalm / (1.0 + dist * 0.012);
         vec3 n = normalize(vec3((h0 - hx) * 1.3 * calm, 1.0, (h0 - hz) * 1.3 * calm));
         vec3 r = reflect(-V, n);
@@ -458,7 +472,9 @@ export function makeWater(o: { def: WorldDef; lights?: THREE.Vector3[]; lightCol
         r = normalize(r);
         vec3 sky = skyBase(r) * uTint;
         float sunVis = smoothstep(-0.03, 0.03, uSunDir.y) * uSkyFx.z;
-        sky += mix(uGlow, vec3(1.0), 0.5) * pow(max(dot(r, uSunDir), 0.0), 380.0) * 18.0 * sunVis;
+        // (where the ripples have gone to their mean, the glint widens and dims by as much: the same light, no sparks)
+        float shine = mix(70.0, 380.0, k1);
+        sky += mix(uGlow, vec3(1.0), 0.5) * pow(max(dot(r, uSunDir), 0.0), shine) * 18.0 * (shine + 2.0) / 382.0 * sunVis;
         vec4 wr = worldReflect(vec3(vLocal.x, 0.0, vLocal.z), r);
         sky = mix(sky, wr.rgb, wr.a);
         float fres = 0.05 + 0.95 * pow(1.0 - max(dot(n, V), 0.0), 5.0);

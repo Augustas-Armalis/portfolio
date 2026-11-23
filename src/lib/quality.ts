@@ -256,3 +256,41 @@ export function reportFrame(dt: number, up = true) {
   remember(s.auto);
   emit(false);
 }
+
+// ---- render scale ----
+// Each gear draws at most this many pixels (millions). At 1280 x 720 and 1920 x 1080 every gear above Low draws
+// every pixel; on a big screen the lower gears draw fewer and the picture is laid on the screen smoothly (the
+// steadying keeps edges calm): a 2560 x 1440 window is 3.7 million pixels, which at Medium is a third more work in
+// every pass than the gear is meant for.
+export const PIXEL_BUDGET: Record<Preset, number> = { low: 1.2, medium: 2.2, high: 3, ultra: 5 };
+// Under that, a dynamic scale: a fallback for a moment the gear cannot hold (a heavy view, a busy machine). Over
+// a second of frames slower than 50 a second it steps down by a tenth, to 0.7 at least; over three seconds faster
+// than 80 a second it steps back up. Auto's change of gear stays the answer to a machine that is simply slower.
+const dyn = { k: 1, acc: 0, n: 0, slow: 0, fast: 0 };
+export function dynamicScale(dt: number) {
+  if (dt <= 0 || dt > 0.25) return dyn.k;
+  dyn.acc += dt;
+  dyn.n++;
+  if (dyn.acc < 1) return dyn.k;
+  const avg = dyn.acc / dyn.n;
+  dyn.acc = 0;
+  dyn.n = 0;
+  dyn.slow = avg > 1 / 50 ? dyn.slow + 1 : 0;
+  dyn.fast = avg < 1 / 80 ? dyn.fast + 1 : 0;
+  if (dyn.slow >= 1 && dyn.k > 0.7) {
+    dyn.k = Math.max(0.7, dyn.k - 0.1);
+    dyn.slow = 0;
+  } else if (dyn.fast >= 3 && dyn.k < 1) {
+    dyn.k = Math.min(1, dyn.k + 0.1);
+    dyn.fast = 0;
+  }
+  return dyn.k;
+}
+// the pixel ratio to draw at: the device's, within the gear's cap, under the gear's budget and the dynamic scale
+export function drawRatio(q: Quality, cssW: number, cssH: number, mobile: boolean) {
+  const native = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  const base = Math.max(Math.min(1, q.dpr), Math.min(native, q.dpr, mobile ? 1.5 : 2));
+  const px = Math.max(1, cssW * cssH * base * base);
+  const budget = Math.min(1, Math.sqrt((PIXEL_BUDGET[q.preset] * 1e6) / px));
+  return base * budget * dyn.k;
+}

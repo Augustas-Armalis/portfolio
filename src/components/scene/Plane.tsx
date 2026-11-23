@@ -835,7 +835,8 @@ export function Plane({
     st.idle = Math.max(st.idle, 0);
     updateNose();
     st.windowed = true;
-    voyage.veil = 0.16;
+    // (no breath of cloud: the frame after the worlds change places is the frame before)
+    voyage.veil = 0;
     voyage.held = 0;
     voyage.phase = "opening";
   };
