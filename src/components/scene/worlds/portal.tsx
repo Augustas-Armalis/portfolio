@@ -1,0 +1,264 @@
+"use client";
+
+import { useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo } from "react";
+import * as THREE from "three";
+import { POST_U, postCtl } from "../Post";
+import { applySky, clockHours, skyState, type SkyState } from "../sky";
+import { setWorldAir } from "./kit";
+import { WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, originOf, voyage, voyageSky, type WorldDef, type WorldId } from "./voyage";
+
+// Gates are windows. As the plane nears a gate the opening shows the next world itself, live: that world (already
+// made and warm, hidden at the same place) is drawn into a small target from an eye that stands to its entry
+// exactly as the visitor's eye stands to the gate, and the gate's opening shows that picture pixel for pixel
+// where it falls on the screen, so near things in it slide against far ones as the plane moves (true parallax)
+// and what is seen through the gate is what will be flown into. Going through, the worlds are simply exchanged
+// (Plane.tsx carries the plane across with the same turn and offset): the picture in the window becomes the
+// scene, under a breath of cloud at the frame's edges instead of the long closed cloud.
+//
+// Bounded: only within 320 m of the gate, only once the next world is warm (voyage.ready), at 0.4 of the frame
+// each way (a sixth of its pixels), every third frame until the last seventy metres and every frame from there.
+// Never on Low or on a phone, and never when anything is missing: then the gate is today's veil and cloud.
+//
+//   <PortalView mobile />                 once, beside the worlds (Worlds.tsx): draws the next world's picture
+//   <PortalWindow id def half rise />     at a world's gate (WorldBase gives every world one): shows it
+//   portalReady(to)                       Plane.tsx: may this crossing be made through the window, now?
+//   portalSwap(to)                        Plane.tsx: the worlds change places this instant (shown, sky and air)
+//   gateToEntry(from, to, m)              the move that carries a point at `from`'s gate to `to`'s entry; returns the turn
+
+// what stands and what waits, as the scene graph has them (Worlds.tsx keeps these up to date)
+// (`windows`: the worlds whose gate has a window mounted in it: without one a crossing is never made this way)
+export const portalRig = { stand: null as THREE.Object3D | null, warm: null as THREE.Object3D | null, warmId: null as WorldId | null, home: new Set<THREE.Object3D>(), windows: new Map<WorldId, number>() };
+
+export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPortalK: { value: 0 }, uPortalRes: { value: new THREE.Vector2(1, 1) } };
+const state = { next: null as WorldId | null, k: 0, fresh: 0, tick: 0 };
+
+const E = new THREE.Vector3();
+const G = new THREE.Vector3();
+const M1 = new THREE.Matrix4();
+const M2 = new THREE.Matrix4();
+export function gateToEntry(from: WorldId, to: WorldId, out: THREE.Matrix4): number | null {
+  const g = gateOf(from);
+  if (!g) return null;
+  const e = entryOf(to);
+  G.copy(g.pos).add(originOf(from));
+  E.copy(e.pos).add(originOf(to));
+  const turn = e.yaw - g.yaw;
+  // p' = E + R(turn) (p - G)
+  out.makeTranslation(E.x, E.y, E.z).multiply(M1.makeRotationY(turn)).multiply(M2.makeTranslation(-G.x, -G.y, -G.z));
+  return turn;
+}
+
+// the sky a world has when it stands (the same the voyage would give it)
+const skies = new Map<WorldId, SkyState>();
+function skyOf(id: WorldId): SkyState {
+  let s = skies.get(id);
+  if (s) return s;
+  const keep = { cur: voyage.cur, skyFrom: voyage.skyFrom, lastSky: voyage.lastSky, skyMod: voyage.skyMod };
+  voyage.cur = id;
+  voyage.skyFrom = null;
+  voyage.skyMod = null;
+  s = voyageSky(skyState(clockHours()), 0);
+  Object.assign(voyage, keep);
+  // (home's sky is the hour's: not kept)
+  if (WORLDS[id].air) skies.set(id, s);
+  return s;
+}
+
+export const portalReady = (to: WorldId) => state.next === to && state.k > 0.6 && state.fresh > 0 && portalRig.warmId === to && !!portalRig.warm;
+
+export function portalSwap(to: WorldId) {
+  if (portalRig.stand) portalRig.stand.visible = false;
+  if (portalRig.warm && portalRig.warmId === to) portalRig.warm.visible = true;
+  portalRig.home.forEach((o) => (o.visible = to === "home"));
+  applySky(skyOf(to));
+  setWorldAir(WORLDS[to].fog);
+  state.next = null;
+  state.k = 0;
+  state.fresh = 0;
+  PORTAL_U.uPortalK.value = 0;
+}
+
+export function PortalView({ mobile }: { mobile: boolean }) {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const rig = useMemo(() => {
+    const rt = new THREE.WebGLRenderTarget(8, 8, { type: THREE.HalfFloatType, depthBuffer: true });
+    return { rt, cam: new THREE.PerspectiveCamera(), m: new THREE.Matrix4(), buf: new THREE.Vector2(), gate: new THREE.Vector3(), scale: new THREE.Vector3() };
+  }, []);
+  useEffect(
+    () => () => {
+      rig.rt.dispose();
+      PORTAL_U.tPortal.value = null;
+      PORTAL_U.uPortalK.value = 0;
+      state.next = null;
+      state.k = 0;
+      state.fresh = 0;
+    },
+    [rig],
+  );
+  // (after the frame's own movement, before the lens draws it: Post's draw is at priority 1)
+  useFrame((st, rawDt) => {
+    const dt = Math.min(rawDt, 0.1);
+    const cur = voyage.cur;
+    const next = WORLD_ORDER[WORLD_ORDER.indexOf(cur) + 1] ?? null;
+    const gate = gateOf(cur);
+    const target = postCtl.sceneTarget;
+    let want = 0;
+    let d = 1e9;
+    const able = !mobile && postCtl.level >= 1 && !!target && (portalRig.windows.get(cur) ?? 0) > 0 && voyage.flying && voyage.phase === "open" && !!gate && !!next && next !== "home" && voyage.ready === next && portalRig.warmId === next && !!portalRig.warm;
+    if (able) {
+      d = rig.gate.copy(gate!.pos).add(originOf(cur)).distanceTo(voyage.planePos);
+      want = d < 320 ? 1 - THREE.MathUtils.smoothstep(d, 200, 300) : 0;
+    }
+    if (!able || d >= 320) {
+      state.k = Math.max(0, state.k - dt * 3);
+      if (state.k <= 0) {
+        state.next = null;
+        state.fresh = 0;
+      }
+      PORTAL_U.uPortalK.value = state.fresh > 0 ? state.k : 0;
+      return;
+    }
+    if (state.next !== next) {
+      state.next = next;
+      state.fresh = 0;
+      state.k = 0;
+    }
+    state.k += (want - state.k) * (1 - Math.exp(-dt * 4));
+    // the picture: every third frame, every frame over the last seventy metres
+    if (d > 70 && state.fresh > 0 && ++state.tick % 3 !== 0) {
+      PORTAL_U.uPortalK.value = state.k;
+      return;
+    }
+    const cam = st.camera as THREE.PerspectiveCamera;
+    const turn = gateToEntry(cur, next!, rig.m);
+    if (turn === null) return;
+    const w = Math.max(8, Math.round(target!.width * 0.4));
+    const h = Math.max(8, Math.round(target!.height * 0.4));
+    if (rig.rt.width !== w || rig.rt.height !== h) rig.rt.setSize(w, h);
+    // the same eye, carried from this gate to that entry
+    const pc = rig.cam;
+    pc.fov = cam.fov;
+    pc.aspect = cam.aspect;
+    pc.near = cam.near;
+    pc.far = cam.far;
+    pc.projectionMatrix.copy(cam.projectionMatrix);
+    pc.projectionMatrixInverse.copy(cam.projectionMatrixInverse);
+    cam.updateMatrixWorld();
+    pc.matrixWorld.multiplyMatrices(rig.m, cam.matrixWorld);
+    pc.matrixWorld.decompose(pc.position, pc.quaternion, rig.scale);
+    pc.matrixAutoUpdate = false;
+    pc.matrix.copy(pc.matrixWorld);
+    pc.matrixWorldInverse.copy(pc.matrixWorld).invert();
+    // that world shown and this one not, under its own sky and air, for the length of one draw
+    const stand = portalRig.stand;
+    const warm = portalRig.warm!;
+    const homeWas: [THREE.Object3D, boolean][] = [];
+    portalRig.home.forEach((o) => homeWas.push([o, o.visible]));
+    const standWas = stand?.visible ?? false;
+    if (stand) stand.visible = false;
+    portalRig.home.forEach((o) => (o.visible = false));
+    warm.visible = true;
+    const skyWas = voyage.lastSky;
+    applySky(skyOf(next!));
+    setWorldAir(WORLDS[next!].fog);
+    const k0 = PORTAL_U.uPortalK.value;
+    PORTAL_U.uPortalK.value = 0;
+    const lin = POST_U.uLinearOut.value;
+    POST_U.uLinearOut.value = 1;
+    const prev = gl.getRenderTarget();
+    const shadows = gl.shadowMap.autoUpdate;
+    gl.shadowMap.autoUpdate = false;
+    gl.setRenderTarget(rig.rt);
+    gl.clear();
+    gl.render(scene, pc);
+    gl.setRenderTarget(prev);
+    gl.shadowMap.autoUpdate = shadows;
+    POST_U.uLinearOut.value = lin;
+    PORTAL_U.uPortalK.value = k0;
+    setWorldAir(WORLDS[cur].fog);
+    if (skyWas) applySky(skyWas);
+    warm.visible = false;
+    if (stand) stand.visible = standWas;
+    homeWas.forEach(([o, v]) => (o.visible = v));
+    state.fresh = 1;
+    PORTAL_U.tPortal.value = rig.rt.texture;
+    PORTAL_U.uPortalRes.value.set(target!.width, target!.height);
+    PORTAL_U.uPortalK.value = state.k;
+  }, 0.5);
+  return null;
+}
+
+// The opening itself: a soft-edged lancet standing in the gate, which shows the picture where it falls on the
+// screen. Nothing of it is seen until the picture is there (far from the gate, on Low, on a phone: never).
+export function PortalWindow({ id, def, half = 15, rise = 23 }: { id: WorldId; def: WorldDef; half?: number; rise?: number }) {
+  const b = useMemo(() => {
+    const gate = gateOf(id);
+    if (!gate) return null;
+    const c = Math.cos(gate.yaw);
+    const s = Math.sin(gate.yaw);
+    const g0 = id === "home" ? 0 : Math.min(groundAt(def, gate.pos.x - c * half, gate.pos.z + s * half), groundAt(def, gate.pos.x + c * half, gate.pos.z - s * half));
+    // (the gate's own measure, as LightGate draws it: from its foot, on the ground or fifteen metres under a gate
+    // that hangs in the air, up to `rise` above the height the way passes at; the head begins just above that height)
+    const hung = id !== "home" && gate.pos.y - Math.max(g0, def.water ?? -1e9) > 70;
+    const wide = half * 1.04;
+    const lo = (hung ? gate.pos.y - 15 : Math.min(g0, def.water ?? g0) - 1.5) - 1;
+    const hi = gate.pos.y + rise * 1.03;
+    const spring = (gate.pos.y + 2 - lo) / (hi - lo);
+    const pos: number[] = [];
+    const uv: number[] = [];
+    for (const [u, v] of [
+      [-1, 0],
+      [1, 0],
+      [-1, 1],
+      [1, 1],
+    ]) {
+      pos.push(gate.pos.x + c * u * wide, lo + (hi - lo) * v, gate.pos.z - s * u * wide);
+      uv.push(u, v);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    geo.setIndex([0, 1, 2, 1, 3, 2]);
+    geo.computeBoundingSphere();
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      uniforms: { ...PORTAL_U, uSpring: { value: spring } },
+      vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes; uniform float uSpring; varying vec2 vUv;
+        void main(){
+          if (uPortalK <= 0.003) discard;
+          // a lancet: straight sides, a pointed round head, soft all the way round
+          float head = clamp((vUv.y - uSpring) / max(1.0 - uSpring, 0.001), 0.0, 1.0);
+          float wide = sqrt(max(1.0 - head * head, 0.0));
+          float dx = abs(vUv.x) / max(wide, 0.001);
+          float edge = max(dx, max(head, 1.0 - smoothstep(0.0, 0.04, vUv.y)));
+          float a = (1.0 - smoothstep(0.72, 0.98, edge)) * uPortalK;
+          vec3 col = texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb;
+          // (a little of that world's light gathers at the rim, as on the lip of any opening)
+          col += col * 0.35 * smoothstep(0.45, 0.9, edge);
+          gl_FragColor = vec4(col, a);
+        }`,
+    });
+    return { geo, mat };
+  }, [id, def, half, rise]);
+  useEffect(
+    () => () => {
+      b?.geo.dispose();
+      b?.mat.dispose();
+    },
+    [b],
+  );
+  useEffect(() => {
+    if (!b) return;
+    const w = portalRig.windows;
+    w.set(id, (w.get(id) ?? 0) + 1);
+    return () => void w.set(id, (w.get(id) ?? 1) - 1);
+  }, [b, id]);
+  if (!b) return null;
+  return <mesh geometry={b.geo} material={b.mat} renderOrder={3} frustumCulled={false} />;
+}
