@@ -3,6 +3,7 @@ import { buildTree, makeLeafTexture } from "../../home/trees";
 import { Kit, makeTempera, rng, type Halo, type V3 } from "../kit";
 import { archGeometry, boulderGeometry, leafyMesh, makeLeafyMaterial, type Beam, type Crown } from "../fairy/shared";
 import { FRIEND_U, GLSL_ORB } from "./cave";
+import type { Fern } from "./ferns";
 import { ARCH, CAVE_Z, FRIEND_PATH, ORB, caveAt, clear, floorAt } from "./shape";
 
 // The wood in her cave, in the picture's own green: the painting's ground is upright strokes of green and gold, so
@@ -50,6 +51,7 @@ function forestDone(o: {
   shrooms: THREE.BufferGeometry;
   glows: Halo[];
   beams: Beam[];
+  ferns: Fern[];
 }) {
   return o;
 }
@@ -87,15 +89,15 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     made++;
     yield* lap();
   }
-  // ferns and undergrowth: low and thick along the way and round the clearing's edge
-  const NF = Math.round(900 * few);
+  // ferns: low and thick along the way and round the clearing's edge (real fronds: friendship/ferns.ts)
+  const ferns: Fern[] = [];
+  const NF = Math.round(1000 * few);
   for (let i = 0, made = 0; i < NF * 4 && made < NF; i++) {
     const z = -120 + r() * 1000;
     const x = pathX(z) + (r() * 2 - 1) * (40 + r() * 260);
     if (!inside(x, z, 10)) continue;
     if (Math.abs(x - pathX(z)) < 7) continue;
-    const s = 0.5 + r() * 0.9;
-    add(`bush${made % 2}c`, { p: [x, g(x, z) - 0.3, z], r: s * 5, h: 0.6 + r() * 0.3, seed: r() });
+    ferns.push({ p: [x, g(x, z) - 0.2, z], s: 1.6 + Math.pow(r(), 1.5) * 3.2, yaw: r() * 6.283 });
     made++;
   }
   yield* lap();
@@ -213,5 +215,5 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
   // and the one that stands behind her, as in the picture's top
   beams.push({ foot: [60, g(60, -60), -60], len: 420, w: 26, k: 0.7 });
   void ORB;
-  return forestDone({ trees, leafy, stone, rock, rockMat, roots, shrooms, glows, beams });
+  return forestDone({ trees, leafy, stone, rock, rockMat, roots, shrooms, glows, beams, ferns });
 }

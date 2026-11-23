@@ -18,7 +18,7 @@ export const PAINT = { w: 1280, h: 1481, cx: 252, cy: 785, r: 207, s: 34 / 207 }
 // where things of the picture stand in the cave (metres)
 const px = (x: number, y: number) => ({ x: ORB.x + (x - PAINT.cx) * PAINT.s, y: ORB.y + (PAINT.cy - y) * PAINT.s });
 // her head (the middle of her face, in the picture), for the lens and the lights
-export const HEAD = { ...px(800, 560), z: -4, h: 40 };
+export const HEAD = { ...px(800, 560), z: -88, h: 62 };
 
 // the floor of the cave: nearly level, a long low swell under her and a hollow before her where the mist lies
 export const FRIEND_TERRAIN: Terrain = {
@@ -110,6 +110,6 @@ export const FRIEND_CANVAS = { x: -40, z: 600, yaw: 0.6 };
 
 // what the plane slides round: her body, her head, the arm she holds out (the hand under the orb is below the way)
 export const FRIEND_OBSTACLES: Obstacle[] = [
-  { x: 115, z: -10, r: 58, h: 270 },
-  { x: 62, z: 0, r: 26, h: 120 },
+  { x: 112, z: -95, r: 62, h: 260 },
+  { x: 72, z: -60, r: 22, h: 120 },
 ];
