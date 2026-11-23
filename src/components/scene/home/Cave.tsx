@@ -518,7 +518,8 @@ export function Cave() {
         beyondMat: makeBeyondMaterial(),
         motes: buildMotes(70),
         mat: makeStoneMaterial(),
-        massMat: makeRangeMaterial({ r0: 0, r1: 0, height: PEAK.h, freq: 0, seed: 0, haze: 0, snow: 0.22, pass: [0, 0], span: [0, 0], massif: 0 }),
+        // (no snow: a mountain this low, close in front of the snowy ranges, read at night as a pale flat cut-out)
+        massMat: makeRangeMaterial({ r0: 0, r1: 0, height: PEAK.h, freq: 0, seed: 0, haze: 0, snow: 0, pass: [0, 0], span: [0, 0], massif: 0 }),
       })),
     [],
   );

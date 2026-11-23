@@ -123,10 +123,10 @@ function makeFire() {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, uAt: { value: new THREE.Vector3(...FIRE) } },
+    uniforms: { ...SKY_U, ...HOME_U, uAt: { value: new THREE.Vector3(...FIRE) } },
     vertexShader: /* glsl */ `
       attribute vec3 aUv; uniform vec3 uAt; uniform float uTime;
-      varying vec3 vUv; varying float vDist; varying float vK;
+      varying vec3 vUv; varying float vDist; varying float vK; varying vec3 vWp;
       void main(){
         vUv = aUv;
         vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
@@ -149,12 +149,14 @@ function makeFire() {
           wp = c + (R * position.x + U * position.y) * 0.05;
         }
         vDist = length(wp - cameraPosition);
+        vWp = wp;
         gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
       }`,
     fragmentShader: /* glsl */ `
-      varying vec3 vUv; varying float vDist; varying float vK;
+      varying vec3 vUv; varying float vDist; varying float vK; varying vec3 vWp;
       ${GLSL_NOISE}
       ${GLSL_SKY}
+      ${GLSL_HOME_AIR}
       void main(){
         float k = vUv.z;
         float dusk = smoothstep(0.1, 0.5, uNight + (1.0 - smoothstep(-0.02, 0.08, uKeyDir.y)));
@@ -174,8 +176,8 @@ function makeFire() {
           float r = length(vUv.xy);
           col = vec3(1.0, 0.6, 0.25) * (1.0 - smoothstep(0.3, 1.0, r)) * vK * 2.0;
         }
-        // (into the air with distance: far off it is a small warm point)
-        col *= exp(-vDist * 0.0012);
+        // (into the land's own air with distance, as everything else is: far off it is a small warm point)
+        col *= 1.0 - homeAirAmt(vWp);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
