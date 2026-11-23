@@ -12,7 +12,7 @@ import { ORIGIN, WORLDS, voyage } from "./voyage";
 import { FRIEND_U, caveGeometry, makeCaveMaterial } from "./friendship/cave";
 import { forestSteps, withOrb, type Forest } from "./friendship/forest";
 import { makeMotesMaterial, makeOrbMaterial, makeStreaksMaterial, motesGeometry, streaksGeometry } from "./friendship/light";
-import { makePaintedMaterial, maskTexture, reliefGeometry } from "./friendship/painted";
+import { crownGeometry, makePaintedMaterial, maskTexture, reliefGeometry } from "./friendship/painted";
 import { HEAD, ORB, floorAt } from "./friendship/shape";
 
 // Friendship (Draugystė, 1906–1907). In the picture a figure in profile, her face lit gold from the orb, a crown of
@@ -119,6 +119,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       cave: caveGeometry(m),
       caveMat: makeCaveMaterial(),
       relief: reliefGeometry(m ? 120 : 200, m ? 140 : 232),
+      crownSheet: crownGeometry(m ? 40 : 70, m ? 46 : 80),
       map,
       mask,
       herCore: makePaintedMaterial(map, mask, 0),
@@ -197,7 +198,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       <mesh geometry={forest.roots} material={b.rootMat} />
       <mesh geometry={forest.shrooms} material={b.shroomMat} />
       {/* her: the painting's own figure on its relief, the crown of rays keyed out and added behind */}
-      <mesh geometry={b.relief} material={b.crown} renderOrder={2} frustumCulled={false} />
+      <mesh geometry={b.crownSheet} material={b.crown} renderOrder={2} frustumCulled={false} />
       <mesh geometry={b.relief} material={b.herCore} frustumCulled={false} />
       <mesh geometry={b.relief} material={b.herEdge} renderOrder={3} frustumCulled={false} />
       <mesh geometry={b.orb} material={b.orbMat} position={[ORB.x, ORB.y, ORB.z]} />

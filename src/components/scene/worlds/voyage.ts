@@ -358,7 +358,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     place: "none",
     air: AIR.friendship,
     // (thick air: the far wall is half gone into it, the passage behind wholly; nothing in a cave is seen for kilometres)
-    fog: [0.0011, 0.0016, 1500, 2600],
+    fog: [0.00065, 0.0016, 1500, 2600],
     // the cave's floor; the cave itself, the figure and the orb are built (worlds/friendship/)
     terrain: FRIEND_TERRAIN,
     water: null,
