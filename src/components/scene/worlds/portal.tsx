@@ -4,7 +4,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import * as THREE from "three";
 import { POST_U, postCtl } from "../Post";
-import { applySky, clockHours, skyState, type SkyState } from "../sky";
+import { SKY_U, applySky, clockHours, skyState, type SkyState } from "../sky";
 import { setWorldAir } from "./kit";
 import { WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, originOf, voyage, voyageSky, type WorldDef, type WorldId } from "./voyage";
 
@@ -141,6 +141,10 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     setWorldAir(WORLDS[next].fog);
     const k0 = PORTAL_U.uPortalK.value;
     PORTAL_U.uPortalK.value = 0;
+    // (and without this side's mist: SKY_U.uMist is this world's cloud, forest fog or cave haze, which every material
+    // of that world would otherwise wear in the picture and drop the frame after the swap)
+    const mist0 = SKY_U.uMist.value;
+    SKY_U.uMist.value = 0;
     const lin = POST_U.uLinearOut.value;
     POST_U.uLinearOut.value = 1;
     const prev = gl.getRenderTarget();
@@ -160,6 +164,7 @@ export function PortalView({ mobile }: { mobile: boolean }) {
       gl.shadowMap.needsUpdate = shadowDue;
       POST_U.uLinearOut.value = lin;
       PORTAL_U.uPortalK.value = k0;
+      SKY_U.uMist.value = mist0;
       setWorldAir(WORLDS[cur].fog);
       if (skyWas) applySky(skyWas);
       warm.visible = false;

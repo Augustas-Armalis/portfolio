@@ -1290,6 +1290,9 @@ function Scene({
     }
   };
 
+  // (first in the frame: the eye, the plane and a crossing between worlds are settled before anything that follows
+  // the eye or belongs to one world reads them; run after them, the frame of a crossing drew the new world with
+  // things still placed for the old eye)
   useFrame((_, rawDt) => {
     try {
       frame(dev.current.dt ?? rawDt);
@@ -1298,7 +1301,7 @@ function Scene({
       if (process.env.NODE_ENV !== "production") Object.assign(window, { __err: String((err as Error)?.stack ?? err) });
       throw err;
     }
-  });
+  }, -1);
 
   // where the lens focuses: on the desk from the orbit, on whatever a mode
   // is looking at, wide open to the land in flight, and nothing soft at all
