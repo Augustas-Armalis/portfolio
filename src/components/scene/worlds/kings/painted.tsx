@@ -60,10 +60,10 @@ const DARK_HAND: Poly = [
 const PIECES: Piece[] = [
   { side: -1, z: -16, poly: PALE_ALL, feather: 16, pillow: 9, lum: 5, order: 2 },
   { side: 1, z: -16, poly: DARK_ALL, feather: 16, pillow: 9, lum: 5, order: 2 },
-  { side: -1, z: -2, poly: PALE_HEAD, feather: 12, pillow: 7, lum: 6, order: 3, pivot: [330, 640] },
-  { side: 1, z: -2, poly: DARK_HEAD, feather: 12, pillow: 7, lum: 6, order: 3, pivot: [900, 600] },
-  { side: -1, z: 16, poly: PALE_HAND, feather: 9, pillow: 5, lum: 4, order: 4 },
-  { side: 1, z: 14, poly: DARK_HAND, feather: 10, pillow: 5, lum: 4, order: 4 },
+  { side: -1, z: -7, poly: PALE_HEAD, feather: 12, pillow: 7, lum: 6, order: 3, pivot: [330, 640] },
+  { side: 1, z: -7, poly: DARK_HEAD, feather: 12, pillow: 7, lum: 6, order: 3, pivot: [900, 600] },
+  { side: -1, z: 14, poly: PALE_HAND, feather: 9, pillow: 5, lum: 4, order: 4 },
+  { side: 1, z: 2, poly: DARK_HAND, feather: 10, pillow: 5, lum: 4, order: 4 },
 ];
 
 // where a point of the canvas stands in the wood (the world's own coordinates), before any relief
@@ -116,8 +116,8 @@ function build(img: HTMLImageElement) {
 
   const sx = AW / PW;
   const sy = AH / PH;
-  const pieces = PIECES.map((p) => {
-    // the cut, soft; and the same again far softer: how deep inside the form a point lies (the swell of the relief)
+  // every piece's cut, soft; and the same again far softer: how deep inside the form a point lies (the swell of the relief)
+  const cuts = PIECES.map((p) => {
     g.fillStyle = "#000";
     g.fillRect(0, 0, AW, AH);
     g.fillStyle = "#fff";
@@ -130,6 +130,20 @@ function build(img: HTMLImageElement) {
     for (let i = 0; i < mask.length; i++) mask[i] = m[i * 4] / 255;
     const deep = blur(mask.slice(), AW, AH, Math.max(2, Math.round(p.feather * sx * 1.7)));
     blur(mask, AW, AH, Math.max(1, Math.round(p.feather * sx * 0.45)));
+    return { mask, deep };
+  });
+  // A piece that lies behind another is cut away under the heart of it (all but a margin under its edge): as the eye
+  // moves the front piece slides over the back one, and there must be no second face there to show beside the first.
+  PIECES.forEach((p, k) => {
+    PIECES.forEach((q, n) => {
+      if (q.side !== p.side || q.order <= p.order) return;
+      const over = cuts[n].deep;
+      const mine = cuts[k].mask;
+      for (let i = 0; i < mine.length; i++) mine[i] *= 1 - THREE.MathUtils.smoothstep(over[i] * 1.1, 0.62, 0.9);
+    });
+  });
+  const pieces = PIECES.map((p, k) => {
+    const { mask, deep } = cuts[k];
     const data = new Uint8Array(AW * AH * 4);
     for (let i = 0; i < mask.length; i++) {
       data[i * 4] = Math.round(mask[i] * 255);
@@ -195,7 +209,7 @@ function build(img: HTMLImageElement) {
         varying vec2 vUv; varying vec3 vWorld; varying float vFront;
         void main(){
           vUv = uv;
-          vec3 a = texture2D(tAux, vec2(uv.x, min(uv.y, 0.997))).rgb;
+          vec3 a = texture2D(tAux, vec2(uv.x, min(uv.y, 0.986))).rgb;
           vec3 p = position;
           // the relief: every form swells toward its middle, and stands out a little more wherever the paint is light
           p.z += a.g * uLay.x + (a.b - 0.18) * uLay.y;
@@ -221,14 +235,15 @@ function build(img: HTMLImageElement) {
         ${GLSL_KINGS}
         float lumOf(vec3 c){ return dot(c, vec3(0.3, 0.55, 0.15)); }
         void main(){
-          vec2 uv = vec2(vUv.x, min(vUv.y, 0.997));
+          // (the photograph of the canvas has its frame's edge along the bottom and the sides: never read that far)
+          vec2 uv = vec2(clamp(vUv.x, 0.006, 0.994), min(vUv.y, 0.986));
           vec3 aux = texture2D(tAux, uv).rgb;
           float a = smoothstep(0.1, 0.62, aux.r);
           if (a < 0.02) discard;
           vec3 paint = texture2D(tPaint, uv).rgb;
           // below the picture's own edge the robes go on down into the dark
           // (the last of the canvas already runs out into it, so there is no line where the picture stops)
-          paint = mix(paint, vec3(0.013, 0.012, 0.011), smoothstep(0.95, 1.05, vUv.y) * 0.94);
+          paint = mix(paint, vec3(0.013, 0.012, 0.011), smoothstep(0.93, 1.03, vUv.y) * 0.95);
           // close to, the tooth of his canvas (the picture is only so many pixels: this is what the eye finds beyond them)
           float dist = length(cameraPosition - vWorld);
           float tooth = (vnoise(vWorld.xy * 2.6 + vWorld.z) - 0.5) * 0.6 + (vnoise(vec2(vWorld.x * 9.0, vWorld.y * 1.2)) - 0.5) * 0.4;
