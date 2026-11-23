@@ -657,9 +657,9 @@ function Scene({
   // still fetching (textures, the sky HDRI), upload every texture, compile
   // every program, draw a few hidden frames, and only then report ready, so
   // nothing hitches once the dark lifts. Each step moves the loader's line.
-  // compileAsync can throw from inside its own polling (a material swapped
-  // mid-compile), so compile synchronously, guarded; the line itself is a CSS
-  // transition and keeps gliding. Always reveal within 9 s regardless.
+  // The programs are compiled off the main thread (compileAsync, guarded: it can
+  // throw from inside its own polling when a material is swapped mid-compile, and
+  // then they are made on first draw). Always reveal within 9 s regardless.
   useEffect(() => {
     let dead = false;
     let done = false;
@@ -702,7 +702,6 @@ function Scene({
           const im = x.image as { width?: number; complete?: boolean } | null;
           if (!im || !im.width || im.complete === false) return;
           seen.add(x);
-          gl.initTexture(x);
         };
         scene.traverse((o) => {
           const ms = (o as THREE.Mesh).material;
@@ -712,6 +711,14 @@ function Scene({
             if (us) for (const k in us) up(us[k]?.value);
           }
         });
+        // (put on the card a few at a time, eight milliseconds' worth and then a breath: all of them in one go was
+        // a single long task, and the loader's line stood still for it)
+        const list = [...seen];
+        for (let i = 0; i < list.length && !dead; ) {
+          const t = performance.now();
+          while (i < list.length && performance.now() - t < 8) gl.initTexture(list[i++]);
+          if (i < list.length) await wait(0);
+        }
       } catch {
         /* uploaded on first draw instead */
       }

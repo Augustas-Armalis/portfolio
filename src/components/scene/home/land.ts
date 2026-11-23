@@ -33,6 +33,9 @@ export const BAY = { ux: -0.717, uz: -0.697 };
 // how far the hillside falls (m), and over what run
 const FALL = { drop: 6.5, run: 70 };
 
+// (a plain root of squares: Math.hypot guards against overflow these metres never come near, and is several times
+// slower; the land is asked its height and its lake some millions of times while the field is laid out)
+const hyp = (a: number, b: number) => Math.sqrt(a * a + b * b);
 const sstep = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -43,7 +46,7 @@ export function hLakeK(x: number, z: number) {
   const qx = (x - HLAKE.x) / HLAKE.rx;
   const qz = (z - HLAKE.z) / HLAKE.rz;
   const a = Math.atan2(qz, qx);
-  return Math.hypot(qx, qz) / (1 + 0.15 * Math.sin(a * 3 + 0.7) + 0.08 * Math.sin(a * 5 + 2.1) + 0.05 * Math.sin(a * 9 + 4.0));
+  return hyp(qx, qz) / (1 + 0.15 * Math.sin(a * 3 + 0.7) + 0.08 * Math.sin(a * 5 + 2.1) + 0.05 * Math.sin(a * 9 + 4.0));
 }
 // the shore behind the desk: z of the waterline at x (a long shallow bay, 180 m off at its nearest)
 export const coastZ = (x: number) => 150 - 0.0001 * x * x + 24 * Math.sin(x * 0.0041 + 0.9) + 8 * Math.sin(x * 0.0127 + 2.0);
@@ -51,7 +54,7 @@ export const coastZ = (x: number) => 150 - 0.0001 * x * x + 24 * Math.sin(x * 0.
 export const inland = (x: number, z: number) => coastZ(x) - z;
 // how level the ground is held: 0 on the field, the road and round the lake; 1 out in the open land
 export function landFree(x: number, z: number) {
-  const r = Math.hypot(x, z);
+  const r = hyp(x, z);
   let f = sstep(70, 210, r);
   const rd = Math.abs(x - roadX(z));
   const onRoad = (1 - sstep(14, 60, rd)) * (z < 20 ? 1 : 0) * sstep(HOME_GATE_Z - 150, HOME_GATE_Z - 70, z);
@@ -64,11 +67,11 @@ export function landFree(x: number, z: number) {
 export function fallK(x: number, z: number) {
   const q = x * BAY.ux + z * BAY.uz;
   const d = Math.max(0, q - 5);
-  const west = (roadX(z) - x) / (Math.hypot(x, z) + 6);
+  const west = (roadX(z) - x) / (hyp(x, z) + 6);
   return FALL.drop * (1 - Math.exp(-d / FALL.run)) * sstep(0.02, 0.3, west);
 }
 export function landH(x: number, z: number) {
-  const r = Math.hypot(x, z);
+  const r = hyp(x, z);
   const wx = x + 18 * Math.sin(z * 0.013 + 1.7);
   const wz = z + 18 * Math.sin(x * 0.011 + 4.1);
   const k1 = Math.sin(wx * 0.021 + 0.6) * Math.sin(wz * 0.017 + 2.2);
@@ -109,7 +112,7 @@ function lakeRim(tx: number, tz: number) {
   // the point of the lake's rim on the way from its middle toward (tx, tz)
   const dx = tx - HLAKE.x;
   const dz = tz - HLAKE.z;
-  const L = Math.hypot(dx, dz);
+  const L = hyp(dx, dz);
   let lo = 0;
   let hi = L;
   for (let i = 0; i < 20; i++) {
@@ -394,8 +397,10 @@ function fbm(x: number, y: number, oct = 4) {
 }
 export function rng(seed: number) {
   let s = seed;
+  // (the same sequence as (s * 16807) % 2147483647, without the slow float remainder)
   return () => {
-    s = (s * 16807) % 2147483647;
+    const x = s * 16807;
+    s = x - Math.floor(x / 2147483647) * 2147483647;
     return (s - 1) / 2147483646;
   };
 }
@@ -406,7 +411,7 @@ export function rng(seed: number) {
 // a clear lane from the desk to the lake and the pass in the mountains, the
 // road's own avenue, nothing on the beach or in water.
 export function forestD(x: number, z: number) {
-  const r = Math.hypot(x, z);
+  const r = hyp(x, z);
   const c = inland(x, z);
   if (c < 100) return 0;
   const lk = hLakeK(x, z);
@@ -436,13 +441,13 @@ export function forestD(x: number, z: number) {
   d = Math.max(d, journeyWood(x, z) * (0.82 + 0.18 * mid));
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
   // the town's ground and the river's banks are open
-  d *= sstep(SACRED.foot - 6, SACRED.foot + 20, Math.hypot(x - SACRED.x, z - SACRED.z));
+  d *= sstep(SACRED.foot - 6, SACRED.foot + 20, hyp(x - SACRED.x, z - SACRED.z));
   // the farmland east of the road is open
   d *= 1 - 0.92 * fieldK(x, z);
-  d *= sstep(TOWN.r - 18, TOWN.r + 26, Math.hypot(x - TOWN.x, z - TOWN.z)) * sstep(HILL.foot - 18, HILL.foot + 8, Math.hypot(x - HILL.x, z - HILL.z));
+  d *= sstep(TOWN.r - 18, TOWN.r + 26, hyp(x - TOWN.x, z - TOWN.z)) * sstep(HILL.foot - 18, HILL.foot + 8, hyp(x - HILL.x, z - HILL.z));
   const rd = riverD(x, z);
   if (rd < 40) d *= sstep(riverW(x) + 2, riverW(x) + 22, rd);
-  d *= sstep(22, 44, Math.hypot(x - PLACES.farm.x, z - PLACES.farm.z)) * sstep(34, 70, Math.hypot(x - PLACES.village.x, z - PLACES.village.z)) * sstep(10, 26, Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z)) * sstep(1.5, 5, streamD(x, z));
+  d *= sstep(22, 44, hyp(x - PLACES.farm.x, z - PLACES.farm.z)) * sstep(34, 70, hyp(x - PLACES.village.x, z - PLACES.village.z)) * sstep(10, 26, hyp(x - PLACES.tower.x, z - PLACES.tower.z)) * sstep(1.5, 5, streamD(x, z));
   return Math.min(1, d);
 }
 
@@ -467,9 +472,9 @@ export function plantHome(amount: number): HomeTree[] {
     return u < 0.52 ? "broad" : u < 0.74 ? "birch" : u < 0.9 ? "pine" : "bush";
   };
   const push = (x: number, z: number, kind: TreeKind, s: number, lod: 0 | 1 | 2) => {
-    trees.push({ x, y: landH(x, z), z, s, kind, v: Math.floor(r() * 3), rot: r() * 6.283, tint: r(), lod: lod === 0 && Math.hypot(x, z) < 82 ? -1 : lod });
+    trees.push({ x, y: landH(x, z), z, s, kind, v: Math.floor(r() * 3), rot: r() * 6.283, tint: r(), lod: lod === 0 && hyp(x, z) < 82 ? -1 : lod });
   };
-  const near = (x: number, z: number): 0 | 1 => (Math.hypot(x, z) < 115 || (z < 0 && Math.abs(x - roadX(z)) < 24 && z > HOME_GATE_Z - 20) ? 0 : 1);
+  const near = (x: number, z: number): 0 | 1 => (hyp(x, z) < 115 || (z < 0 && Math.abs(x - roadX(z)) < 24 && z > HOME_GATE_Z - 20) ? 0 : 1);
 
   // 1. framing the view from the desk, placed by hand: tall trees left and right, a birch by the lake
   const hand: [number, number, TreeKind, number][] = [
@@ -512,7 +517,7 @@ export function plantHome(amount: number): HomeTree[] {
       const u = r();
       const u2 = r();
       const d = forestD(x, z);
-      const rr = Math.hypot(x, z);
+      const rr = hyp(x, z);
       if (rr > 240 && !(z < 0 && Math.abs(x - roadX(z)) < 80 && z > HOME_GATE_Z - 90)) continue;
       if (u > d * d * 0.8 * amount) {
         // a lone tree or a bush out in the meadow, now and then
@@ -532,7 +537,7 @@ export function plantHome(amount: number): HomeTree[] {
       const x = gx + r() * cell2;
       const z = gz + r() * cell2;
       const u = r();
-      const rr = Math.hypot(x, z);
+      const rr = hyp(x, z);
       if (rr < 240 || rr > 1700) continue;
       if (z < 0 && Math.abs(x - roadX(z)) < 80 && z > HOME_GATE_Z - 90) continue;
       // (the journey's own forest is planted whole, by its own hand: see JourneyWoods)
@@ -595,7 +600,7 @@ export function bakeCrownMap(trees: HomeTree[]) {
     const z1 = Math.min(n - 1, Math.ceil(cz + R));
     for (let j = z0; j <= z1; j++)
       for (let i = x0; i <= x1; i++) {
-        const d = Math.hypot(i + 0.5 - cx, j + 0.5 - cz) / R;
+        const d = hyp(i + 0.5 - cx, j + 0.5 - cz) / R;
         if (d >= 1) continue;
         const a = (1 - d * d) * (1 - d * d) * (t.kind === "birch" ? 0.6 : 0.9);
         const k = j * n + i;
@@ -609,7 +614,7 @@ export function bakeCrownMap(trees: HomeTree[]) {
     const cz = (z + CROWN_SPAN) * px;
     for (let j = Math.max(0, Math.floor(cz - R)); j <= Math.min(n - 1, Math.ceil(cz + R)); j++)
       for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(n - 1, Math.ceil(cx + R)); i++) {
-        const d = Math.hypot(i + 0.5 - cx, j + 0.5 - cz) / R;
+        const d = hyp(i + 0.5 - cx, j + 0.5 - cz) / R;
         if (d < 1) acc[j * n + i] = 1 - (1 - acc[j * n + i]) * (1 - a * (1 - d * d));
       }
   };
@@ -650,7 +655,7 @@ export function bakeCloudTex() {
           const cx = (((ix + dx) % count) + count) % count;
           const cy = (((iy + dy) % count) + count) % count;
           const k = (cy * count + cx) * 2;
-          const d = Math.hypot(ix + dx + pts[k] - x, iy + dy + pts[k + 1] - y);
+          const d = hyp(ix + dx + pts[k] - x, iy + dy + pts[k + 1] - y);
           if (d < best) best = d;
         }
       // (a dome over each point, not a cone: the clouds heaped from these are round on top)

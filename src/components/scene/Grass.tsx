@@ -52,8 +52,11 @@ const sstep = (a: number, b: number, x: number) => {
 
 function scatter(g: THREE.InstancedBufferGeometry, ring: Ring, seed: number) {
   let s = seed;
+  // (the same sequence as (s * 16807) % 2147483647, without the slow float remainder: this runs some ten
+  // million times while the field is laid out)
   const rnd = () => {
-    s = (s * 16807) % 2147483647;
+    const x = s * 16807;
+    s = x - Math.floor(x / 2147483647) * 2147483647;
     return (s - 1) / 2147483646;
   };
   const off = new Float32Array(ring.count * 3);
