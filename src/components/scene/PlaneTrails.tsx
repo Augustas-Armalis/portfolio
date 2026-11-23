@@ -90,7 +90,7 @@ export function makeTrails(): Trails {
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false;
-  mesh.renderOrder = 6;
+  mesh.renderOrder = 8; // (over a gate's window, which is drawn late: the mist is in front of it)
   mesh.visible = false;
   const tip = new THREE.Vector3();
   const tan = new THREE.Vector3();
