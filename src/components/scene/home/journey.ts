@@ -194,6 +194,18 @@ export function journeyWood(x: number, z: number) {
   return (1 - sst(70, 150, d)) * ends;
 }
 
+// The hidden forest and the cave's approach as one place (0 outside .. 1 well in), for what changes when the plane
+// goes into it (the field's music handing over to the forest's, the forest's fog): the old forest's extent either
+// side of its lane, from the town's last houses to the mountain's foot, and a round of land before the cave's mouth
+// (the cave itself included). Ground plan only: land.ts adds "and down among the trees".
+export function journeyArea(x: number, z: number) {
+  if (x > -170 || x < -600 || z > -130 || z < -820) return 0;
+  const { d, along } = laneD(x, z);
+  const wood = (1 - sst(70, 140, d)) * sst(0.0, 0.1, along);
+  const cave = 1 - sst(100, 180, Math.hypot(x - CAVE.x, z - CAVE.z));
+  return Math.max(wood, cave);
+}
+
 // ---------- the path of light ----------
 // [x, z, metres above whatever is under it (land or water)]; the first two climb off the desk as the old road did
 // (their height is the road's, see voyage.ts).

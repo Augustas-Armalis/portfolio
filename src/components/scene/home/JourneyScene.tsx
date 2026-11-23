@@ -8,7 +8,7 @@ import { pathOf, voyage } from "../worlds/voyage";
 import { Cave } from "./Cave";
 import { Farm, Sacred, SeaBoats } from "./Sacred";
 import { FOREST_LINE, TOWN } from "./journey";
-import { HOME_U } from "./land";
+import { HOME_U, inJourneyForest } from "./land";
 import { Town } from "./Town";
 import { FOREST_K, Woods } from "./Woods";
 
@@ -37,7 +37,7 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     const pts = pathOf("home").pts;
     return { pts, town: fracNear(pts, TOWN.x, TOWN.z), forest: fracNear(pts, ...FOREST_LINE[1]), deep: fracNear(pts, ...FOREST_LINE[4]), cave: fracNear(pts, ...FOREST_LINE[FOREST_LINE.length - 1]) };
   }, []);
-  const st = useMemo(() => ({ i: 0, f: 0, q: -1, live: null as SkyState | null, sky: null as SkyState | null, age: 0 }), []);
+  const st = useMemo(() => ({ i: 0, f: 0, q: -1, live: null as SkyState | null, sky: null as SkyState | null, age: 0, area: 0 }), []);
   useEffect(
     () => () => {
       HOME_U.uAirK.value.x = AIR0;
@@ -102,15 +102,18 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
       const f = best / (pts.length - 1);
       // (once into the flight, the hour only goes on: turning back does not undo the evening, unless far off the path)
       st.f = bd < 160 * 160 ? Math.max(st.f, f) : THREE.MathUtils.damp(st.f, f, 0.5, dt);
+      // (and the fog is the forest's own: it thins away as the plane climbs over the crowns or leaves the wood)
+      st.area = THREE.MathUtils.damp(st.area, inJourneyForest(p.x, p.y, p.z), 1.1, dt);
     } else {
       st.f = 0;
       st.i = 0;
+      st.area = 0;
     }
     if (voyage.cur === "home") voyage.skyMod = mod;
     const f = st.f;
     const night = THREE.MathUtils.smoothstep(f, marks.forest - 0.04, marks.deep);
     FOREST_K.night.value = Math.max(night, SKY_U.uNight.value * 0.8);
-    const fog = THREE.MathUtils.smoothstep(f, marks.forest - 0.03, marks.forest + 0.08) * (1 - 0.7 * THREE.MathUtils.smoothstep(f, marks.cave - 0.36, marks.cave - 0.16)) * (1 - THREE.MathUtils.smoothstep(f, marks.cave - 0.14, marks.cave - 0.05));
+    const fog = st.area * THREE.MathUtils.smoothstep(f, marks.forest - 0.03, marks.forest + 0.08) * (1 - 0.7 * THREE.MathUtils.smoothstep(f, marks.cave - 0.36, marks.cave - 0.16)) * (1 - THREE.MathUtils.smoothstep(f, marks.cave - 0.14, marks.cave - 0.05));
     FOREST_K.fog.value = fog;
     // the air: a light mist over the town's roofs (smoke and evening damp), and in the forest a soft fog lit by the
     // moon, thick enough that the trunks fade within a few tens of metres; it lifts before the mountain
