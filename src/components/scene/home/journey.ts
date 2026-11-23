@@ -37,7 +37,7 @@ export function riverD(x: number, z: number) {
 export const TOWN = { x: -246, z: riverZ(-246), r: 92 };
 export const SQUARE = { x: -262, z: riverZ(-262) + 34 };
 export const CHURCH = { x: -270, z: riverZ(-270) + 60 };
-export const HILL = { x: -212, z: riverZ(-212) - 92, h: 27, top: 20, foot: 80, step: 4.5, terr: 0.9 };
+export const HILL = { x: -212, z: riverZ(-212) - 92, h: 22, top: 20, foot: 82, step: 4.5, terr: 0.9 };
 // the street that winds up the hill from the quay to the castle's gate: its angle round the hill at a radius
 export const hillRoadA = (r: number) => Math.atan2(TOWN.z - HILL.z, TOWN.x - HILL.x) + (r - HILL.top) * 0.045;
 // the hill's own height over the valley floor: a dome, its flanks gently terraced so houses stand on the flats

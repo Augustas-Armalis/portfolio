@@ -8,6 +8,7 @@ import { ambienceListener } from "@/lib/ambience";
 import { postCtl } from "./Post";
 import { bakeHomeSolids, homeGround } from "./homeGround";
 import { useTrails } from "./PlaneTrails";
+import { gateToEntry, portalReady, portalSwap } from "./worlds/portal";
 import { arriveGolden } from "./sky";
 import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
@@ -154,8 +155,17 @@ export function Plane({
   const group = useRef<THREE.Group>(null);
   const hover = useRef(false);
   const scene = useThree((s) => s.scene);
-  // the mist off its wing tips (PlaneTrails.tsx)
+  // the mist off its wing tips (PlaneTrails.tsx), and the land or water under a point of whichever world stands
   const trails = useTrails();
+  const groundUnder = useMemo(
+    () => (x: number, z: number) => {
+      const id = voyage.cur;
+      if (id === "home") return homeGround(x, z);
+      const o = originOf(id);
+      return groundAt(WORLDS[id], x - o.x, z - o.z);
+    },
+    [],
+  );
   useEffect(() => {
     // dev: __homeGround(x, z) is what the plane stays above at home; __homeGround.bake() reads the ranges again
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __homeGround: Object.assign((x: number, z: number) => homeGround(x, z), { bake: () => bakeHomeSolids(scene) }) });
@@ -219,6 +229,7 @@ export function Plane({
       camLift: 0,
       camLiftV: 0,
       mouseWas: false,
+      windowed: false, // the crossing just made was through a gate's window
       qFrom: new THREE.Quaternion(),
       upFrom: new THREE.Vector3(0, 1, 0),
     }),
@@ -264,7 +275,7 @@ export function Plane({
     voyage.planeSpeed = st.speed;
     // (what sounds near the plane grows as it comes: lib/ambience.ts)
     ambienceListener(st.pos.x, st.pos.y, st.pos.z);
-    if (cam) trails.update(dt, g, mist, cam);
+    if (cam) trails.update(dt, g, mist, cam, groundUnder);
   };
   const updateNose = () => st.nose.set(-Math.sin(st.yaw) * Math.cos(st.pitch), Math.sin(st.pitch), -Math.cos(st.yaw) * Math.cos(st.pitch));
 
@@ -667,7 +678,9 @@ export function Plane({
           // (for the gate's ripple only: where in its opening the plane went through)
           voyage.gateHit = { world: id, side: Math.cos(gate.yaw) * rx - Math.sin(gate.yaw) * rz, up: ry, at: performance.now() };
           voyage.next = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1] ?? null;
-          if (voyage.next) voyage.phase = "closing";
+          // (the gate was a window on a world that stands ready: straight through it. Otherwise, the cloud)
+          if (voyage.next && portalReady(voyage.next)) through_(id, voyage.next);
+          else if (voyage.next) voyage.phase = "closing";
           else if (process.env.NODE_ENV !== "production") console.error(`[voyage] ${id}: through the gate, but no world follows`);
         }
       }
@@ -701,9 +714,47 @@ export function Plane({
       // (one that was ready needs only the sky's change of colour; one made here and now is given longer)
       if (voyage.held > (voyage.quick ? 0.3 : 0.75) && voyage.frames >= (voyage.quick ? 3 : 5) && !voyage.skyFrom) voyage.phase = "opening";
     } else {
-      voyage.veil = Math.max(0, voyage.veil - dt / 1.7);
-      if (voyage.veil <= 0) voyage.phase = "open";
+      // (after a window there was never more than a breath of cloud at the frame's edges: it is gone in a moment)
+      voyage.veil = Math.max(0, voyage.veil - dt / (st.windowed ? 0.9 : 1.7));
+      if (voyage.veil <= 0) {
+        voyage.phase = "open";
+        st.windowed = false;
+      }
     }
+  };
+  // Through a gate that is a window (worlds/portal.tsx): the plane is carried from this world's gate to the next
+  // world's entry with the very turn and offset it has (so is the eye that follows it, and the mist behind it),
+  // and the worlds change places in the same instant. What was seen through the gate is now simply there.
+  const through_ = (from: WorldId, to: WorldId) => {
+    const turn = gateToEntry(from, to, M4);
+    if (turn === null) {
+      voyage.phase = "closing";
+      return;
+    }
+    st.pos.applyMatrix4(M4);
+    st.yaw += turn;
+    st.camYaw += turn;
+    trails.carry(M4);
+    voyage.next = null;
+    voyage.quick = true;
+    swapWorld(to);
+    // (no slow change of sky under a cloud: the sky is already the one that was seen through the gate)
+    voyage.skyFrom = null;
+    portalSwap(to);
+    // never into the ground on the far side, whatever height the gate was taken at
+    const o = originOf(to);
+    const floor = groundAt(WORLDS[to], st.pos.x - o.x, st.pos.z - o.z) + 2;
+    if (st.pos.y < floor) st.pos.y = floor;
+    st.pathI = 0;
+    st.seek = 0;
+    st.gateSide = -1;
+    st.gateAlong = NaN;
+    st.idle = Math.max(st.idle, 0);
+    updateNose();
+    st.windowed = true;
+    voyage.veil = 0.16;
+    voyage.held = 0;
+    voyage.phase = "opening";
   };
   const airOf = (edge: number) => {
     // (the kings' light is not cloud: it thickens no air)

@@ -3,12 +3,13 @@
 import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import * as THREE from "three";
+import { SKY_U } from "../sky";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, pointsGeometry, rng, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { makeCloudPaint, makeRayDiscMaterial, makeSoftMaterial, paintedCloudGeometry, softGeometry, type PCloud, type Soft } from "./stars/forms";
 import { beamGeometry, makeBeamMaterial, makeGoldStone, type Beam } from "./sun/gold";
-import { SUN_GRASS_MASK, SUN_PAL, groveMap, sunPlotJS } from "./sun/ground";
+import { SUN_GRASS_MASK, SUN_GROUND_U, SUN_PAL, groveMap, sunPlotJS } from "./sun/ground";
 import { SUN_LIFE_U, bannersGeometry, greatSunMaterial, hungBellGeometry, makeBannerMaterial, makeHungBellMaterial, makeSkeinMaterial, makeSunsMaterial, makeWalkerMaterial, skeinGeometry, sunsGeometry, walkersGeometry, type Banner, type Hung, type KSun, type Skein, type Walker } from "./sun/life";
 import { SUN_BELLS, SUN_BRIDGES, SUN_GARDEN, SUN_GATEHOUSES, SUN_ROAD_Z, SUN_SKY, sunRoadX, type SunBridge } from "./sun/shape";
 import { ORIGIN, WORLDS, gateOf, groundAt, pathOf, voyage } from "./voyage";
@@ -670,6 +671,35 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       }
     }
 
+    // the first view is framed: close on either hand of the road as the plane comes over the rise, a stand of tall
+    // dark cypresses (near, in shade), and between them the lit plain, the aqueducts and the bells
+    for (const [sx, n] of [
+      [-1, 7],
+      [1, 5],
+    ] as [number, number][])
+      for (let i = 0; i < n; i++) {
+        const z = 1690 - i * 9 + (r() - 0.5) * 6;
+        const x = sunRoadX(z) + sx * (30 + i * 5 + r() * 8);
+        const big = 2.6 + r() * 1.4;
+        const rd = 1.5 * big;
+        const sy = 4.2 + r() * 1.6;
+        treesNear.push({ p: [x, g(x, z) + rd * sy * 0.8, z], r: rd, col: [0.07, 0.09, 0.15], sy, seed: r() });
+        shade.push({ x, z, r: rd, h: rd * sy * 1.8 });
+      }
+    // and nearest of all, hard by the way on either hand where the plane comes over the rise, two pairs of great
+    // dark cypresses taller than its flight: the plane goes between them, and the lit plain is seen through that gate
+    for (const [dx, z, tall] of [
+      [-24, 1736, 62],
+      [27, 1728, 54],
+      [-33, 1700, 46],
+      [36, 1694, 40],
+    ] as [number, number, number][]) {
+      const x = sunRoadX(z) + dx;
+      const rd = tall / 13;
+      const sy = tall / (rd * 1.8);
+      treesNear.push({ p: [x, g(x, z) + rd * sy * 0.8, z], r: rd, col: [0.05, 0.065, 0.11], sy, seed: r() });
+      shade.push({ x, z, r: rd, h: tall });
+    }
     // ----- pilgrims on the road, in small companies -----
     const walkers: Walker[] = [];
     const companies = props.mobile ? 14 : 34;
@@ -784,13 +814,15 @@ export default function SunWorld({ props }: { props: WorldProps }) {
   // The journey's events. The plane's furthest progress north kindles the suns ahead of it; the skeins are let go
   // in their moments: one across the first view, one up from the garden over the first aqueduct, one across the
   // open sun on the way out. All of it begins again each time the world is entered.
-  const ev = useRef({ t: 0, on: false });
+  const ev = useRef({ t: 0, on: false, toll: -1 });
   useFrame(({ camera }, dt) => {
     const e = ev.current;
     const here = voyage.cur === "sun";
     if (!here || !e.on) {
       e.on = here;
       e.t = 0;
+      e.toll = -1;
+      SUN_GROUND_U.uToll.value = -1;
       SUN_LIFE_U.uFront.value = 1e5;
       SUN_LIFE_U.uSkein.value.set(-1, -1, -1, -1);
       if (!here) return;
@@ -806,6 +838,12 @@ export default function SunWorld({ props }: { props: WorldProps }) {
     s.x = run(s.x, e.t > 3);
     s.y = run(s.y, front < 1250);
     s.z = run(s.z, front < -1170 && x > 180);
+    // the great bell tolls when the plane has come through the tall aqueduct, and again at long intervals while it
+    // is among the bells: each time a ring of light goes out from its foot over the plain (sun/ground.ts)
+    const now = SKY_U.uTime.value;
+    if (front < 40 && e.toll < 0) e.toll = now;
+    const tt = e.toll < 0 ? -1 : (now - e.toll) % 38;
+    SUN_GROUND_U.uToll.value = tt >= 0 && tt < 22 ? tt : -1;
   });
   return (
     <>

@@ -92,7 +92,10 @@ function archPoint(a: number): [number, number] {
   return [-CAVE.half * Math.cos(t), CAVE.wall + (CAVE.top - CAVE.wall) * Math.sin(t)];
 }
 
-export function buildFuneralRock(mobile: boolean) {
+// (made in steps: the mountains' grid a few rows at a time, then the road, then the caves; so it can be made a
+// little a frame under the closed cloud instead of in one long frame. prepareFuneralRock hands out the stepper.)
+function* rockSteps(mobile: boolean, budget: number) {
+  let t0 = performance.now();
   const L = funeralLand();
   const near = roadIndex();
   const mouth = L.pts[L.iMouth];
@@ -117,7 +120,11 @@ export function buildFuneralRock(mobile: boolean) {
   const pos = new Float32Array(NV * NV * 3);
   const attr = new Float32Array(NV * NV * 3); // crest light, the procession's gold, (spare)
   const CZ = 60;
-  for (let j = 0; j < NV; j++)
+  for (let j = 0; j < NV; j++) {
+    if ((j & 3) === 0 && performance.now() - t0 > budget) {
+      yield;
+      t0 = performance.now();
+    }
     for (let i = 0; i < NV; i++) {
       const x = warp((i / SEG) * 2 - 1);
       const z = warp((j / SEG) * 2 - 1) + CZ;
@@ -156,6 +163,8 @@ export function buildFuneralRock(mobile: boolean) {
       // (no line of light along the cut under the road's edge: the road's own cliff is drawn over it)
       attr[o + 2] = q.i >= 0 ? Math.min(1, Math.max(0, (150 - q.d) / 50)) : 0;
     }
+  }
+  yield;
   // how much each point stands proud of its neighbours (a crest) or lies under them (a gully)
   for (let j = 1; j < SEG; j++)
     for (let i = 1; i < SEG; i++) {
@@ -198,6 +207,7 @@ export function buildFuneralRock(mobile: boolean) {
   land.computeVertexNormals();
   land.computeBoundingSphere();
 
+  yield;
   // ---------- the road and its cliffs ----------
   // across: the road (5), then down each side the cliff under its edge
   const SK: [number, number][] = [
@@ -286,6 +296,7 @@ export function buildFuneralRock(mobile: boolean) {
   ledge.computeVertexNormals();
   ledge.computeBoundingSphere();
 
+  yield;
   // ---------- the caves ----------
   // Two of them, built the same way: the one in the north wall that the procession goes into (lit from within), and
   // the one in the southern mountain that it, and the plane, come out of (dark, the night's blue at its mouth).
@@ -443,6 +454,28 @@ export function buildFuneralRock(mobile: boolean) {
   cave.computeBoundingSphere();
 
   return { land, ledge, cave };
+}
+type Rock = ReturnType<typeof rockSteps> extends Generator<void, infer T, void> ? T : never;
+let madeRock: { mobile: boolean; v: Rock } | null = null;
+export function prepareFuneralRock(mobile: boolean, budget = 5) {
+  if (madeRock && madeRock.mobile !== mobile) madeRock = null;
+  const g = madeRock ? null : rockSteps(mobile, budget);
+  return () => {
+    if (!g || madeRock) return true;
+    const r = g.next();
+    if (r.done) madeRock = { mobile, v: r.value };
+    return !!r.done;
+  };
+}
+export function dropFuneralRock(v: unknown) {
+  if (madeRock?.v === v) madeRock = null;
+}
+export function buildFuneralRock(mobile: boolean): Rock {
+  if (madeRock && madeRock.mobile === mobile) return madeRock.v;
+  const g = rockSteps(mobile, Infinity);
+  let r = g.next();
+  while (!r.done) r = g.next();
+  return r.value;
 }
 
 // ---------- the paint ----------

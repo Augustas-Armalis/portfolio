@@ -1346,8 +1346,21 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
   useEffect(() => {
     if (!fine) return;
     let tip = 0;
+    let letGoAt = -1e9;
+    // Esc gives the pointer back and does nothing else: it must not also land the plane. Chrome keeps that Esc to
+    // itself; a browser that passes it on (before or after it lets the pointer go) has it stopped here, ahead of
+    // everything else that listens for Esc.
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const locked = !!document.pointerLockElement;
+      if (!locked && performance.now() - letGoAt > 600) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      if (locked) document.exitPointerLock();
+    };
     const change = () => {
       const on = !!document.pointerLockElement;
+      if (!on) letGoAt = performance.now();
       mouseLook.on = on;
       mouseLook.dx = mouseLook.dy = 0;
       setHeld(on);
@@ -1388,7 +1401,9 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
     document.addEventListener("mousemove", move);
     window.addEventListener("pointerdown", press, true);
     window.addEventListener("keydown", key);
+    window.addEventListener("keydown", esc, true);
     return () => {
+      window.removeEventListener("keydown", esc, true);
       window.clearTimeout(tip);
       document.removeEventListener("pointerlockchange", change);
       document.removeEventListener("pointerlockerror", refused);

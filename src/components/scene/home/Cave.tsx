@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
@@ -300,6 +301,17 @@ function buildCave() {
   return finish(b);
 }
 
+// from far off the mouth is backed by one dark warm sheet a few metres in (the cave itself is not drawn there)
+function buildPlug() {
+  const b = newBuf();
+  const line = mouthLine(30);
+  const c = vert(b, 0, MOUTH.top * 0.4, 9, 4);
+  const ids = line.map(([u, y]) => vert(b, u * 1.08, Math.max(y, FLOOR - 0.5), 9, 4));
+  for (let i = 0; i < ids.length - 1; i++) b.idx.push(c, ids[i], ids[i + 1]);
+  b.idx.push(c, ids[ids.length - 1], ids[0]);
+  return finish(b);
+}
+
 // light drifting in the chamber: soft motes that rise and wander, warm
 function buildMotes(count: number) {
   const r = rng(808);
@@ -349,6 +361,82 @@ function buildMotes(count: number) {
 }
 
 const LEAD = new THREE.Color(1.0, 0.8, 0.5);
+// Behind the veil, the world beyond: layered sheets of slow flowing light, gold going to rose, each further in and
+// moving at its own pace, so the portal has depth and life when looked into.
+function buildBeyond() {
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  const quad = (p: [number, number, number][], q: [number, number, number][]) => {
+    const b = pos.length / 3;
+    p.forEach((v, i) => {
+      pos.push(...v);
+      uv.push(...q[i]);
+    });
+    idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  };
+  const H = ARCH.half * 1.15;
+  const top = ARCH.apex + 3;
+  for (let k = 0; k < 5; k++) {
+    const a = CAVE.gateIn + 2.5 + k * 7;
+    quad([W(-H, FLOOR - 0.5, a), W(H, FLOOR - 0.5, a), W(H, top, a), W(-H, top, a)], [[-H, FLOOR - 0.5, k], [H, FLOOR - 0.5, k], [H, top, k], [-H, top, k]]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("aUv", new THREE.Float32BufferAttribute(uv, 3));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  return g;
+}
+function makeBeyondMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    uniforms: { ...SKY_U, uNightK: FOREST_K.night },
+    vertexShader: /* glsl */ `
+      attribute vec3 aUv; varying vec3 vUv; varying vec3 vWorld;
+      void main(){ vUv = aUv; vWorld = position; gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform float uTime; uniform float uNightK;
+      varying vec3 vUv; varying vec3 vWorld;
+      ${GLSL_NOISE}
+      void main(){
+        float dist = length(vWorld - cameraPosition);
+        // (seen only from in front of the mountain and inside it: from far off it would be a sliver fighting the rock)
+        float near = (1.0 - smoothstep(55.0, 115.0, dist)) * exp(-dist * 0.006);
+        if (vUv.z < 9.5) {
+          float k = vUv.z;
+          vec2 p = vUv.xy;
+          // inside the arch's outline (a little soft): the sheet is only seen through the opening
+          float K = 1.1547 * (${f2(ARCH.apex)} - ${f2(ARCH.spring)});
+          float hw = p.y <= ${f2(ARCH.spring)} ? ${f2(ARCH.half)} : ${f2(ARCH.half)} * (2.0 * cos(asin(clamp((p.y - ${f2(ARCH.spring)}) / K, 0.0, 1.0))) - 1.0);
+          float inside = 1.0 - smoothstep(-2.0, 1.5, abs(p.x) - hw * (1.05 + k * 0.05));
+          float t = uTime * (0.05 + k * 0.015);
+          vec2 q = p * (0.06 + k * 0.012) + vec2(k * 3.7, -t);
+          vec2 w = vec2(fbm(q + vec2(t * 0.6, 0.0)), fbm(q + vec2(5.2, t * 0.4)));
+          float n = fbm(q * 1.6 + w * 2.2 + vec2(0.0, -t * 1.5));
+          float veins = pow(1.0 - abs(n - 0.5) * 2.0, 6.0);
+          vec3 gold = vec3(1.0, 0.78, 0.42);
+          vec3 rose = vec3(1.0, 0.55, 0.5);
+          vec3 col = mix(gold, rose, smoothstep(0.3, 0.8, w.x)) * (0.18 + 0.55 * veins) * (1.0 - k * 0.12);
+          // brightest low and in the middle, where the way goes
+          col *= 0.6 + 0.6 * exp(-pow((p.y - ${f2(ARCH.spring)}) / 12.0, 2.0));
+          gl_FragColor = vec4(col * inside * near * 0.38, 1.0);
+        } else {
+          // a shaft: soft across, fading out toward the mouth, breathing slowly
+          float a = pow(1.0 - abs(vUv.x), 2.4) * (1.0 - vUv.y) * smoothstep(0.0, 0.12, vUv.y);
+          a *= 0.55 + 0.45 * sin(uTime * 0.4 + vUv.z * 1.7);
+          a *= smoothstep(3.0, 14.0, dist) * near;
+          gl_FragColor = vec4(vec3(1.0, 0.8, 0.5) * a * (0.06 + 0.06 * uNightK), 1.0);
+        }
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
 const f2 = (n: number) => n.toFixed(2);
 
 function makeStoneMaterial() {
@@ -417,7 +505,7 @@ function makeStoneMaterial() {
         vec3 V = normalize(cameraPosition - vWorld);
         col += uLead * pow(max(dot(reflect(-V, n), toSrc), 0.0), 18.0) * 0.25 * inside * fine * (kind < 1.5 || (kind > 3.5 && kind < 4.5) ? 1.0 : 0.3);
         // (inside the cave there is no air of the land)
-        col = mix(homeAir(col, vWorld), col, inside);
+        col = homeAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -432,15 +520,29 @@ export function Cave() {
         cliff: buildCliff(),
         mass: buildMass(),
         cave: buildCave(),
+        plug: buildPlug(),
+        beyond: buildBeyond(),
+        beyondMat: makeBeyondMaterial(),
         motes: buildMotes(70),
         mat: makeStoneMaterial(),
         massMat: makeRangeMaterial({ r0: 0, r1: 0, height: PEAK.h, freq: 0, seed: 0, haze: 0, snow: 0.22, pass: [0, 0], span: [0, 0], massif: 0 }),
       })),
     [],
   );
+  // the cave's inside (its walls, the frame, the light in it) is only drawn when the eye is near enough to see into it
+  const inner = useRef<THREE.Group>(null);
+  const plug = useRef<THREE.Mesh>(null);
+  const frames = useRef(0);
+  useFrame(({ camera }) => {
+    const g = inner.current;
+    if (!g) return;
+    const near = Math.hypot(camera.position.x - CAVE.x, camera.position.z - CAVE.z) < (g.visible ? 330 : 300);
+    g.visible = ++frames.current < 90 || near;
+    if (plug.current) plug.current.visible = !g.visible;
+  });
   useEffect(
     () => () => {
-      for (const x of [m.cliff, m.mass, m.cave, m.motes.g, m.motes.m, m.mat, m.massMat]) x.dispose();
+      for (const x of [m.cliff, m.mass, m.cave, m.plug, m.beyond, m.beyondMat, m.motes.g, m.motes.m, m.mat, m.massMat]) x.dispose();
     },
     [m],
   );
@@ -448,8 +550,12 @@ export function Cave() {
     <>
       <mesh geometry={m.mass} material={m.massMat} />
       <mesh geometry={m.cliff} material={m.mat} />
+      <mesh ref={plug} geometry={m.plug} material={m.mat} visible={false} />
+      <group ref={inner}>
       <mesh geometry={m.cave} material={m.mat} />
       <mesh geometry={m.motes.g} material={m.motes.m} renderOrder={6} />
+      <mesh geometry={m.beyond} material={m.beyondMat} renderOrder={5} />
+      </group>
     </>
   );
 }

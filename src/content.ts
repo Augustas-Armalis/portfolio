@@ -350,7 +350,7 @@ export const projects: Partial<Record<AppId, Project>> = {
     ],
     stack: "Swift, Metal, C#",
     status: "v1.2.2",
-    video: { src: "/lab/rug/demo.mp4", poster: "/lab/rug/poster.webp" },
+    video: { src: "/lab/rug/rug.mp4", poster: "/lab/rug/rug-poster.webp" },
     numbers: [
       { label: "Runs on", value: "Mac, PC" },
       { label: "Price", value: "Free" },
@@ -745,7 +745,7 @@ const media: Media[] = [
 export const gallery = {
   media,
   albums: [
-    { id: "best", title: "Best of", sub: "The ones I keep coming back to", items: ["x1jAFA-T7GU", "film-52444", "W5ISGAqjAfg", "wPKTJsihIYw", "uPwWP83BCeg", "uJIhAvqFJxg", "GiDqZkXMqVM", "film-4998", "bINbcn3031o", "_-3P0X11GYI", "GU8CEZReKxs", "kQ0LkrVVuv0"] },
+    { id: "best", title: "Best of", sub: "The ones I keep coming back to", items: ["GiDqZkXMqVM", "film-52444", "W5ISGAqjAfg", "x1jAFA-T7GU", "wPKTJsihIYw", "uPwWP83BCeg", "uJIhAvqFJxg", "film-4998", "bINbcn3031o", "_-3P0X11GYI", "GU8CEZReKxs", "kQ0LkrVVuv0"] },
     { id: "iceland", title: "Iceland", sub: "Along the Ring Road", items: ["wPKTJsihIYw", "bINbcn3031o", "film-52436", "eKfEO0qM1aU", "YifNPOb4UhA", "PozYb57vV38", "hO4F6nYJ03w", "innb1UEpVZg"] },
     { id: "dolomites", title: "Dolomites", sub: "High up in the Alps", items: ["x1jAFA-T7GU", "uJIhAvqFJxg", "1oGFKEePOFQ", "film-2788", "kQ0LkrVVuv0", "UWP6ZzHrqfo", "ATzEluEgZpw", "RIhZ4zFYBCQ", "PWHEBQS0QXo"] },
     { id: "tokyo", title: "Tokyo at night", sub: "Shinjuku, Shibuya, Ikebukuro", items: ["W5ISGAqjAfg", "2uuaV_fI4LU", "GU8CEZReKxs", "XMAbH81gUbQ", "kYlfHSJVZT4", "xSJq_ivXjAc", "T11f_AGNKGg"] },

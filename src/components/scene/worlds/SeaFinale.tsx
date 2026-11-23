@@ -7,6 +7,7 @@ import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, WORLD_U, makeTempera, rng, type GroundPalette, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { greatSunMaterial } from "./sun/life";
+import { PORTAL_U } from "./portal";
 import { buildWisps, makeWispMaterial } from "./sea/water";
 import { makeCloudPaint, paintedCloudGeometry, type PCloud } from "./stars/forms";
 import { SKY_U, airState, mixSky, type SkyState } from "../sky";
@@ -303,8 +304,9 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       e.seed = (e.seed * 7.31 + 1.7) % 97;
       e.nextBolt = t + 3.5 + ((e.seed * 3.3) % 5.5);
       // (ahead and to the open sea's side, where nothing stands before it; its head up in the deck)
-      const ang = 0.35 + ((e.seed * 0.37) % 1) * 1.0;
-      const dist = 1300 + ((e.seed * 0.61) % 1) * 1300;
+      // (well inside the view, and nearer than the wave, so nothing hides it)
+      const ang = 0.1 + ((e.seed * 0.37) % 1) * 0.5;
+      const dist = 620 + ((e.seed * 0.61) % 1) * 420;
       camera.getWorldDirection(tmp.current.fwd);
       const fl = Math.hypot(tmp.current.fwd.x, tmp.current.fwd.z) || 1;
       const hx = tmp.current.fwd.x / fl;
@@ -313,7 +315,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       const dirz = hz * Math.cos(ang) - hx * Math.sin(ang);
       const u = b.boltMat.uniforms;
       u.uAt.value.set(camera.position.x - ORIGIN.x + dirx * dist, camera.position.y - ORIGIN.y + 420 + ((e.seed * 0.83) % 1) * 260, camera.position.z - ORIGIN.z + dirz * dist);
-      u.uSize.value.set(900, 1500);
+      u.uSize.value.set(620, 1150);
       u.uBolt.value.x = e.seed;
     }
     const age = t - e.boltAt;
@@ -324,6 +326,8 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     const eye: V3 = [camera.position.x - ORIGIN.x, camera.position.y - ORIGIN.y, camera.position.z - ORIGIN.z];
     rainRef.current?.position.set(eye[0], eye[1], eye[2]);
     crashRef.current?.position.set(eye[0], eye[1], eye[2]);
+    // (the window onto the next world, when there is one, shows through the crash)
+    b.crashMat.uniforms.uThin.value = PORTAL_U.uPortalK.value;
     // one ship works her way right up the face as the wave stands, hangs under the crest, and is thrown back
     const crestK = sm(p, 0.42, 0.62) * (1 - sm(p, 0.74, 0.9));
     const { up, fwd, right, m } = tmp.current;
@@ -360,7 +364,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
   });
   return (
     <>
-      <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.9, 0.6]} pathGain={0.3} angels={false} marks={false} />
+      <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.9, 0.6]} pathGain={0.3} angels={false} marks={false} gateSize={[32, 42]} />
       {/* (hung beyond the wave, which is further off than the shared sun stands) */}
       <mesh material={b.sunMat} frustumCulled={false} renderOrder={-4}>
         <planeGeometry args={[2, 2]} />

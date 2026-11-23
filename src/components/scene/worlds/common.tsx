@@ -9,6 +9,7 @@ import { WorldGrass } from "../Grass";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { GLSL_AIR, Kit, WORLD_U, angel, haloGeometry, makeCanvasMaterial, makeHaloMaterial, makePoints, makePuffMaterial, makeTempera, makeTerrainMaterial, pointsGeometry, puffGeometry, rng, terrainGeometry, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { PortalWindow } from "./portal";
 import { WORLDS, WORLD_ORDER, gateOf, groundAt, heightGLSL, originOf, pathOf, voyage, type WorldDef, type WorldId } from "./voyage";
 
 // What every world shares: its ground and grass, the path of light with its
@@ -250,7 +251,7 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
           #include <colorspace_fragment>
         }`,
     });
-    return { geo, mat, threadGeo: tp.length ? threadGeo : null, threadMat, halos: haloGeometry(halos), haloMat: makeHaloMaterial(0), glows: glows.length ? haloGeometry(glows) : null, glowMat: makeHaloMaterial(2), marks: k.parts.length ? k.build() : null, tempera: makeTempera({ amb: 0.9, key: 0.3 }) };
+    return { geo, mat, threadGeo: tp.length ? threadGeo : null, threadMat, halos: haloGeometry(halos), haloMat: makeHaloMaterial(0, [110, 250]), glows: glows.length ? haloGeometry(glows) : null, glowMat: makeHaloMaterial(2), marks: k.parts.length ? k.build() : null, tempera: makeTempera({ amb: 0.9, key: 0.3 }) };
   }, [id, effects > 0.25]);
   return (
     <>
@@ -458,6 +459,8 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
       {arch && <mesh geometry={b.arch} material={b.tempera} />}
       <points geometry={b.motes} material={b.moteMat} />
       {arch && <mesh geometry={b.puffs} material={b.puffMat} renderOrder={3} />}
+      {/* the opening is a window on the next world once the plane is near (worlds/portal.tsx); the sheet of light plays over it */}
+      <PortalWindow id={id} def={def} half={half} rise={rise} />
       <mesh geometry={b.veilGeo} material={b.veil} position={b.pos} rotation={[0, b.yaw, 0]} renderOrder={5} />
       <mesh geometry={b.glow} material={b.glowMat} renderOrder={6} />
       {arch && <mesh geometry={b.halos} material={b.haloMat} renderOrder={6} />}
@@ -893,6 +896,8 @@ export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pa
       <LightPath id={id} def={def} tint={pathTint} gain={pathGain} effects={props.effects} angels={angels} marks={marks} />
       {arch && def.gate && gate !== "none" && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} look={gate} half={gateSize?.[0]} rise={gateSize?.[1]} />}
       <Gallery def={def} />
+      {/* a world that draws its own gate still has the window in it (worlds/portal.tsx); where the world mounts a LightGate of its own, that gate's window is the one and this stands aside */}
+      {def.gate && !(arch && gate !== "none") && <PortalWindow id={id} def={def} half={gateSize?.[0]} rise={gateSize?.[1]} fallback />}
     </>
   );
 }

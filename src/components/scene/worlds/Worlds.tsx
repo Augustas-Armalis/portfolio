@@ -7,19 +7,20 @@ import { postCtl } from "../Post";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { CAVE } from "../home/journey";
+import { PortalView, portalRig } from "./portal";
 import { LightGate, LightPath, type WorldProps } from "./common";
 import { Birds, type Flock } from "./life";
 import { PlayFrame } from "./play";
 import { setWorldAir } from "./kit";
 import FairyWorld from "./Fairy";
-import FuneralWorld from "./Funeral";
+import FuneralWorld, { prepareFuneral } from "./Funeral";
 import GateWorld from "./Gate";
 import KingsWorld, { dropKings, prepareKings } from "./Kings";
 import ParadiseWorld from "./Paradise";
-import RexWorld from "./Rex";
+import RexWorld, { prepareRex } from "./Rex";
 import SeaWorld from "./Sea";
 import SeaFinaleWorld from "./SeaFinale";
-import StarsWorld from "./Stars";
+import StarsWorld, { prepareStars } from "./Stars";
 import SunWorld from "./Sun";
 import { ORIGIN, WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, pathOf, useWorld, voyage, type WorldId } from "./voyage";
 
@@ -32,9 +33,18 @@ if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") Obje
 
 // The home field's own things (hills, trees, lake, grass) are wrapped in this
 // so they are not even submitted while the plane is in another world.
+// (a gate's window draws the next world by itself for a moment: it needs to know what is home's, to leave it out)
+const homeRef = (g: THREE.Group | null) => {
+  if (g) portalRig.home.add(g);
+  else portalRig.home.forEach((o) => !o.parent && portalRig.home.delete(o));
+};
 export function HomeWorld({ children }: { children: ReactNode }) {
   const id = useWorld();
-  return <group visible={id === "home"}>{children}</group>;
+  return (
+    <group visible={id === "home"} ref={homeRef}>
+      {children}
+    </group>
+  );
 }
 
 // The cloud over the lens. It closes from the edges of the frame in soft
@@ -107,7 +117,7 @@ const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNod
 // one left behind is unmounted (and its geometry, materials and textures disposed) as the plane arrives.
 type Drawn = THREE.Mesh | THREE.Points | THREE.Line;
 // (step 0, for a world with something heavy in it: that is made first, a few milliseconds a frame)
-const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { kings: (props) => prepareKings(props) };
+const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { kings: (props) => prepareKings(props), stars: (props) => prepareStars(props), funeral: (props) => prepareFuneral(props), rex: (props) => prepareRex(props) };
 function useWarmWorld(cur: WorldId, props: WorldProps) {
   const { gl, camera, scene } = useThree();
   const [warm, setWarm] = useState<WorldId | null>(null);
@@ -292,23 +302,37 @@ export function Worlds(props: WorldProps) {
   return (
     <>
       {id === "home" && (
-        <>
+        <group ref={homeRef}>
           <LightPath id="home" def={WORLDS.home} angels effects={props.effects} from={10} />
           {/* the home gate is the veil inside the cave's arch (home/journey.ts, home/Cave.tsx draw the stone) */}
           <LightGate id="home" def={WORLDS.home} look="veil" half={CAVE.half} rise={CAVE.rise} />
           {/* a small flock over the road that parts round the plane as it passes (worlds/play.tsx) */}
           {props.effects > 0.25 && <Birds flocks={HOME_FLOCKS} scatter={15} seed={11} />}
-        </>
+        </group>
       )}
       {ids.map((w) => {
         const Comp = COMPONENTS[w];
         return (
-          <group key={w} position={ORIGIN} visible={w === id} ref={w === id ? stand : group}>
+          <group
+            key={w}
+            position={ORIGIN}
+            visible={w === id}
+            ref={(g) => {
+              (w === id ? stand : group).current = g;
+              // (which of the two is which, for the gate's window)
+              if (w === id) portalRig.stand = g;
+              else {
+                portalRig.warm = g;
+                portalRig.warmId = g ? w : null;
+              }
+            }}
+          >
             {Comp && <Comp props={props} />}
           </group>
         );
       })}
       <PlayFrame />
+      <PortalView mobile={props.mobile} />
       <Veil />
     </>
   );

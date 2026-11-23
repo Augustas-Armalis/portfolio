@@ -1,90 +1,98 @@
 [
- {
-  "id": "sun-allegro",
-  "file": "/assets/ciurlionis/sun-allegro.jpg",
-  "title": "Sonata of the Sun. Allegro (1907)",
-  "width": 1280,
-  "height": 1452,
-  "source": "https://commons.wikimedia.org/wiki/File:Saules_sonata.Allegro.jpg"
- },
- {
-  "id": "stars-allegro",
-  "file": "/assets/ciurlionis/stars-allegro.jpg",
-  "title": "Sonata of the Stars. Allegro (1908)",
-  "width": 1280,
-  "height": 1492,
-  "source": "https://commons.wikimedia.org/wiki/File:Sonata_No._6_(Sonata_of_the_Stars)._Allegro.jpeg"
- },
- {
-  "id": "stars-andante",
-  "file": "/assets/ciurlionis/stars-andante.jpg",
-  "title": "Sonata of the Stars. Andante (1908)",
-  "width": 1280,
-  "height": 1506,
-  "source": "https://commons.wikimedia.org/wiki/File:Sonata_No._6_(Sonata_of_the_Stars)._Andante.jpeg"
- },
- {
-  "id": "rex",
-  "file": "/assets/ciurlionis/rex.jpg",
-  "title": "Rex (1909)",
-  "width": 1280,
-  "height": 1437,
-  "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_REX_-_1909.jpg"
- },
- {
-  "id": "fairy-tale",
-  "file": "/assets/ciurlionis/fairy-tale.jpg",
-  "title": "Castle Fairy Tale (1909)",
-  "width": 1280,
-  "height": 947,
-  "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_FAIRY_TALE_(CASTLE_FAIRY_TALE)_-_1909.jpg"
- },
- {
-  "id": "paradise",
-  "file": "/assets/ciurlionis/paradise.jpg",
-  "title": "Paradise (1909)",
-  "width": 1280,
-  "height": 943,
-  "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_ANGELS_(PARADISE)_-_1909.jpg"
- },
- {
-  "id": "offering",
-  "file": "/assets/ciurlionis/offering.jpg",
-  "title": "The Offering (1909)",
-  "width": 1280,
-  "height": 1149,
-  "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_OFFERING_-_1909.jpg"
- },
- {
-  "id": "tranquility",
-  "file": "/assets/ciurlionis/tranquility.jpg",
-  "title": "Tranquility (1904)",
-  "width": 960,
-  "height": 553,
-  "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Ciurlionis_-_Tranquility_(Ramybe).jpg"
- },
- {
-  "id": "kings",
-  "file": "/assets/ciurlionis/kings.jpg",
-  "title": "Fairy Tale of the Kings (1909)",
-  "width": 1280,
-  "height": 1201,
-  "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_FAIRY_TALE_(FAIRY_TALE_OF_KINGS)_-_1909.jpg"
- },
- {
-  "id": "funeral-vi",
-  "file": "/assets/ciurlionis/funeral-vi.jpg",
-  "title": "Funeral Symphony VI (1903)",
-  "width": 1280,
-  "height": 1491,
-  "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_FUNERAL_SYMPHONY_(VI)_-_1903,_Varsuva.jpg"
- },
- {
-  "id": "sea-finale",
-  "file": "/assets/ciurlionis/sea-finale.jpg",
-  "title": "Sonata of the Sea: Finale (1908)",
-  "width": 584,
-  "height": 727,
-  "source": "https://commons.wikimedia.org/wiki/File:Juros_sonata.Finale.jpg"
- }
+  {
+    "id": "sun-allegro",
+    "file": "/assets/ciurlionis/sun-allegro.jpg",
+    "title": "Sonata of the Sun. Allegro (1907)",
+    "width": 1280,
+    "height": 1452,
+    "source": "https://commons.wikimedia.org/wiki/File:Saules_sonata.Allegro.jpg"
+  },
+  {
+    "id": "stars-allegro",
+    "file": "/assets/ciurlionis/stars-allegro.jpg",
+    "title": "Sonata of the Stars. Allegro (1908)",
+    "width": 1280,
+    "height": 1492,
+    "source": "https://commons.wikimedia.org/wiki/File:Sonata_No._6_(Sonata_of_the_Stars)._Allegro.jpeg"
+  },
+  {
+    "id": "stars-andante",
+    "file": "/assets/ciurlionis/stars-andante.jpg",
+    "title": "Sonata of the Stars. Andante (1908)",
+    "width": 1280,
+    "height": 1506,
+    "source": "https://commons.wikimedia.org/wiki/File:Sonata_No._6_(Sonata_of_the_Stars)._Andante.jpeg"
+  },
+  {
+    "id": "rex",
+    "file": "/assets/ciurlionis/rex.jpg",
+    "title": "Rex (1909)",
+    "width": 1280,
+    "height": 1437,
+    "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_REX_-_1909.jpg"
+  },
+  {
+    "id": "fairy-tale",
+    "file": "/assets/ciurlionis/fairy-tale.jpg",
+    "title": "Castle Fairy Tale (1909)",
+    "width": 1280,
+    "height": 947,
+    "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_FAIRY_TALE_(CASTLE_FAIRY_TALE)_-_1909.jpg"
+  },
+  {
+    "id": "paradise",
+    "file": "/assets/ciurlionis/paradise.jpg",
+    "title": "Paradise (1909)",
+    "width": 1280,
+    "height": 943,
+    "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_ANGELS_(PARADISE)_-_1909.jpg"
+  },
+  {
+    "id": "offering",
+    "file": "/assets/ciurlionis/offering.jpg",
+    "title": "The Offering (1909)",
+    "width": 1280,
+    "height": 1149,
+    "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_OFFERING_-_1909.jpg"
+  },
+  {
+    "id": "tranquility",
+    "file": "/assets/ciurlionis/tranquility.jpg",
+    "title": "Tranquility (1904)",
+    "width": 960,
+    "height": 553,
+    "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Ciurlionis_-_Tranquility_(Ramybe).jpg"
+  },
+  {
+    "id": "kings",
+    "file": "/assets/ciurlionis/kings.jpg",
+    "title": "Fairy Tale of the Kings (1909)",
+    "width": 1280,
+    "height": 1201,
+    "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_FAIRY_TALE_(FAIRY_TALE_OF_KINGS)_-_1909.jpg"
+  },
+  {
+    "id": "funeral-vi",
+    "file": "/assets/ciurlionis/funeral-vi.jpg",
+    "title": "Funeral Symphony VI (1903)",
+    "width": 1280,
+    "height": 1491,
+    "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_FUNERAL_SYMPHONY_(VI)_-_1903,_Varsuva.jpg"
+  },
+  {
+    "id": "sea-finale",
+    "file": "/assets/ciurlionis/sea-finale.jpg",
+    "title": "Sonata of the Sea: Finale (1908)",
+    "width": 584,
+    "height": 727,
+    "source": "https://commons.wikimedia.org/wiki/File:Juros_sonata.Finale.jpg"
+  },
+  {
+    "id": "friendship",
+    "file": "/assets/ciurlionis/friendship.jpg",
+    "title": "Friendship (1906–1907)",
+    "width": 1280,
+    "height": 1481,
+    "source": "https://commons.wikimedia.org/wiki/File:Mikalojus_Konstantinas_Ciurlionis_-_FRIENDSHIP_-_1906_-_7.jpg"
+  }
 ]

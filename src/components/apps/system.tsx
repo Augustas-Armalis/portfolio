@@ -584,7 +584,8 @@ export function SettingsApp() {
                       </span>
                     )}
                   </Squircle>
-                  <span className="m-sub mt-1.5 block truncate text-ink-2">{live ? "Live, follows the music" : w.by}</span>
+                  <span className="m-body mt-1.5 block truncate text-ink">{live ? "Live" : (w.name ?? w.by)}</span>
+                  <span className="m-sub block truncate text-ink-3">{live ? "Follows the music" : w.by}</span>
                 </button>
               );
             })}

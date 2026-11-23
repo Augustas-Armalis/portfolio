@@ -227,6 +227,8 @@ export const HOME_U = {
   uCloudTex: { value: null as THREE.Texture | null },
   // haze at the ground (per metre), its falloff with height, the cloud cover's threshold
   uAirK: { value: new THREE.Vector4(0.00125, 0.0045, 0.56, 0) },
+  // a mist the air itself glows toward (rgb, how much): the journey's forest at night is moonlit fog, not darkness
+  uFogGlow: { value: new THREE.Vector4(0.1, 0.13, 0.17, 0) },
 };
 
 // The air of the home world: haze that lies in the low land and thins with
@@ -235,7 +237,7 @@ export const HOME_U = {
 // of it are nothing; a kilometre of it is the sky. And the shade of the
 // clouds, which drift over all of it.
 export const GLSL_HOME_AIR = /* glsl */ `
-uniform sampler2D uForestMap; uniform sampler2D uCrownMap; uniform sampler2D uCloudTex; uniform vec4 uAirK;
+uniform sampler2D uForestMap; uniform sampler2D uCrownMap; uniform sampler2D uCloudTex; uniform vec4 uAirK; uniform vec4 uFogGlow;
 float homeAirAmt(vec3 wpos){
   vec3 dv = wpos - cameraPosition; float dist = length(dv);
   float b = uAirK.y;
@@ -247,7 +249,8 @@ float homeAirAmt(vec3 wpos){
 // (looked down into from above, the air is not the horizon's own blaze but something cooler and quieter)
 vec3 homeAirCol(vec3 d){
   vec3 c = skyBase(normalize(vec3(d.x, max(d.y, 0.0) * 0.55 + 0.02, d.z)));
-  return mix(c, mix(uUpper, uHorizon, 0.4) * 0.92, smoothstep(0.0, 0.45, -d.y) * 0.72);
+  c = mix(c, mix(uUpper, uHorizon, 0.4) * 0.92, smoothstep(0.0, 0.45, -d.y) * 0.72);
+  return mix(c, uFogGlow.rgb, uFogGlow.a);
 }
 // thin air is blue and adds little; only deep air is the pale horizon itself. So the middle distance keeps its
 // colour and its darks, and it is the far land that goes into the sky.
@@ -619,7 +622,8 @@ export function bakeCrownMap(trees: HomeTree[]) {
 // (soft noise carved by round cells), G: the billows on them, B: plain soft
 // noise. Sampled a few times per sky pixel, which is far cheaper than hashing.
 export function bakeCloudTex() {
-  const n = 256;
+  // (a phone bakes it at half the size: a quarter of the work behind the loader, and the shaders read it by position, not by texel)
+  const n = typeof window !== "undefined" && window.innerWidth < 768 ? 128 : 256;
   const data = new Uint8Array(n * n * 4);
   const R = rng(99);
   const cells = (count: number) => {
