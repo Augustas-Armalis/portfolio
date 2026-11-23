@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import * as THREE from "three";
 import { POST_U, postCtl } from "../Post";
 import { applySky, clockHours, skyState, type SkyState } from "../sky";
@@ -28,7 +28,7 @@ import { WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, originOf, voyage, voyag
 
 // what stands and what waits, as the scene graph has them (Worlds.tsx keeps these up to date)
 // (`windows`: the worlds whose gate has a window mounted in it: without one a crossing is never made this way)
-export const portalRig = { stand: null as THREE.Object3D | null, warm: null as THREE.Object3D | null, warmId: null as WorldId | null, home: new Set<THREE.Object3D>(), windows: new Map<WorldId, number>(), gl: null as THREE.WebGLRenderer | null };
+export const portalRig = { stand: null as THREE.Object3D | null, warm: null as THREE.Object3D | null, warmId: null as WorldId | null, home: new Set<THREE.Object3D>(), windows: new Map<WorldId, number>(), gl: null as THREE.WebGLRenderer | null, close: 0 };
 
 // (uPortalGain: the picture is that world's light, but the frame is still exposed for this one until the plane is
 // through: it is shown at the brightness it will have on the far side)
@@ -204,6 +204,7 @@ export function PortalView({ mobile }: { mobile: boolean }) {
       }
       PORTAL_U.uPortalGain.value = skyOf(next!).exposure / Math.max(voyage.lastSky?.exposure ?? 1, 0.05);
     }
+    if (!able || d >= 45) portalRig.close = 0;
     if (!able || d >= 320) {
       state.k = Math.max(0, state.k - dt * 3);
       if (state.k <= 0) {
@@ -221,6 +222,9 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     }
     state.k += (want - state.k) * (1 - Math.exp(-dt * 4));
     // the live picture: only within 130 m (beyond, the still); every second frame, every frame over the last seventy metres
+    // (the last stretch: the window is drawn after everything of this world, so no mist, spray or glow of this side
+    // lies over it in the frames before the swap and is gone the frame after)
+    portalRig.close = d < 45 ? 1 : 0;
     const stillOk = STILL_U.uStillOn.value > 0;
     const liveT = stillOk ? 1 - THREE.MathUtils.smoothstep(d, 90, 130) : 1;
     if (stillOk && d > 135) {
@@ -300,6 +304,10 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
     return () => ownBump(id, -1);
   }, [fallback, id]);
   const shown = !(fallback && owned > 0);
+  const mesh = useRef<THREE.Mesh>(null);
+  useFrame(() => {
+    if (mesh.current) mesh.current.renderOrder = portalRig.close && voyage.cur === id ? 1e4 : 7;
+  });
   const b = useMemo(() => {
     const gate = gateOf(id);
     if (!gate) return null;
@@ -375,6 +383,6 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
   }, [b, id, shown]);
   if (!b || !shown) return null;
   // (after the gate's own sheet of light, glow and lamps: as the picture comes up they are left as a halo round it
-  // and no longer wash it out)
-  return <mesh geometry={b.geo} material={b.mat} renderOrder={7} frustumCulled={false} />;
+  // and no longer wash it out; over the last stretch, after everything: see PortalView)
+  return <mesh geometry={b.geo} material={b.mat} renderOrder={7} frustumCulled={false} ref={mesh} />;
 }
