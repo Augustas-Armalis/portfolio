@@ -708,7 +708,9 @@ function build(level: number) {
 }
 
 const sunV = new THREE.Vector3();
-const WARM = ["tile", "tile2", "dof", "tent", "mask", "rays", "steady"] as const;
+// every pass, in the order they are made: those every frame needs first
+const WARM = ["half", "ao", "aoBlur", "down", "up", "comp", "paint", "steady", "tile", "tile2", "dof", "tent", "mask", "rays"] as const;
+const FIRST = 7; // how many of them a frame cannot be drawn without
 const VP = new THREE.Matrix4();
 
 export function Post({ level }: { level: number }) {
@@ -805,13 +807,25 @@ export function Post({ level }: { level: number }) {
       gl.setRenderTarget(target);
       gl.render(p.quad, p.cam);
     };
-    // The passes of the lens that are not needed at once (the depth of field when the eye reaches the desk, the
-    // rays when the sun comes into the frame, the steadying when the eye slows) are made one a frame over its
-    // first frames, which are drawn behind the loader: made at first use, each cost a long frame in the middle of
-    // the descent or the first look round. (The photograph's finer blur is left for the camera to ask for.)
+    // The lens is fourteen programs, and making them all in its first frame was one task of half a second (two
+    // seconds on a slow machine). They are made one a frame instead. While the loader's own picture covers the
+    // canvas (postCtl.overlay) nothing of the scene needs to reach the screen, so for those first frames the scene
+    // is only drawn into its target (which also warms its own shaders and buffers) and one pass of the lens is
+    // made; the loader is laid over as always. Where there is no loader over it (a change of gear in mid-visit)
+    // the passes a frame cannot do without are made at once, as before, and the rest one a frame.
     if (p.warmed < WARM.length) {
-      const mat = p.m[WARM[p.warmed++]];
-      if (mat) run(mat, p.pick);
+      const covered = !!postCtl.overlay && !out;
+      if (!covered) while (p.warmed < FIRST) run(p.m[WARM[p.warmed++]], p.pick);
+      else if (p.warmed < FIRST) {
+        run(p.m[WARM[p.warmed++]], p.pick);
+        POST_U.uLinearOut.value = 1;
+        gl.setRenderTarget(p.full);
+        gl.render(scene, camera);
+        POST_U.uLinearOut.value = 0;
+        overlay();
+        return;
+      }
+      if (p.warmed >= FIRST && p.warmed < WARM.length) run(p.m[WARM[p.warmed++]], p.pick);
     }
     p.depthU.uNear.value = pc.near;
     p.depthU.uFar.value = pc.far;
