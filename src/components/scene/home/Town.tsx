@@ -6,10 +6,10 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { voyage } from "../worlds/voyage";
-import { makeHomeTreeMaterial } from "./Forest";
+import { farBlock, makeFarMaterial, makeHomeTreeMaterial } from "./Forest";
 import { CHURCH, HILL, SQUARE, TOWN, hillRoadA, riverD, riverSlope, riverW, riverWL, riverZ, sst } from "./journey";
-import { GLSL_HOME_AIR, HOME_U, landH, rng, timed, type TreeKind } from "./land";
-import { buildTree, makeLeafTexture } from "./trees";
+import { GLSL_HOME_AIR, HOME_U, landH, rng, timed, type HomeTree, type TreeKind } from "./land";
+import { buildTree, makeFarTreeTexture, makeLeafTexture } from "./trees";
 
 // The town on the river (journey.ts): a Lithuanian wooden town as at Rumšiškės or in old Kėdainiai, and over it a
 // red-brick castle on its hill as at Trakai. Log houses with steep shingled or thatched roofs, carved white window
@@ -41,7 +41,16 @@ class TB {
   private oz = 0;
   private c = 1;
   private s = 0;
+  // (the ground under the thing being built, found once per thing: the shader's foot-shade only needs it roughly)
+  private gy = 0;
+  private gx = NaN;
+  private gz = NaN;
   at(x: number, y: number, z: number, rot = 0) {
+    if (x !== this.gx || z !== this.gz) {
+      this.gx = x;
+      this.gz = z;
+      this.gy = landH(x, z);
+    }
     this.ox = x;
     this.oy = y;
     this.oz = z;
@@ -60,7 +69,7 @@ class TB {
     this.col.push(col[0], col[1], col[2]);
     this.uv.push(uv[0], uv[1]);
     this.mat.push(m[0], m[1], m[2], m[3]);
-    this.ao.push(q[1] - landH(q[0], q[2]));
+    this.ao.push(q[1] - this.gy);
     return this.pos.length / 3 - 1;
   }
   // a quad a b c d, with its uv in metres (by default u along a->b, v along a->d)
@@ -156,7 +165,7 @@ const SHINGLE: V3 = [0.2, 0.18, 0.16];
 const THATCH: V3 = [0.3, 0.25, 0.14];
 const TILE: V3 = [0.24, 0.095, 0.06];
 const STONE: V3 = [0.33, 0.31, 0.28];
-const BRICK: V3 = [0.25, 0.1, 0.065];
+const BRICK: V3 = [0.22, 0.095, 0.065];
 const DARK: V3 = [0.07, 0.055, 0.045];
 const WOOD: V3 = [0.26, 0.2, 0.14];
 const PAINTED: V3[] = [
@@ -433,144 +442,121 @@ function buildTown() {
   take(SQUARE.x, SQUARE.z, 19);
   take(CHURCH.x, CHURCH.z, 17);
 
-  // ----- the castle on the hill: a curtain wall with round corner towers, a gate tower, the tall keep -----
+  // ----- the castle on the hill (as Trakai's or Kaunas's): an irregular ring of red-brick wall following the hill's
+  // head, towers of different heights round it (round ones with tall cones, a square gate tower), the tall round keep
+  // with a turret beside it, a small white chapel with its own spire, pennants on the points, warm slit windows
   {
     const gy = ground(HILL.x, HILL.z) - 0.5;
-    // turned so its gate looks down toward the river
     const rot = Math.atan2(TOWN.x - HILL.x, TOWN.z - HILL.z);
     b.at(HILL.x, gy, HILL.z, rot);
-    const W = 13;
-    const Dp = 11;
-    const wh = 9.5;
-    const corners: [number, number][] = [
-      [-W, -Dp],
-      [W, -Dp],
-      [W, Dp],
-      [-W, Dp],
-    ];
-    for (let i = 0; i < 4; i++) {
-      const [x0, z0] = corners[i];
-      const [x1, z1] = corners[(i + 1) % 4];
-      b.wall(x0, z0, x1, z1, -2.5, wh, BRICK, K.brick, 0);
-      b.wall(x1 * 0.93, z1 * 0.9, x0 * 0.93, z0 * 0.9, -2.5, wh, BRICK, K.brick, 0);
+    const wh = 8.5;
+    // the ring: six corners at their own distances (local: the gate at +z)
+    const ring: [number, number][] = [0.2, 1.15, 2.05, 3.0, 4.05, 5.15].map((a, i) => {
+      const rr = [13, 15, 12.5, 14.5, 12, 15.5][i];
+      return [Math.sin(a) * rr, Math.cos(a) * rr];
+    });
+    for (let i = 0; i < ring.length; i++) {
+      const [x0, z0] = ring[i];
+      const [x1, z1] = ring[(i + 1) % ring.length];
+      b.wall(x0, z0, x1, z1, -3, wh, BRICK, K.brick, 0);
+      b.wall(x1 * 0.92, z1 * 0.92, x0 * 0.92, z0 * 0.92, -3, wh, BRICK, K.brick, 0);
+      b.quad([x0, wh, z0], [x1, wh, z1], [x1 * 0.92, wh, z1 * 0.92], [x0 * 0.92, wh, z0 * 0.92], [0.22, 0.17, 0.13], [K.stone, 0, 0, 0]);
       const n = Math.round(Math.hypot(x1 - x0, z1 - z0) / 1.6);
       for (let k = 0; k < n; k += 2) {
         const t = (k + 0.5) / n;
-        b.box(x0 + (x1 - x0) * t, wh + 0.45, z0 + (z1 - z0) * t, 0.8, 0.9, 0.8, BRICK, K.brick);
+        b.box(x0 + (x1 - x0) * t, wh + 0.45, z0 + (z1 - z0) * t, 0.75, 0.9, 0.75, BRICK, K.brick);
       }
     }
-    b.quad([-W, wh, Dp], [W, wh, Dp], [W, wh, -Dp], [-W, wh, -Dp], [0.22, 0.17, 0.13], [K.stone, 0, 0, 0]);
-    // round towers with tall cones of red tile
-    for (const [cx, cz] of corners) {
-      b.cyl(cx, -2.5, cz, 3.1, 2.8, wh + 7.5, 12, BRICK, K.brick, 3.2);
-      b.cyl(cx, wh + 5, cz, 3.5, 0.0, 9.5, 12, TILE, K.tile);
-      b.cyl(cx, wh + 14.4, cz, 0.06, 0.03, 1.4, 4, DARK);
-    }
-    // the gate tower, its pointed arch facing the town
-    b.box(0, wh / 2 + 2.5, Dp, 6.5, wh + 10, 5, BRICK, K.brick);
-    b.cyl(0, wh + 7.5, Dp, 4.6, 0, 7, 4, TILE, K.tile);
-    b.quad([-1.5, -0.5, Dp + 2.53], [1.5, -0.5, Dp + 2.53], [1.5, 3.4, Dp + 2.53], [-1.5, 3.4, Dp + 2.53], DARK, [K.paint, 0, 0, 0]);
-    b.tri([-1.5, 3.4, Dp + 2.53], [1.5, 3.4, Dp + 2.53], [0, 5.0, Dp + 2.53], DARK, [K.paint, 0, 0, 0], [[0, 0], [3, 0], [1.5, 1.6]]);
-    // the keep: tall and square, its own steep roof and a slim spire
-    b.box(-3, 12, -3, 9, 29, 9, BRICK, K.brick, false);
-    b.wall(-7.5, 1.52, 1.5, 1.52, 4, 25, BRICK, K.brick, 2.6, 0, 2);
-    b.wall(1.52, 1.5, 1.52, -7.5, 4, 25, BRICK, K.brick, 2.6, 0, 2);
-    b.cyl(-3, 26.5, -3, 6.6, 0, 11, 4, TILE, K.tile);
-    b.cyl(-3, 37, -3, 0.08, 0.02, 3, 4, DARK);
-    // a hall along the far wall
-    b.box(5, 5.0, -6, 14, 11, 7, BRICK, K.brick, false);
-    b.wall(-2, -2.48, 12, -2.48, 1.5, 10, BRICK, K.brick, 2.4, 0, 2);
-    const hq = 10.5;
-    b.quad([-2.3, hq, -2.2], [12.3, hq, -2.2], [12.3, hq + 4.5, -6], [-2.3, hq + 4.5, -6], TILE, [K.tile, 0, 0, 0]);
-    b.quad([12.3, hq, -9.8], [-2.3, hq, -9.8], [-2.3, hq + 4.5, -6], [12.3, hq + 4.5, -6], TILE, [K.tile, 0, 0, 0]);
-    // lights round the walk and at the gate: the lights seen from the river
-    for (const [cx, cz] of corners) lamps.push([...b.w([cx * 0.86, wh + 1.6, cz * 0.86]), 0.8, HILL.x + 40]);
-    lamps.push([...b.w([-2.3, 4.0, Dp + 2.9]), 0.7, HILL.x + 50]);
-    lamps.push([...b.w([2.3, 4.0, Dp + 2.9]), 0.7, HILL.x + 50]);
-    smoke.push([...b.w([5, 15, -6]), 1]);
+    // towers on the corners: round, each its own height, tall red cones, a pennant on the point
+    const pennant = (x: number, y: number, z: number, col: V3) => {
+      b.box(x, y + 1.0, z, 0.06, 2.0, 0.06, DARK);
+      b.tri([x, y + 2.0, z], [x, y + 1.4, z], [x + 1.6, y + 1.75, z + 0.3], col, [K.paint, 0, 0, 0], [[0, 0], [0, 0.6], [1.6, 0.3]]);
+    };
+    ring.forEach(([cx, cz], i) => {
+      if (i === 0) return;
+      const th = wh + 4 + ((i * 37) % 5) * 1.6;
+      const tr = 2.6 + ((i * 13) % 3) * 0.35;
+      b.cyl(cx, -3, cz, tr, tr * 0.92, th + 3, 12, BRICK, K.brick, 2.6);
+      b.cyl(cx, th - 0.4, cz, tr * 1.12, tr * 1.12, 0.6, 12, [0.2, 0.15, 0.1], K.boards, 0, false);
+      b.cyl(cx, th, cz, tr * 1.15, 0.0, tr * 3.2, 12, TILE, K.tile);
+      pennant(cx, th + tr * 3.2 - 0.2, cz, i % 2 ? [0.55, 0.08, 0.05] : [0.75, 0.55, 0.1]);
+      lamps.push([...b.w([cx * 1.12, th - 2.5, cz * 1.12]), 0.55, HILL.x + 40]);
+    });
+    // the gate tower over the first corner: square, its pointed arch toward the town
+    const [gx, gz] = ring[0];
+    b.at(HILL.x, gy, HILL.z, rot);
+    b.box(gx, wh / 2 + 3, gz, 6, wh + 12, 5.5, BRICK, K.brick);
+    b.cyl(gx, wh + 9, gz, 4.4, 0, 6, 4, TILE, K.tile);
+    pennant(gx, wh + 14.6, gz, [0.55, 0.08, 0.05]);
+    b.quad([gx - 1.4, -0.5, gz + 2.78], [gx + 1.4, -0.5, gz + 2.78], [gx + 1.4, 3.2, gz + 2.78], [gx - 1.4, 3.2, gz + 2.78], DARK, [K.paint, 0, 0, 0]);
+    b.tri([gx - 1.4, 3.2, gz + 2.78], [gx + 1.4, 3.2, gz + 2.78], [gx, 4.8, gz + 2.78], DARK, [K.paint, 0, 0, 0], [[0, 0], [2.8, 0], [1.4, 1.6]]);
+    lamps.push([...b.w([gx - 2.2, 3.8, gz + 3.1]), 0.7, HILL.x + 50]);
+    lamps.push([...b.w([gx + 2.2, 3.8, gz + 3.1]), 0.7, HILL.x + 50]);
+    // the keep: tall and round, a ring of machicolations, its cone, a slimmer turret leaning on it
+    b.cyl(-2, -2, -2, 5.2, 4.8, 30, 16, BRICK, K.brick, 2.8);
+    b.cyl(-2, 29.5, -2, 5.6, 5.6, 1.0, 16, [0.2, 0.15, 0.1], K.boards, 0, false);
+    b.cyl(-2, 30.3, -2, 5.8, 0, 13, 16, TILE, K.tile);
+    pennant(-2, 43, -2, [0.75, 0.55, 0.1]);
+    b.cyl(2.6, 6, -5.5, 1.9, 1.8, 30, 10, BRICK, K.brick, 2.4);
+    b.cyl(2.6, 35.8, -5.5, 2.1, 0, 7, 10, TILE, K.tile);
+    // the hall, warm windows along it
+    b.box(5, 4.8, 3, 7, 10.5, 12, BRICK, K.brick, false);
+    b.wall(1.48, 9, 1.48, -3, 1.5, 9.5, BRICK, K.brick, 2.2, 0, 2);
+    b.quad([1.2, 9.5, 9.3], [1.2, 9.5, -3.3], [5, 13.5, -3.3], [5, 13.5, 9.3], TILE, [K.tile, 0, 0, 0]);
+    b.quad([8.8, 9.5, -3.3], [8.8, 9.5, 9.3], [5, 13.5, 9.3], [5, 13.5, -3.3], TILE, [K.tile, 0, 0, 0]);
+    // the chapel: white plaster, a little shingled spire
+    b.box(-6, 3.5, 6, 5, 7, 7.5, WHITE, K.paint, false);
+    b.quad([-8.8, 7, 9.9], [-8.8, 7, 2.1], [-6, 10, 2.1], [-6, 10, 9.9], SHINGLE, [K.shingle, 0, 0, 0]);
+    b.quad([-3.2, 7, 2.1], [-3.2, 7, 9.9], [-6, 10, 9.9], [-6, 10, 2.1], SHINGLE, [K.shingle, 0, 0, 0]);
+    b.box(-6, 11, 9, 1.6, 3, 1.6, WHITE, K.paint);
+    b.cyl(-6, 12.5, 9, 1.2, 0, 4, 8, SHINGLE, K.shingle);
+    b.box(-6, 17.2, 9, 0.08, 1.4, 0.08, [0.6, 0.5, 0.22]);
+    b.box(-6, 17.5, 9, 0.6, 0.08, 0.08, [0.6, 0.5, 0.22]);
+    smoke.push([...b.w([5, 14.5, 3]), 1]);
   }
 
-  // ----- the houses climbing the hill: on its terraces, facing out and down -----
-  for (let k = 1; k <= 5; k++) {
-    // the radius where the dome stands k steps high (the middle of a flat)
-    const want = k * HILL.step;
-    let lo = HILL.top;
-    let hi = HILL.foot;
-    for (let i = 0; i < 24; i++) {
-      const m = (lo + hi) / 2;
-      if (HILL.h * (1 - sst(HILL.top, HILL.foot, m)) > want) lo = m;
-      else hi = m;
-    }
-    const rad = (lo + hi) / 2 - 1.5;
-    const n = Math.floor((2 * Math.PI * rad) / 12.5);
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + k * 0.7 + r() * 0.12;
-      const x = HILL.x + Math.cos(a) * rad;
-      const z = HILL.z + Math.sin(a) * rad;
-      // the back of the hill, toward the forest, is left to its trees
-      if (Math.sin(a) < -0.5 && Math.cos(a) < 0.3) continue;
-      // (the winding street up to the castle keeps clear)
-      const ra = Math.abs(((a - hillRoadA(rad) + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * rad;
-      if (ra < 7.5) continue;
-      if (r() < 0.12) {
-        gardens.push([x, z, r() < 0.5 ? "broad" : "birch", 0.62 + r() * 0.25]);
-        continue;
-      }
-      const L = 7 + r() * 3.5;
-      const D = 5.6 + r() * 1.2;
-      if (!free(x, z, L * 0.55)) continue;
-      take(x, z, L * 0.55);
-      const u = r();
-      const res = house(b, x, z, Math.PI / 2 - a, L, D, 2.9 + r() * 0.4, {
-        roof: u < 0.4 ? "shingle" : u < 0.78 ? "tile" : "thatch",
-        wall: r() < 0.5 ? "logs" : r() < 0.6 ? "painted" : "grey",
-        accent: Math.floor(r() * 4),
-        porch: r() < 0.4,
-        chimney: r() < 0.7,
-        horses: r() < 0.55,
-      });
-      if (r() < 0.2) smoke.push([...b.w([L * 0.175, res.top - res.floor + 1.3, -0.6]), 0.7 + r() * 0.5]);
-      // a fruit tree or a birch in the yard between this house and the next
-      if (r() < 0.65) {
-        const ga = a + (Math.PI / n) * (0.9 + r() * 0.3);
-        const gr = rad + (r() - 0.5) * 3;
-        const gx = HILL.x + Math.cos(ga) * gr;
-        const gz = HILL.z + Math.sin(ga) * gr;
-        if (free(gx, gz, 2.2)) {
-          take(gx, gz, 2.2);
-          const u2 = r();
-          gardens.push([gx, gz, u2 < 0.55 ? "broad" : u2 < 0.85 ? "birch" : "bush", 0.5 + r() * 0.3]);
-        }
-      }
-      // a lantern on the street below each third house: the hill sparkles at dusk
-      if (i % 3 === 0) lantern(b, HILL.x + Math.cos(a + 0.18) * (rad + 6), HILL.z + Math.sin(a + 0.18) * (rad + 6), lamps, HILL.x + 60 - k * 6);
-    }
+  // ----- the houses climbing the hill: loosely, as a town grows, each turned to the view down the slope -----
+  for (let tries = 0; tries < 420; tries++) {
+    const a = r() * Math.PI * 2;
+    const rad = HILL.top + 5 + Math.pow(r(), 0.8) * (HILL.foot - HILL.top - 9);
+    // the back of the hill, toward the forest, is left to its trees
+    if (Math.sin(a) < -0.5 && Math.cos(a) < 0.3) continue;
+    const ra = Math.abs(((a - hillRoadA(rad) + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * rad;
+    if (ra < 5.5) continue;
+    const x = HILL.x + Math.cos(a) * rad;
+    const z = HILL.z + Math.sin(a) * rad;
+    const L = 5.8 + r() * 4.5;
+    const D = 5.0 + r() * 1.6;
+    const big = Math.max(L, D) * 0.55 + 0.6;
+    if (!free(x, z, big)) continue;
+    take(x, z, big);
+    const u = r();
+    // (mostly the long side to the view, some gable-on; never quite square to the slope)
+    const rot = Math.PI / 2 - a + (r() < 0.3 ? Math.PI / 2 : 0) + (r() - 0.5) * 0.7;
+    const res = house(b, x, z, rot, L, D, 2.8 + r() * 0.5, {
+      roof: u < 0.42 ? "shingle" : u < 0.8 ? "tile" : "thatch",
+      wall: r() < 0.5 ? "logs" : r() < 0.6 ? "painted" : "grey",
+      accent: Math.floor(r() * 4),
+      porch: r() < 0.35,
+      chimney: r() < 0.7,
+      horses: r() < 0.5,
+      storey: r() < 0.15 ? 1.7 : 1,
+    });
+    if (r() < 0.22) smoke.push([...b.w([L * 0.175, res.top - res.floor + 1.3, -0.6]), 0.7 + r() * 0.5]);
+    if (r() < 0.3) lantern(b, x + Math.cos(a) * (D * 0.5 + 2.5), z + Math.sin(a) * (D * 0.5 + 2.5), lamps, HILL.x + 60 - rad * 0.3);
   }
-
-  // ----- trees on the slopes between the terraces: the hill is green between its roofs -----
-  for (let k = 0; k <= 5; k++) {
-    const want = (k + 0.5) * HILL.step;
-    let lo = HILL.top;
-    let hi = HILL.foot;
-    for (let i = 0; i < 24; i++) {
-      const m = (lo + hi) / 2;
-      if (HILL.h * (1 - sst(HILL.top, HILL.foot, m)) > want) lo = m;
-      else hi = m;
-    }
-    const rad = (lo + hi) / 2;
-    const n = Math.floor((2 * Math.PI * rad) / 5.5);
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + r() * 0.1;
-      if (r() < 0.38) continue;
-      const gr = rad + (r() - 0.5) * 2;
-      const gx = HILL.x + Math.cos(a) * gr;
-      const gz = HILL.z + Math.sin(a) * gr;
-      const ra = Math.abs(((a - hillRoadA(gr) + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * gr;
-      if (ra < 4.5 || !free(gx, gz, 1.8)) continue;
-      take(gx, gz, 1.8);
-      const u = r();
-      gardens.push([gx, gz, u < 0.5 ? "broad" : u < 0.8 ? "birch" : "bush", 0.5 + r() * 0.35]);
-    }
+  // the gardens in between: fruit trees, birches, bushes
+  for (let tries = 0; tries < 520; tries++) {
+    const a = r() * Math.PI * 2;
+    const rad = HILL.top + 3 + r() * (HILL.foot - HILL.top - 4);
+    const ra = Math.abs(((a - hillRoadA(rad) + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * rad;
+    if (ra < 3.5) continue;
+    const gx = HILL.x + Math.cos(a) * rad;
+    const gz = HILL.z + Math.sin(a) * rad;
+    if (!free(gx, gz, 1.9)) continue;
+    take(gx, gz, 1.9);
+    const u = r();
+    gardens.push([gx, gz, u < 0.5 ? "broad" : u < 0.8 ? "birch" : "bush", 0.48 + r() * 0.32]);
   }
 
   // ----- the quays: houses along both banks, a street between them and the water -----
@@ -1158,21 +1144,38 @@ function makeGardens(list: [number, number, TreeKind, number][], mobile: boolean
   for (const kind of ["broad", "birch", "bush"] as TreeKind[]) {
     const mine = list.filter((g) => g[2] === kind);
     if (!mine.length) continue;
-    const im = new THREE.InstancedMesh(buildTree(kind, 1, mobile ? 0 : 1), mat, mine.length);
+    // (two cuts of the same trees: the fine one while the eye is in the town, the coarse one from afar)
+    const fine = new THREE.InstancedMesh(buildTree(kind, 1, mobile ? 0 : 1), mat, mine.length);
+    const coarse = new THREE.InstancedMesh(buildTree(kind, 1, 0), mat, mine.length);
     mine.forEach(([x, z, , s], i) => {
       o.position.set(x, landH(x, z) - 0.06, z);
       o.rotation.set(0, r() * 6.28, 0);
       o.scale.setScalar(s);
       o.updateMatrix();
-      im.setMatrixAt(i, o.matrix);
-      im.setColorAt(i, col.setRGB(0.9 + r() * 0.2, 0.95 + r() * 0.1, 0.85 + r() * 0.1));
+      col.setRGB(0.9 + r() * 0.2, 0.95 + r() * 0.1, 0.85 + r() * 0.1);
+      for (const im of [fine, coarse]) {
+        im.setMatrixAt(i, o.matrix);
+        im.setColorAt(i, col);
+      }
     });
-    im.instanceMatrix.needsUpdate = true;
-    if (im.instanceColor) im.instanceColor.needsUpdate = true;
-    im.computeBoundingSphere();
-    meshes.push(im);
+    for (const im of [fine, coarse]) {
+      im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+      im.computeBoundingSphere();
+      meshes.push(im);
+    }
+    fine.userData.cut = "fine";
+    coarse.userData.cut = "coarse";
+    coarse.visible = false;
   }
-  return { meshes, mat, leaves };
+  // and from afar, one painted card a tree
+  const farMat = makeFarMaterial(makeFarTreeTexture());
+  const cards = farBlock(
+    list.map(([x, z, kind, s]): HomeTree => ({ x, y: landH(x, z), z, s: s * 0.9, kind, v: 0, rot: 0, tint: 0.5, lod: 2 })),
+    farMat,
+  );
+  cards.visible = false;
+  return { meshes, mat, leaves, farMat, cards };
 }
 
 export function Town({ mobile = false }: { mobile?: boolean }) {
@@ -1182,20 +1185,31 @@ export function Town({ mobile = false }: { mobile?: boolean }) {
   }, [mobile]);
   useEffect(
     () => () => {
-      for (const x of [t.geo, t.det, t.mat, t.halos.g, t.halos.m, t.smoke.g, t.smoke.m, t.storks.g, t.storks.m, t.storks.geo, t.wheel, t.garden.mat, t.garden.leaves]) x.dispose();
-      t.garden.meshes.forEach((m) => {
-        m.geometry.dispose();
-        m.dispose();
-      });
+      for (const x of [t.geo, t.det, t.mat, t.halos.g, t.halos.m, t.smoke.g, t.smoke.m, t.storks.g, t.storks.m, t.storks.geo, t.wheel, t.garden.mat, t.garden.farMat, t.garden.cards.geometry]) x.dispose();
+      // (the trees' geometry and the leaf sheet are the shared library's: trees.ts)
+      t.garden.meshes.forEach((m) => m.dispose());
     },
     [t],
   );
   const wheel = useRef<THREE.Mesh>(null);
   const det = useRef<THREE.Mesh>(null);
   const front = useRef(1e4);
+  const frames = useRef(0);
+  const far = useRef(false);
+  const storks = useRef<THREE.Mesh>(null);
   useFrame(({ camera }, dt) => {
     // (the houses' fine things only near: from the desk they would be a few pixels fighting the walls for depth)
-    if (det.current) det.current.visible = Math.hypot(camera.position.x - TOWN.x, camera.position.z - TOWN.z) < 190;
+    const dTown = Math.hypot(camera.position.x - TOWN.x, camera.position.z - TOWN.z);
+    // (for its first frames, behind the loader, everything is drawn once, so nothing is first sent to the GPU mid-flight)
+    const warm = ++frames.current < 90;
+    if (det.current) det.current.visible = warm || dTown < 190;
+    const near = t.garden.meshes[0]?.visible ? dTown < 240 : dTown < 210;
+    // (from far off, as from the desk, the gardens are painted cards, and the storks and the wheel are not drawn)
+    far.current = far.current ? dTown > 230 : dTown > 260;
+    for (const m of t.garden.meshes) m.visible = warm || (!far.current && (m.userData.cut === "fine") === near);
+    t.garden.cards.visible = warm || far.current;
+    if (storks.current) storks.current.visible = warm || !far.current;
+    if (wheel.current) wheel.current.visible = warm || !far.current;
     // the plane's furthest progress down the river (west), for the lamps; reset while it is not flying at home
     const flying = voyage.cur === "home" && voyage.flying && voyage.planePos.y > -100;
     front.current = flying ? Math.min(front.current, voyage.planePos.x) : 1e4;
@@ -1212,7 +1226,8 @@ export function Town({ mobile = false }: { mobile?: boolean }) {
       </group>
       <mesh geometry={t.halos.g} material={t.halos.m} renderOrder={6} frustumCulled={false} />
       <mesh geometry={t.smoke.g} material={t.smoke.m} renderOrder={5} />
-      <mesh geometry={t.storks.g} material={t.storks.m} />
+      <mesh ref={storks} geometry={t.storks.g} material={t.storks.m} />
+      <primitive object={t.garden.cards} />
       {t.garden.meshes.map((m, i) => (
         <primitive key={i} object={m} />
       ))}

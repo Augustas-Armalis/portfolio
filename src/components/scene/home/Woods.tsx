@@ -7,10 +7,10 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { voyage } from "../worlds/voyage";
-import { makeHomeTreeMaterial } from "./Forest";
+import { farBlock, makeFarMaterial, makeHomeTreeMaterial } from "./Forest";
 import { FOREST_LINE, HILL, laneD, sst } from "./journey";
-import { GLSL_HOME_AIR, HOME_U, PLACES, landH, rng, type TreeKind } from "./land";
-import { buildTree, makeLeafTexture } from "./trees";
+import { GLSL_HOME_AIR, HOME_U, PLACES, landH, rng, type HomeTree, type TreeKind } from "./land";
+import { buildTree, makeFarTreeTexture, makeLeafTexture } from "./trees";
 
 // The old forest of the journey (journey.ts): from the town's last houses north to the mountain's foot. Tall old
 // pines and oaks stand close either side of a lane the plane flies down, under their crowns, along a winding track
@@ -58,7 +58,7 @@ type WTree = { x: number; z: number; kind: TreeKind; s: number; rich: boolean; c
 function plant(amount: number) {
   const r = rng(6021);
   const out: WTree[] = [];
-  const cell = 5.0 / Math.sqrt(Math.max(0.5, amount));
+  const cell = 4.1 / Math.sqrt(Math.max(0.5, amount));
   for (let gx = -470; gx < -220; gx += cell)
     for (let gz = -680; gz < -160; gz += cell) {
       const x = gx + r() * cell;
@@ -73,10 +73,10 @@ function plant(amount: number) {
       if (Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z) < 14) continue;
       if (Math.hypot(x - DEER.x, z - DEER.z) < 9) continue;
       if (OWLS.some((o) => Math.hypot(x - o.x, z - o.z) < 4)) continue;
-      if (u > (d < 26 ? 0.88 : 0.8)) continue;
+      if (u > (d < 26 ? 0.9 : 0.86)) continue;
       // by the lane only pines (their crowns are carried high: the plane flies under them), further in oaks and spruce
       const kind: TreeKind = d < 14 ? "pine" : k < 0.5 ? "pine" : k < 0.74 ? "spruce" : k < 0.97 ? "broad" : "birch";
-      const s = kind === "pine" ? 1.35 + v * 0.45 : kind === "broad" ? 1.3 + v * 0.35 : kind === "spruce" ? 1.2 + v * 0.35 : 1.05 + v * 0.25;
+      const s = kind === "pine" ? 1.6 + v * 0.55 : kind === "broad" ? 1.45 + v * 0.4 : kind === "spruce" ? 1.45 + v * 0.45 : 1.2 + v * 0.25;
       out.push({ x, z, kind, s, rich: d < 26, chunk: Math.min(2, Math.floor(along * 3.2)), rot: r() * 6.283, tint: r() });
     }
   return out;
@@ -403,7 +403,7 @@ function makeMist(count: number) {
         vec3 c = aAt.xyz + vec3(sin(uTime * 0.05 + aAt.w) * 3.0, 0.0, cos(uTime * 0.04 + aAt.w * 1.3) * 3.0);
         float dist = length(c - cameraPosition);
         // (a sheet is never met up close: it thins as the eye comes near)
-        vA = uFogK * 0.16 * smoothstep(8.0, 24.0, dist) * (1.0 - smoothstep(160.0, 240.0, dist));
+        vA = uFogK * 0.3 * smoothstep(8.0, 24.0, dist) * (1.0 - smoothstep(160.0, 240.0, dist));
         vUv = position.xy;
         // upright, turned to the eye about the vertical only, so they lie along the ground
         vec3 Rh = normalize(vec3(R.x, 0.0, R.z) + 1e-5);
@@ -483,8 +483,21 @@ export function Woods({ amount, mobile, effects }: { amount: number; mobile: boo
             } else pending.set(tk, im);
           }
           if (!(rich && !cut)) tris += ((geo.index?.count ?? 0) / 3) * list.length;
+          im.userData.chunk = c;
+          im.userData.lod = !rich ? "mid" : cut ? "fine" : "coarse";
           meshes.push(im);
         }
+    // Far off, each stretch of the wood is the home world's painted cards (one card a tree): seen from the desk the
+    // whole forest is a few thousand triangles and three draws, and the trees themselves come in as the eye nears.
+    const farMat = makeFarMaterial(makeFarTreeTexture());
+    const cards = [0, 1, 2].map((c) => {
+      const list: HomeTree[] = trees.filter((t) => t.chunk === c).map((t) => ({ x: t.x, y: landH(t.x, t.z), z: t.z, s: t.s, kind: t.kind, v: 0, rot: t.rot, tint: t.tint, lod: 2 }));
+      const m = farBlock(list, farMat);
+      const at = new THREE.Vector3();
+      list.forEach((t) => at.add(new THREE.Vector3(t.x, t.y, t.z)));
+      at.divideScalar(Math.max(1, list.length));
+      return { mesh: m, at, far: false };
+    });
     const fox = foxGeometry();
     const deer = deerGeometry();
     const owls = OWL_H.map((h) => owlGeometry(h));
@@ -496,27 +509,39 @@ export function Woods({ amount, mobile, effects }: { amount: number; mobile: boo
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __woods: { trees: trees.length, tris: Math.round(tris), draws: meshes.length } });
     const g = ((globalThis as unknown as { __gen?: Record<string, number> }).__gen ??= {});
     g.woods = Math.round(performance.now() - t0);
-    return { meshes, twins, geos: [...geos.values()], mat, leaves, fox, deer, owls, cmats, flies, wisps, shrooms, mist };
+    return { meshes, twins, cards, farMat, mat, fox, deer, owls, cmats, flies, wisps, shrooms, mist };
   }, [amount, mobile, effects]);
   useEffect(
     () => () => {
+      // (the trees' geometry and the leaf sheets are the shared library's: trees.ts)
       w.meshes.forEach((m) => m.dispose());
-      for (const x of [...w.geos, w.mat, w.leaves, w.fox, w.deer, ...w.owls, ...w.cmats, w.flies.g, w.flies.m, w.wisps.g, w.wisps.m, w.shrooms.g, w.shrooms.m, w.shrooms.geo, w.mist.g, w.mist.m]) x.dispose();
+      w.cards.forEach((c) => c.mesh.geometry.dispose());
+      for (const x of [w.farMat, w.mat, w.fox, w.deer, ...w.owls, ...w.cmats, w.flies.g, w.flies.m, w.wisps.g, w.wisps.m, w.shrooms.g, w.shrooms.m, w.shrooms.geo, w.mist.g, w.mist.m]) x.dispose();
     },
     [w],
   );
 
   const fox = useRef<THREE.Mesh>(null);
-  const st = useRef({ al: 0.9, gait: 0, x: 0, z: 0, yaw: 0, init: false });
+  const st = useRef({ al: 0.9, gait: 0, x: 0, z: 0, yaw: 0, init: false, frames: 0 });
   useFrame(({ camera }, dtRaw) => {
     const dt = Math.min(dtRaw, 0.1);
     const s = st.current;
+    // (for its first frames, behind the loader, both cuts are drawn once, so neither is first sent to the GPU mid-flight)
+    const warm = ++s.frames < 90;
+    // each stretch: far off its cards, nearer the coarse cut, near the fine trees by the lane
+    for (const c of w.cards) {
+      const d = camera.position.distanceTo(c.at);
+      c.far = c.far ? d > 350 : d > 390;
+      c.mesh.visible = warm || c.far;
+    }
     for (const t of w.twins) {
       const d = camera.position.distanceTo(t.at);
-      const fine = t.fine.visible ? d < 360 : d < 320;
-      t.fine.visible = fine;
-      t.coarse.visible = !fine;
+      const fine = t.fine.visible && !warm ? d < 280 : d < 250;
+      const far = w.cards[t.fine.userData.chunk].far && !warm;
+      t.fine.visible = warm || (fine && !far);
+      t.coarse.visible = warm || (!fine && !far);
     }
+    for (const m of w.meshes) if (m.userData.lod === "mid") m.visible = warm || !w.cards[m.userData.chunk].far;
     const pp = voyage.planePos;
     const inHome = voyage.cur === "home" && voyage.flying && pp.y > -100;
     const L = inHome ? laneD(pp.x, pp.z) : { d: 1e9, along: 0 };
@@ -573,6 +598,9 @@ export function Woods({ amount, mobile, effects }: { amount: number; mobile: boo
     <>
       {w.meshes.map((m, i) => (
         <primitive key={i} object={m} />
+      ))}
+      {w.cards.map((c, i) => (
+        <primitive key={`c${i}`} object={c.mesh} />
       ))}
       <mesh ref={fox} geometry={w.fox} material={w.cmats[0]} scale={1.15} />
       <mesh geometry={w.deer} material={w.cmats[1]} position={[DEER.x, DEER.y - 0.05, DEER.z]} rotation={[0, DEER_YAW, 0]} />
