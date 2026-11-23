@@ -929,7 +929,9 @@ function* buildTownSteps() {
     b.box(-0.07, 0.42, 0, 0.03, 0.5, 0.03, RED);
   }
 
-  return { geo: b.geometry(), det: DET.geometry(), lamps, smoke, mill, gardens };
+  // (no garden tree stands over a lamp)
+  const clearOfLamps = gardens.filter(([x, z]) => lamps.every((l) => Math.hypot(l[0] - x, l[2] - z) > 3.4));
+  return { geo: b.geometry(), det: DET.geometry(), lamps, smoke, mill, gardens: clearOfLamps };
 }
 
 // ---------- the shader ----------
