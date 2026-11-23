@@ -548,7 +548,7 @@ export function makeRockMaterial() {
         vec3 alb = rockAlb(vLocal.xz, vLocal.y, n) * chalk(vLocal, dist);
         alb *= mix(1.0, mix(0.66, 1.16, smoothstep(0.05, 0.6, rib)), steep * rk);
         float lam = clamp(dot(n, uKeyDir) * 0.55 + 0.45, 0.0, 1.0);
-        vec3 col = alb * (uSkyCol * (0.72 + 0.28 * n.y) * 0.95 + uKeyCol * lam * lam * 0.6);
+        vec3 col = alb * (uSkyCol * (0.55 + 0.45 * n.y) * 0.8 + uKeyCol * lam * lam * 1.0);
         // his green-blue line of light along every crest, and a breath of it where a form turns from the eye
         float crest = smoothstep(0.16, 0.75, vK.x);
         float fres = pow(1.0 - max(dot(n, V), 0.0), 5.0);

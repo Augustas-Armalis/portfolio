@@ -15,7 +15,7 @@ import { ROAD_W, funeralLand } from "./land";
 // length can be culled, and drawn as carefully as its distance asks: near, a hooded figure of a hundred
 // triangles; further, one of thirty; far off, a single painted card that faces the eye. Some carry a light.
 
-export const CHUNK = 90;
+export const CHUNK = 120;
 const HEIGHT = 2.65;
 const END = /* glsl */ `
   #include <tonemapping_fragment>

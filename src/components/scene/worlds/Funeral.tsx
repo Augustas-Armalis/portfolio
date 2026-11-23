@@ -351,17 +351,6 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       clouds.push({ p: [x, y, z], w: 130 + r() * 200 + (d - 1300) * 0.06, seed: r() });
     }
 
-    // and nearer, in the abyss itself: banks of cloud lying in it, under the road's edge, the lanterns' light on their tops
-    for (let i = 0; i < (props.mobile ? 22 : 46); i++) {
-      const a = r() * Math.PI * 2;
-      const d = 250 + Math.pow(r(), 0.9) * 800;
-      const x = 380 + Math.cos(a) * d * 0.7;
-      const z = 120 + Math.sin(a) * d;
-      const y = 10 + r() * 80;
-      if (L.ground(x, z) > y - 40) continue;
-      clouds.push({ p: [x, y, z], w: 160 + r() * 240, seed: r() });
-    }
-
     // sparks of the lights they carry, drifting up off the crowd
     const motes = pointsGeometry(
       props.mobile ? 500 : 1400,
@@ -408,7 +397,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       clouds,
       shrines: shrines.build(),
       watchers: watch.geo,
-      watcherMat: makeTempera({ amb: 1.5, key: 0.6, rim: [0.1, 0.4, 0.42], rimPow: 2.6, wrap: 0.6, grain: 1.0 }),
+      watcherMat: makeTempera({ amb: 1.0, key: 0.6, rim: [0.1, 0.4, 0.42], rimPow: 2.6, wrap: 0.6, grain: 1.0 }),
       spiritRoad,
       auroraMat: makeAuroraMaterial(),
       veil,
