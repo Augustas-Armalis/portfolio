@@ -41,7 +41,18 @@ export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPor
 // after the worlds change places is the frame before.
 const STILL_U = { tStill: { value: null as THREE.Texture | null }, uStillMat: { value: new THREE.Matrix4() }, uStillOn: { value: 0 }, uLiveK: { value: 0 } };
 // A gate whose opening in the world is not the size of its sheet of light: [half-width, rise above the way's height].
-const OPENING: Partial<Record<WorldId, [number, number]>> = { sun: [23, 33] };
+// Measured from each world's own gate geometry: the clear half-width where the lancet springs (gate.pos.y + 2) and the top of the
+// space above gate.pos.y.
+//   sun        the arch between the towers (Sun.tsx gatehouse, s = 2.4)
+//   stars      inside the pale disc's bright core (the disc stands off to one side of the gate: Stars.tsx)
+//   fairy      the second order of the pointed arch (Fairy.tsx archGeometry 33 x mid + 25.5)
+//   paradise   the hole of the pointed arch in the colonnade (paradise/isle.ts archGeometry 28.5 x 38.6)
+//   gate       the gorge between the two leaning needles: 35 at the spring, 30 at half height, 24 at the tips, 94 over the way (Gate.tsx)
+//   seafinale  the space under the breaking crest (seafinale/shape.ts); it has no frame, the face stands about 40 m off
+//   sea        the grotto's half-ellipse (sea/shape.ts GROTTO half 24, top 27, over a gate at 9)
+//   funeral    the tunnel mouth: wall to 20, then a half-ellipse to 47 over the road (funeral/rock.ts, the gate 11 above the road)
+// Left out: home (CAVE.half and CAVE.rise, the cave's own), friendship (the orb draws its own hole) and rex (nothing is built at its gate).
+const OPENING: Partial<Record<WorldId, [number, number]>> = { sun: [23, 33], stars: [40, 45], fairy: [16.5, 25.5], paradise: [14.5, 22.5], gate: [35, 93], seafinale: [32, 42], sea: [22, 18], funeral: [21, 36] };
 const state = { next: null as WorldId | null, k: 0, fresh: 0, tick: 0, still: null as WorldId | null, live: 0 };
 
 const E = new THREE.Vector3();
