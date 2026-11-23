@@ -94,6 +94,29 @@ export function BootVeil({ onDone }: { onDone: () => void }) {
 
 type LoaderPhase = "load" | "open" | "fade" | "gone";
 const subs = new Set<() => void>();
+// While loading, the shown progress eases on toward a little short of the end, never more than a fifth ahead of
+// the real progress, and slower the nearer it gets: it keeps moving, but never claims done before it is.
+let creeping = false;
+function creep() {
+  if (creeping || typeof window === "undefined") return;
+  creeping = true;
+  let last = performance.now();
+  const step = (now: number) => {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (loader.phase !== "load" || loader.progress >= 0.985) {
+      creeping = false;
+      return;
+    }
+    const ceil = Math.min(0.97, loader.real + 0.2 + 0.1 * loader.real);
+    if (loader.progress < ceil) {
+      loader.progress += (ceil - loader.progress) * (1 - Math.exp(-dt / 2.6));
+      subs.forEach((f) => f());
+    }
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 export const loader = {
   progress: 0,
   phase: "load" as LoaderPhase,
@@ -111,11 +134,17 @@ export const loader = {
     if (r && r.width > 0) loader.line = { left: r.left, right: r.right, top: r.top, height: r.height };
     return loader.line;
   },
-  // progress only ever moves forward
+  // progress only ever moves forward. What is shown is the real progress, but never standing still: between
+  // reports it creeps on by itself (see creep()), so the line and the count run instead of waiting on a step.
+  real: 0,
   set(p: number) {
-    if (p <= loader.progress) return;
-    loader.progress = Math.min(1, p);
-    subs.forEach((f) => f());
+    if (p <= loader.real) return;
+    loader.real = Math.min(1, p);
+    creep();
+    if (loader.real > loader.progress) {
+      loader.progress = loader.real;
+      subs.forEach((f) => f());
+    }
   },
   // "open": the canvas takes over (cinematic); "fade": a plain dissolve (no intro)
   finish(how: "open" | "fade") {
@@ -125,6 +154,7 @@ export const loader = {
     subs.forEach((f) => f());
   },
   reset() {
+    loader.real = 0;
     loader.progress = 0;
     loader.phase = "load";
     loader.prompt = null;
@@ -132,6 +162,8 @@ export const loader = {
   },
 };
 if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __loader: loader });
+// (the count starts moving from the first frame, before the scene has reported anything)
+if (typeof window !== "undefined") queueMicrotask(creep);
 
 // The loading moment: dusk over the sea. A dark sky full of small stars, the
 // mountains' line along the horizon, and on the horizon the mark of the OS: a
