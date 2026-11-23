@@ -38,7 +38,7 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     const pts = pathOf("home").pts;
     return { pts, town: fracNear(pts, TOWN.x, TOWN.z), forest: fracNear(pts, ...FOREST_LINE[1]), deep: fracNear(pts, ...FOREST_LINE[4]), cave: fracNear(pts, ...FOREST_LINE[FOREST_LINE.length - 1]) };
   }, []);
-  const st = useMemo(() => ({ i: 0, f: 0, q: -1, live: null as SkyState | null, sky: null as SkyState | null, age: 0 }), []);
+  const st = useMemo(() => ({ i: 0, f: 0, fe: 0, q: -1, live: null as SkyState | null, sky: null as SkyState | null, age: 0 }), []);
   useEffect(
     () => () => {
       HOME_U.uAirK.value.x = AIR0;
@@ -67,10 +67,10 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     return 22.4;
   };
   function mod(s: SkyState) {
-    if (voyage.cur !== "home" || st.f <= 0.005) return s;
+    if (voyage.cur !== "home" || st.fe <= 0.005) return s;
     // (a visitor already at night stays in the night: the journey only darkens)
-    if (s.night > 0.5 && st.f < marks.forest) return s;
-    const q = Math.round(st.f * 400) / 400;
+    if (s.night > 0.5 && st.fe < marks.forest) return s;
+    const q = Math.round(st.fe * 400) / 400;
     if (q !== st.q || !st.sky || st.age > 90) {
       st.q = q;
       st.age = 0;
@@ -108,10 +108,17 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
       st.i = 0;
     }
     if (voyage.cur === "home") voyage.skyMod = mod;
-    const f = st.f;
-    const night = THREE.MathUtils.smoothstep(f, marks.forest - 0.04, marks.deep);
+    // Everything the journey changes (the hour, the sky, the light, night in the forest, its fog, the town's mist)
+    // follows an eased place along the path, not the plane's own: over distance each change is spread across a
+    // hundred metres or more of flight, and the ease in time (about three seconds to settle, as the music's
+    // crossfade at the forest's edge) keeps a jump, a fast pass or a turn back from ever snapping it. The same on
+    // the way out.
+    st.fe = voyage.cur === "home" ? THREE.MathUtils.damp(st.fe, st.f, 1.0, Math.min(dt, 0.1)) : 0;
+    if (Math.abs(st.fe - st.f) < 1e-5) st.fe = st.f;
+    const f = st.fe;
+    const night = THREE.MathUtils.smoothstep(f, marks.forest - 0.06, marks.deep);
     FOREST_K.night.value = Math.max(night, SKY_U.uNight.value * 0.8);
-    const fog = THREE.MathUtils.smoothstep(f, marks.forest - 0.03, marks.forest + 0.08) * (1 - 0.7 * THREE.MathUtils.smoothstep(f, marks.cave - 0.36, marks.cave - 0.16)) * (1 - THREE.MathUtils.smoothstep(f, marks.cave - 0.14, marks.cave - 0.05));
+    const fog = THREE.MathUtils.smoothstep(f, marks.forest - 0.05, marks.forest + 0.08) * (1 - 0.7 * THREE.MathUtils.smoothstep(f, marks.cave - 0.36, marks.cave - 0.16)) * (1 - THREE.MathUtils.smoothstep(f, marks.cave - 0.14, marks.cave - 0.05));
     FOREST_K.fog.value = fog;
     // the air: a light mist over the town's roofs (smoke and evening damp), and in the forest a soft fog lit by the
     // moon, thick enough that the trunks fade within a few tens of metres; it lifts before the mountain

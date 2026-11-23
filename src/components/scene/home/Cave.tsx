@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { ARCH, CAVE, MOUTH, PEAK, caveAt, sst } from "./journey";
+import { ARCH, CAVE, GATE_NARROW, MOUTH, PEAK, archHW, caveAt, sst } from "./journey";
 import { GLSL_HOME_AIR, HOME_U, landH, rng, timed } from "./land";
 import { makeRangeMaterial } from "./Mountains";
 import { FOREST_K } from "./Woods";
@@ -73,13 +73,13 @@ function massH(u: number, a: number) {
   return h - 4 - 60 * (1 - sst(0, 30, h));
 }
 
-// ---------- the mouth: a rough rounded opening, wider at its foot ----------
+// ---------- the mouth: the gate's own pointed arch, as rock wears it: a natural lancet, a little rough ----------
 const MID = 14;
 function mouthHW(y: number) {
-  const n = (vn(y * 0.32 + 4, 1.3) - 0.5) * 2.6 + (vn(y * 0.9, 7.7) - 0.5) * 0.9;
-  if (y <= MID) return MOUTH.half + n * 0.7 + 1.5 * (1 - sst(-4, MID, y));
-  const t = Math.min(1, (y - MID) / (MOUTH.top - MID));
-  return Math.max(0, MOUTH.half * Math.pow(Math.max(0, 1 - Math.pow(t, 2.2)), 1 / 2.2) + n * (1 - t));
+  // (the roughness is broad and slow, never a zigzag: the edge is worn, not chipped)
+  const n = (vn(y * 0.22 + 4, 1.3) - 0.5) * 1.6 + (vn(y * 0.5, 7.7) - 0.5) * 0.5;
+  const t = Math.min(1, Math.max(0, (y - ARCH.spring) / (MOUTH.top - ARCH.spring)));
+  return Math.max(0, archHW(y) + n * (1 - t) * 0.8 + 0.8 * (1 - sst(-4, 4, y)));
 }
 function mouthDist(u: number, y: number) {
   if (y < MOUTH.top) return Math.abs(u) - mouthHW(y);
@@ -207,14 +207,14 @@ function buildMass() {
 }
 
 // how wide the cave is at a depth, against its mouth: it narrows, then opens into the high chamber, then closes
-const caveScale = (a: number) => 1 - 0.1 * sst(0, 14, a) + 0.62 * sst(16, 36, a) - 1.2 * sst(86, MOUTH.depth, a);
+const caveScale = (a: number) => 1 - (1 - GATE_NARROW) * sst(0, CAVE.gateIn, a) + 0.3 * sst(CAVE.gateIn + 8, CAVE.gateIn + 30, a) - 0.9 * sst(86, MOUTH.depth, a);
 
 function buildCave() {
   const b = newBuf();
   const quad = (i0: number, i1: number, i2: number, i3: number) => b.idx.push(i0, i1, i2, i0, i2, i3);
   // the lip of rock round the mouth: a rough roll that stands a little out of the cliff
-  const line = mouthLine(70);
-  const SIDES = 8;
+  const line = mouthLine(120);
+  const SIDES = 12;
   const rim: number[][] = [];
   line.forEach(([u, y], i) => {
     const p = line[Math.max(0, i - 1)];
@@ -229,7 +229,7 @@ function buildCave() {
       nu = -nu;
       ny = -ny;
     }
-    const rad = 1.6 + 1.4 * vn(i * 0.21, 3.1);
+    const rad = 1.6 + 1.2 * vn(i * 0.09, 3.1);
     const ring: number[] = [];
     for (let k = 0; k < SIDES; k++) {
       const th = (k / SIDES) * Math.PI * 2;
@@ -240,17 +240,23 @@ function buildCave() {
   });
   for (let i = 0; i < rim.length - 1; i++) for (let k = 0; k < SIDES; k++) quad(rim[i][k], rim[i][(k + 1) % SIDES], rim[i + 1][(k + 1) % SIDES], rim[i + 1][k]);
   // the cave: the mouth's outline carried in, rough, narrowing and opening into the chamber; its far end the light
-  const prof = mouthLine(26);
+  // (fine rings and many points round each: the rock between the lip and the gate is seen close, and must be smooth)
+  const prof = mouthLine(56);
   const as: number[] = [];
-  for (let a = -0.5; a < MOUTH.depth; a += 3) as.push(a);
+  for (let a = -0.5; a < CAVE.gateIn + 16; a += 1.25) as.push(a);
+  for (let a = CAVE.gateIn + 16; a < MOUTH.depth; a += 4) as.push(a);
   as.push(MOUTH.depth);
   const rings = as.map((a) => {
     const sc = Math.max(0.12, caveScale(a));
     return prof.map(([u, y], i) => {
       const ny = Math.max(y, FLOOR - 0.2);
-      const rough = (vn(i * 0.37 + a * 0.11, a * 0.07) - 0.5) * 3.2 * sst(2, 10, a) + (vn(i * 1.3, a * 0.4) - 0.5) * 0.8;
-      const k = 1 + rough / Math.max(6, Math.hypot(u, ny - FLOOR));
-      return vert(b, u * sc * k, FLOOR - 0.2 + (ny - FLOOR + 0.2) * sc * k, a, 4);
+      // (broad swellings of the rock, smooth along and round the passage)
+      const s = i / prof.length;
+      const rough = (vn(s * 9 + a * 0.05, a * 0.04 + 2) - 0.5) * 1.4 + (vn(s * 21 + 4, a * 0.12) - 0.5) * 0.35;
+      const k = 1 + rough / Math.max(10, Math.hypot(u, ny - FLOOR));
+      // (the passage begins inside the cliff's face, which leans back: where the face stands deeper than this ring,
+      // the ring is drawn at the face, so no shell of the passage stands out of the rock in front of it)
+      return vert(b, u * sc * k, FLOOR - 0.2 + (ny - FLOOR + 0.2) * sc * k, Math.max(a, Math.min(CAVE.gateIn - 1.5, cliffA(u, y) - 1.5)), 4);
     });
   });
   for (let j = 0; j < rings.length - 1; j++) for (let i = 0; i < prof.length - 1; i++) quad(rings[j][i], rings[j][i + 1], rings[j + 1][i + 1], rings[j + 1][i]);
@@ -259,13 +265,13 @@ function buildCave() {
   for (let i = 0; i < last.length - 1; i++) b.idx.push(mid, last[i], last[i + 1]);
   // the floor: worn rock, a low threshold at the mouth
   const fa: number[] = [];
-  for (let a = -9; a <= MOUTH.depth; a += 3) fa.push(a);
+  for (let a = -9; a <= MOUTH.depth; a += a < CAVE.gateIn + 16 ? 1.25 : 4) fa.push(a);
   const floor = fa.map((a) => {
     const hw = (MOUTH.half + 2.5) * Math.max(0.3, caveScale(Math.max(a, 0)));
     const y = a < 0 ? -0.6 + (FLOOR + 0.6) * sst(-9, 0, a) : FLOOR;
-    return [-1, -0.5, 0, 0.5, 1].map((s) => vert(b, s * hw, y + (vn(s * 3 + 5, a * 0.3) - 0.5) * 0.25 * sst(-2, 4, a), a, 5));
+    return [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map((s) => vert(b, s * hw, y + (vn(s * 3 + 5, a * 0.15) - 0.5) * 0.2 * sst(-2, 4, a), a, 5));
   });
-  for (let j = 0; j < floor.length - 1; j++) for (let i = 0; i < 4; i++) quad(floor[j][i], floor[j + 1][i], floor[j + 1][i + 1], floor[j][i + 1]);
+  for (let j = 0; j < floor.length - 1; j++) for (let i = 0; i < 8; i++) quad(floor[j][i], floor[j + 1][i], floor[j + 1][i + 1], floor[j][i + 1]);
   // the carved frame round the portal: four orders of stone standing out of the rock, each a step further in
   const archLine = (H: number, apex: number, foot: number, n = 22): [number, number][] => {
     const K = 1.1547 * (apex - ARCH.spring);
@@ -289,8 +295,8 @@ function buildCave() {
 function buildPlug() {
   const b = newBuf();
   const line = mouthLine(30);
-  const c = vert(b, 0, MOUTH.top * 0.4, 9, 4);
-  const ids = line.map(([u, y]) => vert(b, u * 1.08, Math.max(y, FLOOR - 0.5), 9, 4));
+  const c = vert(b, 0, MOUTH.top * 0.4, CAVE.gateIn + 1.5, 4);
+  const ids = line.map(([u, y]) => vert(b, u * 1.08, Math.max(y, FLOOR - 0.5), CAVE.gateIn + 1.5, 4));
   for (let i = 0; i < ids.length - 1; i++) b.idx.push(c, ids[i], ids[i + 1]);
   b.idx.push(c, ids[ids.length - 1], ids[0]);
   return finish(b);
@@ -304,13 +310,13 @@ function buildMotes(count: number) {
   g.setIndex([0, 1, 2, 0, 2, 3]);
   const at = new Float32Array(count * 4);
   for (let i = 0; i < count; i++) {
-    const a = 8 + r() * (MOUTH.depth - 16);
+    const a = -3 + r() * (CAVE.gateIn - 4);
     const sc = caveScale(a);
     at.set([...W((r() - 0.5) * 2 * MOUTH.half * sc * 0.8, FLOOR + 1 + r() * MOUTH.top * sc * 0.75, a), r() * 100], i * 4);
   }
   g.setAttribute("aAt", new THREE.InstancedBufferAttribute(at, 4));
   g.instanceCount = count;
-  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(...W(0, 20, 50)), 90);
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(...W(0, 20, 4)), 40);
   const m = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -460,15 +466,18 @@ function makeStoneMaterial() {
         // (the cliff face and the lip round the mouth are kind 0: always out in the land's light and air, however far
         // back the rock leans; only the cave's own walls, floor and carving are inside)
         float caveIn = kind < 0.5 ? 0.0 : smoothstep(-2.0, 6.0, L.z);
-        rock *= mix(2.4, 1.0, caveIn);
+        // (pale weathered rock by day; by night the face is dark, only the portal's glow on it)
+        rock *= mix(mix(1.15, 2.4, sunUp), 1.0, caveIn);
         vec3 alb = rock;
         if (kind > 1.5 && kind < 2.95) {
           // the carved orders: pale stone, cut clean, a little paler outward, worn
           alb = vec3(0.4, 0.37, 0.36) * (1.0 + (kind - 2.0) * 0.35) * (0.85 + 0.25 * vnoise(L.xy * 0.5));
         } else if (kind > 3.5 && kind < 4.5) {
-          alb = rock * 0.85;
+          // the passage's walls: damp, darker where water runs down them in streaks
+          float wet = smoothstep(0.35, 0.75, vnoise(vec2(L.x * 0.35 + L.z * 0.05, L.y * 0.04)));
+          alb = rock * mix(0.85, 0.6, wet);
         } else if (kind > 4.5 && kind < 5.5) {
-          alb = mix(rock * 0.8, vec3(0.16, 0.13, 0.1), 0.4);
+          alb = mix(rock * 0.7, vec3(0.1, 0.085, 0.07), 0.45);
         }
         // the portal's light: warm, falling off from the veil in its frame, over the whole chamber and out of the mouth
         vec3 src = vec3(0.0, ${f2(ARCH.spring)}, ${f2(CAVE.gateIn)});
@@ -478,7 +487,9 @@ function makeStoneMaterial() {
         float lam = 0.35 + 0.65 * max(dot(n, toSrc), 0.0);
         // (in the cave the land's coordinates: L.z over 0 is inside; outside only a spill near the mouth)
         float inside = caveIn;
-        float portal = (2.8 / (1.0 + dl * dl / 520.0)) * lam * mix(0.25, 1.0, fromFront);
+        // (the gate stands just inside the mouth now, close to the walls: its light is a glow on damp dark rock,
+        // strongest on what faces it, never a floodlight that bleaches the stone)
+        float portal = (1.1 / (1.0 + dl * dl / 140.0)) * pow(lam, 1.6) * mix(0.25, 1.0, fromFront);
         float spill = exp(-max(length(L.xy - vec2(0.0, 14.0)) - 18.0, 0.0) / 8.0) * smoothstep(-14.0, 0.0, L.z) * (1.0 - inside);
         float ndl = max(dot(n, uKeyDir), 0.0);
         vec3 sky = (uSkyCol * (0.6 + 0.4 * n.y) + uKeyCol * ndl * 0.9 * sunUp * cloudShade(vWorld)) * (1.0 - inside * 0.85);
@@ -487,12 +498,15 @@ function makeStoneMaterial() {
         float crack = 0.35 + 0.65 * smoothstep(0.62, 0.82, vnoise(vec2(L.x * 0.09, L.z * 0.05) + 3.7));
         vec3 cool = vec3(0.32, 0.4, 0.55) * 0.55 * crack * (0.45 + 0.55 * max(n.y, 0.0));
         float spillIn = (0.35 + 0.65 * smoothstep(-2.0, ${CAVE.gateIn.toFixed(1)}, L.z)) * (0.6 + 0.4 * max(n.y, 0.0));
-        vec3 col = alb * (sky + uLead * (portal * 1.6 * inside + spillIn * 0.55 * inside + spill * 0.35 * (0.4 + night)) + cool * inside);
+        vec3 col = alb * (sky + uLead * (portal * 1.6 * inside + spillIn * 0.18 * inside + spill * 0.22 * (0.4 + night)) + cool * 0.5 * inside);
         // the far end of the cave: the light itself, soft
         if (kind > 5.5) col = uLead * 1.6;
         // a sheen on wet rock where it faces the light
         vec3 V = normalize(cameraPosition - vWorld);
-        col += uLead * pow(max(dot(reflect(-V, n), toSrc), 0.0), 18.0) * 0.25 * inside * fine * (kind < 1.5 || (kind > 3.5 && kind < 4.5) ? 1.0 : 0.3);
+        // (damp all over, wetter in streaks: a broad soft gleam and a tighter one)
+        float gloss = 0.5 + 0.5 * smoothstep(0.35, 0.75, vnoise(vec2(L.x * 0.35 + L.z * 0.05, L.y * 0.04)));
+        float rv = max(dot(reflect(-V, n), toSrc), 0.0);
+        col += uLead * (pow(rv, 10.0) * 0.22 + pow(rv, 40.0) * 0.5) * gloss * inside * (0.4 + 0.6 * fine) * (kind < 1.5 || (kind > 3.5 && kind < 5.5) ? 1.0 : 0.3);
         // (inside the cave there is no air of the land)
         // (the cave's inside takes the land's air only while the eye is outside: from the forest it goes into the fog
         // with the mountain, and once in, it is clear and lit by the way on)

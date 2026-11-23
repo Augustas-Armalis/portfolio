@@ -128,14 +128,46 @@ export const riverLevel = (x: number, z: number) => (riverD(x, z) < riverW(x) + 
 
 // ---------- the forest and the mountain ----------
 // The cave: its mouth's middle on the ground, and the way it faces (the plane flies in toward -z, yaw as the gates')
-export const CAVE = { x: -366, z: -668, yaw: 0.06, half: 12.5, rise: 25, above: 9, floor: 1.2, gateIn: 46 };
+export const CAVE = { x: -366, z: -668, yaw: 0.06, half: 12.5, rise: 25, above: 9, floor: 1.2, gateIn: 10 };
 // the mountain the cave is cut into: its heart, how high its head stands over the cave's floor
 export const PEAK = { x: -392, z: -812, h: 185 };
-// the arch cut into the cliff: its half-width at the legs, where the arch springs and where its point stands, over
-// the cave's floor (the veil inside is the gate's own: CAVE.half, CAVE.rise)
-// the cave's mouth (a rough natural opening), how deep it goes, and the carved frame round the portal inside it
-export const MOUTH = { half: 19, top: 36, depth: 108 };
-export const ARCH = { half: 14, spring: CAVE.floor + CAVE.above + 2, apex: CAVE.floor + CAVE.above + CAVE.rise + 2.5, depth: MOUTH.depth };
+// The cave's mouth IS the gate's arch: a rough natural lancet in the cliff (half-width at its legs, the height of its
+// point over the land at the mouth), the passage behind it narrowing a little straight into the gate, which stands
+// CAVE.gateIn in, a few metres behind the lip, its window as large as the opening: what is seen through the mouth is
+// the next world, nothing of the cave's inside. (depth: how far the passage runs on behind the gate, never seen.)
+export const MOUTH = { half: 14.5, top: CAVE.floor + CAVE.above + CAVE.rise + 2.5, depth: 108 };
+export const ARCH = { half: MOUTH.half, spring: CAVE.floor + CAVE.above + 2, apex: MOUTH.top, depth: MOUTH.depth };
+// how much narrower the passage is at the gate than at the mouth (the window is the mouth's size: its edge stays
+// hidden behind the rock all round)
+export const GATE_NARROW = 0.88;
+// the half-width of the arch's opening at a height y over the land at the mouth (the true lancet, before the rock's
+// roughness): two arcs, each struck from the far springing
+export function archHW(y: number) {
+  if (y <= ARCH.spring) return ARCH.half;
+  const K = 1.1547 * (ARCH.apex - ARCH.spring);
+  const t = Math.min(1, (y - ARCH.spring) / K);
+  return Math.max(0, ARCH.half * (2 * Math.cos(Math.asin(t)) - 1));
+}
+// The gate's window, for the portal (worlds/portal.tsx PortalWindow, worlds/common.tsx LightGate): its half-width and
+// how far its point stands over the gate's height (PortalWindow draws `half * 1.04` wide, `rise * 1.03` high, from
+// the springing two metres over the gate), and its outline in the cave's frame (u across, y over the land at the
+// mouth), from the left foot over the point to the right foot
+export const CAVE_GATE = (() => {
+  const gateY = CAVE.floor + CAVE.above;
+  const half = ARCH.half;
+  const rise = (ARCH.apex - gateY) / 1.03;
+  const outline: [number, number][] = [];
+  const n = 24;
+  for (let i = 0; i <= n; i++) {
+    const y = CAVE.floor - 1 + (ARCH.apex - CAVE.floor + 1) * Math.sin((i / n) * Math.PI * 0.5);
+    outline.push([-archHW(y), y]);
+  }
+  for (let i = n - 1; i >= 0; i--) {
+    const y = CAVE.floor - 1 + (ARCH.apex - CAVE.floor + 1) * Math.sin((i / n) * Math.PI * 0.5);
+    outline.push([archHW(y), y]);
+  }
+  return { half, rise, outline, a: CAVE.gateIn };
+})();
 // the cave's frame: a point by its distance across (u, + to the right looking in) and into the mountain (a)
 export const caveAt = (u: number, a: number) => {
   const c = Math.cos(CAVE.yaw);
@@ -264,7 +296,7 @@ export const JOURNEY: [number, number, number][] = [
   [-270, -150, 6.8],
   [-292, -160, 6.8],
   ...FOREST_LINE.map(([x, z], i): [number, number, number] => [x, z, i < 2 ? 7.2 : 7.0]),
-  ...[18, CAVE.gateIn, 82].map((a): [number, number, number] => {
+  ...[CAVE.gateIn - 9, CAVE.gateIn, CAVE.gateIn + 40].map((a): [number, number, number] => {
     const p = caveAt(0, a);
     return [p.x, p.z, CAVE.floor + CAVE.above + 0.4];
   }),
