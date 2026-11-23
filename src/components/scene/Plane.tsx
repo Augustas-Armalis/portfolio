@@ -154,8 +154,17 @@ export function Plane({
   const group = useRef<THREE.Group>(null);
   const hover = useRef(false);
   const scene = useThree((s) => s.scene);
-  // the mist off its wing tips (PlaneTrails.tsx)
+  // the mist off its wing tips (PlaneTrails.tsx), and the land or water under a point of whichever world stands
   const trails = useTrails();
+  const groundUnder = useMemo(
+    () => (x: number, z: number) => {
+      const id = voyage.cur;
+      if (id === "home") return homeGround(x, z);
+      const o = originOf(id);
+      return groundAt(WORLDS[id], x - o.x, z - o.z);
+    },
+    [],
+  );
   useEffect(() => {
     // dev: __homeGround(x, z) is what the plane stays above at home; __homeGround.bake() reads the ranges again
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __homeGround: Object.assign((x: number, z: number) => homeGround(x, z), { bake: () => bakeHomeSolids(scene) }) });
@@ -264,7 +273,7 @@ export function Plane({
     voyage.planeSpeed = st.speed;
     // (what sounds near the plane grows as it comes: lib/ambience.ts)
     ambienceListener(st.pos.x, st.pos.y, st.pos.z);
-    if (cam) trails.update(dt, g, mist, cam);
+    if (cam) trails.update(dt, g, mist, cam, groundUnder);
   };
   const updateNose = () => st.nose.set(-Math.sin(st.yaw) * Math.cos(st.pitch), Math.sin(st.pitch), -Math.cos(st.yaw) * Math.cos(st.pitch));
 
