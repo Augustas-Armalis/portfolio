@@ -39,22 +39,32 @@ const sstep = (a: number, b: number, x: number) => {
 const CW = 1024;
 const CH = Math.round((CW * PAGE_D) / PAGE_W);
 
+let tile: HTMLCanvasElement | null = null;
+function grainTile() {
+  if (tile) return tile;
+  tile = document.createElement("canvas");
+  tile.width = tile.height = 256;
+  const g = tile.getContext("2d")!;
+  const img = g.createImageData(256, 256);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 9;
+    img.data[i] = 0xf4 + n;
+    img.data[i + 1] = 0xf1 + n;
+    img.data[i + 2] = 0xea + n;
+    img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return tile;
+}
 function paperCanvas() {
   const c = document.createElement("canvas");
   c.width = CW;
   c.height = CH;
   const g = c.getContext("2d")!;
-  g.fillStyle = "#f4f1ea";
+  // tooth: faint grain. (One small tile of it, made once and laid as a pattern: reading and writing every pixel
+  // of two full pages took a quarter of a second of the loader on a slowed machine.)
+  g.fillStyle = g.createPattern(grainTile(), "repeat") ?? "#f4f1ea";
   g.fillRect(0, 0, CW, CH);
-  // tooth: faint grain
-  const img = g.getImageData(0, 0, CW, CH);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 9;
-    img.data[i] += n;
-    img.data[i + 1] += n;
-    img.data[i + 2] += n;
-  }
-  g.putImageData(img, 0, 0);
   return c;
 }
 
