@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { HOME_GATE_Z } from "../flightPath";
 import { GLSL_NOISE, GLSL_PATH } from "../shared";
@@ -9,42 +9,43 @@ import { GLSL_SKY, SKY_U } from "../sky";
 import { GLSL_DESK_SHADOW } from "../World";
 import { CLOUD, GLSL_FIELD, GLSL_HOME_AIR, GLSL_LAND, HOME_U } from "./land";
 
-// The land, the lake and the sea, as one surface. A disc of rings that rides
-// with the eye (fine underfoot, each ring a few per cent wider than the last,
-// out to the horizon), lifted onto the land's height in the vertex shader and
+// The land, the lake and the sea, as one surface. Nested square grids that move
+// with the eye in whole steps of their own lattice (fine underfoot, each level
+// twice as coarse, out to the horizon), lifted onto the land's height in the vertex shader and
 // never below the water. Each pixel then knows what it is: meadow (the same
 // paint as the blades standing on it, so the grass has no edge), the worn
 // footpath, forest floor, sand, or water: the lake still and mirroring, the
 // sea rolling in with a sun path, glitter and foam on the beach.
 
-function ringGeometry(nA: number, r0: number, rMax: number) {
-  const k = 1 + (2 * Math.PI) / nA;
-  const radii: number[] = [];
-  for (let r = r0; r < rMax * k; r *= k) radii.push(Math.min(r, rMax));
-  const pos = new Float32Array((1 + radii.length * nA) * 3);
+// One level of the land's clipmap: a square grid of (2n)x(2n) cells of one unit, centred on the origin; with `hole`,
+// the cells within `hole` of the middle are left out (the finer level covers them).
+function levelGeometry(n: number, hole: number) {
+  const pos: number[] = [];
   const idx: number[] = [];
-  let v = 1;
-  radii.forEach((r, j) => {
-    // every other ring is turned half a step, so the triangles do not line up into spokes
-    const turn = j % 2 ? Math.PI / nA : 0;
-    for (let i = 0; i < nA; i++, v++) {
-      const a = (i / nA) * Math.PI * 2 + turn;
-      pos[v * 3] = Math.cos(a) * r;
-      pos[v * 3 + 2] = Math.sin(a) * r;
+  const at = new Map<number, number>();
+  const W = 2 * n + 1;
+  const v = (i: number, j: number) => {
+    const k = (j + n) * W + (i + n);
+    let x = at.get(k);
+    if (x === undefined) {
+      x = pos.length / 3;
+      pos.push(i, 0, j);
+      at.set(k, x);
     }
-  });
-  for (let i = 0; i < nA; i++) idx.push(0, 1 + ((i + 1) % nA), 1 + i);
-  for (let j = 0; j < radii.length - 1; j++)
-    for (let i = 0; i < nA; i++) {
-      const a = 1 + j * nA + i;
-      const b = 1 + j * nA + ((i + 1) % nA);
-      const c = a + nA;
-      const d = b + nA;
-      if (j % 2) idx.push(a, b, d, a, d, c);
-      else idx.push(a, b, c, b, d, c);
+    return x;
+  };
+  for (let j = -n; j < n; j++)
+    for (let i = -n; i < n; i++) {
+      if (hole > 0 && i >= -hole && i < hole && j >= -hole && j < hole) continue;
+      const a = v(i, j);
+      const b = v(i + 1, j);
+      const c = v(i, j + 1);
+      const d = v(i + 1, j + 1);
+      // (the diagonal of every cell one way: a morphed rim is then exactly the coarser level's own triangles)
+      idx.push(a, c, b, b, c, d);
     }
   const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
   g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
   return g;
@@ -66,17 +67,24 @@ export function makeLandMaterial() {
   soil.anisotropy = 8;
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, ...HOME_U, ...REFLECT_U, uCenter: { value: new THREE.Vector2() }, uSoilTex: { value: soil } },
+    uniforms: { ...SKY_U, ...HOME_U, ...REFLECT_U, uCenter: { value: new THREE.Vector2() }, uEye: { value: new THREE.Vector2() }, uCell: { value: 1 }, uMorph: { value: 1e9 }, uHole: { value: 0 }, uSoilTex: { value: soil } },
     vertexShader: /* glsl */ `
-      uniform vec2 uCenter;
+      uniform vec2 uCenter; uniform vec2 uEye; uniform float uCell; uniform float uMorph;
       varying vec3 vWorld; varying vec3 vN; varying float vCav;
       ${GLSL_LAND}
       void main(){
-        vec2 p = position.xz + uCenter;
+        // (a lattice point of the world: the level's grid is moved only by whole steps of two cells, so every vertex
+        // stands on the same spot of land while the eye moves and nothing swims; toward the level's rim every other
+        // vertex slides onto its even neighbour, so the rim is the next level's own grid and the two meet exactly)
+        vec2 g = position.xz;
+        vec2 p = g * uCell + uCenter;
+        vec2 dd = abs(p - uEye);
+        float m = clamp((max(dd.x, dd.y) / uCell - uMorph) / 4.0, 0.0, 1.0);
+        p -= mod(g, 2.0) * uCell * m;
         float h = landH(p);
         // how hollow the ground is here (the mean of the land round about, less this point): creases and the feet of
         // slopes gather a soft shade, brows and crests stay open to the sky
-        float e = 7.0 + length(position.xz) * 0.02;
+        float e = 7.0 + uCell * 0.6;
         vCav = ((landH(p + vec2(e, 0.0)) + landH(p - vec2(e, 0.0)) + landH(p + vec2(0.0, e)) + landH(p - vec2(0.0, e))) * 0.25 - h) / e;
         float level = max(hLakeK(p) < 1.15 ? LAKE_Y : SEA, riverLevel(p));
         vWorld = vec3(p.x, max(h, level), p.y);
@@ -114,8 +122,12 @@ export function makeLandMaterial() {
         return a * 1.3 + b * 0.6 + c * 0.22 * k;
       }
 
+      uniform vec2 uEye; uniform float uHole;
       void main(){
         vec2 p = vWorld.xz;
+        // (the finer level draws this part of the land)
+        vec2 de = abs(p - uEye);
+        if (max(de.x, de.y) < uHole) discard;
         float dist = length(vWorld - cameraPosition);
         float h = landH(p);
         float lk = hLakeK(p);
@@ -373,23 +385,56 @@ export function makeLandMaterial() {
   });
 }
 
+// The land is drawn as a clipmap (nested square grids, each twice as coarse as the one inside it, each moved only by
+// whole steps of its own lattice). It used to be a disc of rings riding smoothly with the eye: then every vertex slid
+// over the land as the eye moved, the land's own shape was sampled somewhere new each frame, and the ground swam:
+// the shore most of all (the land's height against the water's is a sharp crease, and the drawn water's edge
+// wobbled up and down the beach as you came near), and far hills and coast rippled in flight.
+const CELLS = 48; // half the width of a level, in its own cells
+const HOLE = 20; // half the width of the hole in a coarser level, in its cells (well inside the finer level's rim)
 export function Land({ mobile }: { mobile: boolean }) {
-  const geo = useMemo(() => ringGeometry(mobile ? 144 : 208, 1.6, LAND_FAR), [mobile]);
+  const n = mobile ? 32 : CELLS;
+  const hole = mobile ? 12 : HOLE;
+  const cell0 = mobile ? 0.5 : 0.25;
+  const levels = Math.ceil(Math.log2(LAND_FAR / (cell0 * n))) + 1;
+  const geo = useMemo(() => ({ full: levelGeometry(n, 0), ring: levelGeometry(n, hole) }), [n, hole]);
   const mat = useMemo(() => makeLandMaterial(), []);
-  const mesh = useRef<THREE.Mesh>(null);
+  const mats = useMemo(
+    () =>
+      Array.from({ length: levels }, (_, l) => {
+        const m = l === 0 ? mat : mat.clone();
+        // (one set of uniforms for every level but its own lattice)
+        if (l > 0) m.uniforms = { ...mat.uniforms, uCenter: { value: new THREE.Vector2() }, uCell: { value: 1 }, uMorph: { value: 1e9 }, uHole: { value: 0 } };
+        m.uniforms.uCell.value = cell0 * 2 ** l;
+        // (the rim begins to morph eight cells in from the edge: whatever the snap, it is whole before the edge)
+        m.uniforms.uMorph.value = l === levels - 1 ? 1e9 : n - 8;
+        // (inside this, the finer level draws: two and a half of its cells in from its own edge, where it is fully morphed)
+        m.uniforms.uHole.value = l === 0 ? 0 : (n - 2.5) * cell0 * 2 ** (l - 1);
+        return m;
+      }),
+    [mat, levels, cell0, n],
+  );
   useEffect(
     () => () => {
-      geo.dispose();
+      geo.full.dispose();
+      geo.ring.dispose();
       mat.uniforms.uSoilTex.value.dispose();
-      mat.dispose();
+      mats.forEach((m) => m.dispose());
     },
-    [geo, mat],
+    [geo, mat, mats],
   );
   useFrame(({ camera }) => {
-    // at the desk the rings stay centred on it (nothing can swim); away from it they ride with the eye
-    const d = Math.hypot(camera.position.x, camera.position.z);
-    const k = THREE.MathUtils.smoothstep(d, 40, 90);
-    mat.uniforms.uCenter.value.set(camera.position.x * k, camera.position.z * k);
+    mat.uniforms.uEye.value.set(camera.position.x, camera.position.z);
+    for (const m of mats) {
+      const s = m.uniforms.uCell.value * 2;
+      m.uniforms.uCenter.value.set(Math.round(camera.position.x / s) * s, Math.round(camera.position.z / s) * s);
+    }
   });
-  return <mesh ref={mesh} geometry={geo} material={mat} renderOrder={-5} frustumCulled={false} />;
+  return (
+    <>
+      {mats.map((m, l) => (
+        <mesh key={l} geometry={l === 0 ? geo.full : geo.ring} material={m} renderOrder={-5} frustumCulled={false} />
+      ))}
+    </>
+  );
 }
