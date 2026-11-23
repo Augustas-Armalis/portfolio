@@ -58,7 +58,7 @@ type WTree = { x: number; z: number; kind: TreeKind; s: number; rich: boolean; c
 function plant(amount: number) {
   const r = rng(6021);
   const out: WTree[] = [];
-  const cell = 5.0 / Math.sqrt(Math.max(0.5, amount));
+  const cell = 4.1 / Math.sqrt(Math.max(0.5, amount));
   for (let gx = -470; gx < -220; gx += cell)
     for (let gz = -680; gz < -160; gz += cell) {
       const x = gx + r() * cell;
@@ -73,10 +73,10 @@ function plant(amount: number) {
       if (Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z) < 14) continue;
       if (Math.hypot(x - DEER.x, z - DEER.z) < 9) continue;
       if (OWLS.some((o) => Math.hypot(x - o.x, z - o.z) < 4)) continue;
-      if (u > (d < 26 ? 0.88 : 0.8)) continue;
+      if (u > (d < 26 ? 0.9 : 0.86)) continue;
       // by the lane only pines (their crowns are carried high: the plane flies under them), further in oaks and spruce
       const kind: TreeKind = d < 14 ? "pine" : k < 0.5 ? "pine" : k < 0.74 ? "spruce" : k < 0.97 ? "broad" : "birch";
-      const s = kind === "pine" ? 1.35 + v * 0.45 : kind === "broad" ? 1.3 + v * 0.35 : kind === "spruce" ? 1.2 + v * 0.35 : 1.05 + v * 0.25;
+      const s = kind === "pine" ? 1.6 + v * 0.55 : kind === "broad" ? 1.45 + v * 0.4 : kind === "spruce" ? 1.45 + v * 0.45 : 1.2 + v * 0.25;
       out.push({ x, z, kind, s, rich: d < 26, chunk: Math.min(2, Math.floor(along * 3.2)), rot: r() * 6.283, tint: r() });
     }
   return out;
@@ -403,7 +403,7 @@ function makeMist(count: number) {
         vec3 c = aAt.xyz + vec3(sin(uTime * 0.05 + aAt.w) * 3.0, 0.0, cos(uTime * 0.04 + aAt.w * 1.3) * 3.0);
         float dist = length(c - cameraPosition);
         // (a sheet is never met up close: it thins as the eye comes near)
-        vA = uFogK * 0.16 * smoothstep(8.0, 24.0, dist) * (1.0 - smoothstep(160.0, 240.0, dist));
+        vA = uFogK * 0.3 * smoothstep(8.0, 24.0, dist) * (1.0 - smoothstep(160.0, 240.0, dist));
         vUv = position.xy;
         // upright, turned to the eye about the vertical only, so they lie along the ground
         vec3 Rh = normalize(vec3(R.x, 0.0, R.z) + 1e-5);
@@ -507,15 +507,17 @@ export function Woods({ amount, mobile, effects }: { amount: number; mobile: boo
   );
 
   const fox = useRef<THREE.Mesh>(null);
-  const st = useRef({ al: 0.9, gait: 0, x: 0, z: 0, yaw: 0, init: false });
+  const st = useRef({ al: 0.9, gait: 0, x: 0, z: 0, yaw: 0, init: false, frames: 0 });
   useFrame(({ camera }, dtRaw) => {
     const dt = Math.min(dtRaw, 0.1);
     const s = st.current;
+    // (for its first frames, behind the loader, both cuts are drawn once, so neither is first sent to the GPU mid-flight)
+    const warm = ++s.frames < 90;
     for (const t of w.twins) {
       const d = camera.position.distanceTo(t.at);
-      const fine = t.fine.visible ? d < 360 : d < 320;
-      t.fine.visible = fine;
-      t.coarse.visible = !fine;
+      const fine = t.fine.visible && !warm ? d < 360 : d < 320;
+      t.fine.visible = warm || fine;
+      t.coarse.visible = warm || !fine;
     }
     const pp = voyage.planePos;
     const inHome = voyage.cur === "home" && voyage.flying && pp.y > -100;
