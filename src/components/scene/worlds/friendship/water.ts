@@ -119,7 +119,11 @@ export function makeWaterMaterial() {
         // the orb mirrored: where the eye's reflected ray points at it, a broken path of its light
         vec3 rd = reflect(-V, n);
         vec3 toOrb = normalize(uOrb - vWorld);
-        float glint = pow(max(dot(rd, toOrb), 0.0), 60.0) * 2.2 + pow(max(dot(rd, toOrb), 0.0), 8.0) * 0.25;
+        // (dimmer the further the orb: in the tunnel the pools hold only a far point of it, and the rings in the dark)
+        float od = length(uOrb - vWorld);
+        float far = 1.0 / (1.0 + pow(od / 260.0, 2.0));
+        float glint = (pow(max(dot(rd, toOrb), 0.0), 120.0) * 2.0 + pow(max(dot(rd, toOrb), 0.0), 12.0) * 0.2) * far;
+        if (vKind > 0.5) glint += abs(slope.x) * 0.5 * (0.3 + far);
         vec3 deep = vec3(0.004, 0.016, 0.016);
         vec3 col = deep + airCol(rd) * fr * 0.7 + vec3(1.0, 0.8, 0.5) * glint * uOrbK * 1.4;
         col += orbLight(vWorld, vec3(0.0, 1.0, 0.0), 0.3, 140.0).rgb * 0.06;
