@@ -565,7 +565,14 @@ function* rexSteps(props: WorldProps) {
       [-70, 640, 13, 24],
       [112, 560, 17, 34],
     ] as [number, number, number, number][])
-      k.add(new THREE.IcosahedronGeometry(1, 2), [x, h * 0.3, z], [0.02, 0.017, 0.02], { top: [0.07, 0.055, 0.05], scale: [w, h, w * 0.8], rot: [0, x * 0.1, 0.12], flat: true });
+      // (each a stand of dark spires leaning together, like the far ones along the water)
+      for (const [dx, dz, kh, lean] of [
+        [0, 0, 1, 0.04],
+        [w * 0.55, w * 0.2, 0.68, -0.1],
+        [-w * 0.5, -w * 0.25, 0.5, 0.12],
+        [w * 0.1, -w * 0.6, 0.36, 0.06],
+      ] as [number, number, number, number][])
+        k.add(new THREE.ConeGeometry(w * 0.42 * (0.6 + 0.4 * kh), h * kh, 6), [x + dx, (h * kh) / 2 - 1.5, z + dz], [0.02, 0.017, 0.02], { top: [0.075, 0.06, 0.055], rot: [lean * 0.5, x * 0.1 + dx, lean] });
     yield;
     const setGeo = k.build();
     yield;

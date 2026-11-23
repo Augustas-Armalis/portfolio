@@ -412,8 +412,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: 0, z: -420, r: 34, h: 1000 },
     ],
     canvases: [
-      { painting: "stars-allegro", x: -56, z: 585, yaw: 1.1 },
-      { painting: "stars-andante", x: -59, z: 442, yaw: 0.02 },
+      // (well along the way: nothing hangs in the first view of the pyramid)
+      { painting: "stars-allegro", x: -150, z: 330, yaw: 1.1 },
+      { painting: "stars-andante", x: -170, z: 120, yaw: 0.02 },
     ],
   },
   rex: {
