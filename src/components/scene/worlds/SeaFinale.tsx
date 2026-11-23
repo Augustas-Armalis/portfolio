@@ -299,14 +299,13 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     // (it is fifteen hundred metres when it falls); it rises fastest at first, when it is far off
     const rise = 0.02 + 0.98 * Math.pow(sm(p, 0.04, 0.985), 0.8);
     // the weather: gentle, then turning as the wave stands up, at its height along the face
-    // (a turning of the weather, not a storm: the sea runs higher and the sky cools and thickens, and a thin rain comes)
-    const k = 0.5 * sm(p, 0.1, 0.5);
+    const k = sm(p, 0.1, 0.5);
     // the end: the crest comes down over the last of the way
     const crash = sm(p, 0.91, 0.985);
     storm.k = k;
     FINALE_U.uRise.value = rise;
     FINALE_U.uStorm.value = k;
-    FINALE_U.uSwell.value = 0.5 + 1.4 * k;
+    FINALE_U.uSwell.value = 0.5 + 1.5 * k;
     FINALE_U.uCrash.value = crash;
     WORLD_U.uFogD.value = def.fog[0] * (1 + 2.6 * k);
     // the deck of cloud rolls in from behind the wave and comes down a little
@@ -315,7 +314,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     b.sunMat.uniforms.uGain.value = 0.26 * (1 - k) * (1 - k);
     // lightning: once the storm is up, a forked stroke somewhere in the cloud ahead every few seconds; for the
     // instant it lasts the cloud is lit from within and the sea and the wave take its light (soft, and clamped)
-    if (false && k > 0.55 && t > e.nextBolt) {
+    if (k > 0.55 && t > e.nextBolt) {
       e.boltAt = t;
       e.seed = (e.seed * 7.31 + 1.7) % 97;
       e.nextBolt = t + 3.5 + ((e.seed * 3.3) % 5.5);
