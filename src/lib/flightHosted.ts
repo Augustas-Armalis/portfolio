@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from "react";
 import { channel, musicOwner, resumeAudio, stopOwner, voice, voicePlay, voicePrime, voiceStop, type Voice } from "@/lib/audio";
 
-// The flight's hosted music (the fallback when a stream cannot play, and a
-// choice in the music picker): M. K. Čiurlionis's own piano work "The Sea"
+// The flight's hosted music (the fallback when a Čiurlionis stream cannot
+// play): M. K. Čiurlionis's own piano work "The Sea"
 // (Jūra, VL 317), played by Jean Dubé (CC BY 4.0, see CREDITS.md). One
 // recording, three movements, dealt out to the worlds by mood. The music
 // director (lib/musicDirector.ts) decides when this plays; nothing else calls it.

@@ -1075,8 +1075,8 @@ function WorldsList({ current, pending, onPick, mobile }: { current: WorldId; pe
   );
 }
 
-// The flight's music button: it opens the mini-player (scene/music/MusicDock), where what plays is named and
-// anything else can be chosen. A small bead on it shows that something is playing.
+// The flight's music button: it opens the mini-player (scene/music/MusicDock), where what plays is named, with a
+// volume and a mute (nothing to choose: the music is the place's own). A small bead on it shows that something is playing.
 function FlightMusicButton({ className, size }: { className: (on: boolean) => string; size: number }) {
   const m = useMusic();
   return (

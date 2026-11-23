@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { HOME_GATE_Z, roadX } from "../flightPath";
 import { pathW, pathX } from "../shared";
-import { groveWood, mainPathD, sidePathD, fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
+import { groveWood, mainPathD, sidePathD, fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyArea, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
 
 // The land the desk stands in, written once and read by everything that
 // stands on it. The desk is at the origin and the visitor looks north (-z).
@@ -95,6 +95,13 @@ export function landH(x: number, z: number) {
   h += (HLAKE.y - 1.2 - h) * (1 - sstep(0.86, 1.1, lk));
   h -= 0.5 * (1 - sstep(0.3, 1.7, streamD(x, z)));
   return h;
+}
+
+// How far into the journey's forest (or the cave's approach) a point in the air is, 0..1 (journey.ts, journeyArea):
+// only down among the trees. Flying high over the crowns is not being in it.
+export function inJourneyForest(x: number, y: number, z: number) {
+  const a = journeyArea(x, z);
+  return a <= 0 ? 0 : a * (1 - sstep(45, 90, y - landH(x, z)));
 }
 
 // The brook: out of the wood east of the road, under the footbridge, into the lake's east end. z of its bed at x,

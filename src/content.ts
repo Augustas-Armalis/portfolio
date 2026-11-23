@@ -434,16 +434,16 @@ export type Track = {
 
 const allTracks: Track[] = [
   {
-    id: "kiss-me",
-    title: "Kiss Me",
+    id: "kiss-you",
+    title: "Kiss You",
     artist: "Augustas Armalis",
+    file: "/content/music/kiss-you.mp3",
     cover: "/content/music/kiss-me.webp",
-    duration: 77,
-    durationLabel: "1:17",
+    duration: 79,
+    durationLabel: "1:19",
     year: 2026,
     confirmed: true,
-    note: "New song. A first preview, November 2026",
-    youtube: "fUTEPMo2qsk",
+    note: "New song, made with a singer. November 2026",
     isNew: true,
   },
   {
@@ -476,7 +476,7 @@ const allTracks: Track[] = [
   },
 ];
 export const tracks: Track[] = allTracks.filter((t) => t.confirmed);
-// the ones the player can play itself (Kiss Me plays from YouTube)
+// the ones the player can play itself (a song without a file of ours would play from YouTube)
 export const playableTracks: Track[] = tracks.filter((t) => t.file);
 
 export const music = {
@@ -601,7 +601,7 @@ export const timeline: Milestone[] = [
   { when: "Aug 2026", title: "The novel, and a first release", body: "Žiemos naktys šviesesnės is finished. Nocturne for Absent Things comes out on Spotify.", app: "novel", key: true },
   { when: "Aug 2026", title: "Larpo, fourth brand", body: "The studio's new site goes live. A team of four.", app: "larpo", key: true },
   { when: "Oct 2026", title: "Rug and Afterlight", body: "A rug for your desktop, and a second release.", app: "rug" },
-  { when: "Nov 2026", title: "Kiss Me", body: "A first song, made with a singer.", app: "records", key: true },
+  { when: "Nov 2026", title: "Kiss You", body: "A first song, made with a singer.", app: "records", key: true },
 ];
 
 // Notes: short, his own voice.
@@ -615,7 +615,7 @@ export const notes: Note[] = [
       { p: "Larpo is the main thing: websites, product and brand for SaaS and AI teams, from zero to launch." },
       { p: "Leading product design at Acquisity." },
       { h: "On the side" },
-      { list: ["Making songs with a singer. Kiss Me is the first.", "Rebuilding Lunor. It's going to be huge.", "Cortex, a brain for design. Soon."] },
+      { list: ["Making songs with a singer. Kiss You is the first.", "Rebuilding Lunor. It's going to be huge.", "Cortex, a brain for design. Soon."] },
     ],
   },
   {

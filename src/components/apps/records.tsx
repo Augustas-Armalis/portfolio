@@ -13,7 +13,7 @@ import { Btn, glass, List, ListRow, M, useChrome } from "../ui";
 import { trackOf, player, usePlayer } from "./player";
 import { LiveWallpaper } from "../Apps";
 
-// A song without a file of ours (Kiss Me) plays from YouTube inside Records. Picking one stops the player, so only
+// A song without a file of ours would play from YouTube inside Records (every song has its file now). Picking one stops the player, so only
 // one thing ever plays.
 const VideoCtx = createContext<{ video: Track | null; pick: (t: Track) => void; back: () => void }>({ video: null, pick: () => {}, back: () => {} });
 const useVideo = () => useContext(VideoCtx);
@@ -96,7 +96,7 @@ function MusicBackdrop() {
   );
 }
 
-// Kiss Me: the YouTube player where the artwork stands, its title and a way back to the recordings
+// A song on YouTube: the player where the artwork stands, its title and a way back to the recordings
 function VideoPlaying({ t, compact }: { t: Track; compact: boolean }) {
   const { back } = useVideo();
   return (

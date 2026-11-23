@@ -1,5 +1,17 @@
 [
   {
+    "id": "kiss-you",
+    "title": "Kiss You",
+    "artist": "Augustas Armalis",
+    "file": "/content/music/kiss-you.mp3",
+    "cover": "/content/music/kiss-me.webp",
+    "duration": 79,
+    "durationLabel": "1:19",
+    "year": 2026,
+    "status": "his",
+    "note": "His new song, made with a singer (November 2026). Replaces the YouTube preview 'Kiss Me'; the cover is the one Kiss Me had."
+  },
+  {
     "id": "nocturne-for-absent-things",
     "title": "Nocturne for Absent Things",
     "artist": "Augustas Armalis",

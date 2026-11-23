@@ -463,7 +463,7 @@ function SoundPane({ compact }: { compact: boolean }) {
       <div>
         <SectionHeader mac={!compact}>The field</SectionHeader>
         <List mac={!compact}>
-          <Level compact={compact} label="Field music" sub="At the desk in the meadow" value={s.music} onChange={s.setMusic} />
+          <Level compact={compact} label="Music" sub="In the field and in flight" value={s.music} onChange={s.setMusic} />
           <Level compact={compact} label="Ambience" sub="Wind, waves and birds" value={s.ambience} onChange={s.setAmbience} />
         </List>
         <p className={note}>70% is how they were mixed; above it they are a little louder.</p>

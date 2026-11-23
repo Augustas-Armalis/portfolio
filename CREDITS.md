@@ -63,11 +63,10 @@ public/icons/system/*.svg: from WhiteSur icon theme by vinceliuice, https://gith
 - public/content/music/ciurlionis-prelude-vl268-dube.mp3: M. K. Čiurlionis, Prelude in D minor, VL 268, piano. Performed by Jean Dubé. Creative Commons Attribution 4.0, via IMSLP: https://imslp.org/wiki/Prelude_in_D_minor,_VL_268_(%C4%8Ciurlionis,_Mikalojus_Konstantinas)
 
 ## Streamed music (embedded official players, nothing downloaded or hosted), added 20 Nov
-Played through the YouTube IFrame player on youtube-nocookie.com (src/lib/stream.ts); each upload was checked public, embeddable and playable in an embed on 20 Nov 2026.
-- Miške (In the Forest): https://www.youtube.com/watch?v=R-3c28gbx34 . Lithuanian National Symphony Orchestra, Modestas Pitrėnas; album "Čiurlionis: The Sea, In the Forest & Kęstutis" (℗ 2020 Ondine), provided to YouTube by NAXOS of America (the orchestra's Topic channel).
-- Jūra (The Sea): https://www.youtube.com/watch?v=3kGTf5yXW1g . Same album and performers, with Evelina Staniulytė, organ.
-- Jūra, live in Vilnius: https://www.youtube.com/watch?v=89o4wK16g3E . Lithuanian National Symphony Orchestra, Mirga Gražinytė-Tyla; the Lithuanian National Philharmonic's own channel.
-- Spring Fields Ambience and Music: https://www.youtube.com/watch?v=6ksK2rqrjZk . Martia's Muses (their own channel). Their page asks that their music not be used in projects without a licence (https://www.martiasmuses.com/licensing/): ask before launch.
+Played through the YouTube IFrame player on youtube-nocookie.com (src/lib/stream.ts); nothing is downloaded or rehosted. Each upload was checked public and embeddable (YouTube oEmbed) on 23 Nov 2026. The mini-player names what plays and links to the upload.
+- Village in a Mountain Pass – Ambience and Music (the field's music, at home): https://www.youtube.com/watch?v=QBOIlkb67Fs . Martia's Muses (their own channel). Their page asks that their music not be used in projects without a licence (https://www.martiasmuses.com/licensing/): ask before launch.
+- M. K. Čiurlionis, Miške (In the Forest) (the forest, the cave and the voyage up to The Offering): https://www.youtube.com/watch?v=MzEH7xrmflg . Uploaded by the channel "tamsta" (@derintojas), not by the orchestra or the label.
+- M. K. Čiurlionis, Jūra (The Sea) (from the Sea Finale to the end): https://www.youtube.com/watch?v=BY4o2G6hmaQ . Same channel.
 
 ## Added 20 Nov (OS content round)
 
