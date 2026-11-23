@@ -370,7 +370,7 @@ const isOn = () => running && !sceneMuted() && scene.active && document.visibili
 
 // ---- the desk's music ----
 // The field has music of its own once the visitor has clicked. What it is belongs to the music director
-// (lib/musicDirector.ts: by default the Spring Fields embed, quietly); here it is only asked for and sent away:
+// (lib/musicDirector.ts: the Village in a Mountain Pass embed, and nothing else); here it is only asked for and sent away:
 // asked for at the desk and in the avenue when nothing else is playing and the plane is not in the air, sent away
 // (over 2.5 s) the moment anything else plays, the plane takes off or the OS is on screen.
 let deskOn = false;

@@ -5,8 +5,8 @@ import { useOS } from "@/store";
 // mini-player): one small store, kept in localStorage.
 //
 //   master      0..1   everything: 1 is the site as it was mixed, 0 is silence            (default 1)
-//   fieldMusic  0..1   the field's own music (the embedded stream at the desk): 0.7 is    (default 0.7)
-//                      the level it was set at, 1 a little louder (+3 dB), 0 none
+//   fieldMusic  0..1   the scene's music (the embedded streams: the field's, and the     (default 0.7)
+//                      flight's): 0.7 is the level it was set at, 1 a little louder (+3 dB), 0 none
 //   ambience    0..1   the air of the place (wind, waves, far birds), at the desk and in   (default 0.7)
 //                      every world: 0.7 as mixed, 1 a little louder (+3 dB), 0 none
 //   muted       bool   all sound off. This IS the system's Sound switch (useOS().sound, shown in Control Centre

@@ -12,7 +12,7 @@ import { DeskDust, type DustApi } from "./scene/Dust";
 import { useOS } from "@/store";
 import { ambienceMuted, ambienceScene, onAmbienceChange, setAmbienceMuted, startAmbience } from "@/lib/ambience";
 import { music, sampleMusic, stopOwner } from "@/lib/audio";
-import { flightMusicStop, flightMusicTo, flightMusicVolume } from "@/lib/flightMusic";
+import { flightMusicForest, flightMusicStop, flightMusicTo, flightMusicVolume } from "@/lib/flightMusic";
 import { gyroLook, gyroNudge, gyroStop } from "@/lib/gyro";
 import { handoff } from "@/lib/handoff";
 import { getQuality, getQualityChoice, reportFrame, setQualityChoice, useQuality, type Quality } from "@/lib/quality";
@@ -25,6 +25,7 @@ import { Clouds } from "./scene/home/Clouds";
 import { Butterflies, Flock, Motes, Skein } from "./scene/home/Life";
 import { PropLights, Props } from "./scene/home/Props";
 import { Journey } from "./scene/home/JourneyScene";
+import { inJourneyForest } from "./scene/home/land";
 import { FOREST_K } from "./scene/home/Woods";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
@@ -991,11 +992,11 @@ function Scene({
       voyage.landing = true;
       planeApi.current?.beginLand(cam);
       if (voyage.homing) {
-        // coming home out of the light, the music comes back up, and only then lets go
+        // coming home out of the light, the field's music comes back up, and the flight hands it to the desk
         flightMusicVolume(1);
         flightMusicTo("home");
         window.setTimeout(() => stage.current !== "fly" && flightMusicStop(7), 17000);
-      } else flightMusicStop();
+      } else flightMusicStop(7);
       setStage("land");
       return;
     }
@@ -1401,6 +1402,8 @@ function Scene({
         vol = 0.1 + 0.6 * smooth(clamp01((d - 90) / 520));
       }
       if (Math.abs(vol - musicVol.current) > 0.01) flightMusicVolume((musicVol.current = vol));
+      // at home, the field's music hands over to the forest's as the plane goes in among the trees or nears the cave
+      if (voyage.cur === "home" && voyage.planePos.y > -100) flightMusicForest(inJourneyForest(voyage.planePos.x, voyage.planePos.y, voyage.planePos.z));
     } else musicVol.current = 1;
     const s = stage.current;
     const el = now - st.current;
@@ -1938,7 +1941,7 @@ export default function Room({
   useEffect(() => {
     if (layout.current === isMobile) return;
     layout.current = isMobile;
-    if (modeRef.current === "plane") flightMusicStop();
+    if (modeRef.current === "plane") flightMusicStop(5, false);
     if (modeRef.current === "music") stopOwner("headphones", 0.6);
     gyroStop();
     setFlight({ gyro: false });
@@ -1956,7 +1959,7 @@ export default function Room({
   // the room going away (or being rebuilt by a hot reload) takes its music with it
   useEffect(
     () => () => {
-      flightMusicStop();
+      flightMusicStop(5, false);
       stopOwner("headphones", 0.6);
     },
     [],

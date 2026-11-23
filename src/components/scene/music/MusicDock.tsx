@@ -4,16 +4,17 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowUpRight, ChevronDown, Music2, Play, Volume2, VolumeX } from "lucide-react";
-import { TRACKS, pickTrack, playFieldMusic, setMusicMuted, setMusicOpen, setMusicVolume, useMusic } from "@/lib/musicDirector";
+import { playFieldMusic, setMusicMuted, setMusicOpen, setMusicVolume, useMusic } from "@/lib/musicDirector";
 import { streamHost } from "@/lib/stream";
 import { useOS } from "@/store";
 import { TRACK, geist } from "../font";
 import { GLASS_SPRING, Glass, GlassStyles } from "../Glass";
 
 // The mini-player: what is playing, whose it is and where it comes from, in one small piece of glass. Closed it
-// is a pill (the player's own frame, small, a title, its source); opened out it shows the frame larger, a volume,
-// a mute, and the list of everything that can be played, each with its source and credit. A streamed recording is
-// the official player, embedded: its frame is always in the page and on show while it plays.
+// is a pill (the player's own frame, small, a title, its source); opened out it shows the frame larger, the
+// credit with a link to the upload, a volume and a mute. Nothing to choose: what plays is the place's own
+// (lib/musicDirector.ts). A streamed recording is the official player, embedded: its frame is always in the page
+// and on show while it plays.
 //
 // Where the field's music cannot start by itself (a browser that lets no frame play with sound unasked, a
 // blocker), the pill says so quietly: "Play field music". Pressing it tries again inside the press and opens the
@@ -77,11 +78,8 @@ function Dock() {
   const waiting = stream && m.state !== "playing";
   // the field's music is waiting to be asked for by hand
   const tap = m.tap && show;
-  const line = m.muted ? "Music off" : !t ? "" : m.credit ? m.credit : stream ? (m.part ?? t.source) : t.by;
+  const line = m.muted ? "Music off" : !t ? "" : m.credit ? m.credit : `${t.by} · ${stream ? "YouTube" : t.source}`;
   const W = coarse ? "min(318px, calc(100vw - 80px))" : "326px";
-  // (what this place plays by default leads the list)
-  const first = m.place === "flight" ? "worlds" : "spring";
-  const list = TRACKS.filter((x) => !x.flightOnly || m.place === "flight").sort((a, b) => +(b.id === first) - +(a.id === first));
   return (
     <div
       ref={root}
@@ -136,7 +134,6 @@ function Dock() {
                 {open && (
                   <motion.div key="body" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={GLASS_SPRING} className="overflow-hidden">
                     <div className="px-3.5 pb-1 text-[11.5px] leading-snug text-white/70">
-                      {m.part && stream ? <div>{m.part}</div> : null}
                       <div className="flex items-center gap-1.5">
                         <span className="truncate" data-music="source">
                           {m.credit ?? t?.source ?? ""}
@@ -149,28 +146,12 @@ function Dock() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 px-2 py-1">
+                    <div className="flex items-center gap-2 px-2 pb-2 pt-1">
                       <button type="button" className={`lg-btn grid h-8 w-8 shrink-0 place-items-center ${m.muted ? "lg-on" : "text-white/95"}`} aria-pressed={m.muted} aria-label={m.muted ? "Turn the music on" : "Turn the music off"} data-music="mute" onClick={() => setMusicMuted(!m.muted)}>
                         {m.muted ? <VolumeX size={15} strokeWidth={2} /> : <Volume2 size={15} strokeWidth={2} />}
                       </button>
-                      <input type="range" min={0} max={1} step={0.01} value={m.volume} onChange={(e) => setMusicVolume(+e.target.value)} className="lg-range mr-2 flex-1" aria-label={m.place === "flight" ? "Music volume" : "Field music volume"} data-music="volume" />
+                      <input type="range" min={0} max={1} step={0.01} value={m.volume} onChange={(e) => setMusicVolume(+e.target.value)} className="lg-range mr-2 flex-1" aria-label="Music volume" data-music="volume" />
                     </div>
-                    {/* the picker is the flight's: at the field there is one music, a volume and a mute */}
-                    {m.place === "flight" && (
-                    <div className="flex max-h-[min(46vh,296px)] flex-col gap-0.5 overflow-y-auto p-1.5 pt-0.5" role="radiogroup" aria-label="What plays" data-music="list">
-                      {list.map((x) => {
-                        const on = m.choice === x.id;
-                        return (
-                          <button key={x.id} type="button" role="radio" aria-checked={on} data-track={x.id} className={`lg-btn flex flex-col !rounded-[14px] px-2.5 py-1.5 text-left ${on ? "lg-on" : "text-white/95"}`} onClick={() => pickTrack(x.id)}>
-                            <span className="text-[12.5px] font-medium leading-tight tracking-[-0.01em]">{x.title}</span>
-                            <span className={`mt-0.5 text-[11px] leading-tight ${on ? "text-black/60" : "text-white/62"}`}>
-                              {x.by} · {x.credit ? "CC BY 4.0" : x.source}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
