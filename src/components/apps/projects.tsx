@@ -40,7 +40,7 @@ function ProductPage({ id, p }: { id: AppId; p: Project }) {
     p.years && { k: "When", v: p.years },
     p.stack && { k: "Built with", v: p.stack },
     p.status && { k: "Status", v: p.status },
-    p.link && !/x\.com/.test(p.link.href) && { k: "Website", v: p.link.label },
+    p.link && { k: "Website", v: p.link.label },
   ].filter((x): x is { k: string; v: string } => !!x);
   const pad = compact ? "px-5" : "px-10 @max-[559px]:px-6";
   return (

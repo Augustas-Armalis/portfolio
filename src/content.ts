@@ -356,7 +356,6 @@ export const projects: Partial<Record<AppId, Project>> = {
       { label: "Price", value: "Free" },
     ],
     get: { label: "Get", href: "https://github.com/augustas-rug/road-rug", sub: "GitHub" },
-    link: { label: "The film on X", href: "https://x.com/augustasdesign/status/2110439077384253885" },
     kind: "store",
     repo: "https://github.com/augustas-rug/road-rug",
   },
