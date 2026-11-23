@@ -33,6 +33,7 @@ const LIP = 2;
 const GOLD = 3;
 const CLOTH = 4;
 const SLEEVE = 5;
+const NAIL = 6;
 
 export type Her = {
   geo: THREE.BufferGeometry;
@@ -56,6 +57,8 @@ export function* herSteps(coarse: boolean, budget: number, far = false): Generat
     { col: [0.78, 0.55, 0.16], kind: 3, what: [0, 0, 0, 0], grp: 2 },
     { col: [0.05, 0.128, 0.124], kind: 0, what: [1, 0, 0, 0], grp: 3 },
     { col: [0.058, 0.145, 0.138], kind: 0, what: [0, 1, 0, 0], grp: 4 },
+    // (a nail: the skin a little paler and pinker, laid on the finger's own clay)
+    { col: [0.7, 0.47, 0.34], kind: 1, what: sk, grp: 0 },
   ];
   // the head: level, bowed the least bit toward what she holds
   const tau = 0.13;
@@ -184,38 +187,92 @@ export function* herSteps(coarse: boolean, budget: number, far = false): Generat
   };
 
   // ---- the hand ----
-  // Open under the orb, bearing it as lightly as it can be borne: a narrow palm beneath, the heel of the hand
-  // toward her, and four long slender fingers going on under it and up, spread like the petals of a lily, each
-  // with its three joints, leaving the orb a little at the tips; the thumb lies up round the side the plane comes
-  // from, and stays well under the way in.
-  const hand = new Clay(0.02 * U);
-  const on = (az: number, pol: number, out: number): V3 => {
-    const a = (az * Math.PI) / 180;
-    const p = (pol * Math.PI) / 180;
-    const r = ORB.r + out;
-    return [O[0] - Math.sin(p) * Math.cos(a) * r, O[1] - Math.cos(p) * r, O[2] + Math.sin(p) * Math.sin(a) * r];
+  // Open under the orb and bearing it as lightly as it can be borne: the wrist bent back so the palm lies up against
+  // the orb's underside, cupped to it; four slender fingers going on under it and up its far side, each tapering,
+  // with its three joints, the knuckles standing the least bit proud on the back and a nail at the end; and the
+  // thumb from the fleshy root of the palm, opposed, curving up the near side of the orb (the side the plane comes
+  // from), with its own two joints. All of it lies along the orb, a finger's thickness off it.
+  //
+  // Laid out on the orb itself: `u` is how far round under it, from her side (negative) to the far side (positive),
+  // `v` how far toward the near side, both in degrees from the bottom of it; `out` how far off its surface.
+  const hand = new Clay(0.012 * U);
+  const R0 = ORB.r;
+  const DEG = Math.PI / 180;
+  const dirAt = (u: number, v: number): V3 => [-Math.sin(u * DEG) * Math.cos(v * DEG), -Math.cos(u * DEG) * Math.cos(v * DEG), Math.sin(v * DEG)];
+  const at = (u: number, v: number, out: number): V3 => {
+    const d = dirAt(u, v);
+    return [O[0] + d[0] * (R0 + out), O[1] + d[1] * (R0 + out), O[2] + d[2] * (R0 + out)];
   };
-  const finger = (pts: V3[], r0: number, tip: number) => {
-    const n = pts.length;
-    const rad = pts.map((_, i) => r0 * (1 - (1 - tip) * Math.pow(i / (n - 1), 0.85)));
-    hand.chain(pts, rad, SKIN, { k: 0.016 * U });
-    // and a small round pad at the tip
-    hand.ball(pts[n - 1], rad[n - 1] * 1.05, SKIN, { k: 0.01 * U });
-  };
-  hand.limb(Wr, [O[0] + 24, O[1] - ORB.r - 6.2, O[2] + 3.5], 0.088 * U, 0.07 * U, SKIN, { k: 0.07 * U, flat: 1.25 });
-  hand.ball([O[0] + 8, O[1] - ORB.r - 4.6, O[2] + 1], [19, 4.3, 15], SKIN, { k: 0.06 * U });
-  [-47, -18, 9, 34].forEach((az, i) => {
-    const len = [0.8, 0.95, 1.0, 0.93][i];
-    // (the bones of the hand run on from the wrist to each knuckle, under the skin of its back)
-    hand.limb([O[0] + 20, O[1] - ORB.r - 5.6, O[2] + 2 + az * 0.12], on(az, 13, 2.7), 3.0, 2.6, SKIN, { k: 0.035 * U });
-    finger([on(az, 13, 2.7), on(az, 13 + 26 * len, 2.5), on(az * 1.03, 13 + 46 * len, 2.9), on(az * 1.05, 13 + 60 * len, 4.0), on(az * 1.06, 13 + 69 * len, 5.8)], 2.55, 0.5);
-  });
-  finger([on(150, 26, 3.4), on(122, 27, 3.0), on(96, 31, 3.0), on(76, 36.5, 3.6), on(64, 41, 4.6)], 3.2, 0.52);
+  // (the way round the orb at a place, as an axis: the palm's and a finger's own length)
+  const round = (u: number): V3 => [-Math.cos(u * DEG), Math.sin(u * DEG), 0];
+  const deg = (len: number, out: number) => len / (R0 + out) / DEG;
+  const off = (p: V3, n: V3, k: number): V3 => [p[0] + n[0] * k, p[1] + n[1] * k, p[2] + n[2] * k];
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  // the wrist, out of the forearm, bending back up to the heel of the hand
+  hand.limb(Wr, at(-38, 3, 6.4), 0.085 * U, 0.072 * U, SKIN, { k: 0.05 * U, flat: 1.3 });
+  // the palm: one shallow pad cupped to the orb, fuller at the heel and at the root of the thumb and of the little finger
+  hand.ball(at(-19, 1, 3.4), [12.5, 3.2, 10.5], SKIN, { x: round(-19), y: dirAt(-19, 1), k: 2.4 });
+  hand.ball(at(-31, 0, 4.4), [7, 4.2, 8.2], SKIN, { x: round(-31), y: dirAt(-31, 0), k: 2.2 });
+  hand.ball(at(-26, 9.5, 4.4), [7.5, 4.2, 5.2], SKIN, { x: round(-26), y: dirAt(-26, 9.5), k: 2 });
+  hand.ball(at(-26, -9, 3.9), [7, 3.6, 4.2], SKIN, { x: round(-26), y: dirAt(-26, -9), k: 2 });
+  // the fingers: index nearest the thumb, then middle, ring, little; how long each is, where it leaves the palm
+  const fingers: { v: number; len: number; u0: number; r: number }[] = [
+    { v: 10.2, len: 19, u0: -3.8, r: 2.12 },
+    { v: 3.4, len: 21.5, u0: -2.6, r: 2.22 },
+    { v: -3.4, len: 20.5, u0: -3.2, r: 2.12 },
+    { v: -10, len: 16.5, u0: -5.4, r: 1.9 },
+  ];
+  const tipAt: V3[] = [];
+  for (const fg of fingers) {
+    // the bone of the hand under the back of it, from the heel out to the knuckle
+    hand.limb(at(-28, fg.v * 0.55, 4.2), at(fg.u0, fg.v, fg.r + 0.4), 2.7, fg.r * 1.02, SKIN, { k: 1.6 });
+    // three joints, the bones a little shorter each time, the finger tapering and lying along the orb (a hair
+    // further off at the knuckle, touching it at the tip), spreading a little as it goes
+    const seg = [0, 0.47, 0.76, 1];
+    const rad = [fg.r, fg.r * 0.86, fg.r * 0.74, fg.r * 0.56];
+    const pts = seg.map((f, i) => at(fg.u0 + deg(fg.len * f, fg.r), fg.v * (1 + 0.16 * f), rad[i] + lerp(0.5, 0.05, f)));
+    // (one smooth run from knuckle to tip, its bones joined with the least blending: a soft join between two bones
+    // swells, and a finger of swollen joints is a string of beads)
+    hand.chain(pts, rad, SKIN, { k: 0.1 });
+    // the big knuckle at the root of each finger stands the least bit proud on the back of the hand
+    hand.ball(off(pts[0], dirAt(fg.u0, fg.v), rad[0] * 0.2), rad[0] * 0.9, SKIN, { k: 0.8 });
+    // the pad of the tip
+    hand.ball(pts[3], rad[3] * 0.98, SKIN, { k: 0.1 });
+    // and the nail on the back of it
+    const un = fg.u0 + deg(fg.len * 0.92, fg.r);
+    const nn = dirAt(un, fg.v * 1.15);
+    hand.ball(off(at(un, fg.v * (1 + 0.16 * 0.92), rad[3] + 0.1), nn, rad[3] * 0.62), [rad[3] * 1.25, rad[3] * 0.42, rad[3] * 0.78], NAIL, { paint: true, x: round(un), y: nn, k: 0.2 });
+    tipAt.push(pts[3]);
+  }
+  // the thumb: from the fleshy root of the palm on the near side, out and up the orb's near side, opposed to the
+  // fingers; its own long first bone, then two joints, a nail
+  {
+    const tp: [number, number, number][] = [
+      [-30, 12, 4.4],
+      [-22, 23, 3.2],
+      [-14.5, 34.5, 2.7],
+      [-9.5, 44, 1.9],
+    ];
+    const tr = [3.0, 2.6, 2.3, 1.75];
+    const pts = tp.map(([u, v, o]) => at(u, v, o));
+    hand.chain(pts, tr, SKIN, { k: 0.12 });
+    // (its root runs smoothly into the fleshy pad it rises from)
+    hand.limb(at(-27, 8, 4.4), pts[1], 3.4, tr[1] * 0.9, SKIN, { k: 1.6 });
+    hand.ball(off(pts[1], dirAt(tp[1][0], tp[1][1]), tr[1] * 0.18), tr[1] * 0.86, SKIN, { k: 0.8 });
+    hand.ball(pts[3], tr[3] * 1.0, SKIN, { k: 0.1 });
+    // (the thumb's nail faces out and a little forward, as a thumb's does when it is laid round a ball)
+    const nn = dirAt(-10.5, 42);
+    const tg: V3 = [pts[3][0] - pts[2][0], pts[3][1] - pts[2][1], pts[3][2] - pts[2][2]];
+    const tl = Math.hypot(tg[0], tg[1], tg[2]);
+    hand.ball(off(at(-10.8, 41.5, 2.0), nn, 1.1), [2.2, 0.75, 1.45], NAIL, { paint: true, x: [tg[0] / tl, tg[1] / tl, tg[2] / tl], y: nn, k: 0.2 });
+    tipAt.push(pts[3]);
+  }
+  void tipAt;
 
   const parts = [
     yield* body.meshSteps(1.15 * v, paints, undefined, budget, far ? {} : { detail: folds, band: 8.5 }),
     yield* head.meshSteps(0.5 * v, paints, undefined, budget),
-    yield* hand.meshSteps(0.28 * v, paints, undefined, budget),
+    yield* hand.meshSteps(0.16 * v, paints, undefined, budget),
     yield* hair.meshSteps(1.25 * v, paints, undefined, budget),
   ];
   if (process.env.NODE_ENV !== "production") console.info(`[friendship] her${far ? " (far)" : ""}, triangles: body ${Math.round(parts[0].index!.count / 3)}, head ${Math.round(parts[1].index!.count / 3)}, hand ${Math.round(parts[2].index!.count / 3)}, hair ${Math.round(parts[3].index!.count / 3)}`);
@@ -288,6 +345,8 @@ export function makeHerMaterial(h: Her, map: THREE.Texture) {
       uU: { value: HER.u },
       uFloor: { value: 0 },
       uS: { value: HER_K },
+      // the orb in her own measure (centre, radius): what lies close to it is lit through
+      uOrbM: { value: new THREE.Vector4(ORB.x, ORB.y, ORB.z, ORB.r) },
       tMap: { value: map },
     },
     vertexShader: /* glsl */ `
@@ -307,7 +366,7 @@ export function makeHerMaterial(h: Her, map: THREE.Texture) {
       }`,
     fragmentShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vObj; varying vec3 vN; varying vec4 vCol; varying vec4 vWhat; varying float vAO;
-      uniform vec3 uHeadC; uniform vec3 uHeadF; uniform vec3 uUp; uniform vec2 uHairDir; uniform float uU; uniform float uFloor; uniform vec3 uChest; uniform float uS; uniform sampler2D tMap;
+      uniform vec3 uHeadC; uniform vec3 uHeadF; uniform vec3 uUp; uniform vec2 uHairDir; uniform float uU; uniform float uFloor; uniform vec3 uChest; uniform float uS; uniform sampler2D tMap; uniform vec4 uOrbM;
       ${GLSL_NOISE}
       ${GLSL_SKY}
       ${GLSL_AIR}
@@ -456,6 +515,15 @@ export function makeHerMaterial(h: Her, map: THREE.Texture) {
         float fres = pow(1.0 - abs(dot(n, V)), 2.4);
         sss += vec3(1.0, 0.3, 0.1) * skinW * att * att * pow(1.0 - abs(dot(n, V)), 1.5) * (1.0 - smoothstep(-0.25, 0.55, ndl)) * 0.85;
         vec3 col = alb * (fill * ao * ao * 2.4 + warm + sss);
+        // The hand is close against the orb and thin: the light comes through it. Warm and red where the skin is
+        // thinnest and nearest (the fingertips, the edges of the fingers, the web of the thumb), most at the edges the
+        // eye sees across, a glow from within rather than a light on it.
+        {
+          float ds = length(vObj - uOrbM.xyz) - uOrbM.w;
+          float near = skinW * exp(-max(ds, 0.0) / 3.2) * (1.0 - smoothstep(9.0, 14.0, ds));
+          float edge = 0.35 + 0.65 * pow(1.0 - abs(dot(n, V)), 1.3);
+          col += vec3(1.0, 0.4, 0.15) * alb * near * edge * att * 3.4 + vec3(1.0, 0.55, 0.25) * near * near * att * 0.06;
+        }
         // the very edge that is turned toward the orb burns: the line of fire he drew down her profile
         col += vec3(1.0, 0.5, 0.16) * alb * fres * att * clamp(ndl + 0.3, 0.0, 1.0) * mix(3.4, 2.2, clothW) * ao * open;
         // and on the far side a thread of the cave's green
