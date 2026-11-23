@@ -9,8 +9,6 @@ import { postCtl } from "./Post";
 import { bakeHomeSolids, homeGround } from "./homeGround";
 import { useTrails } from "./PlaneTrails";
 import { carryY, gateToEntry, portalReady, portalSwap } from "./worlds/portal";
-import { HOME_WIN } from "./worlds/kings/homeWindow";
-const M4b = new THREE.Matrix4();
 import { arriveGolden } from "./sky";
 import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
@@ -157,7 +155,6 @@ export function Plane({
   const group = useRef<THREE.Group>(null);
   const hover = useRef(false);
   const scene = useThree((s) => s.scene);
-  const camera = useThree((s) => s.camera);
   // the mist off its wing tips (PlaneTrails.tsx), and the land or water under a point of whichever world stands
   const trails = useTrails();
   const groundUnder = useMemo(
@@ -728,31 +725,9 @@ export function Plane({
       if (id === "kings" && !voyage.homing) {
         const o = originOf(id);
         const b = kingsBloom(st.pos.x - o.x, st.pos.y, st.pos.z - o.z);
-        // (with the home picture up in the glass there is no light to close over the frame: the plane goes through it)
-        voyage.veil = HOME_WIN.live ? 0 : b.veil;
-        voyage.warm = voyage.veil > 0 ? 1 : 0;
-        // (deep enough in that the glass fills the frame: the eye rides a few metres behind the plane)
-        if (b.d < KINGS.domeR * 0.7 && HOME_WIN.live) {
-          // through the glass: plane, eye and where it looks are carried by the window's own move, home stands
-          const m = HOME_WIN.m;
-          const r = M4b.extractRotation(m);
-          st.pos.applyMatrix4(m);
-          st.nose.applyMatrix4(r).normalize();
-          camera.position.applyMatrix4(m);
-          st.look.applyMatrix4(m);
-          camera.up.applyMatrix4(r).normalize();
-          camera.lookAt(st.look);
-          camera.updateMatrixWorld();
-          trails.reset();
-          arriveGolden();
-          swapWorld("home");
-          voyage.veil = 0;
-          voyage.warm = 0;
-          voyage.homing = false;
-          voyage.onHome?.();
-          return;
-        }
-        if (b.d < KINGS.domeR * 1.1 && !HOME_WIN.live) {
+        voyage.veil = b.veil;
+        voyage.warm = b.veil > 0 ? 1 : 0;
+        if (b.d < KINGS.domeR * 1.1) {
           voyage.homing = true;
           voyage.warm = 1;
           voyage.onHome?.();
