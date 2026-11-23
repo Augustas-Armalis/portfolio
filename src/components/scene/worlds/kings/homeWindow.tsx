@@ -21,7 +21,7 @@ import { BY, R } from "./light";
 // until the last hundred and twenty metres and every second from there. Never on a phone or on Low (there, and wherever anything is missing, the dome keeps
 // its modelled homestead, which stands under this window always and is simply covered by it).
 
-const U = { tHome: { value: null as THREE.Texture | null }, uHomeK: { value: 0 }, uHomeRes: { value: new THREE.Vector2(1, 1) }, uHomeGain: { value: 1 }, uHomeNear: { value: 0 } };
+const U = { tHome: { value: null as THREE.Texture | null }, uHomeK: { value: 0 }, uHomeRes: { value: new THREE.Vector2(1, 1) }, uHomeGain: { value: 1 } };
 // the heart of the dome, in the scene's own coordinates: it stands for the desk
 const HEART = new THREE.Vector3(ORIGIN.x, ORIGIN.y + BY + R * 0.3, ORIGIN.z + KINGS.z);
 // ...but seen from a little above it and tipped toward it. The plane comes to the kings from low in the wood, looking
@@ -32,9 +32,6 @@ const HEART = new THREE.Vector3(ORIGIN.x, ORIGIN.y + BY + R * 0.3, ORIGIN.z + KI
 const HOME_UP = 12;
 const HOME_TIP = -0.245;
 let golden: SkyState | null = null;
-// what Plane.tsx needs to fly through the glass: whether the picture is up, and the move that carries a point in the
-// wood to the same point of home as the picture shows it (the eye's own move)
-export const HOME_WIN = { live: false, m: new THREE.Matrix4() };
 const SP = new THREE.Vector3();
 
 export function HomeWindow({ mobile }: { mobile: boolean }) {
@@ -52,6 +49,7 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
       veil: null as THREE.Object3D | null,
       spare: [] as THREE.Object3D[],
       thin: [] as [THREE.InstancedBufferGeometry, number][],
+      sparse: [] as [THREE.InstancedMesh, number][],
       spareAt: -1,
     }),
     [],
@@ -65,7 +63,7 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
         uniforms: U,
         vertexShader: /* glsl */ `varying vec3 vN; varying vec3 vW; void main(){ vN = normalize(mat3(modelMatrix) * normal); vec4 wp = modelMatrix * vec4(position, 1.0); vW = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
         fragmentShader: /* glsl */ `
-          uniform sampler2D tHome; uniform float uHomeK; uniform vec2 uHomeRes; uniform float uHomeGain; uniform float uHomeNear;
+          uniform sampler2D tHome; uniform float uHomeK; uniform vec2 uHomeRes; uniform float uHomeGain;
           varying vec3 vN; varying vec3 vW;
           void main(){
             if (uHomeK <= 0.003) discard;
@@ -74,8 +72,7 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
             float a = smoothstep(0.02, 0.3, f) * uHomeK;
             // that country's own light, as it will be seen from inside it
             // (it is the one light of this wood: a little of its own glow lies over the picture, most toward the rim)
-            vec3 col = texture2D(tHome, gl_FragCoord.xy / uHomeRes).rgb * uHomeGain * mix(1.25, 1.0, uHomeNear) + vec3(0.5, 0.32, 0.16) * (0.06 + 0.8 * (1.0 - f) * (1.0 - f)) * (1.0 - uHomeNear);
-            a = mix(a, uHomeK, uHomeNear);
+            vec3 col = texture2D(tHome, gl_FragCoord.xy / uHomeRes).rgb * uHomeGain + vec3(0.5, 0.32, 0.16) * (0.06 + 0.8 * (1.0 - f) * (1.0 - f));
             gl_FragColor = vec4(col, a);
           }`,
       }),
@@ -102,12 +99,6 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
     const want = able ? 1 - THREE.MathUtils.smoothstep(d, 240, 320) : 0;
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __homeWin: { able, d, k: rig.k, fresh: rig.fresh, level: postCtl.level, target: !!target, stand: !!stand, home: portalRig.home.size, phase: voyage.phase, flying: voyage.flying, cur: voyage.cur, U, portalRig, scene, gl, spare: rig.spare, thin: rig.thin } });
     rig.k += (want - rig.k) * (1 - Math.exp(-dt * 3));
-    HOME_WIN.m.copy(rig.m);
-    HOME_WIN.live = able && rig.fresh && rig.k > 0.6 && d < 70;
-    // (the last stretch: the picture at the frame's size, every frame, of the whole home and without the glass's own
-    // tint, so the frame after the plane goes through is the frame before)
-    const near = d < 70;
-    U.uHomeNear.value = near ? 1 - THREE.MathUtils.smoothstep(d, 45, 70) : 0;
     if (!able) {
       if (rig.k < 0.01) {
         rig.k = 0;
@@ -117,13 +108,13 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
       return;
     }
     // (home is a whole world to draw: every fourth frame from far off, every second over the last hundred and twenty metres)
-    if (rig.fresh && !near && ++rig.tick % (d > 120 ? 4 : 2) !== 0) {
+    if (rig.fresh && ++rig.tick % (d > 120 ? 4 : 2) !== 0) {
       U.uHomeK.value = rig.k;
       return;
     }
     const cam = st.camera as THREE.PerspectiveCamera;
-    const w = Math.max(8, Math.round(target!.width * (near ? 1 : 0.25)));
-    const h = Math.max(8, Math.round(target!.height * (near ? 1 : 0.25)));
+    const w = Math.max(8, Math.round(target!.width * 0.25));
+    const h = Math.max(8, Math.round(target!.height * 0.25));
     if (rig.rt.width !== w || rig.rt.height !== h) rig.rt.setSize(w, h);
     // the same eye, carried from the dome's floor to the desk's ground
     const pc = rig.cam;
@@ -156,6 +147,7 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
       rig.spareAt = 0;
       rig.spare.length = 0;
       rig.thin.length = 0;
+      rig.sparse.length = 0;
       portalRig.home.forEach((grp) =>
         grp.traverse((o) => {
           const m = o as THREE.Mesh;
@@ -178,7 +170,11 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
           const away = (bs.radius < 1500 && far - bs.radius > 380) || (bs.radius < 600 && far > 400);
           const small = tris < 1500 && far > 120;
           const mote = !m.isMesh && far > 150;
-          if (grass || away || small || mote) rig.spare.push(o);
+          // (things strewn by the thousand, a few triangles each: flowers, tufts)
+          const strewn = !im.isInstancedMesh && ig.isInstancedBufferGeometry && many > 1000 && tris / many < 24 && bs.radius < 100000;
+          if (grass || away || small || mote || strewn) rig.spare.push(o);
+          // (and of a far stand of trees every other one makes the same wood at this size)
+          else if (im.isInstancedMesh && far > 200 && im.count > 40) rig.sparse.push([im, im.count]);
         }),
       );
       // and of what stands on the desk only the large things: the rest are specks from here
@@ -196,8 +192,12 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
       walk(scene);
     }
     const spareWas = rig.spare.map((o) => o.visible);
-    if (!near) for (const o of rig.spare) o.visible = false;
-    if (!near) for (const [g, n] of rig.thin) g.instanceCount = Math.ceil(n / 3);
+    for (const o of rig.spare) o.visible = false;
+    // (the counts as they are this frame: home may change them itself)
+    const thinWas = rig.thin.map(([g]) => g.instanceCount);
+    const sparseWas = rig.sparse.map(([m]) => m.count);
+    rig.thin.forEach(([g], i) => (g.instanceCount = Math.ceil(thinWas[i] / 3)));
+    rig.sparse.forEach(([m], i) => (m.count = Math.ceil(sparseWas[i] / 2)));
     const standWas = stand!.visible;
     stand!.visible = false;
     const veilWas = rig.veil?.visible ?? false;
@@ -235,11 +235,12 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
     if (rig.veil) rig.veil.visible = veilWas;
     stand!.visible = standWas;
     rig.spare.forEach((o, i) => (o.visible = spareWas[i]));
-    for (const [g, n] of rig.thin) g.instanceCount = n;
+    rig.thin.forEach(([g], i) => (g.instanceCount = thinWas[i]));
+    rig.sparse.forEach(([m], i) => (m.count = sparseWas[i]));
     homeWas.forEach(([o, v]) => (o.visible = v));
     U.tHome.value = rig.rt.texture;
     U.uHomeRes.value.set(target!.width, target!.height);
-    U.uHomeGain.value = golden.exposure / Math.max(skyWas?.exposure ?? 1.3, 0.05);
+    U.uHomeGain.value = (golden.exposure / Math.max(skyWas?.exposure ?? 1.3, 0.05)) * 1.25;
     U.uHomeK.value = rig.fresh ? rig.k : 0;
   }, 0.5);
   return <mesh geometry={b.geo} material={b.mat} position={[0, BY, KINGS.z]} renderOrder={4.5} frustumCulled={false} />;
