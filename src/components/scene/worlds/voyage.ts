@@ -104,18 +104,20 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // stands where the sun would (straight ahead, a little up) so the haze glows round it as round a sun
   friendship: {
     label: "Friendship",
-    zenith: [0.022, 0.04, 0.034],
-    upper: [0.034, 0.058, 0.046],
-    horizon: [0.05, 0.078, 0.052],
+    zenith: [0.012, 0.032, 0.024],
+    upper: [0.018, 0.044, 0.03],
+    horizon: [0.03, 0.058, 0.034],
     // (the air toward the orb takes this colour: kept low, or the whole cave goes to cream)
     glow: [0.2, 0.15, 0.075],
     amb: [0.07, 0.11, 0.085],
-    key: [1.0, 0.84, 0.56],
-    keyI: 0.6,
+    key: [0.9, 0.95, 0.62],
+    keyI: 0.7,
+    // (no sun in this sky: the glow of the orb in the air is its own, worked out along every ray: friendship/cave.ts;
+    // the key light is the pale light that comes down the shafts from far above, onto the tops of the trees)
     sunAz: 0,
-    sunEl: 6,
-    keyAz: 0,
-    keyEl: 10,
+    sunEl: -30,
+    keyAz: 20,
+    keyEl: 70,
     cloudLit: [0.1, 0.12, 0.08],
     cloudShade: [0.02, 0.03, 0.025],
     night: 0.25,

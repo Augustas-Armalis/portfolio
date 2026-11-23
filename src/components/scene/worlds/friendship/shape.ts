@@ -9,9 +9,16 @@ import type { Obstacle, Terrain } from "../voyage";
 // the height of her face. The orb is the way on: the plane flies into it.
 
 // the orb: where it hangs and how big it is (the gate is at its heart)
-export const ORB = { x: 0, y: 150, z: 0, r: 20 };
-// her head: the centre of the skull, and its height from chin to crown (the orb's diameter, as in the picture)
-export const HEAD = { x: 64, y: 156, z: 0, h: 42 };
+// (larger than the gate's own catch: the plane is also taken through when it enters the orb anywhere: Friendship.tsx)
+// (it hangs a little behind the picture's plane, so her painted fingers lie in front of it)
+export const ORB = { x: 0, y: 132, z: -36, r: 34 };
+// the picture laid over her: its size in pixels, where the orb's centre is in it and its radius, and metres a pixel
+// (so the painted orb and the real one are the same)
+export const PAINT = { w: 1280, h: 1481, cx: 252, cy: 785, r: 207, s: 34 / 207 };
+// where things of the picture stand in the cave (metres)
+const px = (x: number, y: number) => ({ x: ORB.x + (x - PAINT.cx) * PAINT.s, y: ORB.y + (PAINT.cy - y) * PAINT.s });
+// her head (the middle of her face, in the picture), for the lens and the lights
+export const HEAD = { ...px(800, 560), z: -4, h: 40 };
 
 // the floor of the cave: nearly level, a long low swell under her and a hollow before her where the mist lies
 export const FRIEND_TERRAIN: Terrain = {
@@ -66,26 +73,39 @@ export function floorAt(x: number, z: number) {
   return h;
 }
 const over = (pts: [number, number, number][]) => pts.map(([x, z, y]): [number, number, number] => [x, z, y - floorAt(x, z)]);
+// (in low under the trees, winding a little between the trunks; out through the arch of rock where the wood opens
+// and she stands across the clearing; then up, straight at the orb)
 export const FRIEND_PATH: [number, number, number][] = over([
-  [0, 880, 28],
-  [-6, 780, 32],
-  [-20, 660, 44],
-  [-40, 520, 68],
-  [-36, 390, 92],
-  [-24, 270, 116],
-  [-11, 160, 136],
-  [-3, 70, 147],
-  [0, 0, ORB.y],
-  [0, -40, ORB.y],
+  [0, 880, 16],
+  [8, 800, 15],
+  [-6, 720, 16],
+  [-14, 640, 17],
+  [-4, 560, 17],
+  [6, 480, 18],
+  [0, 400, 20],
+  [-4, 330, 24],
+  [-6, 250, 40],
+  [-4, 170, 68],
+  [-2, 100, 100],
+  [0, 45, 124],
+  [0, ORB.z, ORB.y],
+  [0, ORB.z - 40, ORB.y],
 ]);
+// the arch of rock the way passes under as the wood opens
+export const ARCH = { x: -3, z: 345 };
+// the clearing she stands in, where no tree grows (an ellipse round the picture), and the lane the way keeps open
+export function clear(x: number, z: number, pathX: (z: number) => number) {
+  // (in front of her only: behind her the wood stands close, dark trunks going up into the haze as his strokes do)
+  const inClearing = ((x - 55) / 200) ** 2 + ((z - 150) / 215) ** 2 < 1 || (z > -40 && z < 150 && x > -110 && x < 200);
+  const inLane = z > -60 && Math.abs(x - pathX(z)) < 20;
+  return inClearing || inLane;
+}
 export const FRIEND_ENTRY = { x: 0, z: 880, above: FRIEND_PATH[0][2], yaw: 0 };
 export const FRIEND_GATE = { x: ORB.x, z: ORB.z, above: ORB.y - floorAt(ORB.x, ORB.z), yaw: 0 };
-export const FRIEND_CANVAS = { x: 46, z: 700, yaw: -0.6 };
+export const FRIEND_CANVAS = { x: -40, z: 600, yaw: 0.6 };
 
 // what the plane slides round: her body, her head, the arm she holds out (the hand under the orb is below the way)
 export const FRIEND_OBSTACLES: Obstacle[] = [
-  { x: 118, z: 0, r: 70, h: 120, bell: true },
-  { x: 70, z: 0, r: 30, h: 196 },
-  { x: 52, z: 18, r: 14, h: 104 },
-  { x: 30, z: 12, r: 12, h: 120 },
+  { x: 115, z: -10, r: 58, h: 270 },
+  { x: 62, z: 0, r: 26, h: 120 },
 ];

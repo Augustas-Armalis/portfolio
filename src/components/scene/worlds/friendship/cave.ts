@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
 import { GLSL_AIR, WORLD_U, noise2, ridge2 } from "../kit";
-import { CAVE_Z, HEAD, ORB, caveAt, floorAt } from "./shape";
+import { CAVE_Z, ORB, caveAt, floorAt } from "./shape";
 
 // The cave and the light in it. Everything here is lit by one thing only: the orb she holds (a point of light
 // with a soft fall-off), and the dim green air. The rock is painted as the picture's ground is: deep teal-green
@@ -34,6 +34,22 @@ vec4 orbLight(vec3 p, vec3 n, float wrap, float reach){
   // soft near the orb (no hot spot where the hand holds it), a long tail out to the walls
   float att = 1.0 / (1.0 + pow(max(d - ${(ORB.r * 0.6).toFixed(1)}, 0.0) / reach, 2.0));
   return vec4(orbCol() * diff * att * uOrbK, ndl);
+}
+// The orb's light in the air between the eye and a point: the haze glows round it as round a lamp in fog, and
+// whatever stands before it cuts the glow off (the light of a point falling off as the square of the distance,
+// gathered along the ray in closed form).
+vec3 orbScatter(vec3 p){
+  vec3 ro = cameraPosition;
+  vec3 dv = p - ro;
+  float L = length(dv);
+  vec3 rd = dv / max(L, 0.001);
+  vec3 oc = uOrb - ro;
+  float b = dot(oc, rd);
+  float h = max(length(oc - rd * b), ${(ORB.r * 0.9).toFixed(1)});
+  // (the angle the lit stretch of the ray spans, and a fall-off with its nearest distance that is softer than a
+  // true lamp's: near the orb the haze is a glow, not a white-out)
+  float span = atan((L - b) / h) - atan(-b / h);
+  return vec3(1.0, 0.74, 0.4) * span * 26.0 / pow(h + 50.0, 1.6) * uOrbK;
 }
 `;
 
@@ -171,95 +187,12 @@ export function makeCaveMaterial() {
         float isFloor = (1.0 - vWall) * smoothstep(0.4, 0.8, n.y);
         vec3 alb = mix(wall, floorC, isFloor);
         // the light of the orb, and the dim air's own light in the shade
-        vec4 o = orbLight(vWorld, n, 0.35, 170.0);
+        vec4 o = orbLight(vWorld, n, 0.35, 240.0);
         vec3 amb = uSkyCol * (0.55 + 0.45 * n.y) * 1.1;
         vec3 col = alb * (amb + o.rgb * 2.3);
         // the far reach of it in the hollows: lower walls stand in their own shade
         col *= mix(0.65, 1.0, smoothstep(0.0, 60.0, vWorld.y));
-        col = applyAir(col, vWorld);
-        gl_FragColor = vec4(col, 1.0);
-        ${END}
-      }`,
-  });
-}
-
-// ---------- her ----------
-// Mostly dark, as he left her: warm umber in the face and hands, darker hair, the robe a brown-green that goes to
-// nothing toward the floor. The orb's light comes onto her face and her hand, and a thread of orange-gold runs down
-// every edge that faces it (her brow, the nose, the lips, the chin, the fingers). Pastel strokes over everything.
-export function makeFigureMaterial(part: 0 | 1 | 2) {
-  return new THREE.ShaderMaterial({
-    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, uPart: { value: part }, uHead: { value: new THREE.Vector3(HEAD.x, HEAD.y, HEAD.z) } },
-    vertexShader: /* glsl */ `
-      attribute float aAO;
-      varying vec3 vWorld; varying vec3 vN; varying vec3 vLocal; varying float vAO;
-      void main(){
-        vec4 wp = modelMatrix * vec4(position, 1.0);
-        vWorld = wp.xyz; vLocal = position; vAO = aAO;
-        vN = normalize(mat3(modelMatrix) * normal);
-        gl_Position = projectionMatrix * viewMatrix * wp;
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform float uPart; uniform vec3 uHead;
-      varying vec3 vWorld; varying vec3 vN; varying vec3 vLocal; varying float vAO;
-      ${GLSL_NOISE}
-      ${GLSL_SKY}
-      ${GLSL_AIR}
-      ${GLSL_ORB}
-      void main(){
-        vec3 n = normalize(vN);
-        vec3 V = normalize(cameraPosition - vWorld);
-        vec3 q = vLocal;
-        // head-heights from the middle of her skull: u forward (toward the orb), v up
-        float u = (uHead.x - q.x) / ${HEAD.h.toFixed(1)};
-        float v = (q.y - uHead.y) / ${HEAD.h.toFixed(1)};
-        vec3 skin = vec3(0.13, 0.085, 0.05);
-        vec3 hair = vec3(0.03, 0.022, 0.018);
-        vec3 robe = vec3(0.05, 0.045, 0.03);
-        vec3 alb = skin;
-        if (uPart < 0.5) {
-          // the hair: swept back from the brow over the crown to the knot, and down behind the ear
-          float line = 0.215 - (v - 0.2) * 0.55 + 0.03 * sin(q.z * 0.3);
-          float h = smoothstep(line, line - 0.06, u) * smoothstep(-0.5, -0.25, v);
-          h = max(h, smoothstep(-0.36, -0.44, u));
-          // strands
-          float strand = vnoise(vec2((u * 0.6 + v) * 60.0, q.z * 0.15)) * 0.6 + vnoise(vec2((u + v * 0.4) * 140.0, q.z * 0.4)) * 0.4;
-          vec3 hc = hair * (0.7 + 0.6 * strand);
-          alb = mix(skin, hc, h);
-          // the neck darkens into the body
-          alb *= mix(0.55, 1.0, smoothstep(-0.95, -0.55, v));
-          // the closed eye: a dark line of lash under the brow
-          float ey = v + 0.012 + (u - 0.29) * 0.25;
-          float lash = (1.0 - smoothstep(0.0035, 0.009, abs(ey))) * smoothstep(0.255, 0.27, u) * (1.0 - smoothstep(0.31, 0.32, u)) * smoothstep(9.5, 4.0, abs(abs(q.z) - 5.6) * 3.0);
-          alb = mix(alb, vec3(0.015, 0.01, 0.008), lash * 0.85);
-        } else if (uPart > 1.5) {
-          // the body: robe, going down into the dark
-          alb = robe;
-          alb *= smoothstep(-20.0, 110.0, q.y) * 0.85 + 0.15;
-        }
-        // pastel: strokes laid on a slant, chalk grain
-        float dEye = length(vWorld - cameraPosition);
-        float near = 1.0 - smoothstep(60.0, 600.0, dEye);
-        float st = vnoise(vec2((q.x + q.y) * 0.22, (q.y - q.x) * 0.018 + q.z * 0.03)) * 0.6 + vnoise(vec2((q.x - q.z) * 0.6, q.y * 0.05)) * 0.4;
-        float tooth = vnoise(q.xy * 1.7 + q.z) * 0.5 + vnoise(q.zy * 3.1) * 0.5;
-        alb *= 1.0 + (st - 0.5) * 0.5 + (tooth - 0.5) * 0.22 * near;
-        // a few strokes of green-gold laid over the dark, as he laid them on her shoulder and cheek
-        alb += vec3(0.04, 0.06, 0.02) * smoothstep(0.62, 0.8, st) * (uPart > 1.5 ? 0.8 : 0.5);
-        float ao = mix(0.35, 1.0, smoothstep(0.15, 0.85, vAO));
-        // the orb's light: wrapped a little (the face is lit across its curve), strongest on the hand under it
-        vec4 o = orbLight(vWorld, n, 0.25, 90.0);
-        vec3 amb = uSkyCol * (0.6 + 0.4 * n.y) * 1.25;
-        vec3 col = alb * (amb * ao + o.rgb * 2.6 * mix(0.6, 1.0, ao));
-        // the thread of gold along every edge that faces the orb
-        float fres = pow(1.0 - abs(dot(n, V)), 2.6);
-        float toward = smoothstep(-0.1, 0.6, o.w);
-        float att = length(o.rgb) / 1.6;
-        col += vec3(1.0, 0.52, 0.18) * fres * toward * att * 1.9;
-        // and the green the air lays on the far side
-        col += vec3(0.05, 0.12, 0.08) * fres * (1.0 - toward) * 0.35;
-        // the body goes into the dark of the floor
-        col = mix(col, airCol(normalize(vWorld - cameraPosition)) * 0.6, mistBelow(vWorld, 40.0, 60.0) * 0.8);
-        col = applyAir(col, vWorld);
+        col = applyAir(col, vWorld) + orbScatter(vWorld);
         gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,

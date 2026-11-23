@@ -4,10 +4,9 @@ import { GLSL_SKY, SKY_U } from "../../sky";
 import { GLSL_AIR, WORLD_U, rng } from "../kit";
 import { PORTAL_U } from "../portal";
 import { FRIEND_U } from "./cave";
-import { HEAD, ORB } from "./shape";
+import { ORB, PAINT } from "./shape";
 
-// The light of the cave: the orb itself (and the world seen through it), the crown of rays streaming from her
-// head, the motes that drift in the orb's light, and the long faint upright strokes that hang in the air as they
+// The light of the cave: the orb itself (and the world seen through it), the motes that drift in the orb's light, and the long faint upright strokes that hang in the air as they
 // hang over the whole picture.
 
 const END = /* glsl */ `
@@ -21,10 +20,10 @@ const END = /* glsl */ `
 // opening like the lip of a lens. Inside it there is only that world. On a phone, or before that world is ready,
 // the opening shows its sky painted: a gold air over a dull gold plain and a great low sun.
 const SUN_D = new THREE.Vector3(Math.sin((7 * Math.PI) / 180) * Math.cos((13 * Math.PI) / 180), Math.sin((13 * Math.PI) / 180), -Math.cos((7 * Math.PI) / 180) * Math.cos((13 * Math.PI) / 180)).normalize();
-export function makeOrbMaterial() {
+export function makeOrbMaterial(map: THREE.Texture) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, ...PORTAL_U, uSunD: { value: SUN_D }, uOpen: { value: 0 } },
+    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, ...PORTAL_U, uSunD: { value: SUN_D }, uOpen: { value: 0 }, tMap: { value: map } },
     vertexShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vN;
       void main(){
@@ -33,7 +32,7 @@ export function makeOrbMaterial() {
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: /* glsl */ `
-      uniform vec3 uSunD; uniform float uOpen;
+      uniform vec3 uSunD; uniform float uOpen; uniform sampler2D tMap;
       uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes;
       varying vec3 vWorld; varying vec3 vN;
       ${GLSL_NOISE}
@@ -67,7 +66,7 @@ export function makeOrbMaterial() {
           bell = max(bell, hgt * sqrt(max(1.0 - x * x, 0.0)));
         }
         col = mix(col, vec3(0.34, 0.34, 0.36), step(d.y, bell) * step(-0.004, d.y) * 0.7);
-        return col * 1.25;
+        return col * 0.9;
       }
       void main(){
         vec3 n = normalize(vN);
@@ -84,21 +83,18 @@ export function makeOrbMaterial() {
         vec3 up = cross(V, rt);
         float ang = atan(dot(n, up), dot(n, rt));
         float t = uTime;
-        // chalk rings: circles laid by hand, none quite round, drifting very slowly outward
-        float wob = vnoise(vec2(ang * 2.2, r * 3.0 + 1.0)) * 0.6 + vnoise(vec2(ang * 5.0 + 3.0, r * 6.0)) * 0.4;
-        float rr = r * 11.0 + wob * 0.9 - t * 0.05;
-        float ring = smoothstep(0.55, 0.95, abs(sin(rr * 3.14159)));
-        float fw = fwidth(rr);
-        ring = mix(ring, 0.35, smoothstep(0.25, 0.7, fw));
-        vec3 cream = vec3(1.0, 0.95, 0.84);
-        vec3 warm = vec3(1.0, 0.78, 0.52);
-        vec3 col = mix(cream, warm, smoothstep(0.2, 0.95, r));
-        col = mix(col, vec3(0.98, 0.7, 0.58), ring * 0.28 * smoothstep(0.05, 0.4, r));
-        // the heart is brightest, the light gathers again just inside the rim
-        float k = 1.7 + 0.7 * (1.0 - smoothstep(0.0, 0.75, r)) + 0.25 * smoothstep(0.75, 0.92, r);
-        // it breathes
+        // his own orb: the disc as the eye sees it, read from the picture (its chalk rings, its cream, its ochre
+        // edge), given its light; turning very slowly, so the strokes are never quite still
+        float ca = cos(t * 0.02), sa = sin(t * 0.02);
+        vec2 q = vec2(dot(n, rt), dot(n, up));
+        q = vec2(q.x * ca - q.y * sa, q.x * sa + q.y * ca);
+        vec2 ppx = vec2(${PAINT.cx.toFixed(1)}, ${PAINT.cy.toFixed(1)}) + vec2(q.x, -q.y) * ${(PAINT.r * 0.97).toFixed(1)};
+        vec3 paint = texture2D(tMap, vec2(ppx.x / ${PAINT.w.toFixed(1)}, 1.0 - ppx.y / ${PAINT.h.toFixed(1)})).rgb;
+        // (her fingers lie over it in the picture: they are hers, on her hand in front; here only the orb's cream)
+        paint = mix(vec3(0.95, 0.86, 0.68), paint, smoothstep(0.3, 0.55, dot(paint, vec3(0.3, 0.55, 0.15))));
+        float k = 1.05 + 0.35 * (1.0 - smoothstep(0.0, 0.8, r));
         k *= 0.95 + 0.05 * sin(t * 0.55) + 0.02 * sin(t * 1.7 + 1.0);
-        col *= k * uOrbK;
+        vec3 col = paint * k * uOrbK;
         // the fine dark line he drew round it
         col *= 1.0 - 0.72 * smoothstep(0.955, 0.995, r) * (1.0 - inside);
         // the opening: the next world, through the orb's heart
@@ -112,119 +108,6 @@ export function makeOrbMaterial() {
         float lip = hole * (1.0 - hole) * 4.0;
         col = mix(col, beyond, hole) + vec3(1.0, 0.86, 0.6) * lip * 0.9;
         gl_FragColor = vec4(col, 1.0);
-        ${END}
-      }`,
-  });
-}
-
-// ---------- the crown of rays ----------
-// Long strokes from the crown of her head, up and back, fanning out: green, yellow-green, gold, a few dark, each
-// broken as a pastel stroke is broken, and along every one a slow brightening runs outward. Each stroke is a strip
-// that turns about its own line to face the eye, never thinner on the screen than a pixel and a half (thinner, it
-// dims instead).
-export function raysGeometry(n: number, seed = 7) {
-  const r = rng(seed);
-  const SEG = 18;
-  const pos: number[] = [];
-  const tan: number[] = [];
-  const at: number[] = [];
-  const idx: number[] = [];
-  const S = HEAD.h;
-  for (let i = 0; i < n; i++) {
-    // where it rises from: along the crown, from the hairline over the top to the back
-    const a = r();
-    const ang = Math.PI * (0.18 + a * 0.62); // round the crown, from the brow (forward) to the back
-    const ru = Math.cos(ang) * 0.37;
-    const rv = Math.sin(ang) * 0.47 + 0.02;
-    const z = (r() - 0.5) * 22 * Math.sin(ang);
-    const root = new THREE.Vector3(HEAD.x - ru * S, HEAD.y + rv * S, z);
-    // which way it goes: up from the brow, back and up from the crown, lower toward the back
-    const phi = ((1 - a) * 86 + a * 16 + (r() - 0.5) * 16) * (Math.PI / 180);
-    const dir = new THREE.Vector3(Math.cos(phi), Math.sin(phi), (r() - 0.5) * 0.5 + z * 0.012).normalize();
-    const len = 60 + Math.pow(r(), 0.7) * 190 * (0.55 + 0.45 * Math.sin(a * Math.PI));
-    const bend = (r() - 0.35) * 0.18;
-    const w = 0.7 + r() * 2.2;
-    const col = r();
-    const sd = r();
-    const b0 = pos.length / 3;
-    const p = new THREE.Vector3();
-    const prev = new THREE.Vector3();
-    for (let s = 0; s <= SEG; s++) {
-      const t = s / SEG;
-      // (sunk a little into the hair at its root; curving upward as it goes)
-      p.copy(root)
-        .addScaledVector(dir, (t - 0.03) * len)
-        .add(new THREE.Vector3(0, bend * t * t * len, 0));
-      const d = s === 0 ? dir : p.clone().sub(prev).normalize();
-      for (const side of [-1, 1]) {
-        pos.push(p.x, p.y, p.z);
-        tan.push(d.x, d.y, d.z);
-        at.push(t, side, w, Math.floor(col * 4) + sd * 0.999);
-      }
-      prev.copy(p);
-      if (s < SEG) {
-        const q = b0 + s * 2;
-        idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2);
-      }
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute("aTan", new THREE.Float32BufferAttribute(tan, 3));
-  g.setAttribute("aAt", new THREE.Float32BufferAttribute(at, 4));
-  g.setIndex(idx);
-  g.computeBoundingSphere();
-  return g;
-}
-export function makeRaysMaterial() {
-  return new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, ...WORLD_U, uPx: { value: 0.001 } },
-    vertexShader: /* glsl */ `
-      attribute vec3 aTan; attribute vec4 aAt;
-      uniform float uPx;
-      varying vec4 vAt; varying float vDim; varying vec3 vWorld;
-      void main(){
-        vec4 wp = modelMatrix * vec4(position, 1.0);
-        vec3 toEye = cameraPosition - wp.xyz;
-        float dist = length(toEye);
-        vec3 side = normalize(cross(aTan, toEye / dist));
-        // the stroke tapers at both ends
-        float taper = smoothstep(0.0, 0.08, aAt.x) * (1.0 - 0.6 * aAt.x);
-        float w = aAt.z * taper;
-        // never under a pixel and a half: wider, and dimmer by as much
-        float minW = dist * uPx * 1.5;
-        vDim = clamp(w / max(minW, 0.0001), 0.0, 1.0);
-        w = max(w, minW);
-        wp.xyz += side * aAt.y * w;
-        vAt = aAt; vWorld = wp.xyz;
-        gl_Position = projectionMatrix * viewMatrix * wp;
-      }`,
-    fragmentShader: /* glsl */ `
-      varying vec4 vAt; varying float vDim; varying vec3 vWorld;
-      ${GLSL_NOISE}
-      ${GLSL_SKY}
-      ${GLSL_AIR}
-      void main(){
-        float t = vAt.x;
-        float kind = floor(vAt.w);
-        float seed = fract(vAt.w);
-        float across = exp(-vAt.y * vAt.y * 2.6);
-        // broken as chalk is: gaps along it, and a grain across
-        float brk = smoothstep(0.25, 0.55, vnoise(vec2(t * 9.0 + seed * 40.0, seed * 7.0)));
-        float grain = 0.75 + 0.25 * vnoise(vec2(t * 60.0, vAt.y * 3.0 + seed * 9.0));
-        float ends = smoothstep(0.0, 0.06, t) * (1.0 - smoothstep(0.55 + 0.3 * seed, 1.0, t));
-        // a slow brightening running outward along it
-        float run = 0.55 + 0.45 * pow(0.5 + 0.5 * sin(t * 7.0 - uTime * 0.7 + seed * 6.2832), 3.0);
-        vec3 col = kind < 1.0 ? vec3(0.22, 0.5, 0.2) : kind < 2.0 ? vec3(0.6, 0.7, 0.18) : kind < 3.0 ? vec3(1.0, 0.72, 0.28) : vec3(0.3, 0.42, 0.5);
-        // nearer her head the strokes are warmer, the orb's light on them
-        col = mix(col, vec3(1.0, 0.62, 0.24), (1.0 - smoothstep(0.0, 0.25, t)) * 0.5);
-        float a = across * brk * grain * ends * run * vDim;
-        a *= 1.0 - 0.85 * airAmt(vWorld);
-        gl_FragColor = vec4(col * a * 0.55, 1.0);
         ${END}
       }`,
   });
@@ -332,8 +215,8 @@ export function streaksGeometry(n: number, seed = 11) {
     const x = (r() * 2 - 1) * 380;
     const z = -420 + r() * 900;
     const y = 30 + r() * 380;
-    a.set([x, y, z, 10 + r() * 40], i * 4);
-    b.set([0.5 + r() * 1.3, r(), r(), r()], i * 4);
+    a.set([x, y, z, 5 + r() * 18], i * 4);
+    b.set([1.4 + r() * 2.6, r(), r(), r()], i * 4);
   }
   g.setAttribute("aA", new THREE.InstancedBufferAttribute(a, 4));
   g.setAttribute("aB", new THREE.InstancedBufferAttribute(b, 4));
@@ -380,7 +263,7 @@ export function makeStreaksMaterial() {
       void main(){
         float a = exp(-vUv.x * vUv.x * 3.0) * (1.0 - smoothstep(0.4, 1.0, abs(vUv.y))) * vA;
         a *= 1.0 - 0.75 * airAmt(vWorld);
-        gl_FragColor = vec4(vCol * a * 0.09, 1.0);
+        gl_FragColor = vec4(vCol * a * 0.03, 1.0);
         ${END}
       }`,
   });
