@@ -716,24 +716,26 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     radius: 1340,
     ceil: 260,
     // (it comes in a kilometre and a half from the island's head: a long while over the glass with the whole of it in view)
-    entry: { x: 80, z: 900, above: 14, yaw: -0.05 },
+    // (the way in is laid toward the island's head, not its middle: on a tall narrow screen the head and its two
+    // eyes are then in the frame from the first, the long back running off to the left)
+    entry: { x: 300, z: 900, above: 14, yaw: -0.092 },
     // between the island's two eyes, at the waterline: a low grotto runs into the rock, and that is the way on
     // (no arch of light: worlds/Sea.tsx)
     gate: { x: GROTTO.x, z: GROTTO.z - 30, above: 9, yaw: 0 },
-    // out over the glass toward the whole island, a little aside so it lies broadside, then in toward the head
-    // as the dusk falls, down the eyes' paths and between them
+    // out over the glass toward the island's head, the whole of it lying broadside to the left; then in under the
+    // head as night falls, down the eyes' paths and between them
     path: [
-      [80, 900, 14],
-      [90, 770, 12],
-      [86, 640, 11],
-      [74, 510, 10],
-      [62, 380, 9],
-      [30, 240, 9],
-      [-10, 100, 9],
-      [-10, -50, 9],
-      [50, -170, 9],
-      [170, -280, 9],
-      [320, -370, 9],
+      [300, 900, 14],
+      [312, 770, 12],
+      [322, 640, 11],
+      [328, 510, 10],
+      [326, 380, 9],
+      [316, 250, 9],
+      [300, 130, 9],
+      [292, 10, 9],
+      [300, -110, 9],
+      [330, -220, 9],
+      [384, -320, 9],
       [GROTTO.x - 30, GROTTO.z + 75, 9],
       [GROTTO.x - 5, GROTTO.z + 22, 9],
       [GROTTO.x, GROTTO.z - 30, 9],
@@ -749,7 +751,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -500, z: -640, r: 50, h: 60, bell: true },
       { x: 720, z: -640, r: 55, h: 70, bell: true },
     ],
-    canvases: [{ painting: "tranquility", x: -40, z: 400, yaw: 0.8 }],
+    canvases: [{ painting: "tranquility", x: 250, z: 420, yaw: 0.8 }],
   },
   seafinale: {
     id: "seafinale",

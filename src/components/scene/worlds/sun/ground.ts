@@ -144,7 +144,7 @@ float sunGrass(vec2 p){
 `;
 
 const PAINT = /* glsl */ `
-uniform sampler2D uGrove;
+uniform sampler2D uGrove; uniform float uToll;
 vec3 sunPaint(vec3 alb, vec2 p, float h, float gd){
   float px = length(fwidth(p));
   float lum = clamp(dot(alb, vec3(0.34)) / 0.2, 0.75, 1.3);
@@ -220,7 +220,9 @@ vec3 sunPaint(vec3 alb, vec2 p, float h, float gd){
 }
 `;
 
-const groveU = { uGrove: { value: null as THREE.Texture | null } };
+// (uToll: seconds since the great bell last tolled, under 0 when it has not)
+const groveU = { uGrove: { value: null as THREE.Texture | null }, uToll: { value: -1 } };
+export const SUN_GROUND_U = groveU;
 export const SUN_PAL: GroundPalette = {
   // a soft dull gold, greener in its hollows, paler where it is dry
   a: [0.36, 0.25, 0.055],
@@ -236,6 +238,13 @@ export const SUN_PAL: GroundPalette = {
       sh = max(sh, texture2D(uGrove, p / ${f(GROVE_SPAN)} + 0.5).r * 0.62);
       // shade is violet, as his is
       col = a2 * Lg * mix(vec3(1.0), vec3(0.36, 0.42, 0.74), sh) * (1.0 - sunFootAO(p));
+      // the great bell tolls: one fine ring of light goes out from its foot across the whole plain, and fades
+      if (uToll >= 0.0) {
+        float td = length(p - SUN_B[0].xy);
+        float tr = SUN_B[0].z + uToll * 130.0;
+        float ring = exp(-pow((td - tr) / (10.0 + tr * 0.012), 2.0)) * (1.0 - smoothstep(1500.0, 2700.0, tr));
+        col += vec3(1.0, 0.74, 0.32) * ring * 0.4;
+      }
     }`,
   },
 };

@@ -219,7 +219,7 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
   }, []);
   const ev = useRef({ on: false, wake: -1, pod: false, podT0: -1, magic: 0, open: 0 });
   // (a moment of the flight: worlds/moments.tsx; in development __moments.fire("dolphins") brings them at once)
-  const pod = useMoment("sea", { id: "dolphins", after: 18, at: [60, 9, 330], within: 270, ease: 1, hold: 44, out: 1 });
+  const pod = useMoment("sea", { id: "dolphins", after: 18, at: [322, 9, 400], within: 270, ease: 1, hold: 44, out: 1 });
   useDeepLens("sea");
   useFrame(({ camera }) => {
     // made ready ahead of time, it waits: the air is still the world's before it
