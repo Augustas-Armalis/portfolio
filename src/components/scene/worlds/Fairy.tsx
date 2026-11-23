@@ -80,6 +80,8 @@ float fairyF(vec2 p){
 const FOOT = rampLine(2)[0];
 if (process.env.NODE_ENV !== "production" && Math.hypot(MT.x + FOOT.x - RAMP_FOOT[0], MT.z + FOOT.z - RAMP_FOOT[1]) > 1.5) console.warn("fairy: the ramp's foot has moved; update RAMP_FOOT in fairy/track.ts", MT.x + FOOT.x, MT.z + FOOT.z);
 const WAYS = { tex: null as THREE.DataTexture | null };
+// (development: window.__fairyWays.dist(x, z) is the distance to the nearest way, for checking that nothing grows on one)
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __fairyWays: { dist: wayDist, a: wayA, b: wayB } });
 
 export const FAIRY_PAL: GroundPalette = {
   a: [0.075, 0.15, 0.045],

@@ -26,12 +26,12 @@ const BEND: P2[] = [180, 150, 120, 90, 60, 30, 0].map((d) => {
   return [hairC[0] + Math.cos(a) * hairR, hairC[1] - Math.sin(a) * hairR] as P2;
 });
 export const ROAD_A: P2[] = [
-  [-53, 1920],
-  [-45, 1860],
-  [-34, 1800],
-  [-20, 1738],
-  [-6, 1676],
-  [5, 1612],
+  [-52.2, 1900],
+  [-45, 1840],
+  [-37.2, 1790],
+  [-24, 1730],
+  [-9, 1670],
+  [3, 1612],
   [9, 1552],
   [5, 1494],
   [-4, 1436],
@@ -299,7 +299,8 @@ export function flightPlan(ground: (x: number, z: number) => number): [x: number
   const fly: P2[] = [];
   // the wood and the crest: the plane rides the track (the first stretch of road A, down to the crest)
   const rideA = wayA.pts.filter((p) => p.y <= 1900 && p.y >= 1450);
-  fly.push([-45, 1840], ...pick(rideA, 58).filter((p) => p[1] < 1830 && p[1] > 1450));
+  // (leaving the entry on its own heading, so a plane arriving from Rex, turned to it, flies straight on)
+  fly.push([-45, 1840], [-38.8, 1800.5], ...pick(rideA, 58).filter((p) => p[1] < 1775 && p[1] > 1450));
   // then straight at the castle and easing out to its right flank (a long, gentle bend)
   fly.push([-1, 1385], [4, 1290], [11, 1190], [20, 1075], [32, 940], [47, 790], [66, 630], [89, 460], [114, 290], [141, 120], [168, -40], [194, -190], [219, -330]);
   // and along the way out, road B, to the gate and a little beyond it
