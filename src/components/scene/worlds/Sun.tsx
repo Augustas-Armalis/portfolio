@@ -670,6 +670,21 @@ export default function SunWorld({ props }: { props: WorldProps }) {
       }
     }
 
+    // the first view is framed: close on either hand of the road as the plane comes over the rise, a stand of tall
+    // dark cypresses (near, in shade), and between them the lit plain, the aqueducts and the bells
+    for (const [sx, n] of [
+      [-1, 7],
+      [1, 5],
+    ] as [number, number][])
+      for (let i = 0; i < n; i++) {
+        const z = 1690 - i * 9 + (r() - 0.5) * 6;
+        const x = sunRoadX(z) + sx * (30 + i * 5 + r() * 8);
+        const big = 2.6 + r() * 1.4;
+        const rd = 1.5 * big;
+        const sy = 4.2 + r() * 1.6;
+        treesNear.push({ p: [x, g(x, z) + rd * sy * 0.8, z], r: rd, col: [0.07, 0.09, 0.15], sy, seed: r() });
+        shade.push({ x, z, r: rd, h: rd * sy * 1.8 });
+      }
     // ----- pilgrims on the road, in small companies -----
     const walkers: Walker[] = [];
     const companies = props.mobile ? 14 : 34;

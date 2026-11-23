@@ -32,13 +32,17 @@ const TIPS: [number, number, number][] = [
   [0.071, 0.031, 0.088],
 ];
 
-export type Trails = { mesh: THREE.Mesh; update: (dt: number, plane: THREE.Object3D, k: number, cam: THREE.Camera) => void; reset: () => void; dispose: () => void };
+// (`ground`: the height of land or water under a point of the world, if known: the mist thins out over the last
+// eighty centimetres above it, so a ribbon never ends in a hard line where it would cut into a slope or the sea)
+// (`carry`: the whole of it is moved by a rigid move, when the plane is carried from a gate to the next world's entry)
+export type Trails = { mesh: THREE.Mesh; carry: (m: THREE.Matrix4) => void; update: (dt: number, plane: THREE.Object3D, k: number, cam: THREE.Camera, ground?: (x: number, z: number) => number) => void; reset: () => void; dispose: () => void };
 
 export function makeTrails(): Trails {
   const R = TIPS.length;
   const pts = new Float32Array(R * N * 3); // where each point is
   const born = new Float32Array(R * N); // when it was laid down (the trail's own clock)
   const str = new Float32Array(R * N); // how strong it was laid
+  const gnd = new Float32Array(R * N).fill(-1e5); // the ground under it (read once, when it is laid)
   const pos = new Float32Array(R * N * 2 * 3);
   const info = new Float32Array(R * N * 2 * 4); // across (-1 / 1), metres from the tip, age 0..1, strength
   const idx: number[] = [];
@@ -105,7 +109,7 @@ export function makeTrails(): Trails {
     live = false;
     mesh.visible = false;
   };
-  const update: Trails["update"] = (dt, plane, k, cam) => {
+  const update: Trails["update"] = (dt, plane, k, cam, ground) => {
     clock += dt;
     mat.uniforms.uNear.value = (cam as THREE.PerspectiveCamera).near ?? 0.4;
     plane.updateWorldMatrix(true, false);
@@ -143,6 +147,7 @@ export function makeTrails(): Trails {
         pts.copyWithin((b + 2 + m) * 3, (b + 2) * 3, (b + 2 + keep) * 3);
         born.copyWithin(b + 2 + m, b + 2, b + 2 + keep);
         str.copyWithin(b + 2 + m, b + 2, b + 2 + keep);
+        gnd.copyWithin(b + 2 + m, b + 2, b + 2 + keep);
         cnt[r] = keep + m;
         for (let j = 0; j < m; j++) {
           const u = (s0 + j * SP) / L;
@@ -157,6 +162,7 @@ export function makeTrails(): Trails {
             const P3 = T[t0 + c];
             pts[o * 3 + c] = 0.5 * (2 * P1 + (P2 - P0) * u + (2 * P0 - 5 * P1 + 4 * P2 - P3) * u2 + (3 * P1 - P0 - 3 * P2 + P3) * u3);
           }
+          gnd[o] = ground ? ground(pts[o * 3], pts[o * 3 + 2]) : -1e5;
           born[o] = clock - dt - dtPrev * (1 - u);
           str[o] = kPrev2 + (kPrev - kPrev2) * u;
         }
@@ -173,6 +179,8 @@ export function makeTrails(): Trails {
       pts[b * 3 + 5] = T[t0 + 5];
       born[b + 1] = clock - dt;
       str[b + 1] = kPrev;
+      gnd[b] = ground ? ground(T[t0], T[t0 + 2]) : -1e5;
+      gnd[b + 1] = ground ? ground(T[t0 + 3], T[t0 + 5]) : -1e5;
       const total = 2 + cnt[r];
       let d = 0;
       for (let i = 0; i < N; i++) {
@@ -206,7 +214,9 @@ export function makeTrails(): Trails {
         info[q + 4] = 1;
         info[q + 1] = info[q + 5] = d;
         info[q + 2] = info[q + 6] = age;
-        info[q + 3] = info[q + 7] = i >= total ? 0 : str[o];
+        // (thinning over the last eighty centimetres above land or water)
+        const lift = Math.min(1, Math.max(0, (y - gnd[o]) / 0.8));
+        info[q + 3] = info[q + 7] = i >= total ? 0 : str[o] * lift * lift * (3 - 2 * lift);
         if (age < 1 && str[o] > 0.01 && i < total) any++;
       }
     }
@@ -219,8 +229,30 @@ export function makeTrails(): Trails {
     // (all of it has gone: let it rest until the plane makes more)
     if (!any && k <= 0.01) live = false;
   };
+  const carry = (m: THREE.Matrix4) => {
+    if (!live) return;
+    for (let r = 0; r < R; r++) {
+      for (let i = 0; i < N; i++) {
+        const o = (r * N + i) * 3;
+        tip.set(pts[o], pts[o + 1], pts[o + 2]).applyMatrix4(m);
+        pts[o] = tip.x;
+        pts[o + 1] = tip.y;
+        pts[o + 2] = tip.z;
+      }
+      for (let j = 0; j < 4; j++) {
+        const o = r * 12 + j * 3;
+        tip.set(T[o], T[o + 1], T[o + 2]).applyMatrix4(m);
+        T[o] = tip.x;
+        T[o + 1] = tip.y;
+        T[o + 2] = tip.z;
+      }
+    }
+    // (the ground under the old points is another world's now)
+    gnd.fill(-1e5);
+  };
   return {
     mesh,
+    carry,
     update,
     reset,
     dispose: () => {

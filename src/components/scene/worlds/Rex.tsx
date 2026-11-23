@@ -236,11 +236,26 @@ function makeShellMaterial(kind: 0 | 1 | 2) {
                float n = f3(vec2(az * 3.0, h * 0.07) + 8.0);
                vec3 c = mix(vec3(0.34, 0.3, 0.32), vec3(0.72, 0.56, 0.5), feather * smoothstep(0.3, 0.6, n));
                c = mix(c, vec3(0.18, 0.2, 0.26), smoothstep(0.56, 0.7, 1.0 - n) * 0.55);
-               // and small winged figures drawn in rows among the feathers
-               vec2 aq = vec2(az * 34.0, h * 0.06); vec2 ac = floor(aq); vec2 af = fract(aq) - 0.5;
-               float robe = smoothstep(0.02, 0.0, abs(af.x) - (0.25 - af.y) * 0.2) * step(-0.36, af.y) * step(af.y, 0.24);
-               float wing = smoothstep(0.045, 0.0, abs(length(vec2(abs(af.x) - 0.2, (af.y - 0.18) * 0.5)) - 0.14)) * step(0.02, af.y);
-               c = mix(c, vec3(0.92, 0.78, 0.66), max(robe, wing) * step(0.4, hash12(ac + 2.0)) * 0.8);
+               // and winged figures standing in rows among the feathers, as he drew them all over the upper air: a long
+               // robe wide at the hem, a head in a ring of light, two tall wings spread from the shoulders with the
+               // feathers drawn in them; every edge as wide as the pixel that draws it
+               float arow = floor(h * 0.036);
+               vec2 aq = vec2(az * 22.0 + arow * 0.5, h * 0.036); vec2 ac = floor(aq); vec2 af = fract(aq) - 0.5;
+               float aaw = (fwidth(aq.x) + fwidth(aq.y)) * 0.7;
+               float pick = step(0.38, hash12(ac + 2.0)) * (1.0 - smoothstep(0.25, 0.6, aaw));
+               float robeW = mix(0.13, 0.045, smoothstep(-0.42, 0.18, af.y));
+               float robe = (1.0 - smoothstep(robeW - aaw, robeW + aaw, abs(af.x))) * step(-0.42, af.y) * step(af.y, 0.2);
+               float hd = length(vec2(af.x, af.y - 0.27));
+               float head = 1.0 - smoothstep(0.045 - aaw, 0.045 + aaw, hd);
+               float nimbus = 1.0 - smoothstep(0.01, 0.01 + aaw * 1.5, abs(hd - 0.09));
+               vec2 wv = vec2(abs(af.x) - 0.05, af.y - 0.08);
+               vec2 wr = vec2(wv.x * 0.82 - wv.y * 0.57, wv.x * 0.57 + wv.y * 0.82);
+               float along = wr.y / 0.36;
+               float across = wr.x / (0.075 * sin(clamp(along, 0.0, 1.0) * 3.1416) + 0.006);
+               float wing = (1.0 - smoothstep(0.8, 1.1, abs(across))) * step(0.0, along) * step(along, 1.0);
+               float plume = 0.72 + 0.28 * sin(across * 7.0 + along * 5.0);
+               c = mix(c, vec3(0.93, 0.8, 0.68), max(max(robe, head), wing * plume) * pick * 0.85);
+               c += vec3(1.0, 0.8, 0.52) * nimbus * pick * 0.45;
                return vec4(c, 0.9);`
         }
       }
@@ -417,13 +432,18 @@ export default function RexWorld({ props }: { props: WorldProps }) {
     }
 
     // the wings of the upper air: tall pale angels standing in a row along the third shell, before and behind
+    // (each of the tall angels of the row has a ring of light behind its head, kept apart from the rest so that it
+    // can turn: as the plane comes by, their heads turn to follow it)
+    const nimbi: number[] = [];
     const nA = props.mobile ? 24 : 72;
     const RA = (SHELLS[1] + SHELLS[2]) / 2 - 3 * SS;
     for (let i = 0; i < nA; i++) {
       const a = Math.PI / 2 + (i - (nA - 1) / 2) * (1.5 / nA);
       for (const s of [-1, 1]) {
         const p: V3 = [X + Math.cos(a) * RA, Math.sin(a) * RA - DROP - 4 * SS, Z + s * 1.5 * SS];
-        angel(k, p, (i % 6 === 3 ? 2.6 : 1.5) * SS, s > 0 ? 0 : Math.PI, [0.66, 0.56, 0.44], { glow: 0.6, wing: [0.9, 0.8, 0.66], open: 0.5 });
+        const as = (i % 6 === 3 ? 2.6 : 1.5) * SS;
+        angel(k, p, as, s > 0 ? 0 : Math.PI, [0.66, 0.56, 0.44], { glow: 0.6, wing: [0.9, 0.8, 0.66], open: 0.5 });
+        nimbi.push(p[0], p[1] + 1.68 * as, p[2], as, s > 0 ? 0 : Math.PI);
       }
       if (i % 4 === 0) glows.push({ p: [X + Math.cos(a) * RA, Math.sin(a) * RA - DROP, Z], size: 30 * SS, col: [1, 0.82, 0.6], k: 0.1 });
     }
@@ -551,6 +571,63 @@ export default function RexWorld({ props }: { props: WorldProps }) {
         { x: REX.x, z: REX.z - 700, w: 2400, d: 600, y: 8, a: 0.4 },
       ]),
       wispMat: makeWispMaterial(),
+      nimbi: (() => {
+        const g = new THREE.InstancedBufferGeometry();
+        // a ring of light and, before it, the pale oval of a face
+        const ring = new THREE.RingGeometry(0.19, 0.27, 28);
+        const face = new THREE.CircleGeometry(0.1, 14);
+        face.translate(0, -0.01, 0.12);
+        const pos = [...(ring.toNonIndexed().attributes.position.array as Float32Array), ...(face.toNonIndexed().attributes.position.array as Float32Array)];
+        g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+        const n = nimbi.length / 5;
+        const a = new Float32Array(n * 4);
+        const y = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+          a.set(nimbi.slice(i * 5, i * 5 + 4), i * 4);
+          y[i] = nimbi[i * 5 + 4];
+        }
+        g.setAttribute("aP", new THREE.InstancedBufferAttribute(a, 4));
+        g.setAttribute("aYaw", new THREE.InstancedBufferAttribute(y, 1));
+        g.instanceCount = n;
+        g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
+        ring.dispose();
+        face.dispose();
+        return g;
+      })(),
+      nimbusMat: new THREE.ShaderMaterial({
+        side: THREE.DoubleSide,
+        uniforms: { ...SKY_U, ...WORLD_U },
+        vertexShader: /* glsl */ `
+          attribute vec4 aP; attribute float aYaw;
+          varying vec3 vWorld; varying float vFace;
+          void main(){
+            vec3 c = (modelMatrix * vec4(aP.xyz, 1.0)).xyz;
+            // asleep it faces the way its angel stands; as the eye comes near it turns to it, and follows
+            vec3 toEye = cameraPosition - c;
+            float wake = 1.0 - smoothstep(260.0, 900.0, length(toEye));
+            vec2 f0 = vec2(sin(aYaw), cos(aYaw));
+            vec2 f1 = normalize(toEye.xz + vec2(1e-4));
+            vec2 f = normalize(mix(f0, f1, wake * 0.92) + vec2(1e-5));
+            float tilt = clamp(toEye.y / max(length(toEye.xz), 1.0), -0.6, 0.6) * wake;
+            vec3 fw = normalize(vec3(f.x, tilt, f.y));
+            vec3 rt = normalize(cross(vec3(0.0, 1.0, 0.0), fw));
+            vec3 up = cross(fw, rt);
+            vec3 w = c + (rt * position.x + up * position.y + fw * position.z) * aP.w;
+            vWorld = w; vFace = step(0.05, position.z);
+            gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
+          }`,
+        fragmentShader: /* glsl */ `
+          varying vec3 vWorld; varying float vFace;
+          ${GLSL_SKY}
+          ${GLSL_AIR}
+          void main(){
+            vec3 col = mix(vec3(1.0, 0.82, 0.5) * 1.5, vec3(0.94, 0.8, 0.68) * (uSkyCol + 0.25), vFace);
+            col = applyAir(col, vWorld);
+            gl_FragColor = vec4(col, 1.0);
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
+          }`,
+      }),
       comets: ck.build(),
       cometHalos: haloGeometry(cometHalos),
       cometHaloMat: makeHaloMaterial(0),
@@ -627,6 +704,7 @@ export default function RexWorld({ props }: { props: WorldProps }) {
         <mesh key={i} geometry={b.shells[i]} material={b.shellMats[i]} position={[REX.x, -DROP, REX.z]} renderOrder={-3 + (2 - i)} />
       ))}
       <mesh geometry={b.set} material={b.tempera} />
+      <mesh geometry={b.nimbi} material={b.nimbusMat} frustumCulled={false} />
       <mesh geometry={b.wisps} material={b.wispMat} renderOrder={3} />
       <mesh geometry={b.king} material={b.kingMat} position={[REX.x, 0, REX.z]} />
       <mesh geometry={b.globe} material={b.globeMat} position={[REX.x, 0, REX.z]} />

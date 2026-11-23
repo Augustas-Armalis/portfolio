@@ -247,7 +247,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         col = mix(col, foamCol, clamp(foam, 0.0, 1.0) * 0.8);
         col = mix(col, vec3(0.95, 0.52, 0.1) * (uSkyCol * 0.8 + uKeyCol * (0.35 + 0.6 * toSun)), clamp(bead, 0.0, 1.0) * 0.75);
         col = mix(col, foamCol * 1.1, sign);
-        col += flashOn(0.07 + 0.3 * clamp(foam, 0.0, 1.0) + 0.16 * thin);
+        col += flashOn(0.14 + 0.34 * clamp(foam, 0.0, 1.0) + 0.2 * thin);
         col = applyAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         ${END}
@@ -615,9 +615,10 @@ export function makeCrashMaterial() {
         vec3 d = normalize(vDir);
         // it comes from above and ahead: the top of the view goes first
         float front = smoothstep(-0.9, 0.7, d.y + (uCrash * 2.2 - 1.2));
-        vec2 q = vec2(atan(d.x, -d.z) * 3.0, d.y * 3.0 + uTime * 0.22 + uCrash * 1.6);
-        vec3 l1 = lace(q * 1.3, uTime * 0.06);
-        float fall = vnoise(vec2(q.x * 3.0, q.y * 0.5 + uTime * 0.5));
+        // (it comes down with the crash itself, not with the clock: held still, the white is still)
+        vec2 q = vec2(atan(d.x, -d.z) * 3.0, d.y * 3.0 + uTime * 0.03 + uCrash * 1.6);
+        vec3 l1 = lace(q * 1.3, 0.0);
+        float fall = vnoise(vec2(q.x * 1.4, q.y * 0.4 + uTime * 0.06));
         // (soft: the lace only just shows in it, so the white comes down as one body and does not flicker)
         vec3 foam = W_FOAM * (uSkyCol * 0.8 + uKeyCol * 0.45 + 0.25) * (0.93 + 0.07 * l1.x) * (0.94 + 0.1 * fall);
         float a = clamp(front * uCrash * 1.3 + uCrash * uCrash * uCrash, 0.0, 1.0);

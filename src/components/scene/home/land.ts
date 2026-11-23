@@ -622,7 +622,8 @@ export function bakeCrownMap(trees: HomeTree[]) {
 // (soft noise carved by round cells), G: the billows on them, B: plain soft
 // noise. Sampled a few times per sky pixel, which is far cheaper than hashing.
 export function bakeCloudTex() {
-  const n = 256;
+  // (a phone bakes it at half the size: a quarter of the work behind the loader, and the shaders read it by position, not by texel)
+  const n = typeof window !== "undefined" && window.innerWidth < 768 ? 128 : 256;
   const data = new Uint8Array(n * n * 4);
   const R = rng(99);
   const cells = (count: number) => {
