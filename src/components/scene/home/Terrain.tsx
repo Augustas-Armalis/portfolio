@@ -59,6 +59,7 @@ export const REFLECT_U = {
   uReflTex: { value: null as THREE.Texture | null },
   uReflMat: { value: new THREE.Matrix4() },
   uReflOn: { value: 0 },
+  uReflK: { value: 1 }, // the share of the mirror's target drawn this frame (its lower left corner)
 };
 
 export function makeLandMaterial() {
@@ -93,7 +94,7 @@ export function makeLandMaterial() {
         gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
       }`,
     fragmentShader: /* glsl */ `
-      uniform sampler2D uSoilTex; uniform sampler2D uReflTex; uniform mat4 uReflMat; uniform float uReflOn;
+      uniform sampler2D uSoilTex; uniform sampler2D uReflTex; uniform mat4 uReflMat; uniform float uReflOn; uniform float uReflK;
       varying vec3 vWorld; varying vec3 vN; varying float vCav;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -338,7 +339,8 @@ export function makeLandMaterial() {
             vec2 uv = rc.xy / rc.w + slope * 0.035;
             vec2 ts = vec2(1.6 / 480.0, 1.6 / 270.0);
             vec2 uc = clamp(uv, 0.004, 0.996);
-            vec4 tex = (texture2D(uReflTex, uc + ts * vec2(0.5, 0.5)) + texture2D(uReflTex, uc + ts * vec2(-0.5, 0.5)) + texture2D(uReflTex, uc + ts * vec2(0.5, -0.5)) + texture2D(uReflTex, uc - ts * vec2(0.5, 0.5))) * 0.25;
+            vec2 ks = vec2(uReflK);
+            vec4 tex = (texture2D(uReflTex, clamp(uc + ts * vec2(0.5, 0.5), 0.0, 0.996) * ks) + texture2D(uReflTex, clamp(uc + ts * vec2(-0.5, 0.5), 0.0, 0.996) * ks) + texture2D(uReflTex, clamp(uc + ts * vec2(0.5, -0.5), 0.0, 0.996) * ks) + texture2D(uReflTex, clamp(uc - ts * vec2(0.5, 0.5), 0.0, 0.996) * ks)) * 0.25;
             // (toward the picture's edge it gives way to the water's own sky, so no hard line shows where it ends)
             tex.a *= smoothstep(0.0, 0.05, uv.x) * smoothstep(0.0, 0.05, 1.0 - uv.x) * smoothstep(0.0, 0.05, uv.y) * smoothstep(0.0, 0.05, 1.0 - uv.y);
             mirror = mix(mirror, tex.rgb, tex.a * 0.94);
