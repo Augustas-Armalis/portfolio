@@ -40,8 +40,9 @@ export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPor
 // the live picture takes over; the last stretch is drawn live at the frame's full size, every frame, so the frame
 // after the worlds change places is the frame before.
 const STILL_U = { tStill: { value: null as THREE.Texture | null }, uStillMat: { value: new THREE.Matrix4() }, uStillOn: { value: 0 }, uLiveK: { value: 0 } };
-// A gate whose opening in the world is not the size of its sheet of light: [half-width, rise above the way's height].
-const OPENING: Partial<Record<WorldId, [number, number]>> = { sun: [23, 33] };
+// A gate whose opening in the world is not the size of its sheet of light: [half-width, rise above the way's height,
+// and (optionally) how far below the way's height the opening reaches: a gate that stands on the ground, as Fairy Tale's does].
+const OPENING: Partial<Record<WorldId, [number, number, number?]>> = { sun: [23, 33], fairy: [18, 27, 74] };
 const state = { next: null as WorldId | null, k: 0, fresh: 0, tick: 0, still: null as WorldId | null, live: 0 };
 
 const E = new THREE.Vector3();
@@ -318,7 +319,8 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
   const b = useMemo(() => {
     const gate = gateOf(id);
     if (!gate) return null;
-    [half, rise] = OPENING[id] ?? [half, rise];
+    let reach: number | undefined;
+    [half, rise, reach] = OPENING[id] ?? [half, rise];
     const c = Math.cos(gate.yaw);
     const s = Math.sin(gate.yaw);
     const g0 = id === "home" ? 0 : Math.min(groundAt(def, gate.pos.x - c * half, gate.pos.z + s * half), groundAt(def, gate.pos.x + c * half, gate.pos.z - s * half));
@@ -326,7 +328,7 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
     // that hangs in the air, up to `rise` above the height the way passes at; the head begins just above that height)
     const hung = id !== "home" && gate.pos.y - Math.max(g0, def.water ?? -1e9) > 70;
     const wide = half * 1.04;
-    const lo = (hung ? gate.pos.y - 15 : Math.min(g0, def.water ?? g0) - 1.5) - 1;
+    const lo = reach !== undefined ? gate.pos.y - reach : (hung ? gate.pos.y - 15 : Math.min(g0, def.water ?? g0) - 1.5) - 1;
     const hi = gate.pos.y + rise * 1.03;
     const spring = (gate.pos.y + 2 - lo) / (hi - lo);
     const pos: number[] = [];
