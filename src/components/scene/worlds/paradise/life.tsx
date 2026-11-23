@@ -265,6 +265,128 @@ export function CloudDeck({ y = 1250, size = 9000, alpha = 0.82 }: { y?: number;
   return <mesh geometry={b.g} material={b.mat} position={[0, y, 0]} renderOrder={-3} frustumCulled={false} />;
 }
 
+// ---------- the terraces' gardens ----------
+// One band of ground per terrace, and everything on it drawn from where a point lies: a paved walk behind the
+// parapet, its slabs laid in courses; a lawn, mown in broad bands, the grass uneven and full of daisies; long
+// beds of flowers down its middle, each edged with clipped box; a second walk at the back, under the steps.
+export function makeGardenMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: { ...SKY_U, ...WORLD_U },
+    vertexShader: /* glsl */ `
+      attribute float aR0;
+      varying vec3 vWorld; varying vec3 vObj; varying float vR0;
+      void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vObj = position; vR0 = aR0; gl_Position = projectionMatrix * viewMatrix * wp; }`,
+    fragmentShader: /* glsl */ `
+      varying vec3 vWorld; varying vec3 vObj; varying float vR0;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${GLSL_AIR}
+      float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      void main(){
+        float r = length(vObj.xz);
+        float d = vR0 - r;                    // metres back from the wall's face
+        float s = atan(vObj.z, vObj.x) * r;   // metres along the terrace
+        float D = 40.5;
+        // (what is finer than a pixel is not drawn: it would only glitter)
+        float px = length(vec2(dFdx(d), dFdy(d))) + length(vec2(dFdx(s), dFdy(s)));
+        float fine = 1.0 - smoothstep(0.12, 0.5, px);
+        float mid = 1.0 - smoothstep(0.6, 2.4, px);
+        // the walks: slabs in courses, each a little its own tone, dark joints between
+        vec2 q = vec2(s / 2.8, d / 2.1);
+        q.x += 0.5 * mod(floor(q.y), 2.0);
+        vec2 f = fract(q);
+        float joint = 1.0 - smoothstep(0.0, 0.07, min(min(f.x, 1.0 - f.x) * 2.8, min(f.y, 1.0 - f.y) * 2.1));
+        vec3 pave = vec3(0.6, 0.48, 0.23) * (0.86 + 0.26 * mix(0.5, hash2(floor(q)), mid));
+        pave *= 0.9 + 0.2 * vnoise(vObj.xz * 1.7);
+        pave *= 1.0 - 0.42 * joint * fine;
+        // the lawn
+        float g1 = fbm(vObj.xz * 0.11);
+        float blades = vnoise(vec2(s * 7.0, d * 1.3)) * 0.55 + vnoise(vObj.xz * 4.3) * 0.45;
+        vec3 lawn = mix(vec3(0.1, 0.23, 0.055), vec3(0.27, 0.4, 0.1), g1);
+        lawn *= 0.9 + 0.12 * smoothstep(-0.25, 0.25, sin(s * 0.45)) * mid;
+        lawn *= 0.8 + 0.42 * mix(0.5, blades, fine);
+        vec2 dc = vObj.xz * 1.15;
+        vec2 ci = floor(dc);
+        float pick = hash2(ci);
+        float daisy = (1.0 - smoothstep(0.1, 0.17, length(fract(dc) - 0.5 - (vec2(hash2(ci + 3.1), hash2(ci + 7.7)) - 0.5) * 0.5))) * step(0.84, pick);
+        lawn = mix(lawn, mix(vec3(1.0, 0.97, 0.84), vec3(1.0, 0.8, 0.3), step(0.95, pick)), daisy * fine);
+        // the beds: long, round-ended, a different flower in each
+        float lawnMid = 8.3 + (D - 10.5 - 8.3) * 0.5;
+        float bi = floor(s / 32.0);
+        vec2 bq = vec2(abs((fract(s / 32.0) - 0.5) * 32.0), abs(d - lawnMid));
+        float sd = length(max(bq - vec2(8.5, 1.9), 0.0)) - 1.7;
+        float inBed = 1.0 - smoothstep(-0.12, 0.12, sd);
+        float k4 = mod(bi, 4.0);
+        vec3 fc = k4 < 0.5 ? vec3(0.8, 0.2, 0.34) : k4 < 1.5 ? vec3(0.92, 0.62, 0.1) : k4 < 2.5 ? vec3(0.9, 0.84, 0.72) : vec3(0.28, 0.32, 0.78);
+        vec2 fcell = vec2(s, d) * 1.9;
+        float fh = hash2(floor(fcell));
+        float head = 1.0 - smoothstep(0.2, 0.36, length(fract(fcell) - 0.5));
+        vec3 bed = mix(vec3(0.07, 0.14, 0.05), fc * (0.7 + 0.5 * fh), mix(0.5, head * step(0.22, fh), fine)) * (0.84 + 0.3 * vnoise(vec2(s, d) * 0.6));
+        lawn = mix(lawn, bed, inBed);
+        // (the box edging, and its shade on the grass)
+        lawn = mix(lawn, vec3(0.04, 0.11, 0.05), (1.0 - smoothstep(0.0, 0.5, abs(sd))) * 0.85);
+        lawn *= 1.0 - 0.22 * (1.0 - smoothstep(0.4, 1.6, sd)) * (1.0 - inBed);
+        float walk = max(1.0 - smoothstep(7.45, 7.55, d), smoothstep(D - 8.05, D - 7.95, d));
+        vec3 alb = mix(lawn, pave, walk);
+        // shade where things stand up out of it: the parapet, the kerb, the hedge, the riser behind
+        float ao = 1.0;
+        ao *= 0.72 + 0.28 * smoothstep(1.2, 3.0, d);
+        ao *= 0.8 + 0.2 * smoothstep(0.0, 1.3, abs(d - 7.85) - 0.35);
+        ao *= 0.66 + 0.34 * smoothstep(0.0, 2.6, (D - 10.5) - d + step(D - 10.5, d) * 100.0);
+        ao *= 0.7 + 0.3 * smoothstep(0.0, 2.4, abs(d - (D - 8.0)) + step(d, D - 8.0) * 100.0);
+        ao *= 0.74 + 0.26 * smoothstep(0.0, 3.0, D - d);
+        float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
+        vec3 col = alb * ao * (uSkyCol * 0.7 + uKeyCol * (0.22 + 0.5 * max(uKeyDir.y, 0.0)) * sunUp);
+        col = applyAir(col, vWorld);
+        gl_FragColor = vec4(col, 1.0);
+        ${END}
+      }`,
+  });
+}
+
+// ---------- running water ----------
+// The rills: ripples drawn along the way the water goes, white where it falls and where it lands, glints on
+// the level runs, and edges that break up softly so that no slab of colour lies on the stone.
+export function makeRillMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    uniforms: { ...SKY_U, ...WORLD_U },
+    vertexShader: /* glsl */ `
+      attribute vec2 aUv; attribute vec2 aMix;
+      varying vec3 vWorld; varying vec2 vUv; varying vec2 vMix;
+      void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vUv = aUv; vMix = aMix; gl_Position = projectionMatrix * viewMatrix * wp; }`,
+    fragmentShader: /* glsl */ `
+      varying vec3 vWorld; varying vec2 vUv; varying vec2 vMix;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${GLSL_AIR}
+      void main(){
+        float fall = vMix.x;
+        float ax = abs(vUv.x);
+        float sp = mix(1.5, 5.5, fall);
+        float fl = vUv.y - uTime * sp;
+        float rip = vnoise(vec2(vUv.x * 2.2, fl * 0.8)) * 0.6 + vnoise(vec2(vUv.x * 5.5, fl * 2.1)) * 0.4;
+        float streak = smoothstep(0.42, 0.82, vnoise(vec2(vUv.x * 6.5, fl * mix(1.3, 0.4, fall))));
+        // an edge that wanders, thinner in places, never a ruled line
+        float edge = 1.0 - smoothstep(0.5, 0.98, ax + 0.26 * (vnoise(vec2(vUv.y * 0.7, vUv.x * 0.5 + 3.0)) - 0.5));
+        vec3 col = mix(vec3(0.07, 0.3, 0.36), vec3(0.5, 0.82, 0.84), rip * 0.75 + 0.1);
+        float foam = clamp(fall * (0.3 + 0.7 * streak) + vMix.y * (0.35 + 0.9 * vnoise(vec2(vUv.x * 4.5, fl * 2.6))), 0.0, 1.0);
+        foam = max(foam, smoothstep(0.62, 0.95, ax) * 0.6 * rip);
+        col = mix(col, vec3(0.97, 1.0, 1.0), foam);
+        float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
+        col *= uSkyCol * 0.78 + uKeyCol * (0.22 + 0.5 * max(uKeyDir.y, 0.0)) * sunUp;
+        // glints carried down on the level runs
+        float glint = smoothstep(0.8, 0.93, vnoise(vec2(vUv.x * 8.0, fl * 3.4))) * (1.0 - fall) * (1.0 - smoothstep(60.0, 260.0, length(vWorld - cameraPosition)));
+        col += vec3(1.0, 0.95, 0.78) * glint * 0.7 * sunUp;
+        col = applyAir(col, vWorld);
+        gl_FragColor = vec4(col, edge * mix(0.86, 0.97, foam));
+        ${END}
+      }`,
+  });
+}
+
 // ---------- a ship setting out ----------
 // A small boat with one tall pale sail, lying off the sand until the plane comes near; then it puts out, slowly,
 // along the sun's road toward the horizon, rocking a little, its sail filling. `far` boats are already out there.
