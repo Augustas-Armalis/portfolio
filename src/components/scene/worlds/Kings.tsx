@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, haloGeometry, makeTempera, rng, type GroundPalette, type Halo, type V3 } from "./kit";
+import { HomeWindow } from "./kings/homeWindow";
 import { PaintedKings } from "./kings/painted";
 import { makeUnderstory } from "./kings/trees";
 import { BY, DOME_AT, DOME_U, GLSL_END, GLSL_KINGS, GLSL_KINGS_CORE, KINGS_UNIFORMS, R } from "./kings/light";
@@ -838,6 +839,7 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       <PaintedKings />
       <mesh geometry={b.little} material={b.lit} />
       <mesh geometry={b.domeGeo} material={b.domeSky} position={at} />
+      <HomeWindow mobile={props.mobile} />
       <mesh geometry={b.domeGeo} material={b.domeGlass} position={at} renderOrder={5} />
       <mesh geometry={b.raysGeo} material={b.raysMat} renderOrder={6} frustumCulled={false} />
       <group ref={bell} position={[BELL[0], BELL[1] + BELL_DROP, BELL[2]]}>
