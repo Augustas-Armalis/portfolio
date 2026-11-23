@@ -1444,6 +1444,9 @@ function Scene({
         cam.far = far;
         cam.updateProjectionMatrix();
       }
+    } else if (cam.far !== 12000) {
+      cam.far = 12000;
+      cam.updateProjectionMatrix();
     }
     // the plain three fog (the desk and its things) keeps pace with the shader fog
     fog.far = Math.min(176, 3 / (FOG + mist));
