@@ -715,7 +715,7 @@ export function Plane({
       if (voyage.held > (voyage.quick ? 0.3 : 0.75) && voyage.frames >= (voyage.quick ? 3 : 5) && !voyage.skyFrom) voyage.phase = "opening";
     } else {
       // (after a window there was never more than a breath of cloud at the frame's edges: it is gone in a moment)
-      voyage.veil = Math.max(0, voyage.veil - dt / (st.windowed ? 0.5 : 1.7));
+      voyage.veil = Math.max(0, voyage.veil - dt / (st.windowed ? 0.9 : 1.7));
       if (voyage.veil <= 0) {
         voyage.phase = "open";
         st.windowed = false;
@@ -752,7 +752,7 @@ export function Plane({
     st.idle = Math.max(st.idle, 0);
     updateNose();
     st.windowed = true;
-    voyage.veil = 0.32;
+    voyage.veil = 0.16;
     voyage.held = 0;
     voyage.phase = "opening";
   };

@@ -896,8 +896,8 @@ export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pa
       <LightPath id={id} def={def} tint={pathTint} gain={pathGain} effects={props.effects} angels={angels} marks={marks} />
       {arch && def.gate && gate !== "none" && <LightGate id={id} def={def} tint={gateTint ?? pathTint} gain={pathGain} look={gate} half={gateSize?.[0]} rise={gateSize?.[1]} />}
       <Gallery def={def} />
-      {/* a world that draws its own gate still has the window in it (worlds/portal.tsx); LightGate brings its own */}
-      {def.gate && !(arch && gate !== "none") && <PortalWindow id={id} def={def} half={gateSize?.[0]} rise={gateSize?.[1]} />}
+      {/* a world that draws its own gate still has the window in it (worlds/portal.tsx); where the world mounts a LightGate of its own, that gate's window is the one and this stands aside */}
+      {def.gate && !(arch && gate !== "none") && <PortalWindow id={id} def={def} half={gateSize?.[0]} rise={gateSize?.[1]} fallback />}
     </>
   );
 }

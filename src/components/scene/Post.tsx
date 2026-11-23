@@ -704,10 +704,11 @@ function build(level: number) {
   const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ao, ao2, ldr, ...hist, pick];
   // (hist: which of the two holds the frame before, whether it holds one at all, and how the camera saw the world then)
   const past = { i: 0, ok: false, vp: new THREE.Matrix4(), eye: new THREE.Vector3(), q: new THREE.Quaternion(), at: 0, ray: 0 };
-  return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, hist, past, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, steady, tail, w: 0, h: 0 };
+  return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, hist, past, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, steady, tail, warmed: 0, w: 0, h: 0 };
 }
 
 const sunV = new THREE.Vector3();
+const WARM = ["tile", "tile2", "dof", "tent", "mask", "rays", "steady"] as const;
 const VP = new THREE.Matrix4();
 
 export function Post({ level }: { level: number }) {
@@ -804,6 +805,14 @@ export function Post({ level }: { level: number }) {
       gl.setRenderTarget(target);
       gl.render(p.quad, p.cam);
     };
+    // The passes of the lens that are not needed at once (the depth of field when the eye reaches the desk, the
+    // rays when the sun comes into the frame, the steadying when the eye slows) are made one a frame over its
+    // first frames, which are drawn behind the loader: made at first use, each cost a long frame in the middle of
+    // the descent or the first look round. (The photograph's finer blur is left for the camera to ask for.)
+    if (p.warmed < WARM.length) {
+      const mat = p.m[WARM[p.warmed++]];
+      if (mat) run(mat, p.pick);
+    }
     p.depthU.uNear.value = pc.near;
     p.depthU.uFar.value = pc.far;
     p.cocU.uFocus.value = focusM;
