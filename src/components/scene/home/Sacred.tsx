@@ -19,7 +19,7 @@ import { buildTree, makeLeafTexture } from "./trees";
 
 type V3 = [number, number, number];
 const TOP = { x: SACRED.x, z: SACRED.z, y: landH(SACRED.x, SACRED.z) };
-const ALTAR = { x: SACRED.x + 0.5, z: SACRED.z + 10 };
+const ALTAR = { x: SACRED.x + 0.5, z: SACRED.z + 7 };
 const ALTAR_Y = landH(ALTAR.x, ALTAR.z);
 const FIRE: V3 = [ALTAR.x, ALTAR_Y + 1.55, ALTAR.z];
 
@@ -37,8 +37,8 @@ function buildStones() {
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + ring * 0.4;
       b.at(ALTAR.x + Math.cos(a) * rad, ALTAR_Y - 0.25 + ring * 0.38, ALTAR.z + Math.sin(a) * rad, a);
-      const s = 0.5 + r() * 0.2;
-      b.cyl(0, 0, 0, s * 0.62, s * 0.3, s * 0.75, 6, tone(STONE), K.stone);
+      const s = 0.45 + r() * 0.2;
+      b.rock(0, s * 0.3, 0, s, r() * 20, tone(STONE));
     }
   }
   b.at(ALTAR.x, ALTAR_Y, ALTAR.z, 0.3);
@@ -53,8 +53,8 @@ function buildStones() {
   const N = 9;
   for (let i = 0; i < N; i++) {
     const a = (i / N) * Math.PI * 2 + 0.35;
-    const x = TOP.x + Math.cos(a) * 15;
-    const z = TOP.z + Math.sin(a) * 15;
+    const x = TOP.x + Math.cos(a) * 10.5;
+    const z = TOP.z + Math.sin(a) * 10.5;
     const h = 3.2 + (i % 3) * 0.6;
     b.at(x, landH(x, z) - 0.4, z, -a + Math.PI / 2);
     b.box(0, h / 2, 0, 0.42, h, 0.42, WOOD, K.boards);
@@ -76,11 +76,11 @@ function buildStones() {
   // a ring of grey boulders lower on the hill
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2 + r() * 0.15;
-    const x = TOP.x + Math.cos(a) * 27;
-    const z = TOP.z + Math.sin(a) * 27;
+    const x = TOP.x + Math.cos(a) * 15.5;
+    const z = TOP.z + Math.sin(a) * 15.5;
     b.at(x, landH(x, z) - 0.35, z, r() * 6);
-    const s = 0.9 + r() * 0.7;
-    b.cyl(0, 0, 0, s * 0.75, s * 0.32, s * 0.9, 7, tone(STONE), K.stone);
+    const s = 0.7 + r() * 0.6;
+    b.rock(0, 0, 0, s, r() * 20, tone(STONE));
   }
   return b.geometry();
 }

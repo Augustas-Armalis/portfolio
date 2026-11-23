@@ -9,6 +9,7 @@ import { ORIGIN, heightGLSL, voyage, type WorldDef } from "./worlds/voyage";
 import { DESK, GLSL_NOISE, GLSL_PATH, GLSL_SKY, pathW, pathX } from "./shared";
 import { SKY_U } from "./sky";
 import { GLSL_DESK_SHADOW } from "./World";
+import { GLSL_PATHS } from "./home/journey";
 import { GLSL_FIELD, GLSL_HOME_AIR, GLSL_LAND, HOLD, HOME_U, timed } from "./home/land";
 
 // Instanced grass blades (after Ghost of Tsushima / al-ro / Codrops):
@@ -129,7 +130,8 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
       uInner: { value: INNER_TILE },
       uInnerOn: { value: 0 },
       uWalkOn: { value: 0 },
-      uRoadEnd: { value: HOME_GATE_Z - 30 },
+      // (the old straight road north is bare only as far as the paths part: beyond it the meadow has taken it back)
+      uRoadEnd: { value: -12 },
       ...SKY_U,
       ...HOME_U,
       uWind: { value: 1 },
@@ -146,6 +148,7 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
       ${GLSL_LAND}
       ${GLSL_HOME_AIR}
       ${GLSL_FIELD}
+      ${GLSL_PATHS}
       void main(){
         float t = position.y; float side = position.x;
         vec2 root = aOffset.xy; float yaw = aOffset.z;
@@ -187,6 +190,8 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         // (and none on the lake's sandy rim: pale tufts stood in a row on the sand there)
         lod *= smoothstep(1.3, 1.75, lk);
         lod *= (1.0 - smoothstep(0.15, 0.6, townStreet(root))) * (1.0 - smoothstep(0.2, 0.7, forestTrack(root))) * (1.0 - caveIn(root)) * (1.0 - fieldPlot(root).z);
+        vec2 hpath = homePaths(root);
+        lod *= (1.0 - smoothstep(0.2, 0.7, hpath.x)) * (1.0 - 0.65 * hpath.y);
         float h = aShape.x * max(lod, 0.001) * mix(1.0, 0.6, smoothstep(0.3, 0.8, woods)); float w = aShape.y; float bend = aShape.z; float r = aShape.w;
         #ifdef WRAP
           #ifdef FAR
