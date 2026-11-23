@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { SKY_U, mixSky, skyState, type SkyState } from "../sky";
 import { pathOf, voyage } from "../worlds/voyage";
 import { Cave } from "./Cave";
+import { Sacred, SeaBoats } from "./Sacred";
 import { FOREST_LINE, TOWN } from "./journey";
 import { HOME_U } from "./land";
 import { Town } from "./Town";
@@ -115,7 +116,7 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     const town = THREE.MathUtils.smoothstep(f, marks.town - 0.1, marks.town) * (1 - THREE.MathUtils.smoothstep(f, marks.forest - 0.04, marks.forest + 0.02));
     if (voyage.cur === "home") {
       HOME_U.uAirK.value.x = AIR0 + 0.0022 * town + 0.004 * fog;
-      HOME_U.uFogGlow.value.w = 0.62 * fog;
+      HOME_U.uFogGlow.value.w = 0.78 * fog;
     } else HOME_U.uFogGlow.value.w = 0;
   });
   return (
@@ -123,6 +124,8 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
       <Town mobile={mobile} />
       <Woods amount={trees} mobile={mobile} effects={effects} />
       <Cave />
+      <Sacred mobile={mobile} />
+      <SeaBoats />
     </group>
   );
 }

@@ -403,7 +403,7 @@ function makeMist(count: number) {
         vec3 c = aAt.xyz + vec3(sin(uTime * 0.05 + aAt.w) * 3.0, 0.0, cos(uTime * 0.04 + aAt.w * 1.3) * 3.0);
         float dist = length(c - cameraPosition);
         // (a sheet is never met up close: it thins as the eye comes near)
-        vA = uFogK * 0.3 * smoothstep(8.0, 24.0, dist) * (1.0 - smoothstep(160.0, 240.0, dist));
+        vA = uFogK * 0.45 * smoothstep(8.0, 24.0, dist) * (1.0 - smoothstep(160.0, 240.0, dist));
         vUv = position.xy;
         // upright, turned to the eye about the vertical only, so they lie along the ground
         vec3 Rh = normalize(vec3(R.x, 0.0, R.z) + 1e-5);

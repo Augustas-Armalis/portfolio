@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { HOME_GATE_Z, roadX } from "../flightPath";
 import { pathW, pathX } from "../shared";
-import { CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
+import { routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
 
 // The land the desk stands in, written once and read by everything that
 // stands on it. The desk is at the origin and the visitor looks north (-z).
@@ -87,7 +87,7 @@ export function landH(x: number, z: number) {
   h = beach + (h - beach) * sstep(40, 118, c);
   h = h + (SEA - 8 - h) * (1 - sstep(-60, 4, c));
   // the river out of the lake's west end, its valley and the town on its banks (journey.ts)
-  h = riverLand(h, x, z);
+  h = riverLand(h, x, z) + sacredH(x, z);
   // the lake's bed
   h += (HLAKE.y - 1.2 - h) * (1 - sstep(0.86, 1.1, lk));
   h -= 0.5 * (1 - sstep(0.3, 1.7, streamD(x, z)));
@@ -172,6 +172,7 @@ float streamD(vec2 p){
 ${GLSL_RIVER}
 ${GLSL_TRACK}
 ${GLSL_CAVE}
+${GLSL_SACRED}
 float landFree(vec2 p){
   float r = length(p);
   float f = smoothstep(70.0, 210.0, r);
@@ -203,7 +204,7 @@ float landH(vec2 p){
   float beach = SEA + 1.5 * smoothstep(0.0, 30.0, c) + (2.4 * exp(-((c - 50.0) * (c - 50.0)) / 420.0) + 1.5 * exp(-((c - 84.0) * (c - 84.0)) / 300.0)) * (0.6 + 0.4 * sin(p.x * 0.031 + 1.0));
   h = mix(beach, h, smoothstep(40.0, 118.0, c));
   h = mix(SEA - 8.0, h, smoothstep(-60.0, 4.0, c));
-  h = riverLand(h, p);
+  h = riverLand(h, p) + sacredH(p);
   h = mix(LAKE_Y - 1.2, h, smoothstep(0.86, 1.1, lk));
   h -= 0.5 * (1.0 - smoothstep(0.3, 1.7, streamD(p)));
   return h;
@@ -434,6 +435,7 @@ export function forestD(x: number, z: number) {
   d = Math.max(d, journeyWood(x, z) * (0.82 + 0.18 * mid));
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
   // the town's ground and the river's banks are open
+  d *= sstep(SACRED.foot - 6, SACRED.foot + 20, Math.hypot(x - SACRED.x, z - SACRED.z));
   d *= sstep(TOWN.r - 18, TOWN.r + 26, Math.hypot(x - TOWN.x, z - TOWN.z)) * sstep(HILL.foot - 18, HILL.foot + 8, Math.hypot(x - HILL.x, z - HILL.z));
   const rd = riverD(x, z);
   if (rd < 40) d *= sstep(riverW(x) + 2, riverW(x) + 22, rd);
@@ -539,7 +541,8 @@ export function plantHome(amount: number): HomeTree[] {
         push(x, z, "cypress", 1.1 + r() * 0.6, 2);
         continue;
       }
-      push(x, z, kindAt(x, z), (0.85 + 0.5 * d) * (0.85 + r() * 0.4), 2);
+      // (near the flight's way over the open land a tree is seen from close by: a whole one, not a painted card)
+      push(x, z, kindAt(x, z), (0.85 + 0.5 * d) * (0.85 + r() * 0.4), routeD(x, z) < 130 || (z < 0 && z > -380 && Math.abs(x - roadX(z)) < 110) ? 1 : 2);
     }
   return trees;
 }

@@ -26,9 +26,9 @@ import { buildTree, makeFarTreeTexture, makeLeafTexture } from "./trees";
 type V3 = [number, number, number];
 type M4 = [number, number, number, number];
 // kinds of surface (the shader paints each)
-const K = { paint: 0, logs: 1, boards: 2, shingle: 3, trim: 4, lamp: 5, stone: 6, brick: 7, tile: 8, thatch: 9 } as const;
+export const K = { paint: 0, logs: 1, boards: 2, shingle: 3, trim: 4, lamp: 5, stone: 6, brick: 7, tile: 8, thatch: 9 } as const;
 
-class TB {
+export class TB {
   pos: number[] = [];
   nor: number[] = [];
   col: number[] = [];
@@ -497,6 +497,14 @@ function buildTown() {
     b.cyl(-2, 29.5, -2, 5.6, 5.6, 1.0, 16, [0.2, 0.15, 0.1], K.boards, 0, false);
     b.cyl(-2, 30.3, -2, 5.8, 0, 13, 16, TILE, K.tile);
     pennant(-2, 43, -2, [0.75, 0.55, 0.1]);
+    // a wooden gallery round the keep's head, on brackets, its own shingled skirt
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2;
+      b.box(-2 + Math.cos(a) * 5.9, 27.6, -2 + Math.sin(a) * 5.9, 0.22, 2.4, 0.22, [0.2, 0.15, 0.1], K.boards);
+      b.box(-2 + Math.cos(a) * 5.4, 26.2, -2 + Math.sin(a) * 5.4, 0.18, 0.18, 1.2, [0.18, 0.13, 0.09], K.boards);
+    }
+    b.cyl(-2, 26.4, -2, 6.1, 6.1, 1.2, 18, [0.24, 0.18, 0.12], K.boards, 0, false);
+    b.cyl(-2, 28.8, -2, 6.7, 5.4, 0.9, 18, SHINGLE, K.shingle, 0, false);
     b.cyl(2.6, 6, -5.5, 1.9, 1.8, 30, 10, BRICK, K.brick, 2.4);
     b.cyl(2.6, 35.8, -5.5, 2.1, 0, 7, 10, TILE, K.tile);
     // the hall, warm windows along it
@@ -516,7 +524,7 @@ function buildTown() {
   }
 
   // ----- the houses climbing the hill: loosely, as a town grows, each turned to the view down the slope -----
-  for (let tries = 0; tries < 420; tries++) {
+  for (let tries = 0; tries < 1100; tries++) {
     const a = r() * Math.PI * 2;
     const rad = HILL.top + 5 + Math.pow(r(), 0.8) * (HILL.foot - HILL.top - 9);
     // the back of the hill, toward the forest, is left to its trees
@@ -525,14 +533,19 @@ function buildTown() {
     if (ra < 5.5) continue;
     const x = HILL.x + Math.cos(a) * rad;
     const z = HILL.z + Math.sin(a) * rad;
-    const L = 5.8 + r() * 4.5;
-    const D = 5.0 + r() * 1.6;
+    const L = 6.2 + r() * 4.5;
+    const D = 4.8 + r() * 0.9;
     const big = Math.max(L, D) * 0.55 + 0.6;
     if (!free(x, z, big)) continue;
+    // (mostly the long side to the view, some gable-on; never quite square to the slope)
+    // (on the hill a house stands along the slope, its long side to the view, so little ground falls away under it)
+    const rot = Math.PI / 2 - a + (r() < 0.1 ? Math.PI / 2 : 0) + (r() - 0.5) * 0.45;
+    // only where the hill gives it a place level enough: a house is not set on a tall stone basement
+    b.at(x, 0, z, rot);
+    const fr = footRange(b, L / 2 + 0.3, Math.min(D, 5.6) / 2 + 0.3);
+    if (fr.hi - fr.lo > 2.3) continue;
     take(x, z, big);
     const u = r();
-    // (mostly the long side to the view, some gable-on; never quite square to the slope)
-    const rot = Math.PI / 2 - a + (r() < 0.3 ? Math.PI / 2 : 0) + (r() - 0.5) * 0.7;
     const res = house(b, x, z, rot, L, D, 2.8 + r() * 0.5, {
       roof: u < 0.42 ? "shingle" : u < 0.8 ? "tile" : "thatch",
       wall: r() < 0.5 ? "logs" : r() < 0.6 ? "painted" : "grey",
@@ -802,7 +815,7 @@ function buildTown() {
 }
 
 // ---------- the shader ----------
-function makeTownMaterial() {
+export function makeTownMaterial() {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
     uniforms: { ...SKY_U, ...HOME_U, uFront: { value: 1e4 } },
@@ -895,6 +908,15 @@ function makeTownMaterial() {
           float bfine = 1.0 - smoothstep(0.012, 0.05, fw);
           alb = mix(alb * 0.92, mix(vec3(0.42, 0.38, 0.33), brick, mortar), bfine);
           alb *= 1.0 - 0.2 * smoothstep(0.5, 0.8, vnoise(vec2(uv.x * 0.7, uv.y * 0.08)));
+          // the foot of every wall and tower is grey fieldstone, as at Trakai, the brick laid on it
+          float foot = 1.0 - smoothstep(4.0, 4.3 + vnoise(vec2(uv.x * 0.9, 1.0)) * 0.8, uv.y);
+          if (foot > 0.001) {
+            float row = floor(uv.y / 0.42);
+            vec2 f2 = vec2(fract(uv.x / 0.7 + row * 0.41), fract(uv.y / 0.42));
+            float mortar = smoothstep(0.0, 0.3, min(min(f2.x, 1.0 - f2.x), min(f2.y, 1.0 - f2.y)));
+            vec3 fs = vec3(0.34, 0.32, 0.29) * (0.7 + 0.45 * hash12(vec2(floor(uv.x / 0.7 + row * 0.41), row)));
+            alb = mix(alb, mix(vec3(0.3, 0.28, 0.25) * 0.9, mix(fs * 0.65, fs, mortar), bfine), foot);
+          }
         } else if (kind == 5.0) {
           // a lamp's glass: kindled ahead of the plane, and after dusk
           float key = vMat.y != 0.0 ? vMat.y : vWorld.x + 24.0;
