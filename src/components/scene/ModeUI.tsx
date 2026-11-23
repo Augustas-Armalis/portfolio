@@ -1018,6 +1018,7 @@ function Throttle({ value, onChange }: { value: number; onChange: (v: number) =>
 // a world this table has not heard of yet shows its own title).
 const WORLD_NAMES: Partial<Record<WorldId, string>> = {
   home: "Home",
+  friendship: "Friendship",
   sun: "Sonata of the Sun",
   stars: "Sonata of the Stars",
   rex: "Rex",

@@ -5,6 +5,7 @@ import { CAVE, JOURNEY } from "../home/journey";
 import { landH } from "../home/land";
 import { homeWater } from "../homeGround";
 import { airState, arrivalHours, mixSky, skyState, type Air, type SkyState } from "../sky";
+import { FRIEND_CANVAS, FRIEND_ENTRY, FRIEND_GATE, FRIEND_OBSTACLES, FRIEND_PATH, FRIEND_TERRAIN } from "./friendship/shape";
 import { funeralLand } from "./funeral/land";
 import { GROTTO } from "./sea/shape";
 import { FINALE_ENTRY, FINALE_GATE, FINALE_PATH, FINALE_TERRAIN } from "./seafinale/shape";
@@ -23,10 +24,11 @@ import { SUN_CANVAS, SUN_ENTRY, SUN_GATE, SUN_OBSTACLES, SUN_PATH, SUN_SKY, SUN_
 // that neither can see the other (the camera's far plane is 3000 m), near
 // enough that 32-bit floats still resolve a quarter of a millimetre.
 
-export type WorldId = "home" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "seafinale" | "funeral" | "kings";
+export type WorldId = "home" | "friendship" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "seafinale" | "funeral" | "kings";
 // (after the gate of Offering: the storm wave of the Finale, out of its curl into the calm of Tranquility, through the
 // grotto between the island's eyes and out of a cave mouth into the night of the Funeral Symphony)
-export const WORLD_ORDER: WorldId[] = ["home", "sun", "stars", "rex", "fairy", "paradise", "gate", "seafinale", "sea", "funeral", "kings"];
+// (Friendship first: out of the home cave into hers, and through the orb she holds into the Sun)
+export const WORLD_ORDER: WorldId[] = ["home", "friendship", "sun", "stars", "rex", "fairy", "paradise", "gate", "seafinale", "sea", "funeral", "kings"];
 // Fairy Tale of the Kings: where the two kings stand, and the small lit world they hold between their hands
 export const KINGS = { z: -170, domeY: 70, domeR: 30 };
 export const ORIGIN = new THREE.Vector3(-2500, 0, -2700);
@@ -98,6 +100,28 @@ const FUNERAL = funeralLand();
 
 // Colours below are scene-linear, written before the lens (ACES and the grade) sees them.
 const AIR: Record<Exclude<WorldId, "home">, Air> = {
+  // Friendship: the dim green-gold air of a vast cave; no sky, no sun: the only light is the orb she holds, which
+  // stands where the sun would (straight ahead, a little up) so the haze glows round it as round a sun
+  friendship: {
+    label: "Friendship",
+    zenith: [0.022, 0.04, 0.034],
+    upper: [0.034, 0.058, 0.046],
+    horizon: [0.05, 0.078, 0.052],
+    // (the air toward the orb takes this colour: kept low, or the whole cave goes to cream)
+    glow: [0.2, 0.15, 0.075],
+    amb: [0.07, 0.11, 0.085],
+    key: [1.0, 0.84, 0.56],
+    keyI: 0.6,
+    sunAz: 0,
+    sunEl: 6,
+    keyAz: 0,
+    keyEl: 10,
+    cloudLit: [0.1, 0.12, 0.08],
+    cloudShade: [0.02, 0.03, 0.025],
+    night: 0.25,
+    exposure: 1.25,
+    fx: [0, 0, 0, 0],
+  },
   // Sonata of the Sun: a field of dull gold under a gold-green air; one great drawn sun low ahead (the world's
   // GreatSun: the sky's own disc is not drawn) behind the bells and arches, so they stand as shade with a thread of
   // gold round every edge and its rays pour through them
@@ -323,6 +347,29 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     path: [], // the journey: up the road, over the lake, down the river through the town, the forest, the cave (see pathOf())
     obstacles: [],
     canvases: [],
+  },
+  friendship: {
+    id: "friendship",
+    title: "Friendship",
+    year: "1906–1907",
+    music: "friendship",
+    place: "none",
+    air: AIR.friendship,
+    // (thick air: the far wall is half gone into it, the passage behind wholly; nothing in a cave is seen for kilometres)
+    fog: [0.0011, 0.0016, 1500, 2600],
+    // the cave's floor; the cave itself, the figure and the orb are built (worlds/friendship/)
+    terrain: FRIEND_TERRAIN,
+    water: null,
+    // (the air leans the plane back from the walls: from 620 m off the middle of the chamber)
+    centre: [0, 290],
+    radius: 520,
+    ceil: 150,
+    entry: FRIEND_ENTRY,
+    // in the heart of the orb she holds out: the plane flies into its light, and through it into the Sun
+    gate: FRIEND_GATE,
+    path: FRIEND_PATH,
+    obstacles: [...FRIEND_OBSTACLES],
+    canvases: [{ painting: "friendship", x: FRIEND_CANVAS.x, z: FRIEND_CANVAS.z, yaw: FRIEND_CANVAS.yaw }],
   },
   sun: {
     id: "sun",
