@@ -312,14 +312,20 @@ export function makeLandMaterial() {
           float keep2 = (1.0 - smoothstep(4.0, 22.0, fw)) * (1.0 - smoothstep(260.0, 1300.0, dist));  // chop and swell
           // two scales of travelling waves, and on the sea a long swell coming in to the beach
           vec2 pf = isRiver ? p + vec2(uTime * 0.42, -uTime * 0.42 * riverSlope(p.x)) : p;
-          vec2 w1 = pf / 3.1 + vec2(uTime * 0.021, uTime * 0.013);
-          vec2 w2 = pf / 11.0 - vec2(uTime * 0.012, -uTime * 0.008);
-          vec2 w3 = p / 47.0 + vec2(uTime * 0.006, uTime * 0.004);
+          // (the wave sheets are read through frames turned against one another, and through a slow warp of the place, so
+          // the texture's own period never shows: no grid, no tiles, near or from the sky)
+          vec2 pw = pf + (texture2D(uCloudTex, p / 83.0 + 0.31).rg - 0.5) * 6.0 * keep2;
+          const mat2 RA = mat2(0.8387, -0.5446, 0.5446, 0.8387);
+          const mat2 RB = mat2(0.3624, 0.9320, -0.9320, 0.3624);
+          const mat2 RC = mat2(-0.4161, 0.9093, -0.9093, -0.4161);
+          vec2 w1 = RA * pw / 3.1 + vec2(uTime * 0.021, uTime * 0.013);
+          vec2 w2 = RB * pw / 11.0 - vec2(uTime * 0.012, -uTime * 0.008);
+          vec2 w3 = RC * p / 47.0 + vec2(uTime * 0.006, uTime * 0.004);
           const float E = 0.012;
           float a0 = texture2D(uCloudTex, w1).b, b0 = texture2D(uCloudTex, w2).b, c0 = texture2D(uCloudTex, w3).b;
-          vec2 g1 = vec2(texture2D(uCloudTex, w1 + vec2(E, 0.0)).b - a0, texture2D(uCloudTex, w1 + vec2(0.0, E)).b - a0);
-          vec2 g2 = vec2(texture2D(uCloudTex, w2 + vec2(E, 0.0)).b - b0, texture2D(uCloudTex, w2 + vec2(0.0, E)).b - b0);
-          vec2 g3 = vec2(texture2D(uCloudTex, w3 + vec2(E, 0.0)).b - c0, texture2D(uCloudTex, w3 + vec2(0.0, E)).b - c0);
+          vec2 g1 = vec2(texture2D(uCloudTex, w1 + vec2(E, 0.0)).b - a0, texture2D(uCloudTex, w1 + vec2(0.0, E)).b - a0) * RA;
+          vec2 g2 = vec2(texture2D(uCloudTex, w2 + vec2(E, 0.0)).b - b0, texture2D(uCloudTex, w2 + vec2(0.0, E)).b - b0) * RB;
+          vec2 g3 = vec2(texture2D(uCloudTex, w3 + vec2(E, 0.0)).b - c0, texture2D(uCloudTex, w3 + vec2(0.0, E)).b - c0) * RC;
           vec2 slope = g1 * mix(1.4, 3.2, seaK) * keep1 + g2 * mix(0.8, 4.2, seaK) * keep2 + g3 * 5.0 * seaK * keep2;
           float cst = coastZ(p.x) - p.y; // (negative out at sea)
           // (only near by: from high up a regular swell is rings drawn on the sea)
@@ -336,7 +342,7 @@ export function makeLandMaterial() {
             // the trees and the mountains standing in it, loosened by the ripples
             vec4 rc = uReflMat * vec4(P, 1.0);
             vec2 uv = rc.xy / rc.w + slope * 0.035;
-            vec2 ts = vec2(1.6 / 480.0, 1.6 / 270.0);
+            vec2 ts = vec2(1.6 / 480.0, 1.6 / 270.0) * 0.8;
             vec2 uc = clamp(uv, 0.004, 0.996);
             vec4 tex = (texture2D(uReflTex, uc + ts * vec2(0.5, 0.5)) + texture2D(uReflTex, uc + ts * vec2(-0.5, 0.5)) + texture2D(uReflTex, uc + ts * vec2(0.5, -0.5)) + texture2D(uReflTex, uc - ts * vec2(0.5, 0.5))) * 0.25;
             // (toward the picture's edge it gives way to the water's own sky, so no hard line shows where it ends)
@@ -354,9 +360,12 @@ export function makeLandMaterial() {
           float gl = texture2D(uCloudTex, p / 2.6 + vec2(uTime * 0.03, -uTime * 0.02)).g * texture2D(uCloudTex, p / 1.1 - vec2(uTime * 0.025, uTime * 0.04)).b;
           float spark = smoothstep(0.3, 0.5, gl) * (1.0 - smoothstep(0.03, 0.22, fw));
           float glintN = pow(max(dot(r, uSunDir), 0.0), mix(240.0, 90.0, seaK)) * mix(7.0, 3.5, seaK) * (1.0 - smoothstep(0.1, 0.9, fw));
-          mirror += sunC * (glintN + sunPath * (0.7 + spark * 7.0 + (b0 - 0.4) * 1.6 * keep2)) * sunVis * cloudShade(P);
-          mirror += vec3(0.8, 0.86, 1.0) * moonPath * (0.5 + spark * 4.0 + (b0 - 0.4) * 1.2 * keep2) * uNight;
-
+          vec3 spec = sunC * (glintN + sunPath * (0.7 + spark * 7.0 + (b0 - 0.4) * 1.6 * keep2)) * sunVis * cloudShade(P);
+          spec += vec3(0.8, 0.86, 1.0) * moonPath * (0.5 + spark * 4.0 + (b0 - 0.4) * 1.2 * keep2) * uNight;
+          // (the glint is laid on the picture of the sky, and together they stay under the lens's glow threshold: the water
+          // shines, it does not flare)
+          float room = max(1.0 - max(mirror.r, max(mirror.g, mirror.b)), 0.14);
+          mirror += spec * room / (room + max(spec.r, max(spec.g, spec.b)));
           float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
           fres = mix(fres, min(fres, 0.72), seaK);
           vec3 wl = uSkyCol * 0.9 + uKeyCol * 0.4 * sunUp;
@@ -380,6 +389,13 @@ export function makeLandMaterial() {
             float roll = smoothstep(0.75, 1.0, sin(depth * 3.6 - uTime * 0.9 + wob)) * smoothstep(0.3, 0.7, depth) * (1.0 - smoothstep(1.4, 2.6, depth));
             foam = max(foam, roll * smoothstep(0.35, 0.7, lace) * 0.75);
             wcol = mix(wcol, vec3(0.92, 0.95, 0.96) * (uSkyCol * 0.9 + uKeyCol * 0.6 * sunUp), clamp(foam, 0.0, 1.0) * (1.0 - smoothstep(0.8, 5.0, fw)));
+          }
+          if (seaK < 0.5) {
+            // the still water's rim: a thin soft lace of foam where it laps the shore, broken and drifting a little
+            float lw = vnoise(p * 0.9 + vec2(uTime * 0.05, 0.0)) * 0.6 + vnoise(p * 3.1 - vec2(0.0, uTime * 0.04)) * 0.4;
+            float lapped = 1.0 - smoothstep(0.0, 0.1 + 0.07 * lw, depth);
+            float lace = lapped * smoothstep(0.25, 0.6, lw + 0.3) * (1.0 - smoothstep(0.5, 3.5, fw));
+            wcol = mix(wcol, vec3(0.86, 0.9, 0.9) * (uSkyCol * 0.9 + uKeyCol * 0.45 * sunUp), clamp(lace, 0.0, 1.0) * 0.5);
           }
           // a soft edge where water meets land, and the sand dark with wet beside it
           col = mix(col * mix(0.72, 1.0, smoothstep(0.0, 0.12, -depth + 0.12)), wcol, smoothstep(0.0, still ? 0.035 : 0.06, depth));

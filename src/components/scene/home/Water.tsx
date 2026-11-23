@@ -21,7 +21,7 @@ export function LakeMirror({ quality }: { quality: number }) {
   const { gl, scene, camera } = useThree();
   const rt = useMemo(() => {
     const k = quality >= 1 ? 1 : 0.6;
-    const t = new THREE.WebGLRenderTarget(Math.round(800 * k), Math.round(450 * k), { type: THREE.HalfFloatType, depthBuffer: true });
+    const t = new THREE.WebGLRenderTarget(Math.round(1280 * k), Math.round(720 * k), { type: THREE.HalfFloatType, depthBuffer: true });
     t.texture.minFilter = t.texture.magFilter = THREE.LinearFilter;
     return t;
   }, [quality]);
@@ -36,6 +36,9 @@ export function LakeMirror({ quality }: { quality: number }) {
       frustum: new THREE.Frustum(),
       m: new THREE.Matrix4(),
       sphere: new THREE.Sphere(new THREE.Vector3(HLAKE.x, HLAKE.y, HLAKE.z), Math.max(HLAKE.rx, HLAKE.rz) * 1.25),
+      lastPos: new THREE.Vector3(1e9, 0, 0),
+      lastQuat: new THREE.Quaternion(),
+      cq: new THREE.Quaternion(),
     }),
     [],
   );
@@ -63,8 +66,14 @@ export function LakeMirror({ quality }: { quality: number }) {
       REFLECT_U.uReflOn.value = 0;
       return;
     }
-    // (every other frame; every third on a middling machine)
-    void tick;
+    // (a picture is redrawn when the eye has moved or turned; held still, only every third frame, for the drifting clouds)
+    cam.getWorldPosition(T.pos);
+    cam.getWorldQuaternion(T.cq);
+    const moved = T.pos.distanceToSquared(T.lastPos) > 1e-6 || Math.abs(T.cq.dot(T.lastQuat)) < 0.9999995;
+    tick.current++;
+    if (!moved && tick.current > 12 && tick.current % 3 !== 0) return;
+    T.lastPos.copy(T.pos);
+    T.lastQuat.copy(T.cq);
     // the eye, mirrored in the water
     cam.getWorldPosition(T.pos);
     T.rot.extractRotation(cam.matrixWorld);
