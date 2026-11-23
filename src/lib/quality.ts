@@ -30,6 +30,13 @@ export const PRESETS: Record<Preset, Quality> = {
   high: { preset: "high", dpr: 1.5, grass: 1, trees: 1, shadows: 2048, effects: 1, far: 1, post: 2 },
   ultra: { preset: "ultra", dpr: 2, grass: 1.5, trees: 1, shadows: 4096, effects: 1, far: 1.25, post: 3 },
 };
+// The lens a gear draws with. Low has no lens of its own, but on a computer it keeps a light one: the scene through
+// the steadying, the glow and the finish, without occlusion, depth of field or rays. Without the steadying every
+// edge, leaf and blade crawled at Low as the eye moved (a still view turned a tenth of a pixel a frame: 10-12 % of
+// the pixels went there and back, against under 1 % with it), for the cost of three passes over the frame.
+// A phone (whose pixels are too small for that flicker to show) still draws Low straight to the screen.
+const COARSE = typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
+export const lensOf = (q: Quality) => (q.post > 0 ? q.post : COARSE ? 0 : 0.5);
 const ORDER: Preset[] = ["low", "medium", "high", "ultra"];
 export const QUALITY_LABELS: Record<QualityChoice, string> = { auto: "Auto", low: "Low", medium: "Medium", high: "High", ultra: "Ultra" };
 

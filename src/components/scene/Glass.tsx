@@ -2,7 +2,7 @@
 
 import { motion, type HTMLMotionProps } from "motion/react";
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { useQuality } from "@/lib/quality";
+import { lensOf, useQuality } from "@/lib/quality";
 
 // One material for everything that floats over the 3D world: hover labels,
 // the flight's controls, every focus mode's bar, the player. Liquid Glass,
@@ -79,7 +79,7 @@ export function GlassStyles({ sheet = true }: { sheet?: boolean }) {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
-      {sheet && q.post === 0 && <div aria-hidden data-paper="" className="pointer-events-none absolute inset-0 z-[5]" style={{ backgroundImage: GRAIN, backgroundSize: "220px 220px", mixBlendMode: "soft-light", opacity: 0.55 }} />}
+      {sheet && lensOf(q) === 0 && <div aria-hidden data-paper="" className="pointer-events-none absolute inset-0 z-[5]" style={{ backgroundImage: GRAIN, backgroundSize: "220px 220px", mixBlendMode: "soft-light", opacity: 0.55 }} />}
     </>
   );
 }

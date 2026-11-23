@@ -15,7 +15,7 @@ import { music, sampleMusic, stopOwner } from "@/lib/audio";
 import { flightMusicStop, flightMusicTo, flightMusicVolume } from "@/lib/flightMusic";
 import { gyroLook, gyroNudge, gyroStop } from "@/lib/gyro";
 import { handoff } from "@/lib/handoff";
-import { getQuality, getQualityChoice, reportFrame, setQualityChoice, useQuality, type Quality } from "@/lib/quality";
+import { getQuality, getQualityChoice, lensOf, reportFrame, setQualityChoice, useQuality, type Quality } from "@/lib/quality";
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { DeskModel } from "./scene/glb";
 import { Flowers, Grass } from "./scene/Grass";
@@ -1799,7 +1799,7 @@ function Scene({
       <DeskDust apiRef={dust} />
       {q.effects > 0.2 && <ContactShadows />}
       {idle && mode === "none" && <PlaneLabel spot={planeSpot} introAt={introAt} instant={instant} after={ARR + 2.2} />}
-      <Post level={devPost ?? (mobile ? Math.min(1, q.post) : q.post)} />
+      <Post level={devPost ?? (mobile ? Math.min(1, lensOf(q)) : lensOf(q))} />
     </>
   );
 }
@@ -2264,7 +2264,7 @@ export default function Room({
       />
       <div
         className="pointer-events-none absolute inset-0 transition-opacity duration-700"
-        style={{ opacity: introDone && q.post === 0 && (stage === "idle" || mode !== "none") ? 1 : 0, background: "radial-gradient(120% 95% at 50% 45%, transparent 55%, rgb(10 10 14 / 0.3) 100%)" }}
+        style={{ opacity: introDone && lensOf(q) === 0 && (stage === "idle" || mode !== "none") ? 1 : 0, background: "radial-gradient(120% 95% at 50% 45%, transparent 55%, rgb(10 10 14 / 0.3) 100%)" }}
       />
 
       {/* the hint speaks of the desk: it steps aside while walking the field, and on a narrow window it keeps to the right, clear of the controls */}
