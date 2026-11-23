@@ -14,6 +14,7 @@ import { QUALITY_LABELS, setQualityChoice, useQuality, useQualityChoice, type Qu
 import { Btn, Button, IconTile, List, ListRow, M, SectionHeader, Squircle, sfx, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
 import { Empty, useOpenApp } from "./shared";
 import { useSound } from "./sound";
+import { MUSIC_CREDITS } from "@/lib/musicCredits";
 
 export function TrashApp() {
   const trash = useOS((s) => s.trash);
@@ -467,6 +468,8 @@ function SoundPane({ compact }: { compact: boolean }) {
           <Level compact={compact} label="Ambience" sub="Wind, waves and birds" value={s.ambience} onChange={s.setAmbience} />
         </List>
         <p className={note}>70% is how they were mixed; above it they are a little louder.</p>
+        {/* the music the scene plays, as its licences ask it to be credited */}
+        {MUSIC_CREDITS.length > 0 && <p className={note} data-sound="credits">Music: {MUSIC_CREDITS.join("; ")}.</p>}
       </div>
       <div>
         <SectionHeader mac={!compact}>Music app</SectionHeader>

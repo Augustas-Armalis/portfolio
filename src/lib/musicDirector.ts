@@ -1,84 +1,63 @@
 import { useSyncExternalStore } from "react";
-import { audioHushed, externalMusic, onMusicClaim, onMuteChange, onOwnerStop, sceneMuted, setDeskMusic } from "@/lib/audio";
-import { FLIGHT_CREDIT, hostedFlightActive, hostedFlightPrime, hostedFlightStop, hostedFlightTo, hostedFlightVolume } from "@/lib/flightHosted";
+import { audioHushed, externalMusic, onMusicClaim, onMuteChange, onOwnerStop, resumeAudio, sceneMuted, setDeskMusic, voice, voicePlay, voicePrime, voiceStop, type Voice } from "@/lib/audio";
+import { MUSIC_CREDIT } from "@/lib/musicCredits";
 import { fieldMusicGain, getSoundSettings, masterGain, setSoundSettings, subscribeSoundSettings } from "@/lib/soundSettings";
-import { makeDeck, type Deck } from "@/lib/stream";
 
-// The music of the 3D world. Three pieces, each where it belongs, and nothing to choose:
+// The music of the 3D world. Three drop-in files, each where it belongs, and nothing to choose:
 //
-//   field   "Village in a Mountain Pass – Ambience and Music"   at home: the desk, and the field round it in the air
-//           (Martia's Muses), looping                          too. Asked for by the ambience (lib/ambience.ts)
-//                                                              once the visitor has clicked.
-//   miske   Čiurlionis, Miške (In the Forest), looping          the hidden forest and the cave (home world), and the
-//                                                              voyage from there up to The Offering (gate)
-//   jura    Čiurlionis, Jūra (The Sea), looping                 The Offering (gate) to the end:
-//                                                              sea, funeral, kings
+//   public/content/music/field.mp3    at home: the desk, and the field round it in the air too
+//   public/content/music/forest.mp3   the hidden forest and the cave (home world), and the voyage from there
+//                                     through Paradise
+//   public/content/music/sea.mp3      The Offering (gate) to the end: the Sea Finale, the sea, the funeral, the kings
 //
-// A piece is never restarted while the plane stays in its range: going from world to world inside it (in any
-// order, by the gates or by the Worlds list) changes nothing. Crossing between ranges is a slow cross-fade
-// between the two decks, and each piece is taken up where it was left (kept for the visit). In the home world the
-// field's music carries on through the take-off; flying into the forest or near the cave (Room tells us how far
-// in, musicForest), it hands over to Miške, and back again on the way out. Landing hands back to the field.
+// Replace a file to change what plays there (about 128 kbps MP3; any length: each loops on its own, crossing its
+// end into its beginning), and update its credit in lib/musicCredits.ts and CREDITS.md. Until Augustas gives his own:
+// field.mp3 is twelve seconds of silence, forest.mp3 is Čiurlionis's Prelude in D minor, VL 268, and sea.mp3 his
+// The Sea, VL 317, both played by Jean Dubé (CC BY 4.0, credited in Settings → Sound).
 //
-// All three are played through the embedded YouTube player (lib/stream.ts): never downloaded, never rehosted.
-// When a Čiurlionis stream cannot play (the embed or autoplay refused, no network, a blocker), the music we host
-// stands in without a word: The Sea, VL 317, played by Jean Dubé (lib/flightHosted.ts, CC BY 4.0, its credit in
-// the mini-player for as long as it plays). The field has no stand-in: a refused field stream is silence, and the
-// mini-player says "Play field music" (Safari and every iPhone refuse a frame that plays with sound unasked):
-// pressing it tries again inside that press and opens the player's own frame, whose play button always works.
+// They are played through the audio graph: no player, no frame, nothing on screen but the sound control. A piece
+// is never restarted while the plane stays in its range: going from world to world inside it (in any order, by
+// the gates or by the Worlds list) changes nothing. Crossing between ranges is a slow cross-fade between the two
+// decks, and each piece is taken up where it was left (kept for the visit). In the home world the field's music
+// carries on through the take-off; flying into the forest or near the cave (Room tells us how far in,
+// musicForest), it hands over to the forest's, and back again on the way out. Landing hands back to the field.
+// Files are loaded only when they are first asked for: the field's at the desk, the flight's on take-off. A file
+// that will not load is silence for the visit.
 //
-// His own songs are never played here: they are in the OS's Records and on the desk's headphones, by his choice.
+// His own songs are never played here by themselves: they are in the OS's Records and on the desk's headphones,
+// by his choice.
 //
 // One thing plays at a time, across the whole site. In flight the music is the owner "flight" of the audio
 // manager (the headphones and the OS's player fade out for it, the ambience ducks under it, and it stops when
 // they start or when the room is left); at the desk it is background that nobody owns, and it leaves the moment
 // anything else plays.
 //
-// The mini-player (scene/music/MusicDock.tsx) is only what is playing, its credit, a volume and a mute. The
-// volume is the shared "music" level of lib/soundSettings.ts (the OS's Settings shows the same one), under the
-// master volume; the mute is the music's own, and the system's Sound switch silences it with everything else.
+// Its level is the shared "music" level of lib/soundSettings.ts (the scene's settings and the OS's Settings show
+// the same one), under the master volume; the mute is the music's own, and the scene's sound button and the
+// system's Sound switch silence it with everything else.
 //
-// Development: window.__music.report() (states, volumes, what was asked for and why), .forest(k) to rehearse
-// the forest's edge, .fail() to rehearse a refused stream, .mute(on), .volume(v).
+// Development: window.__music.report() (states, levels, what was asked for and why), .forest(k) to rehearse the
+// forest's edge, .mute(on), .volume(v).
 
-export type PieceId = "field" | "miske" | "jura";
-export type TrackId = PieceId | "sea-dube";
+export type PieceId = "field" | "forest" | "sea";
 export type Place = "desk" | "flight";
-export type Track = {
-  id: TrackId;
-  title: string;
-  by: string; // whose it is
-  source: string; // where it comes from, as shown
-  video?: string;
-  credit?: string; // a licence that asks to be named
-  url?: string; // where the upload lives
+export type Piece = {
+  id: PieceId;
+  file: string;
+  credit: string | null; // as its licence asks it to be named (lib/musicCredits.ts; null: nothing to credit)
+  level: number; // the voice's level at the slider's middle mark
+  x: number; // seconds its end and its beginning overlap as it loops
+};
+export const PIECES: Record<PieceId, Piece> = {
+  field: { id: "field", file: "/content/music/field.mp3", credit: MUSIC_CREDIT.field, level: 0.45, x: 4 },
+  forest: { id: "forest", file: "/content/music/forest.mp3", credit: MUSIC_CREDIT.forest, level: 0.65, x: 4 },
+  sea: { id: "sea", file: "/content/music/sea.mp3", credit: MUSIC_CREDIT.sea, level: 0.65, x: 4.5 },
 };
 
-// The uploads (each checked public and embeddable through YouTube's oEmbed):
-//   QBOIlkb67Fs  "Village in a Mountain Pass Ambience and Music", on its maker's own channel (Martia's Muses)
-//   MzEH7xrmflg  "M. K. Čiurlionis - Miške (In The Forest)", channel "tamsta"
-//   BY4o2G6hmaQ  "M. K. Čiurlionis - Jūra (The Sea)", channel "tamsta"
-const VIDEO: Record<PieceId, string> = { field: "QBOIlkb67Fs", miske: "MzEH7xrmflg", jura: "BY4o2G6hmaQ" };
-const yt = (id: string) => `https://www.youtube.com/watch?v=${id}`;
-export const TRACKS: Record<TrackId, Track> = {
-  field: { id: "field", title: "Village in a Mountain Pass", by: "Martia's Muses", source: "YouTube · Martia's Muses", video: VIDEO.field, url: yt(VIDEO.field) },
-  miske: { id: "miske", title: "Miške (In the Forest)", by: "M. K. Čiurlionis", source: "YouTube · tamsta", video: VIDEO.miske, url: yt(VIDEO.miske) },
-  jura: { id: "jura", title: "Jūra (The Sea)", by: "M. K. Čiurlionis", source: "YouTube · tamsta", video: VIDEO.jura, url: yt(VIDEO.jura) },
-  "sea-dube": { id: "sea-dube", title: "The Sea, VL 317", by: "M. K. Čiurlionis · Jean Dubé, piano", source: "Hosted here", credit: FLIGHT_CREDIT },
-};
-
-// The voyage in two halves (worlds/voyage.ts `music` keys). Everything else in the air is Miške, except the home
-// world ("road", at take-off and whenever the plane is back in it), which is the field's unless the plane is in
-// the forest, and "home", the way back out of the kings' light, which is the landing.
+// The voyage in two halves (worlds/voyage.ts `music` keys). Everything else in the air is the forest's, except the
+// home world ("road", at take-off and whenever the plane is back in it), which is the field's unless the plane is
+// in the forest, and "home", the way back out of the kings' light, which is the landing.
 const SEA_RANGE = new Set(["gate", "seafinale", "sea", "funeral", "kings"]);
-// (when a Čiurlionis stream is refused, the hosted Sea stands in: one movement for each half, each carrying on
-// across its half as the stream would)
-const HOSTED: Record<"miske" | "jura", string> = { miske: "road", jura: "kings" };
-
-// How loud. A stream is levelled by its player's volume (0..1), times the visitor's music level (1 at the slider's
-// middle mark) and the master volume (a frame is outside the audio graph). The field sits a little under the flight.
-const LEVEL: Record<PieceId, number> = { field: 0.32, miske: 0.34, jura: 0.34 };
-const HOSTED_LEVEL = 0.72;
 // seconds: every hand-over is slow (field to forest and back, the two halves of the voyage, the landing)
 const FADE = { change: 7, desk: 4, out: 2.5, press: 1.6 };
 // the forest's edge, with room between going in and coming out so it never flickers (Room: inJourneyForest)
@@ -86,7 +65,8 @@ const FOREST_IN = 0.55;
 const FOREST_OUT = 0.25;
 const STORE = "ag-music";
 
-type Now = { kind: "yt"; key: string; video: string; level: number; track: PieceId } | { kind: "sea"; key: string; track: "sea-dube"; hosted: string };
+type Now = { key: PieceId };
+type Deck = { name: string; v: Voice | null; failed: PieceId | null };
 
 type S = {
   place: Place | null;
@@ -96,25 +76,18 @@ type S = {
   muted: boolean;
   flightVol: number; // the flight's own quieting (the kings' wood)
   now: Now | null;
-  live: 0 | 1; // which deck has the stream
+  live: 0 | 1; // which deck has the music
   decks: [Deck, Deck] | null;
-  blocked: boolean; // the field's stream has failed (silence, and the "Play field music" pill)
-  flightBlocked: boolean; // a Čiurlionis stream has failed on this page: the hosted music stands in
-  retries: number; // times the field's stream was asked for again from inside a later gesture
-  patient: boolean; // the visitor has asked for the field's music by hand: from now on its player waits for them, and never times out
-  askedAt: number; // performance.now() when the field's stream was last asked for
-  lastFail: string | null;
-  pos: Record<string, number>; // where each piece was left
-  hidden: boolean;
+  failed: Partial<Record<PieceId, boolean>>; // a file that would not load: that piece is silence for the visit
+  pos: Partial<Record<PieceId, number>>; // where each piece was left
   log: string[];
   tick: number;
-  open: boolean; // the mini-player is opened out
   v: number; // bumped on every change, for React
-  leaving: number; // (the hosted engine lets go through stopOwner, which we also listen to: not while we are the ones stopping it)
+  leaving: number;
   off: (() => void)[]; // what this module listens to, so a reloaded copy can take over cleanly
 };
-const G = globalThis as typeof globalThis & { __aosMusic2?: S };
-const st: S = (G.__aosMusic2 ??= {
+const G = globalThis as typeof globalThis & { __aosMusic3?: S };
+const st: S = (G.__aosMusic3 ??= {
   place: null,
   world: "road",
   forest: false,
@@ -124,17 +97,10 @@ const st: S = (G.__aosMusic2 ??= {
   now: null,
   live: 0,
   decks: null,
-  blocked: false,
-  flightBlocked: false,
-  retries: 0,
-  patient: false,
-  askedAt: 0,
-  lastFail: null,
+  failed: {},
   pos: {},
-  hidden: false,
   log: [],
   tick: 0,
-  open: false,
   v: 0,
   leaving: 0,
   off: [],
@@ -158,51 +124,69 @@ function save() {
   }
 }
 
+// ---- the two decks: voices of the audio manager, owned by nobody (the flight's claim is made for them) ----
 function decks(): [Deck, Deck] {
   if (st.decks) return st.decks;
-  const mk = (n: string) => {
-    const d = makeDeck(n);
-    d.onState = onDeckState;
-    d.onFail = onDeckFail;
+  const mk = (name: string): Deck => {
+    const d: Deck = { name, v: voice(`music-${name}`, { channel: "music", scene: true, loop: false }), failed: null };
+    d.v?.el.addEventListener("error", () => {
+      const src = d.v?.el.getAttribute("src") ?? "";
+      const id = (Object.keys(PIECES) as PieceId[]).find((k) => src === PIECES[k].file);
+      if (id) onDeckFail(d, id);
+    });
+    d.v?.el.addEventListener("ended", () => onEnded(d));
     return d;
   };
   st.decks = [mk("a"), mk("b")];
   return st.decks;
 }
-// the mini-player: where the frames are seen and what is playing is named
-let docked = false;
-function dock() {
-  if (docked) return;
-  docked = true;
-  void import("@/components/scene/music/MusicDock").then((m) => m.mountMusicDock()).catch(() => (docked = false));
+const srcOf = (d: Deck) => d.v?.el.getAttribute("src") ?? null;
+const volOf = (d: Deck) => (d.v ? (d.v.gain ? d.v.gain.gain.value : d.v.el.volume) : 0);
+const sounding = (d: Deck) => !!d.v && !d.v.el.paused && d.v.want && volOf(d) > 0.001;
+const timeOf = (d: Deck) => d.v?.el.currentTime ?? 0;
+const endOf = (d: Deck) => (Number.isFinite(d.v?.el.duration) ? d.v!.el.duration : 0);
+function deckPlay(d: Deck, p: Piece, at: number, level: number, fade: number) {
+  const v = d.v;
+  if (!v) return;
+  if (srcOf(d) !== p.file) {
+    v.el.src = p.file;
+    v.el.preload = "auto";
+  }
+  const seek = () => {
+    try {
+      if (Math.abs(v.el.currentTime - at) > 0.5) v.el.currentTime = at;
+    } catch {
+      /* not seekable yet */
+    }
+  };
+  if (v.el.readyState >= 1) seek();
+  else v.el.addEventListener("loadedmetadata", seek, { once: true });
+  voicePlay(v, { fade, level });
 }
 
 // ---- what should be heard now ----
-const silent = () => st.muted || sceneMuted() || st.hidden;
+const silent = () => st.muted || sceneMuted();
 export function pieceOf(place: Place, world: string, forest: boolean): PieceId {
   if (place === "desk" || world === "home") return "field";
-  if (world === "road") return forest ? "miske" : "field";
-  return SEA_RANGE.has(world) ? "jura" : "miske";
+  if (world === "road") return forest ? "forest" : "field";
+  return SEA_RANGE.has(world) ? "sea" : "forest";
 }
 function resolve(): Now | null {
   if (!st.place) return null;
-  const id = pieceOf(st.place, st.world, st.forest);
-  if (id === "field") return st.blocked ? null : { kind: "yt", key: "v:field", video: VIDEO.field, level: LEVEL.field, track: "field" };
-  if (st.flightBlocked) return { kind: "sea", key: `sea:${id}`, track: "sea-dube", hosted: HOSTED[id] };
-  return { kind: "yt", key: `v:${id}`, video: VIDEO[id], level: LEVEL[id], track: id };
+  const key = pieceOf(st.place, st.world, st.forest);
+  return st.failed[key] ? null : { key };
 }
 
-const streamLevel = (n: Now & { kind: "yt" }) => Math.min(1, n.level * masterGain() * fieldMusicGain() * (st.place === "flight" ? st.flightVol : 1));
-const hostedLevel = () => st.flightVol * fieldMusicGain() * HOSTED_LEVEL;
+const levelOf = (id: PieceId) => Math.min(1.4, PIECES[id].level * masterGain() * fieldMusicGain() * (st.place === "flight" ? st.flightVol : 1));
+// in flight the music is the flight's, as a voice of its own would be; at the desk it is background nobody owns
+const owned = () => externalMusic(st.place === "flight" ? "flight" : null, st.place === "flight");
 
 function leave(now: Now, fade: number) {
   st.leaving++;
   try {
-    if (now.kind === "yt") {
-      const d = decks()[st.live];
-      if (d.videoId) st.pos[now.key] = d.time();
-      d.stop(fade);
-    } else hostedFlightStop(Math.max(fade, 1.2));
+    const d = decks()[st.live];
+    if (srcOf(d) === PIECES[now.key].file) st.pos[now.key] = timeOf(d);
+    voiceStop(d.v, fade);
   } finally {
     st.leaving--;
   }
@@ -223,106 +207,78 @@ function apply(fade?: number) {
     watching(false);
     return emit();
   }
-  dock();
   const f = fade ?? FADE.change;
+  const ds = decks();
   if (cur && cur.key === want.key) {
-    // the same piece carries on: only its level leans
+    // the same piece carries on: only its level leans (and who owns it, as the plane goes up or comes down)
     st.now = want;
-    if (want.kind === "yt") {
-      const d = decks()[st.live];
-      d.fade(streamLevel(want), 1.2);
-      // (the field's music going up with the plane becomes the flight's, and back at the desk nobody's)
-      if (d.state === "playing") owned();
-    } else hostedFlightVolume(hostedLevel());
-    return emit();
-  }
-  // the hosted stand-in moves between its own movements by itself
-  if (cur && cur.kind === "sea" && want.kind === "sea") {
-    st.now = want;
-    note(`hosted: ${want.key}`);
-    hostedFlightTo(want.hosted);
+    voicePlay(ds[st.live].v, { fade: 1.2, level: levelOf(want.key) });
+    owned();
     return emit();
   }
   if (cur) leave(cur, f);
   st.now = want;
-  note(`in: ${want.key}${want.kind === "yt" ? ` @${Math.round(st.pos[want.key] ?? 0)}s` : ""}`);
-  if (want.kind === "yt") {
-    const ds = decks();
-    // A deck that still holds this recording (left a moment ago and still fading, or paused where it was) takes
-    // it back up; otherwise the deck that is not sounding takes it, and the other is left to finish its fade.
-    const held = ds.findIndex((d, i) => d.videoId === want.video && d.state !== "failed" && d.state !== "idle" && !(cur?.kind === "yt" && i === st.live));
-    const busy = (cur && cur.kind === "yt") || ds[st.live].vol > 0.02;
-    const next = (held >= 0 ? held : busy ? 1 - st.live : st.live) as 0 | 1;
-    st.live = next;
-    const d = ds[next];
-    // (still sounding on its way out: it turns round from where it is, no dip and no seek)
-    const sounding = held === next && (d.state === "playing" || d.state === "buffering") && d.vol > 0.001;
-    if (!sounding) d.fade(0, 0);
-    const at = sounding ? d.time() : (st.pos[want.key] ?? 0);
-    const patient = st.place === "desk" && st.patient;
-    st.askedAt = performance.now();
-    d.play(want.video, at, patient);
-    if (sounding) {
-      d.fade(streamLevel(want), f);
-      owned();
-    }
-    // (a patient player that has not started is offered again in the mini-player a moment later: see view)
-    if (patient) window.setTimeout(emit, 3700);
-    // (otherwise its level comes up when it is really playing: see onDeckState)
-  } else {
-    externalMusic(null, false);
-    hostedFlightVolume(hostedLevel());
-    hostedFlightTo(want.hosted);
-  }
+  const p = PIECES[want.key];
+  // A deck that still holds this piece (left a moment ago and still fading, or paused where it was) takes it back
+  // up; otherwise the deck that is not sounding takes it, and the other is left to finish its fade.
+  const held = ds.findIndex((d, i) => srcOf(d) === p.file && !(cur && i === st.live));
+  const next = (held >= 0 ? held : cur || sounding(ds[st.live]) ? 1 - st.live : st.live) as 0 | 1;
+  st.live = next;
+  const d = ds[next];
+  const turning = held === next && sounding(d);
+  let at = turning ? timeOf(d) : (st.pos[want.key] ?? 0);
+  const end = endOf(d);
+  if (end > 0 && at > end - p.x - 1) at = 0;
+  note(`in: ${want.key} @${Math.round(at)}s${turning ? " (turned round)" : ""}`);
+  resumeAudio();
+  deckPlay(d, p, at, levelOf(want.key), f);
+  owned();
   watching(true);
   emit();
 }
 
-// in flight the stream is the music's owner, as a voice would be; at the desk it is background nobody owns
-const owned = () => externalMusic(st.place === "flight" ? "flight" : null, st.place === "flight");
-
-function onDeckState(d: Deck) {
-  const ds = decks();
-  const now = st.now;
-  const mine = now && now.kind === "yt" && ds[st.live] === d;
-  if (mine && d.state === "playing") {
-    if (d.to < 0.001 || d.vol < 0.001) d.fade(streamLevel(now), st.place === "desk" ? FADE.desk : FADE.change);
-    owned();
-  } else if (mine && d.state === "ended") {
-    // every piece loops: a recording that runs out begins again
-    d.play(now.video, 0);
-  }
-  emit();
+function onDeckFail(d: Deck, id: PieceId) {
+  note(`${id} would not load on deck ${d.name}`);
+  st.failed[id] = true;
+  if (st.now?.key === id) {
+    st.now = null;
+    externalMusic(null, false);
+    apply(FADE.press);
+  } else emit();
 }
-function onDeckFail(d: Deck, why: string) {
-  note(`stream failed on deck ${d.name}: ${why}`);
-  st.lastFail = why;
+function onEnded(d: Deck) {
+  // (the seam is normally crossed before the end: see watching; this is the safety net)
   const now = st.now;
-  if (!now || now.kind !== "yt" || decks()[st.live] !== d) return emit();
-  d.stop(0.4);
-  // the field's goes quiet (and the pill offers it); a Čiurlionis stream gives way to the hosted Sea for this page
-  if (now.track === "field") st.blocked = true;
-  else st.flightBlocked = true;
-  st.now = null;
-  externalMusic(null, false);
-  apply(FADE.press);
+  if (!now || decks()[st.live] !== d) return;
+  deckPlay(d, PIECES[now.key], 0, levelOf(now.key), 0.8);
 }
 
-// While something plays: remember where it is, and loop it a breath before its end.
+// While something plays: remember where it is, and loop it without a seam.
 function watching(on: boolean) {
   window.clearInterval(st.tick);
   st.tick = 0;
   if (!on) return;
   st.tick = window.setInterval(() => {
     const now = st.now;
-    if (!now || now.kind !== "yt") return;
-    const d = decks()[st.live];
-    if (d.state !== "playing") return;
-    st.pos[now.key] = d.time();
-    const dur = d.duration();
-    // (the end itself is caught by "ended")
-    if (dur > 30 && d.time() > dur - 1.5) d.seek(0);
-  }, 1000);
+    if (!now) return;
+    const ds = decks();
+    const d = ds[st.live];
+    if (!d.v || d.v.el.paused) return;
+    const p = PIECES[now.key];
+    const t = timeOf(d);
+    st.pos[now.key] = t;
+    const end = endOf(d);
+    if (end <= p.x * 2 || t < end - p.x) return;
+    // a breath before its end the other deck takes it up from the beginning, the two crossing (unless that deck
+    // is still letting another piece go: then on the next tick)
+    const o = ds[1 - st.live];
+    if (sounding(o)) return;
+    note(`loop: ${now.key}`);
+    voiceStop(d.v, p.x);
+    st.live = (1 - st.live) as 0 | 1;
+    deckPlay(o, p, 0, levelOf(now.key), p.x);
+    st.pos[now.key] = 0;
+  }, 250);
 }
 
 // ---- the calls the rest of the site makes ----
@@ -372,84 +328,36 @@ export function musicFlightVolume(v: number) {
   st.flightVol = v;
   const now = st.now;
   if (st.place !== "flight" || !now) return;
-  if (now.kind === "yt") decks()[st.live].fade(streamLevel(now), 0.6);
-  else hostedFlightVolume(hostedLevel());
+  voicePlay(decks()[st.live].v, { fade: 0.6, level: levelOf(now.key) });
 }
-// (inside a tap that will lead to a flight: the hosted decks are woken so they may start later without one)
+// (inside a tap: both decks play their moment of silence, so either may start a file later without one)
 export function musicPrime() {
   if (typeof window === "undefined") return;
-  hostedFlightPrime();
+  resumeAudio();
+  decks().forEach((d) => voicePrime(d.v));
 }
 
-// The field's music, asked for by hand (the mini-player's "Play field music", pressed): tried again inside that
-// press, and the player's own frame is opened out, where its play button works in every browser. From then on
-// the field's player is patient: it waits for the visitor instead of giving up.
-export function playFieldMusic() {
-  if (typeof window === "undefined" || st.place === "flight") return;
-  note("field music asked for by hand");
-  st.blocked = false;
-  st.patient = true;
-  st.muted = false;
-  st.open = true;
-  save();
-  const now = st.now;
-  if (st.place === "desk" && now && now.kind === "yt") {
-    // (already waiting on its deck: asked again, inside this press)
-    st.askedAt = performance.now();
-    decks()[st.live].play(now.video, st.pos[now.key] ?? 0, true);
-    window.setTimeout(emit, 3700);
-    return emit();
-  }
-  st.place = "desk";
-  apply(FADE.press);
-}
 // the music's level: the shared one (lib/soundSettings.ts), for the field and the flight alike
 export function setMusicVolume(v: number) {
   setSoundSettings({ fieldMusic: v });
 }
 export function setMusicMuted(m: boolean) {
   st.muted = m;
-  // (asking for the music again is a press: a stream refused earlier is given another chance)
-  if (!m) {
-    st.blocked = false;
-    st.flightBlocked = false;
-  }
   save();
   note(m ? "muted" : "unmuted");
   apply(m ? 0.6 : FADE.press);
 }
-export function setMusicOpen(open: boolean) {
-  st.open = open;
-  emit();
-}
 
-// `tap`: the field's music could not start by itself and waits for a press ("Play field music")
-export type MusicView = { place: Place | null; playing: Track | null; kind: Now["kind"] | null; state: string; volume: number; muted: boolean; open: boolean; fallback: boolean; tap: boolean; credit: string | null; v: number };
+export type MusicView = { place: Place | null; playing: Piece | null; volume: number; muted: boolean; v: number };
 let snap: MusicView | null = null;
 let snapV = -1;
 function view(): MusicView {
   if (snap && snapV === st.v) return snap;
   snapV = st.v;
-  const now = st.now;
-  const place = st.place;
-  const playing = now ? TRACKS[now.track] : null;
-  const d = now?.kind === "yt" && st.decks ? st.decks[st.live] : null;
-  snap = {
-    place,
-    playing,
-    kind: now?.kind ?? null,
-    state: d ? d.state : now ? "playing" : "idle",
-    volume: getSoundSettings().fieldMusic,
-    muted: st.muted,
-    open: st.open,
-    fallback: now?.kind === "sea",
-    tap: place === "desk" && !silent() && (d ? st.patient && d.state !== "playing" && performance.now() - st.askedAt > 3500 : st.blocked),
-    credit: playing?.credit ?? null,
-    v: st.v,
-  };
+  snap = { place: st.place, playing: st.now ? PIECES[st.now.key] : null, volume: getSoundSettings().fieldMusic, muted: st.muted, v: st.v };
   return snap;
 }
-const SERVER: MusicView = { place: null, playing: null, kind: null, state: "idle", volume: 0.7, muted: false, open: false, fallback: false, tap: false, credit: null, v: 0 };
+const SERVER: MusicView = { place: null, playing: null, volume: 0.7, muted: false, v: 0 };
 export const useMusic = () =>
   useSyncExternalStore(
     (f) => {
@@ -472,30 +380,14 @@ function init() {
   if (!kept) {
     kept = true;
     try {
-      // (only the mute is kept, for the visit: there is nothing to choose)
       const k = JSON.parse(window.sessionStorage.getItem(STORE) ?? "null") as { muted?: boolean } | null;
       if (k) st.muted = !!k.muted;
     } catch {
       /* nothing kept */
     }
   }
-  st.decks?.forEach((d) => {
-    d.onState = onDeckState;
-    d.onFail = onDeckFail;
-  });
-  // the desk's background music is asked for and sent away by the ambience
-  setDeskMusic(desk, () => {
-    // The scene may be let in by the loader's own clock, before the visitor has touched anything: the field's
-    // stream is then asked for with no gesture behind it and a browser refuses it. The next touches of the scene
-    // (the ambience calls this from every one) ask again from inside the gesture, twice at most; after that it
-    // is left to the "Play field music" pill.
-    if (st.blocked && st.place === "desk" && !st.now && st.retries < 2 && performance.now() - st.askedAt > 2500) {
-      st.retries++;
-      st.blocked = false;
-      note(`field music asked again inside a gesture (${st.retries})`);
-      apply(FADE.desk);
-    }
-  });
+  // the desk's background music is asked for and sent away by the ambience (and primed inside its gestures)
+  setDeskMusic(desk, musicPrime);
   st.off.push(
     // somebody else takes the music (the headphones, the OS's player): ours leaves as a voice would
     onMusicClaim((owner) => {
@@ -508,27 +400,14 @@ function init() {
     onOwnerStop((owner, fade) => {
       if (owner === "flight" && st.place === "flight" && !st.leaving) musicFlightStop(fade, false);
     }),
-    onMuteChange(() => {
-      // (the pill pressed for sound is a press: the field's stream, refused earlier, may be tried again)
-      if (!sceneMuted() && st.place !== "flight") st.blocked = false;
-      apply(0.4);
-    }),
-    // the visitor's levels (the mini-player's slider, the OS's Settings): what is playing leans to them
+    onMuteChange(() => apply(0.4)),
+    // the visitor's levels (the scene's slider, the OS's Settings): what is playing leans to them
     subscribeSoundSettings(() => {
       const now = st.now;
-      if (now?.kind === "yt") decks()[st.live].fade(streamLevel(now), 0.15);
-      else if (now?.kind === "sea") hostedFlightVolume(hostedLevel());
+      if (now) voicePlay(decks()[st.live].v, { fade: 0.15, level: levelOf(now.key) });
       emit();
     }),
   );
-  const vis = () => {
-    const hidden = document.visibilityState !== "visible";
-    if (hidden === st.hidden) return;
-    st.hidden = hidden;
-    apply(hidden ? 0.3 : 1.5);
-  };
-  document.addEventListener("visibilitychange", vis);
-  st.off.push(() => document.removeEventListener("visibilitychange", vis));
 }
 if (typeof window !== "undefined") {
   init();
@@ -539,42 +418,19 @@ if (typeof window !== "undefined") {
       forest: st.forest,
       deskWant: st.deskWant,
       piece: st.place ? pieceOf(st.place, st.world, st.forest) : null,
-      now: st.now,
+      now: st.now?.key ?? null,
       silent: silent(),
       muted: st.muted,
       sceneMuted: sceneMuted(),
       hushed: audioHushed(),
       flightVol: st.flightVol,
-      blocked: st.blocked,
-      flightBlocked: st.flightBlocked,
-      patient: st.patient,
-      tap: view().tap,
+      failed: st.failed,
       sound: getSoundSettings(),
-      lastFail: st.lastFail,
       live: st.live,
-      decks: st.decks?.map((d) => d.report()) ?? [],
-      hostedFlight: hostedFlightActive(),
-      pos: Object.fromEntries(Object.entries(st.pos).map(([k, v]) => [k, Math.round(v)])),
+      decks: (st.decks ?? []).map((d) => ({ deck: d.name, src: (srcOf(d) ?? "").split("/").pop(), paused: d.v?.el.paused ?? null, want: d.v?.want ?? null, t: +timeOf(d).toFixed(1), level: d.v?.level ?? null, gain: +volOf(d).toFixed(3), ready: d.v?.el.readyState ?? null })),
+      pos: Object.fromEntries(Object.entries(st.pos).map(([k, v]) => [k, Math.round(v ?? 0)])),
       log: st.log.slice(-14),
     });
-    Object.assign(window, {
-      __music: {
-        report,
-        state: st,
-        forest: musicForest,
-        volume: setMusicVolume,
-        mute: setMusicMuted,
-        playField: playFieldMusic,
-        sound: setSoundSettings,
-        tracks: TRACKS,
-        // rehearse a refused stream: in flight the hosted music must take over, at the field silence and the pill
-        fail: () => st.decks && onDeckFail(st.decks[st.live], "rehearsed failure"),
-        unblock: () => {
-          st.blocked = false;
-          st.flightBlocked = false;
-          apply();
-        },
-      },
-    });
+    Object.assign(window, { __music: { report, state: st, forest: musicForest, volume: setMusicVolume, mute: setMusicMuted, sound: setSoundSettings, pieces: PIECES } });
   }
 }

@@ -58,15 +58,10 @@ public/icons/system/*.svg: from WhiteSur icon theme by vinceliuice, https://gith
 - public/assets/ambience/wind-woods.mp3: "TedEllis binaural wind sounds birds woods" (CC0, excerpt), https://archive.org/details/soundica-fs-447408-tedellis-binaural-wind-sounds-birds-woods-mp3
 - public/assets/ambience/sea-waves.mp3: "Binaural Beach Waves 4" (CC0, excerpt), https://archive.org/details/soundica-fs-457149-binaural-beach-waves-4-wav
 
-## Čiurlionis recording (CC BY 4.0), added 20 Nov
-- public/content/music/ciurlionis-jura-dube.mp3: M. K. Čiurlionis, The Sea (Jūra), VL 317, piano. Performed by Jean Dubé. Creative Commons Attribution 4.0, via IMSLP: https://imslp.org/wiki/The_Sea,_Op.28_(%C4%8Ciurlionis,_Mikalojus_Konstantinas)
-- public/content/music/ciurlionis-prelude-vl268-dube.mp3: M. K. Čiurlionis, Prelude in D minor, VL 268, piano. Performed by Jean Dubé. Creative Commons Attribution 4.0, via IMSLP: https://imslp.org/wiki/Prelude_in_D_minor,_VL_268_(%C4%8Ciurlionis,_Mikalojus_Konstantinas)
-
-## Streamed music (embedded official players, nothing downloaded or hosted), added 20 Nov
-Played through the YouTube IFrame player on youtube-nocookie.com (src/lib/stream.ts); nothing is downloaded or rehosted. Each upload was checked public and embeddable (YouTube oEmbed) on 23 Nov 2026. The mini-player names what plays and links to the upload.
-- Village in a Mountain Pass – Ambience and Music (the field's music, at home): https://www.youtube.com/watch?v=QBOIlkb67Fs . Martia's Muses (their own channel). Their page asks that their music not be used in projects without a licence (https://www.martiasmuses.com/licensing/): ask before launch.
-- M. K. Čiurlionis, Miške (In the Forest) (the forest, the cave and the voyage up to The Offering): https://www.youtube.com/watch?v=MzEH7xrmflg . Uploaded by the channel "tamsta" (@derintojas), not by the orchestra or the label.
-- M. K. Čiurlionis, Jūra (The Sea) (from the Sea Finale to the end): https://www.youtube.com/watch?v=BY4o2G6hmaQ . Same channel.
+## Čiurlionis recordings (CC BY 4.0), added 20 Nov
+public/content/music/field.mp3 is twelve seconds of generated silence (no recording) until Augustas gives his own. No YouTube or other streamed music is used anywhere.
+- public/content/music/sea.mp3 (the scene's music from The Offering to the end, until his own): M. K. Čiurlionis, The Sea (Jūra), VL 317, piano. Performed by Jean Dubé. Creative Commons Attribution 4.0, via IMSLP: https://imslp.org/wiki/The_Sea,_Op.28_(%C4%8Ciurlionis,_Mikalojus_Konstantinas)
+- public/content/music/forest.mp3 (the scene's music in the forest and on to Paradise, until his own): M. K. Čiurlionis, Prelude in D minor, VL 268, piano. Performed by Jean Dubé. Creative Commons Attribution 4.0, via IMSLP: https://imslp.org/wiki/Prelude_in_D_minor,_VL_268_(%C4%8Ciurlionis,_Mikalojus_Konstantinas)
 
 ## Added 20 Nov (OS content round)
 
