@@ -516,13 +516,23 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 50],
     radius: 1560,
     ceil: 660,
-    entry: { x: 0, z: 1500, above: 48, yaw: 0 },
+    entry: { x: -45, z: 1840, above: 7.5, yaw: -0.155 },
     gate: { x: 646, z: -1335, above: 70, yaw: -0.363 },
-    // down off the rise and low over the fields; then a long climb straight at the castle, the mountain rising to
+    // in low under the trees of a wood, along a winding track (Fairy.tsx trackX), the castle only glimpsed
+    // through the leaves; up off the track where the wood opens, over the crest of the rise, and the whole plain
+    // and the mountain are there at once. Then down off the rise and low over the fields; then a long climb straight at the castle, the mountain rising to
     // fill the sky, to pass close under its towers by its right flank and the slim peak beside it; and away over
     // the plain beyond, down toward the sun
     path: [
-      [0, 1500, 48],
+      [-45, 1840, 7.5],
+      [-31, 1800, 7.5],
+      [-4, 1760, 7.5],
+      [24, 1720, 7.5],
+      [43, 1680, 8],
+      [44, 1640, 10],
+      [28, 1600, 16],
+      [8, 1560, 28],
+      [0, 1500, 46],
       [3, 1380, 47],
       [6, 1260, 45],
       [10, 1130, 52],
