@@ -731,7 +731,8 @@ export function Plane({
         // (with the home picture up in the glass there is no light to close over the frame: the plane goes through it)
         voyage.veil = HOME_WIN.live ? 0 : b.veil;
         voyage.warm = voyage.veil > 0 ? 1 : 0;
-        if (b.d < KINGS.domeR * 1.1 && HOME_WIN.live) {
+        // (deep enough in that the glass fills the frame: the eye rides a few metres behind the plane)
+        if (b.d < KINGS.domeR * 0.7 && HOME_WIN.live) {
           // through the glass: plane, eye and where it looks are carried by the window's own move, home stands
           const m = HOME_WIN.m;
           const r = M4b.extractRotation(m);
@@ -751,7 +752,7 @@ export function Plane({
           voyage.onHome?.();
           return;
         }
-        if (b.d < KINGS.domeR * 1.1) {
+        if (b.d < KINGS.domeR * 1.1 && !HOME_WIN.live) {
           voyage.homing = true;
           voyage.warm = 1;
           voyage.onHome?.();
