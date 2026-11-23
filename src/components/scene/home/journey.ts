@@ -242,7 +242,16 @@ float caveIn(vec2 p){
 // how far a point is from the flight's way over the open land (the road, the lake, the river and the town: the
 // forest's stretch has its own trees), for whoever plants whole trees near it instead of painted cards
 const OPEN_WAY = JOURNEY.slice(2, 16);
+const OPEN_BOX = (() => {
+  const xs = JOURNEY.slice(2, 16).map((p) => p[0]);
+  const zs = JOURNEY.slice(2, 16).map((p) => p[1]);
+  return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+})();
 export function routeD(x: number, z: number) {
+  // (most of the land is far from it: those are answered without walking the line)
+  const bx = Math.max(OPEN_BOX.x0 - x, 0, x - OPEN_BOX.x1);
+  const bz = Math.max(OPEN_BOX.z0 - z, 0, z - OPEN_BOX.z1);
+  if (bx * bx + bz * bz > 300 * 300) return 1e9;
   let best = 1e9;
   for (let i = 0; i < OPEN_WAY.length - 1; i++) {
     const [ax, az] = OPEN_WAY[i];

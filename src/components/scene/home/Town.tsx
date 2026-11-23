@@ -29,13 +29,17 @@ type M4 = [number, number, number, number];
 export const K = { paint: 0, logs: 1, boards: 2, shingle: 3, trim: 4, lamp: 5, stone: 6, brick: 7, tile: 8, thatch: 9 } as const;
 
 export class TB {
-  pos: number[] = [];
-  nor: number[] = [];
-  col: number[] = [];
-  uv: number[] = [];
-  mat: number[] = [];
-  ao: number[] = [];
-  idx: number[] = [];
+  // (the vertices go straight into typed arrays that grow in chunks: nothing is allocated per vertex or per quad)
+  private cap = 0;
+  n = 0;
+  private ni = 0;
+  pos = new Float32Array(0);
+  nor = new Float32Array(0);
+  col = new Float32Array(0);
+  uv = new Float32Array(0);
+  mat = new Float32Array(0);
+  ao = new Float32Array(0);
+  idx = new Uint32Array(0);
   private ox = 0;
   private oy = 0;
   private oz = 0;
@@ -45,6 +49,28 @@ export class TB {
   private gy = 0;
   private gx = NaN;
   private gz = NaN;
+  private grow(verts: number, inds: number) {
+    if (this.n + verts > this.cap) {
+      const cap = Math.max(1024, (this.n + verts) * 2);
+      const re = (a: Float32Array, k: number) => {
+        const b = new Float32Array(cap * k);
+        b.set(a.subarray(0, this.n * k));
+        return b;
+      };
+      this.pos = re(this.pos, 3);
+      this.nor = re(this.nor, 3);
+      this.col = re(this.col, 3);
+      this.uv = re(this.uv, 2);
+      this.mat = re(this.mat, 4);
+      this.ao = re(this.ao, 1);
+      this.cap = cap;
+    }
+    if (this.ni + inds > this.idx.length) {
+      const b = new Uint32Array(Math.max(2048, (this.ni + inds) * 2));
+      b.set(this.idx.subarray(0, this.ni));
+      this.idx = b;
+    }
+  }
   at(x: number, y: number, z: number, rot = 0) {
     if (x !== this.gx || z !== this.gz) {
       this.gx = x;
@@ -62,39 +88,91 @@ export class TB {
   w(p: V3): V3 {
     return [this.ox + p[0] * this.c + p[2] * this.s, this.oy + p[1], this.oz - p[0] * this.s + p[2] * this.c];
   }
-  private v(p: V3, n: THREE.Vector3, col: V3, uv: [number, number], m: M4) {
-    const q = this.w(p);
-    this.pos.push(q[0], q[1], q[2]);
-    this.nor.push(n.x * this.c + n.z * this.s, n.y, -n.x * this.s + n.z * this.c);
-    this.col.push(col[0], col[1], col[2]);
-    this.uv.push(uv[0], uv[1]);
-    this.mat.push(m[0], m[1], m[2], m[3]);
-    this.ao.push(q[1] - this.gy);
-    return this.pos.length / 3 - 1;
+  private v(px: number, py: number, pz: number, nx: number, ny: number, nz: number, col: V3, u: number, w: number, m: M4) {
+    const i = this.n++;
+    const c = this.c;
+    const s = this.s;
+    const wy = this.oy + py;
+    this.pos[i * 3] = this.ox + px * c + pz * s;
+    this.pos[i * 3 + 1] = wy;
+    this.pos[i * 3 + 2] = this.oz - px * s + pz * c;
+    this.nor[i * 3] = nx * c + nz * s;
+    this.nor[i * 3 + 1] = ny;
+    this.nor[i * 3 + 2] = -nx * s + nz * c;
+    this.col[i * 3] = col[0];
+    this.col[i * 3 + 1] = col[1];
+    this.col[i * 3 + 2] = col[2];
+    this.uv[i * 2] = u;
+    this.uv[i * 2 + 1] = w;
+    this.mat[i * 4] = m[0];
+    this.mat[i * 4 + 1] = m[1];
+    this.mat[i * 4 + 2] = m[2];
+    this.mat[i * 4 + 3] = m[3];
+    this.ao[i] = wy - this.gy;
+    return i;
   }
   // a quad a b c d, with its uv in metres (by default u along a->b, v along a->d)
   quad(a: V3, b: V3, c: V3, d: V3, col: V3, m: M4, uv?: [number, number][]) {
-    const n = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).cross(new THREE.Vector3(d[0] - a[0], d[1] - a[1], d[2] - a[2])).normalize();
-    const lu = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
-    const lv = Math.hypot(d[0] - a[0], d[1] - a[1], d[2] - a[2]);
-    const u = uv ?? [
-      [0, 0],
-      [lu, 0],
-      [lu, lv],
-      [0, lv],
-    ];
-    const i = this.v(a, n, col, u[0], m);
-    this.v(b, n, col, u[1], m);
-    this.v(c, n, col, u[2], m);
-    this.v(d, n, col, u[3], m);
-    this.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+    this.grow(4, 6);
+    const ux = b[0] - a[0];
+    const uy = b[1] - a[1];
+    const uz = b[2] - a[2];
+    const vx = d[0] - a[0];
+    const vy = d[1] - a[1];
+    const vz = d[2] - a[2];
+    let nx = uy * vz - uz * vy;
+    let ny = uz * vx - ux * vz;
+    let nz = ux * vy - uy * vx;
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    nx /= nl;
+    ny /= nl;
+    nz /= nl;
+    let i: number;
+    if (uv) {
+      i = this.v(a[0], a[1], a[2], nx, ny, nz, col, uv[0][0], uv[0][1], m);
+      this.v(b[0], b[1], b[2], nx, ny, nz, col, uv[1][0], uv[1][1], m);
+      this.v(c[0], c[1], c[2], nx, ny, nz, col, uv[2][0], uv[2][1], m);
+      this.v(d[0], d[1], d[2], nx, ny, nz, col, uv[3][0], uv[3][1], m);
+    } else {
+      const lu = Math.hypot(ux, uy, uz);
+      const lv = Math.hypot(vx, vy, vz);
+      i = this.v(a[0], a[1], a[2], nx, ny, nz, col, 0, 0, m);
+      this.v(b[0], b[1], b[2], nx, ny, nz, col, lu, 0, m);
+      this.v(c[0], c[1], c[2], nx, ny, nz, col, lu, lv, m);
+      this.v(d[0], d[1], d[2], nx, ny, nz, col, 0, lv, m);
+    }
+    const k = this.ni;
+    this.idx[k] = i;
+    this.idx[k + 1] = i + 1;
+    this.idx[k + 2] = i + 2;
+    this.idx[k + 3] = i;
+    this.idx[k + 4] = i + 2;
+    this.idx[k + 5] = i + 3;
+    this.ni += 6;
   }
   tri(a: V3, b: V3, c: V3, col: V3, m: M4, uv: [number, number][]) {
-    const n = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).cross(new THREE.Vector3(c[0] - a[0], c[1] - a[1], c[2] - a[2])).normalize();
-    const i = this.v(a, n, col, uv[0], m);
-    this.v(b, n, col, uv[1], m);
-    this.v(c, n, col, uv[2], m);
-    this.idx.push(i, i + 1, i + 2);
+    this.grow(3, 3);
+    const ux = b[0] - a[0];
+    const uy = b[1] - a[1];
+    const uz = b[2] - a[2];
+    const vx = c[0] - a[0];
+    const vy = c[1] - a[1];
+    const vz = c[2] - a[2];
+    let nx = uy * vz - uz * vy;
+    let ny = uz * vx - ux * vz;
+    let nz = ux * vy - uy * vx;
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    nx /= nl;
+    ny /= nl;
+    nz /= nl;
+    const i = this.v(a[0], a[1], a[2], nx, ny, nz, col, uv[0][0], uv[0][1], m);
+    this.v(b[0], b[1], b[2], nx, ny, nz, col, uv[1][0], uv[1][1], m);
+    this.v(c[0], c[1], c[2], nx, ny, nz, col, uv[2][0], uv[2][1], m);
+    const k = this.ni;
+    this.idx[k] = i;
+    this.idx[k + 1] = i + 1;
+    this.idx[k + 2] = i + 2;
+    this.ni += 3;
   }
   // a wall from (x0, z0) to (x1, z1), y0 to y1; windows every `win` m (style: 0 house, 1 church, 2 castle slit, 3 one gable window)
   wall(x0: number, z0: number, x1: number, z1: number, y0: number, y1: number, col: V3, kind: number, win = 0, accent = 0, style = 0) {
@@ -145,13 +223,14 @@ export class TB {
   }
   geometry() {
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
-    g.setAttribute("normal", new THREE.Float32BufferAttribute(this.nor, 3));
-    g.setAttribute("aCol", new THREE.Float32BufferAttribute(this.col, 3));
-    g.setAttribute("aUV", new THREE.Float32BufferAttribute(this.uv, 2));
-    g.setAttribute("aMat", new THREE.Float32BufferAttribute(this.mat, 4));
-    g.setAttribute("aAO", new THREE.Float32BufferAttribute(this.ao, 1));
-    g.setIndex(this.idx);
+    const n = this.n;
+    g.setAttribute("position", new THREE.BufferAttribute(this.pos.slice(0, n * 3), 3));
+    g.setAttribute("normal", new THREE.BufferAttribute(this.nor.slice(0, n * 3), 3));
+    g.setAttribute("aCol", new THREE.BufferAttribute(this.col.slice(0, n * 3), 3));
+    g.setAttribute("aUV", new THREE.BufferAttribute(this.uv.slice(0, n * 2), 2));
+    g.setAttribute("aMat", new THREE.BufferAttribute(this.mat.slice(0, n * 4), 4));
+    g.setAttribute("aAO", new THREE.BufferAttribute(this.ao.slice(0, n), 1));
+    g.setIndex(new THREE.BufferAttribute(n > 65535 ? this.idx.slice(0, this.ni) : new Uint16Array(this.idx.subarray(0, this.ni)), 1));
     g.computeBoundingSphere();
     return g;
   }
