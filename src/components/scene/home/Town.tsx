@@ -252,7 +252,7 @@ function footRange(b: TB, hx: number, hz: number) {
 
 // A wooden house: its long side L along local x, depth D along z (front at +z), walls `h` high, a steep gabled roof.
 type HouseOpt = { roof: "shingle" | "thatch" | "tile"; wall: "logs" | "painted" | "grey"; accent: number; porch: boolean; chimney: boolean; horses: boolean; storey?: number };
-function house(b: TB, x: number, z: number, rot: number, L: number, D: number, h: number, o: HouseOpt) {
+export function house(b: TB, x: number, z: number, rot: number, L: number, D: number, h: number, o: HouseOpt) {
   b.at(x, 0, z, rot);
   const hx = L / 2;
   const hz = D / 2;

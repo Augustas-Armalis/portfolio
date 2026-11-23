@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { SKY_U, mixSky, skyState, type SkyState } from "../sky";
 import { pathOf, voyage } from "../worlds/voyage";
 import { Cave } from "./Cave";
-import { Sacred, SeaBoats } from "./Sacred";
+import { Farm, Sacred, SeaBoats } from "./Sacred";
 import { FOREST_LINE, TOWN } from "./journey";
 import { HOME_U } from "./land";
 import { Town } from "./Town";
@@ -126,6 +126,7 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
       <Cave />
       <Sacred mobile={mobile} />
       <SeaBoats />
+      <Farm />
     </group>
   );
 }

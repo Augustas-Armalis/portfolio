@@ -270,3 +270,36 @@ float sacredH(vec2 p){
   return ${f(SACRED.h)} * (1.0 - sst(${f(SACRED.top)}, ${f(SACRED.foot)}, r));
 }
 `;
+
+// ---------- the farmland east of the road ----------
+// Strip fields on a slightly skewed grid: rye (gold), flax (blue-green), potatoes (dark), some left to meadow. A
+// farmstead (sodyba) in among them and a post windmill on a knoll (Sacred.tsx builds them).
+export const FARM = { x0: 48, x1: 430, z0: -330, z1: 30, rot: 0.32, cw: 44, cd: 19 };
+export const FARMSTEAD = { x: 150, z: -120 };
+export const MILL = { x: 236, z: -205 };
+// how much a point is farmland (JS, for the trees: they keep off the fields but stand along their edges)
+export function fieldK(x: number, z: number) {
+  if (x < FARM.x0 || x > FARM.x1 || z < FARM.z0 || z > FARM.z1) return 0;
+  const edge = sst(FARM.x0, FARM.x0 + 30, x) * (1 - sst(FARM.x1 - 40, FARM.x1, x)) * sst(FARM.z0, FARM.z0 + 30, z) * (1 - sst(FARM.z1 - 30, FARM.z1, z));
+  const away = sst(60, 90, Math.hypot(x, z)) * sst(40, 70, Math.hypot(x - SACRED.x, z - SACRED.z));
+  return edge * away;
+}
+export const GLSL_FIELDS = /* glsl */ `
+// a field plot under a point: x the crop (0 rye, 1 flax, 2 potatoes, 3 meadow), y across its furrows (m), z how much
+vec3 fieldPlot(vec2 p){
+  if (p.x < ${f(FARM.x0)} || p.x > ${f(FARM.x1)} || p.y < ${f(FARM.z0)} || p.y > ${f(FARM.z1)}) return vec3(3.0, 0.0, 0.0);
+  float c = cos(${f(FARM.rot)}), s = sin(${f(FARM.rot)});
+  vec2 q = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+  vec2 cell = floor(q / vec2(${f(FARM.cw)}, ${f(FARM.cd)}));
+  vec2 inC = fract(q / vec2(${f(FARM.cw)}, ${f(FARM.cd)})) * vec2(${f(FARM.cw)}, ${f(FARM.cd)});
+  float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+  float crop = h < 0.32 ? 0.0 : h < 0.52 ? 1.0 : h < 0.74 ? 2.0 : 3.0;
+  // a grass headland between plots
+  float head = smoothstep(0.8, 2.2, min(min(inC.x, ${f(FARM.cw)} - inC.x), min(inC.y, ${f(FARM.cd)} - inC.y)));
+  float edge = sst(${f(FARM.x0)}, ${f(FARM.x0 + 30)}, p.x) * (1.0 - sst(${f(FARM.x1 - 40)}, ${f(FARM.x1)}, p.x)) * sst(${f(FARM.z0)}, ${f(FARM.z0 + 30)}, p.y) * (1.0 - sst(${f(FARM.z1 - 30)}, ${f(FARM.z1)}, p.y));
+  float away = sst(60.0, 90.0, length(p)) * sst(40.0, 70.0, length(p - vec2(${f(SACRED.x)}, ${f(SACRED.z)}))) * sst(22.0, 34.0, length(p - vec2(${f(FARMSTEAD.x)}, ${f(FARMSTEAD.z)}))) * sst(12.0, 20.0, length(p - vec2(${f(MILL.x)}, ${f(MILL.z)})));
+  // (no field across the road)
+  float road = sst(10.0, 22.0, abs(p.x - 1.45 - 0.6 * sin(p.y * 0.043 - 1.1)));
+  return vec3(crop, inC.y, head * edge * away * road * step(crop, 2.5));
+}
+`;
