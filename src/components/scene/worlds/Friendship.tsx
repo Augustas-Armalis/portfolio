@@ -1,19 +1,20 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { postCtl } from "../Post";
 import { Gallery, Halos, LightPath, Mist, useDisposable, type WorldProps } from "./common";
 import { makeTempera, type Halo, type Puff } from "./kit";
 import { SunShafts } from "./fairy/shared";
+import { useMoment } from "./moments";
 import { portalRig } from "./portal";
 import { ORIGIN, WORLDS, voyage } from "./voyage";
 import { FRIEND_U, caveGeometry, makeCaveMaterial } from "./friendship/cave";
-import { forestSteps, withOrb, type Forest } from "./friendship/forest";
+import { forestSteps, pathX, withOrb, type Forest } from "./friendship/forest";
 import { makeMotesMaterial, makeOrbMaterial, makeStreaksMaterial, motesGeometry, streaksGeometry } from "./friendship/light";
-import { makePaintedMaterial, maskTexture, reliefGeometry } from "./friendship/painted";
-import { HEAD, ORB, floorAt } from "./friendship/shape";
+import { crownGeometry, makePaintedMaterial, maskTexture, reliefGeometry } from "./friendship/painted";
+import { FRIEND_PATH, HEAD, ORB, TUNNEL, floorAt } from "./friendship/shape";
 
 // Friendship (Draugystė, 1906–1907). In the picture a figure in profile, her face lit gold from the orb, a crown of
 // green and gold rays streaming up from her head, her body going into the dark, holds out on her open hand a pale
@@ -90,6 +91,9 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
     const m = props.mobile;
     // (set here, not only while flown: the world is also drawn through the home gate's window before it stands)
     FRIEND_U.uOrb.value.set(ORB.x, ORB.y, ORB.z).add(ORIGIN);
+    // (and its beats where they begin, so the world seen through the home gate is the one flown into)
+    FRIEND_U.uOrbK.value = 0.55;
+    FRIEND_U.uCracks.value = 0;
     const glows: Halo[] = [
       // the orb's glow in the air
       { p: [ORB.x, ORB.y, ORB.z], size: ORB.r * 3.2, col: [1, 0.82, 0.52], k: 0.3 },
@@ -111,6 +115,25 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       const z = -380 + ((i * 211) % 1250);
       puffs.push({ p: [x, floorAt(x, z) + 6 + (i % 3) * 4, z], size: 60 + ((i * 31) % 70), a: 0.36 });
     }
+    // the veil of mist that hangs before her until the plane is near, and then parts, to either side
+    const veilL: Puff[] = [];
+    const veilR: Puff[] = [];
+    for (let i = 0; i < (m ? 22 : 46); i++) {
+      const x = -60 + ((i * 53) % 260);
+      const z = 40 + ((i * 29) % 140);
+      const y = floorAt(x, z) + 20 + ((i * 17) % 110);
+      (x < 50 ? veilL : veilR).push({ p: [x, y, z], size: 80 + ((i * 41) % 70), a: 0.62 });
+    }
+    // drips of light in the tunnel, falling slowly from its roof
+    const drips = motesGeometry([{ c: [0, TUNNEL.top * 0.55, (TUNNEL.z0 + 1000) / 2], r: [TUNNEL.half * 0.8, TUNNEL.top * 0.45, (1000 - TUNNEL.z0) / 2], n: m ? 90 : 220, size: [0.05, 0.14], rise: -5 }], 21);
+    // fireflies along the way through the wood, low, wandering: they show the way to her
+    const ff: { c: [number, number, number]; r: [number, number, number]; n: number; size: [number, number]; rise: number }[] = [];
+    for (let z = TUNNEL.z0 - 40; z > 220; z -= 55) {
+      const P = FRIEND_PATH.find((q) => q[1] <= z) ?? FRIEND_PATH[FRIEND_PATH.length - 1];
+      const y = floorAt(pathX(z), z) + P[2] - 3;
+      ff.push({ c: [pathX(z), y, z], r: [16, 7, 26], n: m ? 14 : 30, size: [0.12, 0.3], rise: 0 });
+    }
+    const flies = motesGeometry(ff, 33);
     const map = new THREE.TextureLoader().load("/assets/ciurlionis/friendship.jpg");
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 8;
@@ -119,6 +142,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       cave: caveGeometry(m),
       caveMat: makeCaveMaterial(),
       relief: reliefGeometry(m ? 120 : 200, m ? 140 : 232),
+      crownSheet: crownGeometry(m ? 40 : 70, m ? 46 : 80),
       map,
       mask,
       herCore: makePaintedMaterial(map, mask, 0),
@@ -142,8 +166,25 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       streaksMat: makeStreaksMaterial(),
       glows,
       puffs,
+      veilL,
+      veilR,
+      drips,
+      dripsMat: makeMotesMaterial([0.75, 0.9, 1.0]),
+      flies,
+      fliesMat: makeMotesMaterial([0.85, 1.0, 0.45]),
     };
   }, [props.mobile, forest]);
+  // The story, in beats (worlds/moments.tsx): the dark tunnel and its drips of light; a warm glow far ahead; the
+  // cavern opening, a wood inside the mountain lit through cracks high above; fireflies showing the way; the mist
+  // parting before her; the orb brightening and opening as the plane rises to it.
+  const tunnel = useMoment("friendship", { id: "friendship-tunnel", ease: 2.5 });
+  const glimpse = useMoment("friendship", { id: "friendship-glimpse", after: 2, ease: 6 });
+  const cavern = useMoment("friendship", { id: "friendship-cavern", at: [0, 20, TUNNEL.z0 - 60], within: 90, ease: 7 });
+  const flies = useMoment("friendship", { id: "friendship-fireflies", at: [0, 20, TUNNEL.z0 - 160], within: 120, ease: 5 });
+  const reveal = useMoment("friendship", { id: "friendship-reveal", at: [0, 30, 420], within: 110, ease: 7 });
+  const rise = useMoment("friendship", { id: "friendship-orb", at: [ORB.x, ORB.y, ORB.z], within: 230, ease: 5 });
+  const veilL = useRef<THREE.Group>(null);
+  const veilR = useRef<THREE.Group>(null);
   // the gate here is the orb: it is the window on the Sun (worlds/portal.tsx), with no lancet of its own
   useEffect(() => {
     const w = portalRig.windows;
@@ -162,11 +203,29 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       if (lit) letLightGo();
     };
   }, []);
+  // She turns a little with the eye, about the orb's upright (so the hand never leaves it): a picture seen from
+  // the side would be squeezed; this keeps it nearly square to whoever looks, the way a painted card stays readable.
+  const her = useRef<THREE.Group>(null);
   useFrame(({ camera, size }) => {
+    if (her.current && voyage.cur === "friendship") {
+      const o = FRIEND_U.uOrb.value;
+      const want = THREE.MathUtils.clamp(Math.atan2(camera.position.x - o.x, camera.position.z - o.z) * 0.55, -0.45, 0.45);
+      her.current.rotation.y += (want - her.current.rotation.y) * 0.08;
+    }
     const px = (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360)) / Math.max(size.height, 1);
     b.motesMat.uniforms.uPx.value = px;
     b.streaksMat.uniforms.uPx.value = px;
+    b.dripsMat.uniforms.uPx.value = px;
+    b.fliesMat.uniforms.uPx.value = px;
     if (voyage.cur !== "friendship") return;
+    // the beats
+    b.dripsMat.uniforms.uK.value = 1.6 * tunnel.k.value * (1 - 0.7 * cavern.k.value);
+    b.fliesMat.uniforms.uK.value = 2.6 * flies.k.value;
+    FRIEND_U.uCracks.value = cavern.k.value;
+    FRIEND_U.uOrbK.value = 0.55 + 0.45 * glimpse.k.value + 0.3 * rise.k.value;
+    const part = reveal.k.value;
+    if (veilL.current) veilL.current.position.set(-170 * part, 25 * part, 0);
+    if (veilR.current) veilR.current.position.set(190 * part, 25 * part, 0);
     // the orb opens as the plane comes to it
     const d = camera.position.distanceTo(FRIEND_U.uOrb.value);
     b.orbMat.uniforms.uOpen.value = 1 - THREE.MathUtils.smoothstep(d, 30, 340);
@@ -197,9 +256,13 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       <mesh geometry={forest.roots} material={b.rootMat} />
       <mesh geometry={forest.shrooms} material={b.shroomMat} />
       {/* her: the painting's own figure on its relief, the crown of rays keyed out and added behind */}
-      <mesh geometry={b.relief} material={b.crown} renderOrder={2} frustumCulled={false} />
-      <mesh geometry={b.relief} material={b.herCore} frustumCulled={false} />
-      <mesh geometry={b.relief} material={b.herEdge} renderOrder={3} frustumCulled={false} />
+      <group ref={her} position={[ORB.x, 0, ORB.z]}>
+        <group position={[-ORB.x, 0, -ORB.z]}>
+          <mesh geometry={b.crownSheet} material={b.crown} renderOrder={2} frustumCulled={false} />
+          <mesh geometry={b.relief} material={b.herCore} frustumCulled={false} />
+          <mesh geometry={b.relief} material={b.herEdge} renderOrder={3} frustumCulled={false} />
+        </group>
+      </group>
       <mesh geometry={b.orb} material={b.orbMat} position={[ORB.x, ORB.y, ORB.z]} />
       <LightPath id="friendship" def={def} tint={[1, 0.86, 0.56]} gain={0.3} angels={false} marks={false} effects={props.effects} />
       <Gallery def={def} />
@@ -207,6 +270,14 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       <mesh geometry={b.streaks} material={b.streaksMat} renderOrder={4} frustumCulled={false} />
       <mesh geometry={b.motes} material={b.motesMat} renderOrder={7} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
+      <group ref={veilL}>
+        <Mist puffs={b.veilL} />
+      </group>
+      <group ref={veilR}>
+        <Mist puffs={b.veilR} />
+      </group>
+      <mesh geometry={b.drips} material={b.dripsMat} renderOrder={7} />
+      <mesh geometry={b.flies} material={b.fliesMat} renderOrder={7} />
       <Halos list={b.glows} kind={2} />
     </>
   );

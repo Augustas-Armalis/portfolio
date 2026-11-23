@@ -44,20 +44,23 @@ const sst = (a: number, b: number, x: number) => {
 // The cave's cross-section at z: its half-width at the widest, and the height of the vault's crown. The far end is
 // closed in a rounded wall, the passage behind the entry too (it is never seen: the plane comes out of the cloud
 // flying away from it).
-export const CAVE_Z: [number, number] = [-520, 1010];
+// (the way in is the home mountain's own tunnel going on: as narrow and dark as the cave the plane entered there,
+// home/journey.ts MOUTH, for two hundred metres; then it opens, and the cavern is beyond)
+export const CAVE_Z: [number, number] = [-520, 1040];
+export const TUNNEL = { z0: 780, half: 22, top: 34 };
 export function caveAt(z: number) {
-  // the chamber, the throat where the passage opens into it, the passage
-  const open = sst(730, 500, z);
-  let w = 110 + (440 - 110) * open;
-  let top = 160 + (480 - 160) * open;
+  // the cavern, the throat where the tunnel opens into it, the tunnel
+  const open = sst(TUNNEL.z0, 520, z);
+  let w = TUNNEL.half + (440 - TUNNEL.half) * open * open;
+  let top = TUNNEL.top + (480 - TUNNEL.top) * open;
   // (the chamber swells a little toward its middle, where she stands)
   w *= 1 + 0.06 * Math.exp(-(((z - 60) / 260) ** 2));
   // the ends close as the inside of a dome
   const far = Math.max(0, (z - CAVE_Z[0]) / 200);
-  const near = Math.max(0, (CAVE_Z[1] - z) / 70);
+  const near = Math.max(0, (CAVE_Z[1] - z) / 40);
   const k = Math.sqrt(Math.min(1, far * (2 - Math.min(far, 1)))) * Math.sqrt(Math.min(1, near * (2 - Math.min(near, 1))));
   w *= Math.max(0.02, k);
-  top = 30 + (top - 30) * Math.max(0.02, k);
+  top = Math.min(top, 30) + (top - Math.min(top, 30)) * Math.max(0.02, k);
   return { w, top };
 }
 
@@ -76,9 +79,10 @@ const over = (pts: [number, number, number][]) => pts.map(([x, z, y]): [number, 
 // (in low under the trees, winding a little between the trunks; out through the arch of rock where the wood opens
 // and she stands across the clearing; then up, straight at the orb)
 export const FRIEND_PATH: [number, number, number][] = over([
-  [0, 880, 16],
-  [8, 800, 15],
-  [-6, 720, 16],
+  [0, 975, 13],
+  [0, 900, 13],
+  [1, 820, 14],
+  [-2, 740, 16],
   [-14, 640, 17],
   [-4, 560, 17],
   [6, 480, 18],
@@ -100,7 +104,7 @@ export function clear(x: number, z: number, pathX: (z: number) => number) {
   const inLane = z > -60 && Math.abs(x - pathX(z)) < 20;
   return inClearing || inLane;
 }
-export const FRIEND_ENTRY = { x: 0, z: 880, above: FRIEND_PATH[0][2], yaw: 0 };
+export const FRIEND_ENTRY = { x: 0, z: 975, above: FRIEND_PATH[0][2], yaw: 0 };
 export const FRIEND_GATE = { x: ORB.x, z: ORB.z, above: ORB.y - floorAt(ORB.x, ORB.z), yaw: 0 };
 export const FRIEND_CANVAS = { x: -40, z: 600, yaw: 0.6 };
 

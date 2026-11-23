@@ -95,6 +95,13 @@ export function maskTexture() {
 }
 
 // the relief: a grid over the picture, its vertices carried to the picture's pixels in the shader
+// the crown's own sheet, in the picture's pixels, from her crown out past the frame's top and right side
+export function crownGeometry(nx: number, ny: number) {
+  const g = new THREE.PlaneGeometry(1500, 1700, nx, ny);
+  g.translate(620 + 750, -1180 + 850, 0);
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(ORB.x + (1370 - PAINT.cx) * PAINT.s, ORB.y + (PAINT.cy + 330) * PAINT.s, 0), 1300 * PAINT.s);
+  return g;
+}
 export function reliefGeometry(nx: number, ny: number) {
   const g = new THREE.PlaneGeometry(1, 1, nx, ny);
   g.translate(0.5, 0.5, 0);
@@ -105,12 +112,29 @@ export function reliefGeometry(nx: number, ny: number) {
 // where a pixel of the picture stands, and how far forward (the same in every pass)
 const GLSL_PLACE = /* glsl */ `
 uniform sampler2D tMap; uniform sampler2D tMask; uniform float uLayer;
+// the point on her crown the rays spread from (picture pixels)
+const vec2 CROWN = vec2(905.0, 480.0);
+// a ray of the crown carried on past the picture's frame: where in the picture to read it (the last of its paint
+// before the frame, drawn on outward along its own line), and how far past the frame the point is
+vec3 crownRead(vec2 px){
+  vec2 d = px - CROWN;
+  float rad = length(d);
+  vec2 u = d / max(rad, 0.001);
+  // where the ray leaves the picture: through its top, or its right side
+  float rTop = u.y < -0.001 ? (CROWN.y - 2.0) / -u.y : 1e5;
+  float rRight = u.x > 0.001 ? (${W.toFixed(1)} - 2.0 - CROWN.x) / u.x : 1e5;
+  float rEdge = min(rTop, rRight) - 14.0;
+  float past = max(rad - rEdge, 0.0);
+  vec2 q = CROWN + u * min(rad, rEdge);
+  return vec3(q, past);
+}
 float capsule(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h); }
 vec2 pxOf(vec2 uv){ return vec2(uv.x * ${W.toFixed(1)}, (1.0 - uv.y) * ${H.toFixed(1)}); }
 float reliefZ(vec2 px, float lum){
   if (uLayer > 0.5) {
-    // the crown leans back and away as it rises
-    return -12.0 - 26.0 * (1.0 - clamp(px.y / 480.0, 0.0, 1.0)) - 10.0 * clamp((px.x - 800.0) / 480.0, 0.0, 1.0);
+    // the crown leans a little back as it rises from her head, and bows away at its far reach
+    float rad = length(px - CROWN);
+    return -6.0 - rad * 0.012 - rad * rad * 0.000006;
   }
   // the picture plane, bowed: her back and the right edge go away into the dark
   float x = (px.x - 640.0) / 640.0;
@@ -147,9 +171,11 @@ export function makePaintedMaterial(map: THREE.Texture, mask: THREE.Texture, pas
       varying vec2 vUv; varying vec3 vWorld;
       ${GLSL_PLACE}
       void main(){
-        vUv = position.xy;
-        vec3 c = textureLod(tMap, vUv, 3.0).rgb;
-        vec3 p = placeOf(pxOf(vUv), dot(c, vec3(0.3, 0.55, 0.15)));
+        // (the figure's grid spans the picture; the crown's is laid out in the picture's pixels, past its frame)
+        vec2 px0 = uLayer > 0.5 ? position.xy : pxOf(position.xy);
+        vUv = uLayer > 0.5 ? vec2(px0.x / ${W.toFixed(1)}, 1.0 - px0.y / ${H.toFixed(1)}) : position.xy;
+        vec3 c = textureLod(tMap, clamp(vUv, 0.0, 1.0), 3.0).rgb;
+        vec3 p = placeOf(px0, uLayer > 0.5 ? 0.25 : dot(c, vec3(0.3, 0.55, 0.15)));
         vec4 wp = modelMatrix * vec4(p, 1.0);
         vWorld = wp.xyz;
         gl_Position = projectionMatrix * viewMatrix * wp;
@@ -167,13 +193,28 @@ export function makePaintedMaterial(map: THREE.Texture, mask: THREE.Texture, pas
         float lum = dot(col, vec3(0.3, 0.55, 0.15));
         ${
           pass === 2
-            ? `// the rays: whatever is brighter than the dark they stream through, in the crown's own corner
-               float region = smoothstep(680.0, 780.0, px.x) * (1.0 - smoothstep(400.0, 500.0, px.y + (px.x - 900.0) * 0.18));
-               float edge = smoothstep(0.0, 60.0, px.y) * smoothstep(${W.toFixed(1)}, ${(W - 50).toFixed(1)}, px.x);
-               float key = smoothstep(0.05, 0.2, lum - 0.06);
-               // (a slow brightening running out along them)
-               float run = 0.8 + 0.35 * sin(length(px - vec2(860.0, 420.0)) * 0.025 - uTime * 0.8);
-               vec3 c = max(col - vec3(0.05, 0.06, 0.04), 0.0) * key * region * edge * run * 6.0;
+            ? `// the rays: whatever is brighter than the dark they stream through, in the crown's fan; past the frame each
+               // is carried on along its own line, thinning into the air
+               vec3 cr = crownRead(px);
+               vec2 rq = cr.xy;
+               // (past the frame read a little soft across the ray, so a carried stroke is chalk, not a wire)
+               vec2 side = vec2(-(px - CROWN).y, (px - CROWN).x) / max(length(px - CROWN), 1.0) * min(cr.z * 0.012, 5.0);
+               vec2 tuv = vec2(rq.x / ${W.toFixed(1)}, 1.0 - rq.y / ${H.toFixed(1)});
+               vec2 tsd = vec2(side.x / ${W.toFixed(1)}, -side.y / ${H.toFixed(1)});
+               vec3 rc = (texture2D(tMap, tuv).rgb * 2.0 + texture2D(tMap, tuv + tsd).rgb + texture2D(tMap, tuv - tsd).rgb) * 0.25;
+               float rl = dot(rc, vec3(0.3, 0.55, 0.15));
+               vec2 d = px - CROWN;
+               float rad = length(d);
+               float ang = atan(-d.y, d.x);
+               float fan = smoothstep(0.3, 0.55, ang) * (1.0 - smoothstep(1.55, 1.85, ang)) * smoothstep(20.0, 110.0, rad);
+               float key = smoothstep(0.05, 0.2, rl - 0.06);
+               float reach = exp(-cr.z / 520.0) * (1.0 - smoothstep(1300.0, 2000.0, rad));
+               // broken as a pastel stroke is broken, more so the further it is carried
+               float brk = mix(1.0, smoothstep(0.25, 0.7, vnoise(vec2(ang * 140.0, rad * 0.012))), smoothstep(0.0, 300.0, cr.z));
+               float run = 0.8 + 0.3 * sin(rad * 0.02 - uTime * 0.8);
+               vec3 c = max(rc - vec3(0.05, 0.06, 0.04), 0.0) * key * fan * reach * brk * run * 3.4;
+               // (the gold of the picture's rays, and their green)
+               c = mix(c, vec3(0.55, 0.95, 0.45) * dot(c, vec3(0.33)), 0.35);
                c *= 1.0 - 0.7 * airAmt(vWorld);
                gl_FragColor = vec4(c, 1.0);`
             : `float a = texture2D(tMask, vUv).r;

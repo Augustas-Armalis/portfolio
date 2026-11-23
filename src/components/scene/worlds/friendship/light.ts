@@ -149,23 +149,24 @@ export function motesGeometry(sets: MoteSet[], seed = 3) {
   g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 200, 200), 1400);
   return g;
 }
-export function makeMotesMaterial() {
+// (tint: the colour of the most of them; a falling drip is given a negative rise)
+export function makeMotesMaterial(tint?: [number, number, number]) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, uPx: { value: 0.001 } },
+    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, uPx: { value: 0.001 }, uK: { value: 1 }, uTint: { value: new THREE.Color(...(tint ?? [1, 0.82, 0.48])) } },
     vertexShader: /* glsl */ `
       attribute vec4 aA; attribute vec4 aB;
-      uniform float uTime; uniform float uPx; uniform vec3 uOrb;
+      uniform float uTime; uniform float uPx; uniform vec3 uOrb; uniform float uK; uniform vec3 uTint;
       varying vec2 vUv; varying float vA; varying vec3 vCol; varying vec3 vWorld;
       void main(){
         vec3 p = aA.xyz;
         float ph = aB.x * 6.2832;
         // rising (those that rise), the climb starting again from below with a fade at both ends
         float climb = fract(aB.y + uTime * aB.z / max(aB.w, 1.0));
-        p.y += (climb - 0.5) * aB.w * step(0.001, aB.z);
-        float life = aB.z > 0.0 ? smoothstep(0.0, 0.15, climb) * (1.0 - smoothstep(0.8, 1.0, climb)) : 1.0;
+        p.y += (climb - 0.5) * aB.w * step(0.001, abs(aB.z));
+        float life = abs(aB.z) > 0.0 ? smoothstep(0.0, 0.15, climb) * (1.0 - smoothstep(0.8, 1.0, climb)) : 1.0;
         // slow currents
         p += vec3(sin(uTime * 0.11 + ph + p.y * 0.01), sin(uTime * 0.07 + ph * 1.3) * 0.5, cos(uTime * 0.09 + ph * 0.7 + p.x * 0.01)) * (3.0 + aA.w * 2.0);
         vec4 wp = modelMatrix * vec4(p, 1.0);
@@ -181,8 +182,8 @@ export function makeMotesMaterial() {
         // brighter in the orb's light
         float od = length(wp.xyz - uOrb);
         float lit = 0.35 + 1.4 / (1.0 + pow(od / 90.0, 2.0));
-        vA = dim * life * lit * (0.75 + 0.25 * sin(uTime * (0.8 + aB.x) + ph)) * smoothstep(1.5, 8.0, dist);
-        vCol = mix(vec3(1.0, 0.82, 0.48), vec3(0.62, 0.82, 0.4), aB.y);
+        vA = uK * dim * life * lit * (0.75 + 0.25 * sin(uTime * (0.8 + aB.x) + ph)) * smoothstep(1.5, 8.0, dist);
+        vCol = mix(uTint, vec3(0.62, 0.82, 0.4), aB.y * 0.6);
         vWorld = wp.xyz;
         gl_Position = projectionMatrix * mv;
       }`,

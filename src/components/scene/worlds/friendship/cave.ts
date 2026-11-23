@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
 import { GLSL_AIR, WORLD_U, noise2, ridge2 } from "../kit";
-import { CAVE_Z, ORB, caveAt, floorAt } from "./shape";
+import { CAVE_Z, ORB, TUNNEL, caveAt, floorAt } from "./shape";
 
 // The cave and the light in it. Everything here is lit by one thing only: the orb she holds (a point of light
 // with a soft fall-off), and the dim green air. The rock is painted as the picture's ground is: deep teal-green
@@ -13,6 +13,8 @@ export const FRIEND_U = {
   // where the orb is (world space), and how strong its light is
   uOrb: { value: new THREE.Vector3() },
   uOrbK: { value: 1 },
+  // the light through the cracks high in the vault (the cavern's own beat: it comes as the plane comes out of the tunnel)
+  uCracks: { value: 0 },
 };
 
 const END = /* glsl */ `
@@ -22,7 +24,7 @@ const END = /* glsl */ `
 // the light of the orb at a point with a normal: its colour, falling off softly with distance (shared by the rock,
 // the floor and her)
 export const GLSL_ORB = /* glsl */ `
-uniform vec3 uOrb; uniform float uOrbK;
+uniform vec3 uOrb; uniform float uOrbK; uniform float uCracks;
 vec3 orbCol(){ return vec3(1.0, 0.8, 0.5); }
 // returns the light arriving (no albedo), and in .w the direction's cosine for whoever wants a rim
 vec4 orbLight(vec3 p, vec3 n, float wrap, float reach){
@@ -176,22 +178,78 @@ export function makeCaveMaterial() {
         vec3 n = normalize(vN);
         vec3 V = normalize(cameraPosition - vWorld);
         if (dot(n, V) < 0.0) n = -n;
-        float fwh = length(fwidth(vLocal));
-        // the wall's own pattern, laid along x on walls that face along z and along z on walls that face along x
-        float wx = abs(n.x); float wz = abs(n.z);
-        float sw = wx + wz + 0.0001;
-        vec3 wall = (ground(vLocal.z, vLocal.y, fwh) * wx + ground(vLocal.x + 400.0, vLocal.y, fwh) * wz) / sw;
-        // the floor: dark umber-green, swept by the same upright strokes run long toward her
-        float fl = vnoise(vLocal.xz * vec2(0.05, 0.012)) * 0.6 + vnoise(vLocal.xz * vec2(0.18, 0.05) + 4.0) * 0.4;
-        vec3 floorC = mix(vec3(0.022, 0.03, 0.024), vec3(0.05, 0.058, 0.036), fl);
+        vec3 P = vLocal;
+        float fwh = length(fwidth(P));
+        float fine = 1.0 - smoothstep(0.3, 1.6, fwh);
+        // how far into the cavern: the tunnel's rock is the home mountain's own (lilac-grey with ochre beds), the
+        // cavern's goes over into his teal-green as the moss takes it
+        float inC = smoothstep(${(TUNNEL.z0 + 40).toFixed(1)}, ${(TUNNEL.z0 - 220).toFixed(1)}, P.z);
+        // ---- rock: level beds, warped; cracks along them and across; grain
+        float warp = fbm(P.xz * 0.012) * 9.0;
+        float bed = P.y * 0.075 + warp;
+        float strata = vnoise(vec2(bed, P.x * 0.003 + P.z * 0.002));
+        float band = smoothstep(0.35, 0.65, fract(bed * 0.5));
+        float grain = fbm(P.xz * 0.11 + P.y * 0.09) * 0.6 + fbm(vec2(P.x + P.z, P.y) * 0.4) * 0.4 * mix(0.5, 1.0, fine);
+        vec3 homeRock = mix(vec3(0.075, 0.07, 0.085), vec3(0.2, 0.165, 0.135), strata);
+        vec3 tealRock = mix(vec3(0.03, 0.055, 0.05), vec3(0.11, 0.1, 0.06), strata);
+        vec3 rock = mix(homeRock, tealRock, inC) * (0.72 + 0.5 * grain) * (0.88 + 0.24 * band);
+        // cracks: thin dark lines along the beds, and jointing across them
+        float c1 = abs(fract(bed * 0.5 + 0.13 * vnoise(P.xz * 0.05)) - 0.5);
+        float c2 = abs(vnoise(vec2((P.x + P.z) * 0.035, P.y * 0.01)) - 0.5);
+        float crack = (1.0 - smoothstep(0.0, 0.02 + fwh * 0.01, c1)) * 0.7 + (1.0 - smoothstep(0.0, 0.015 + fwh * 0.008, c2)) * 0.6;
+        rock *= 1.0 - 0.55 * crack * fine;
+        // the picture's own strokes still in it, faintly: upright, green and gold
+        float st = vnoise(vec2((P.x + P.z) * 0.14, P.y * 0.012));
+        rock = mix(rock, vec3(0.15, 0.18, 0.06), smoothstep(0.7, 0.85, st) * 0.35 * inC);
+        // moss: on every ledge that faces up, thicker low down and toward the light
+        float ledge = smoothstep(0.15, 0.6, n.y);
+        float mossN = vnoise(P.xz * 0.08) * 0.6 + vnoise(P.xz * 0.31 + 3.0) * 0.4;
+        float moss = ledge * smoothstep(0.35, 0.6, mossN + 0.2 * inC) * mix(0.4, 1.0, inC);
+        vec3 mossC = mix(vec3(0.04, 0.075, 0.03), vec3(0.11, 0.15, 0.04), vnoise(P.xz * 0.6) * fine + 0.3 * (1.0 - fine));
+        vec3 wall = mix(rock, mossC, moss);
+        // ---- the floor: moss, leaf litter, the dark of roots, still pools
         float isFloor = (1.0 - vWall) * smoothstep(0.4, 0.8, n.y);
+        float fm = vnoise(P.xz * vec2(0.05, 0.05)) * 0.55 + vnoise(P.xz * 0.21 + 4.0) * 0.45;
+        vec3 floorC = mix(vec3(0.03, 0.05, 0.026), vec3(0.075, 0.1, 0.035), fm);
+        // litter: small warm flecks, gone where a pixel cannot hold them
+        float lit = smoothstep(0.62, 0.8, vnoise(P.xz * 1.3)) * fine;
+        floorC = mix(floorC, vec3(0.14, 0.09, 0.04), lit * 0.5);
+        // roots: long dark winding lines
+        float rt = abs(vnoise(vec2(P.x * 0.06 + vnoise(P.xz * 0.02) * 3.0, P.z * 0.012)) - 0.5);
+        floorC *= 1.0 - 0.6 * (1.0 - smoothstep(0.0, 0.03 + fwh * 0.01, rt)) * fine;
+        floorC = mix(floorC, homeRock * 0.8, (1.0 - inC) * 0.7);
+        // pools: still dark water in the hollows, the orb and the air in them
+        float poolN = vnoise(P.xz * 0.018 + 7.0) * 0.7 + vnoise(P.xz * 0.06) * 0.3;
+        float aa = max(fwidth(poolN), 0.002);
+        float pool = smoothstep(0.24 + aa, 0.24 - aa, poolN) * isFloor * inC;
         vec3 alb = mix(wall, floorC, isFloor);
         // the light of the orb, and the dim air's own light in the shade
         vec4 o = orbLight(vWorld, n, 0.35, 240.0);
         vec3 amb = uSkyCol * (0.55 + 0.45 * n.y) * 1.1;
         vec3 col = alb * (amb + o.rgb * 2.3);
-        // the far reach of it in the hollows: lower walls stand in their own shade
+        // in the tunnel: the cavern's light coming in at its far mouth, green-gold, along the wet walls
+        vec3 mouth = vec3(0.0, 22.0, ${(TUNNEL.z0 - 30).toFixed(1)});
+        vec3 toM = mouth - P;
+        float dm = length(toM);
+        float mouthL = (0.25 + 0.75 * max(dot(n, toM / dm), 0.0)) / (1.0 + pow(dm / 70.0, 2.0)) * (1.0 - inC * 0.6);
+        col += alb * vec3(0.7, 0.85, 0.45) * mouthL * 2.2;
+        // damp: a sheen on the wet rock where it faces the orb
+        vec3 toO = normalize(uOrb - vWorld);
+        float spec = pow(max(dot(reflect(-V, n), toO), 0.0), 24.0);
+        col += orbCol() * spec * length(o.rgb) * 0.35 * (1.0 - moss) * fine;
+        col += vec3(0.7, 0.85, 0.45) * pow(max(dot(reflect(-V, n), toM / dm), 0.0), 16.0) * mouthL * 0.5 * fine;
+        // the pools: a mirror of the air, and the orb's own light lying in them
+        if (pool > 0.0) {
+          vec3 R = reflect(-V, vec3(0.0, 1.0, 0.0));
+          float glint = pow(max(dot(R, toO), 0.0), 400.0) * 6.0 + pow(max(dot(R, toO), 0.0), 30.0) * 0.4;
+          vec3 water = airCol(R) * 0.7 + orbCol() * glint * uOrbK;
+          col = mix(col, water, pool * 0.9);
+        }
+        // the lower walls stand in their own shade
         col *= mix(0.65, 1.0, smoothstep(0.0, 60.0, vWorld.y));
+        // light through cracks high in the vault: thin pale lines that glow
+        float vault = smoothstep(-0.3, -0.7, n.y) * smoothstep(250.0, 380.0, P.y) * inC;
+        col += vec3(0.75, 0.85, 0.55) * (1.0 - smoothstep(0.0, 0.012 + fwh * 0.006, c2)) * vault * 0.8 * uCracks;
         col = applyAir(col, vWorld) + orbScatter(vWorld);
         gl_FragColor = vec4(col, 1.0);
         ${END}
