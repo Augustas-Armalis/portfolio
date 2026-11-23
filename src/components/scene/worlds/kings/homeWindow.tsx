@@ -16,8 +16,8 @@ import { BY, R } from "./light";
 // plane moves and is what the plane then flies into. No gate and no next world are needed for it, so it is its
 // own small thing here.
 //
-// Bounded like the gates' windows: only within 420 m of the dome, at 0.4 of the frame each way, every third frame
-// until the last ninety metres. Never on a phone or on Low (there, and wherever anything is missing, the dome keeps
+// Bounded like the gates' windows: only within 420 m of the dome, at 0.4 of the frame each way, every fourth frame
+// until the last hundred and twenty metres and every second from there. Never on a phone or on Low (there, and wherever anything is missing, the dome keeps
 // its modelled homestead, which stands under this window always and is simply covered by it).
 
 const U = { tHome: { value: null as THREE.Texture | null }, uHomeK: { value: 0 }, uHomeRes: { value: new THREE.Vector2(1, 1) }, uHomeGain: { value: 1 } };
@@ -101,7 +101,8 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
       U.uHomeK.value = rig.fresh ? rig.k : 0;
       return;
     }
-    if (d > 90 && rig.fresh && ++rig.tick % 3 !== 0) {
+    // (home is a whole world to draw: every fourth frame from far off, every second over the last hundred and twenty metres)
+    if (rig.fresh && ++rig.tick % (d > 120 ? 4 : 2) !== 0) {
       U.uHomeK.value = rig.k;
       return;
     }
