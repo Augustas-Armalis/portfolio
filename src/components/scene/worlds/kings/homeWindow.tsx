@@ -49,6 +49,7 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
       veil: null as THREE.Object3D | null,
       spare: [] as THREE.Object3D[],
       thin: [] as [THREE.InstancedBufferGeometry, number][],
+      sparse: [] as [THREE.InstancedMesh, number][],
       spareAt: -1,
     }),
     [],
@@ -146,6 +147,7 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
       rig.spareAt = 0;
       rig.spare.length = 0;
       rig.thin.length = 0;
+      rig.sparse.length = 0;
       portalRig.home.forEach((grp) =>
         grp.traverse((o) => {
           const m = o as THREE.Mesh;
@@ -168,7 +170,11 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
           const away = (bs.radius < 1500 && far - bs.radius > 380) || (bs.radius < 600 && far > 400);
           const small = tris < 1500 && far > 120;
           const mote = !m.isMesh && far > 150;
-          if (grass || away || small || mote) rig.spare.push(o);
+          // (things strewn by the thousand, a few triangles each: flowers, tufts)
+          const strewn = !im.isInstancedMesh && ig.isInstancedBufferGeometry && many > 1000 && tris / many < 24 && bs.radius < 100000;
+          if (grass || away || small || mote || strewn) rig.spare.push(o);
+          // (and of a far stand of trees every other one makes the same wood at this size)
+          else if (im.isInstancedMesh && far > 200 && im.count > 40) rig.sparse.push([im, im.count]);
         }),
       );
       // and of what stands on the desk only the large things: the rest are specks from here
@@ -187,7 +193,11 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
     }
     const spareWas = rig.spare.map((o) => o.visible);
     for (const o of rig.spare) o.visible = false;
-    for (const [g, n] of rig.thin) g.instanceCount = Math.ceil(n / 3);
+    // (the counts as they are this frame: home may change them itself)
+    const thinWas = rig.thin.map(([g]) => g.instanceCount);
+    const sparseWas = rig.sparse.map(([m]) => m.count);
+    rig.thin.forEach(([g], i) => (g.instanceCount = Math.ceil(thinWas[i] / 3)));
+    rig.sparse.forEach(([m], i) => (m.count = Math.ceil(sparseWas[i] / 2)));
     const standWas = stand!.visible;
     stand!.visible = false;
     const veilWas = rig.veil?.visible ?? false;
@@ -225,7 +235,8 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
     if (rig.veil) rig.veil.visible = veilWas;
     stand!.visible = standWas;
     rig.spare.forEach((o, i) => (o.visible = spareWas[i]));
-    for (const [g, n] of rig.thin) g.instanceCount = n;
+    rig.thin.forEach(([g], i) => (g.instanceCount = thinWas[i]));
+    rig.sparse.forEach(([m], i) => (m.count = sparseWas[i]));
     homeWas.forEach(([o, v]) => (o.visible = v));
     U.tHome.value = rig.rt.texture;
     U.uHomeRes.value.set(target!.width, target!.height);
