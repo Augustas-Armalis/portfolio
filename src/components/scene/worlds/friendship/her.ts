@@ -214,9 +214,9 @@ function skull(x: number, y: number, z: number) {
   // the brow, soft
   d = smin(d, ell(x + 0.082, y - 0.028, az - 0.025, 0.01, 0.007, 0.022), 0.02);
   // the mid-face, cheekbones, the cheeks below them
-  d = smin(d, ell(x + 0.06, y + 0.03, z, 0.034, 0.04, 0.038), 0.025);
+  d = smin(d, ell(x + 0.06, y + 0.03, z, 0.033, 0.04, 0.034), 0.025);
   d = smin(d, ell(x + 0.056, y + 0.002, az - 0.043, 0.024, 0.014, 0.018), 0.022);
-  d = smin(d, ell(x + 0.054, y + 0.034, az - 0.032, 0.028, 0.026, 0.019), 0.025);
+  d = smin(d, ell(x + 0.056, y + 0.034, az - 0.03, 0.024, 0.024, 0.017), 0.025);
   // the muzzle round the mouth
   d = smin(d, ell(x + 0.074, y + 0.056, z, 0.026, 0.026, 0.027), 0.016);
   // the jaw: its rising branch, its body to the chin, and the chin
@@ -311,9 +311,9 @@ function hair(x: number, y: number, z: number) {
   // combed into locks: broad ones, and fine strands in them
   if (d < 0.01) {
     const L = hairLocks(x, y, z);
-    const g1 = Math.sin(L.ang * 22 + L.wob);
+    const g1 = Math.sin(L.ang * 34 + L.wob);
     const g2 = Math.sin(L.ang * 71 + L.wob * 2.0);
-    d += Math.min(1, Math.max(0, reg / 0.012)) * (0.0014 * (g1 * 0.5 + 0.5) + 0.0005 * (g2 * 0.5 + 0.5));
+    d += Math.min(1, Math.max(0, reg / 0.012)) * (0.0009 * (g1 * 0.5 + 0.5) + 0.0004 * (g2 * 0.5 + 0.5));
   }
   // the knot: a coil of the same hair, its turns going round
   const kx = x - KNOT[0];

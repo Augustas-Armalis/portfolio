@@ -97,8 +97,8 @@ export function makeHerMaterial() {
         // the hollows and the turned-away go to the cave's teal
         skin = mix(skin, teal, (1.0 - vAO) * 0.6 * (1.0 - smoothstep(0.1, 0.5, l)));
         // the hair: dark umber locks, the light catching along them in gold
-        float lock = vnoise(vec2(atan(vLocal.z - uHead.z, vLocal.x - uHead.x) * 40.0, (vLocal.y - uHead.y) * 0.08));
-        vec3 hairC = mix(vec3(0.03, 0.02, 0.014), vec3(0.16, 0.09, 0.04), lock) * (0.4 + 1.4 * l);
+        float lock = vnoise(vec2(atan(vLocal.z - uHead.z, vLocal.x - uHead.x) * 70.0, (vLocal.y - uHead.y) * 0.05)) * 0.6 + st * 0.4;
+        vec3 hairC = mix(vec3(0.025, 0.018, 0.012), vec3(0.11, 0.065, 0.03), lock) * (0.35 + 1.1 * l);
         hairC += vec3(0.5, 0.36, 0.14) * pow(clamp(wrap, 0.0, 1.0), 3.0) * att * lock * 0.6;
         vec3 col = mix(skin, hairC, smoothstep(0.3, 0.7, vPart));
         // the crown's light on her from above and behind: a soft green-gold rim, and the orb's own rim on the profile

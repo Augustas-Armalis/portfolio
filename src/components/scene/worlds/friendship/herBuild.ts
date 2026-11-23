@@ -7,7 +7,7 @@ import { surfaceSteps, type Box, type Skin } from "./surface";
 
 export type HerSkin = Skin & { part: Float32Array };
 const X_CUT = 52; // the hand's box ends here (along the forearm)
-const Y_CUT = HER_AT.y - 0.15 * HER_S; // the head's box ends here (the middle of the neck)
+const Y_CUT = HER_AT.y - 0.19 * HER_S; // the head's box ends here (the neck's root, in her shadow)
 
 export function herBoxes(coarse: number) {
   const head = 0.34 * coarse;
