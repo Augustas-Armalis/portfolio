@@ -119,10 +119,10 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     } else HOME_U.uFogGlow.value.w = 0;
   });
   return (
-    <>
+    <group ref={(g) => { if (g && process.env.NODE_ENV !== "production") Object.assign(window, { __journey: g }); }}>
       <Town mobile={mobile} />
       <Woods amount={trees} mobile={mobile} effects={effects} />
       <Cave />
-    </>
+    </group>
   );
 }

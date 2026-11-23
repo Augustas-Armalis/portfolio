@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
@@ -300,6 +301,17 @@ function buildCave() {
   return finish(b);
 }
 
+// from far off the mouth is backed by one dark warm sheet a few metres in (the cave itself is not drawn there)
+function buildPlug() {
+  const b = newBuf();
+  const line = mouthLine(30);
+  const c = vert(b, 0, MOUTH.top * 0.4, 9, 4);
+  const ids = line.map(([u, y]) => vert(b, u * 1.08, Math.max(y, FLOOR - 0.5), 9, 4));
+  for (let i = 0; i < ids.length - 1; i++) b.idx.push(c, ids[i], ids[i + 1]);
+  b.idx.push(c, ids[ids.length - 1], ids[0]);
+  return finish(b);
+}
+
 // light drifting in the chamber: soft motes that rise and wander, warm
 function buildMotes(count: number) {
   const r = rng(808);
@@ -508,6 +520,7 @@ export function Cave() {
         cliff: buildCliff(),
         mass: buildMass(),
         cave: buildCave(),
+        plug: buildPlug(),
         beyond: buildBeyond(),
         beyondMat: makeBeyondMaterial(),
         motes: buildMotes(70),
@@ -516,9 +529,20 @@ export function Cave() {
       })),
     [],
   );
+  // the cave's inside (its walls, the frame, the light in it) is only drawn when the eye is near enough to see into it
+  const inner = useRef<THREE.Group>(null);
+  const plug = useRef<THREE.Mesh>(null);
+  const frames = useRef(0);
+  useFrame(({ camera }) => {
+    const g = inner.current;
+    if (!g) return;
+    const near = Math.hypot(camera.position.x - CAVE.x, camera.position.z - CAVE.z) < (g.visible ? 330 : 300);
+    g.visible = ++frames.current < 90 || near;
+    if (plug.current) plug.current.visible = !g.visible;
+  });
   useEffect(
     () => () => {
-      for (const x of [m.cliff, m.mass, m.cave, m.beyond, m.beyondMat, m.motes.g, m.motes.m, m.mat, m.massMat]) x.dispose();
+      for (const x of [m.cliff, m.mass, m.cave, m.plug, m.beyond, m.beyondMat, m.motes.g, m.motes.m, m.mat, m.massMat]) x.dispose();
     },
     [m],
   );
@@ -526,9 +550,12 @@ export function Cave() {
     <>
       <mesh geometry={m.mass} material={m.massMat} />
       <mesh geometry={m.cliff} material={m.mat} />
+      <mesh ref={plug} geometry={m.plug} material={m.mat} visible={false} />
+      <group ref={inner}>
       <mesh geometry={m.cave} material={m.mat} />
       <mesh geometry={m.motes.g} material={m.motes.m} renderOrder={6} />
       <mesh geometry={m.beyond} material={m.beyondMat} renderOrder={5} />
+      </group>
     </>
   );
 }

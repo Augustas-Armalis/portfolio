@@ -6,10 +6,10 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { voyage } from "../worlds/voyage";
-import { makeHomeTreeMaterial } from "./Forest";
+import { farBlock, makeFarMaterial, makeHomeTreeMaterial } from "./Forest";
 import { CHURCH, HILL, SQUARE, TOWN, hillRoadA, riverD, riverSlope, riverW, riverWL, riverZ, sst } from "./journey";
-import { GLSL_HOME_AIR, HOME_U, landH, rng, timed, type TreeKind } from "./land";
-import { buildTree, makeLeafTexture } from "./trees";
+import { GLSL_HOME_AIR, HOME_U, landH, rng, timed, type HomeTree, type TreeKind } from "./land";
+import { buildTree, makeFarTreeTexture, makeLeafTexture } from "./trees";
 
 // The town on the river (journey.ts): a Lithuanian wooden town as at Rumšiškės or in old Kėdainiai, and over it a
 // red-brick castle on its hill as at Trakai. Log houses with steep shingled or thatched roofs, carved white window
@@ -41,7 +41,16 @@ class TB {
   private oz = 0;
   private c = 1;
   private s = 0;
+  // (the ground under the thing being built, found once per thing: the shader's foot-shade only needs it roughly)
+  private gy = 0;
+  private gx = NaN;
+  private gz = NaN;
   at(x: number, y: number, z: number, rot = 0) {
+    if (x !== this.gx || z !== this.gz) {
+      this.gx = x;
+      this.gz = z;
+      this.gy = landH(x, z);
+    }
     this.ox = x;
     this.oy = y;
     this.oz = z;
@@ -60,7 +69,7 @@ class TB {
     this.col.push(col[0], col[1], col[2]);
     this.uv.push(uv[0], uv[1]);
     this.mat.push(m[0], m[1], m[2], m[3]);
-    this.ao.push(q[1] - landH(q[0], q[2]));
+    this.ao.push(q[1] - this.gy);
     return this.pos.length / 3 - 1;
   }
   // a quad a b c d, with its uv in metres (by default u along a->b, v along a->d)
@@ -1159,7 +1168,14 @@ function makeGardens(list: [number, number, TreeKind, number][], mobile: boolean
     coarse.userData.cut = "coarse";
     coarse.visible = false;
   }
-  return { meshes, mat, leaves };
+  // and from afar, one painted card a tree
+  const farMat = makeFarMaterial(makeFarTreeTexture());
+  const cards = farBlock(
+    list.map(([x, z, kind, s]): HomeTree => ({ x, y: landH(x, z), z, s: s * 0.9, kind, v: 0, rot: 0, tint: 0.5, lod: 2 })),
+    farMat,
+  );
+  cards.visible = false;
+  return { meshes, mat, leaves, farMat, cards };
 }
 
 export function Town({ mobile = false }: { mobile?: boolean }) {
@@ -1169,11 +1185,9 @@ export function Town({ mobile = false }: { mobile?: boolean }) {
   }, [mobile]);
   useEffect(
     () => () => {
-      for (const x of [t.geo, t.det, t.mat, t.halos.g, t.halos.m, t.smoke.g, t.smoke.m, t.storks.g, t.storks.m, t.storks.geo, t.wheel, t.garden.mat, t.garden.leaves]) x.dispose();
-      t.garden.meshes.forEach((m) => {
-        m.geometry.dispose();
-        m.dispose();
-      });
+      for (const x of [t.geo, t.det, t.mat, t.halos.g, t.halos.m, t.smoke.g, t.smoke.m, t.storks.g, t.storks.m, t.storks.geo, t.wheel, t.garden.mat, t.garden.farMat, t.garden.cards.geometry]) x.dispose();
+      // (the trees' geometry and the leaf sheet are the shared library's: trees.ts)
+      t.garden.meshes.forEach((m) => m.dispose());
     },
     [t],
   );
@@ -1181,6 +1195,8 @@ export function Town({ mobile = false }: { mobile?: boolean }) {
   const det = useRef<THREE.Mesh>(null);
   const front = useRef(1e4);
   const frames = useRef(0);
+  const far = useRef(false);
+  const storks = useRef<THREE.Mesh>(null);
   useFrame(({ camera }, dt) => {
     // (the houses' fine things only near: from the desk they would be a few pixels fighting the walls for depth)
     const dTown = Math.hypot(camera.position.x - TOWN.x, camera.position.z - TOWN.z);
@@ -1188,7 +1204,12 @@ export function Town({ mobile = false }: { mobile?: boolean }) {
     const warm = ++frames.current < 90;
     if (det.current) det.current.visible = warm || dTown < 190;
     const near = t.garden.meshes[0]?.visible ? dTown < 240 : dTown < 210;
-    for (const m of t.garden.meshes) m.visible = warm || (m.userData.cut === "fine") === near;
+    // (from far off, as from the desk, the gardens are painted cards, and the storks and the wheel are not drawn)
+    far.current = far.current ? dTown > 230 : dTown > 260;
+    for (const m of t.garden.meshes) m.visible = warm || (!far.current && (m.userData.cut === "fine") === near);
+    t.garden.cards.visible = warm || far.current;
+    if (storks.current) storks.current.visible = warm || !far.current;
+    if (wheel.current) wheel.current.visible = warm || !far.current;
     // the plane's furthest progress down the river (west), for the lamps; reset while it is not flying at home
     const flying = voyage.cur === "home" && voyage.flying && voyage.planePos.y > -100;
     front.current = flying ? Math.min(front.current, voyage.planePos.x) : 1e4;
@@ -1205,7 +1226,8 @@ export function Town({ mobile = false }: { mobile?: boolean }) {
       </group>
       <mesh geometry={t.halos.g} material={t.halos.m} renderOrder={6} frustumCulled={false} />
       <mesh geometry={t.smoke.g} material={t.smoke.m} renderOrder={5} />
-      <mesh geometry={t.storks.g} material={t.storks.m} />
+      <mesh ref={storks} geometry={t.storks.g} material={t.storks.m} />
+      <primitive object={t.garden.cards} />
       {t.garden.meshes.map((m, i) => (
         <primitive key={i} object={m} />
       ))}
