@@ -42,7 +42,7 @@ export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPor
 const STILL_U = { tStill: { value: null as THREE.Texture | null }, uStillMat: { value: new THREE.Matrix4() }, uStillOn: { value: 0 }, uLiveK: { value: 0 } };
 // A gate whose opening in the world is not the size of its sheet of light: [half-width, rise above the way's height,
 // and (optionally) how far below the way's height the opening reaches: a gate that stands on the ground, as Fairy Tale's does].
-const OPENING: Partial<Record<WorldId, [number, number, number?]>> = { sun: [23, 33], fairy: [18, 27, 74] };
+const OPENING: Partial<Record<WorldId, [number, number, number?]>> = { sun: [23, 33], fairy: [18, 27, 74], sea: [27, 27], funeral: [26, 40] };
 const state = { next: null as WorldId | null, k: 0, fresh: 0, tick: 0, still: null as WorldId | null, live: 0 };
 
 const E = new THREE.Vector3();

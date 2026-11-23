@@ -304,7 +304,7 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
     cloudLit: [0.3, 0.42, 0.62],
     cloudShade: [0.03, 0.06, 0.2],
     night: 0.8,
-    exposure: 1.2,
+    exposure: 1.08,
     fx: [0.0, 0.0, 0.0, 0.5],
   },
   // Fairy Tale of the Kings: a night wood, brown-black and teal; the only strong light is the little world
@@ -768,20 +768,26 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // no land at all: the glass of the bay, and the island (worlds/Sea.tsx) lying across it
     terrain: null,
     water: 0,
-    centre: [200, -120],
-    radius: 1340,
+    centre: [200, 180],
+    radius: 1900,
     ceil: 260,
     // (it comes in a kilometre and a half from the island's head: a long while over the glass with the whole of it in view)
     // (the way in is laid toward the island's head, not its middle: on a tall narrow screen the head and its two
     // eyes are then in the frame from the first, the long back running off to the left)
-    entry: { x: 300, z: 900, above: 14, yaw: -0.092 },
-    // between the island's two eyes, at the waterline: a low grotto runs into the rock, and that is the way on
-    // (no arch of light: worlds/Sea.tsx)
-    gate: { x: GROTTO.x, z: GROTTO.z - 30, above: 9, yaw: 0 },
+    entry: { x: 292, z: 1560, above: 14, yaw: -0.07 },
+    // between the island's two eyes, at the waterline: the mouth, and a vault running into the rock; deep in it, where
+    // the vault has narrowed to the width of the Funeral Symphony's cave, the way on (no arch of light: worlds/Sea.tsx)
+    gate: { x: GROTTO.x, z: GROTTO.z - 128, above: 9, yaw: 0 },
     // out over the glass toward the island's head, the whole of it lying broadside to the left; then in under the
     // head as night falls, down the eyes' paths and between them
     path: [
-      [300, 900, 14],
+      [292, 1560, 14],
+      [296, 1440, 13],
+      [301, 1320, 13],
+      [304, 1200, 12],
+      [303, 1080, 12],
+      [300, 960, 12],
+      [306, 830, 12],
       [312, 770, 12],
       [322, 640, 11],
       [328, 510, 10],
@@ -792,10 +798,11 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [300, -110, 9],
       [330, -220, 9],
       [384, -320, 9],
-      [GROTTO.x - 30, GROTTO.z + 75, 9],
-      [GROTTO.x - 5, GROTTO.z + 22, 9],
+      [GROTTO.x - 40, GROTTO.z + 110, 9],
+      [GROTTO.x - 8, GROTTO.z + 36, 9],
       [GROTTO.x, GROTTO.z - 30, 9],
-      [GROTTO.x + 4, GROTTO.z - 68, 9],
+      [GROTTO.x, GROTTO.z - 128, 9],
+      [GROTTO.x, GROTTO.z - 166, 9],
     ],
     // the island (worlds/sea/island.ts), as bells along it: the head stands either side of the grotto
     obstacles: [
@@ -841,7 +848,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     place: "none",
     air: AIR.funeral,
     // (thicker air than before: the ranges stand one behind another, each paler, and the far ones are only a breath)
-    fog: [0.00036, 0.0042],
+    fog: [0.00027, 0.0042],
     // colossal mountains, and the fin of rock the procession's road climbs in three switchbacks to the cave: the
     // land, the road, the path of light beside it and the way in are all worked out together in funeral/land.ts
     terrain: FUNERAL.terrain,

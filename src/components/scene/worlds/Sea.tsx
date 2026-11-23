@@ -15,6 +15,8 @@ import { ISLAND_U, buildGrotto, buildIsland, makeGrottoMaterial, makeIslandMater
 import { noise2 } from "./kit";
 import { EYES, GROTTO, ISLAND } from "./sea/shape";
 import { buildWisps, makeGlass, makeWispMaterial } from "./sea/water";
+import { boatsGeometry, makeBoatMaterial, seaFleet, type BoatPlace } from "./sea/boat";
+import { inflowGeometry, makeInflowMaterial } from "./sea/mouth";
 
 // Tranquility (Ramybė, 1904). One pale, still field of greenish gold, the sky and the water nearly the same; a
 // level horizon; and lying across it one long, low island that is also a creature asleep in the sea: a thin tail
@@ -57,6 +59,30 @@ const NIGHT = airState({
   fx: [0.0, 0.0, 0.0, 0.9],
 });
 const dusk = { k: 0, keyK: -1, sky: null as SkyState | null };
+
+// Where a boat is, over the glass: out of the haze at the sides, a long curve in toward the island's mouth, square to
+// it at the last, and in under the rock (it dissolves into the dark there, or, if the mouth is not yet open, a little
+// before the face). One crossing takes B.x seconds; the fleet is staggered through them.
+const BOAT_PLACE: BoatPlace = {
+  glsl: /* glsl */ `
+    uniform vec2 uMouth; uniform vec3 uBO; uniform float uOpen;
+    vec3 boatPlace(vec4 A, vec4 B, out vec2 hd, out float fade){
+      float u = fract(uTime / B.x + A.z);
+      vec2 P0 = A.xy; vec2 M = uMouth;
+      vec2 C = vec2(M.x + (P0.x - M.x) * 0.1, M.y + (P0.y - M.y) * 0.5);
+      float tb = min(u / 0.86, 1.0);
+      vec2 p = (1.0 - tb) * (1.0 - tb) * P0 + 2.0 * (1.0 - tb) * tb * C + tb * tb * M;
+      vec2 d = 2.0 * (1.0 - tb) * (C - P0) + 2.0 * tb * (M - C);
+      if (u > 0.86) { p = M + vec2(0.0, -1.0) * (u - 0.86) / 0.14 * 90.0; d = vec2(0.0, -1.0); }
+      hd = normalize(d);
+      fade = smoothstep(0.0, 0.06, u) * (1.0 - smoothstep(0.93, 0.995, u)) * (1.0 - smoothstep(0.6, 0.84, u) * (1.0 - smoothstep(0.1, 0.9, uOpen)));
+      return vec3(p.x + uBO.x, uBO.y, p.y + uBO.z);
+    }`,
+  uniforms: { uMouth: { value: new THREE.Vector2(GROTTO.x, GROTTO.z + 3) }, uBO: { value: ORIGIN }, uOpen: ISLAND_U.uOpen, ...WORLD_U },
+  airGlsl: GLSL_AIR,
+  airCall: "applyAir(col, vWorld)",
+  airK: "(1.0 - airAmt(vWorld) * 0.85)",
+};
 const EYE_CORE: [number, number] = [5.4, 1.9];
 const EYE_GLOW: [number, number] = [30, 0.3];
 
@@ -152,6 +178,11 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
       57,
     );
     return {
+      boats: boatsGeometry(seaFleet(props.mobile ? 12 : 22, GROTTO)),
+      boatMat: makeBoatMaterial(BOAT_PLACE),
+      boatMirror: makeBoatMaterial(BOAT_PLACE, true),
+      inflow: inflowGeometry(),
+      inflowMat: makeInflowMaterial(),
       spirits,
       spiritMat: makePoints({ a: [0.5, 0.95, 0.8], b: [1, 0.9, 0.6], scale: 150, drift: 3.4, gain: 0, max: 9 }),
       pod: dolphinsGeometry(pod),
@@ -272,7 +303,8 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
     dusk.k = Math.min(1, Math.max(0, (1330 - d) / 560));
     const sm = THREE.MathUtils.smoothstep;
     e.magic = Math.max(e.magic, sm(760 - d, 0, 300));
-    e.open = Math.max(e.open, sm(500 - d, 0, 270));
+    // (the mouth begins to part a long way out and has taken its full gape by the time the plane is under the head)
+    e.open = Math.max(e.open, sm(1150 - d, 0, 800));
     ISLAND_U.uMagic.value = e.magic;
     ISLAND_U.uOpen.value = e.open;
     b.spiritMat.uniforms.uGain.value = 0.8 * e.magic;
@@ -308,6 +340,9 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
         <planeGeometry args={[6400, 6400]} />
       </mesh>
       <mesh geometry={b.skerries} material={b.skerryMirror} renderOrder={-3} />
+      <mesh geometry={b.boats} material={b.boatMirror} frustumCulled={false} renderOrder={-3} />
+      <mesh geometry={b.boats} material={b.boatMat} frustumCulled={false} renderOrder={-2} />
+      <mesh geometry={b.inflow} material={b.inflowMat} renderOrder={-1} />
       <mesh geometry={b.pod} material={b.podMirror} frustumCulled={false} renderOrder={-3} />
       <mesh geometry={b.pod} material={b.podMat} frustumCulled={false} renderOrder={-2} />
       <mesh geometry={b.rings} material={b.ringMat} frustumCulled={false} renderOrder={-1} />
@@ -316,7 +351,7 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
       <Birds flocks={b.flocks} tint={[0.07, 0.08, 0.07]} />
       <mesh geometry={b.grotto} material={b.grottoMat} />
       {/* inside the grotto, the way on: a soft sheet of light, the night beyond faintly in it (no arch: the rock is the door) */}
-      <LightGate id="sea" def={def} look="veil" half={13} rise={12} gain={0.85} tint={[0.82, 0.9, 1]} />
+      <LightGate id="sea" def={def} look="veil" half={27} rise={27} gain={0.85} tint={[0.82, 0.9, 1]} />
       <mesh geometry={b.post} material={b.postMat} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
       <mesh geometry={b.wisps} material={b.wispMat} renderOrder={3} />
