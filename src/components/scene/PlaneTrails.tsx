@@ -34,7 +34,8 @@ const TIPS: [number, number, number][] = [
 
 // (`ground`: the height of land or water under a point of the world, if known: the mist thins out over the last
 // eighty centimetres above it, so a ribbon never ends in a hard line where it would cut into a slope or the sea)
-export type Trails = { mesh: THREE.Mesh; update: (dt: number, plane: THREE.Object3D, k: number, cam: THREE.Camera, ground?: (x: number, z: number) => number) => void; reset: () => void; dispose: () => void };
+// (`carry`: the whole of it is moved by a rigid move, when the plane is carried from a gate to the next world's entry)
+export type Trails = { mesh: THREE.Mesh; carry: (m: THREE.Matrix4) => void; update: (dt: number, plane: THREE.Object3D, k: number, cam: THREE.Camera, ground?: (x: number, z: number) => number) => void; reset: () => void; dispose: () => void };
 
 export function makeTrails(): Trails {
   const R = TIPS.length;
@@ -228,8 +229,30 @@ export function makeTrails(): Trails {
     // (all of it has gone: let it rest until the plane makes more)
     if (!any && k <= 0.01) live = false;
   };
+  const carry = (m: THREE.Matrix4) => {
+    if (!live) return;
+    for (let r = 0; r < R; r++) {
+      for (let i = 0; i < N; i++) {
+        const o = (r * N + i) * 3;
+        tip.set(pts[o], pts[o + 1], pts[o + 2]).applyMatrix4(m);
+        pts[o] = tip.x;
+        pts[o + 1] = tip.y;
+        pts[o + 2] = tip.z;
+      }
+      for (let j = 0; j < 4; j++) {
+        const o = r * 12 + j * 3;
+        tip.set(T[o], T[o + 1], T[o + 2]).applyMatrix4(m);
+        T[o] = tip.x;
+        T[o + 1] = tip.y;
+        T[o + 2] = tip.z;
+      }
+    }
+    // (the ground under the old points is another world's now)
+    gnd.fill(-1e5);
+  };
   return {
     mesh,
+    carry,
     update,
     reset,
     dispose: () => {
