@@ -10,7 +10,7 @@ import { about, apps, desktopItems, allApps, owner, projectApps, timeline, wallp
 import MusicShader from "../scene/MusicShader";
 import { DeskArt, Monogram } from "../shell";
 import { useOS, useWallpaperIndex } from "@/store";
-import { FPS_CHOICES, FPS_LABELS, PRESET_LABELS, QUALITY_LABELS, RES_LABELS, setFrameCap, setQualityChoice, setQualityLevel, setResolution, useQuality, useQualityChoice, useQualitySettings, type Preset, type QualityChoice, type Res } from "@/lib/quality";
+import { FPS_CHOICES, FPS_LABELS, PRESET_LABELS, QUALITY_LABELS, RES_CHOICES, RES_LABELS, setFrameCap, setQualityChoice, setQualityLevel, setResolution, useQuality, useQualityChoice, useQualitySettings, type Preset, type QualityChoice, type Res } from "@/lib/quality";
 import { Btn, Button, IconTile, List, ListRow, M, SectionHeader, Squircle, sfx, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
 import { Empty, useOpenApp } from "./shared";
 import { useSound } from "./sound";
@@ -617,7 +617,7 @@ export function SettingsApp() {
         <p className={`mt-2 px-1 text-ink-3 ${compact ? "t-foot px-4" : "m-sub"}`}>{choice === "custom" ? "Custom: set below. " : ""}A preset sets everything below; changing any of them makes it custom.</p>
         {(
           [
-            ["Resolution", (Object.keys(RES_LABELS) as Res[]).map((r) => [r, RES_LABELS[r], qs.res === r, () => setResolution(r)] as const)],
+            ["Resolution", RES_CHOICES.map((r) => [r, RES_LABELS[r], qs.res === r, () => setResolution(r)] as const)],
             ["Frame rate", FPS_CHOICES.map((f) => [String(f), FPS_LABELS[f], qs.fps === f, () => setFrameCap(f)] as const)],
             ["Quality", (["low", "medium", "high", "ultra"] as Preset[]).map((l) => [l, PRESET_LABELS[l], qs.level === l, () => setQualityLevel(l)] as const)],
           ] as const

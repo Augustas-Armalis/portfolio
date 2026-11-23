@@ -6,7 +6,7 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUp, D
 import { mouseLook } from "./Plane";
 import { gyroAvailable, gyroCentre, gyroStart, gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
-import { FPS_CHOICES, FPS_LABELS, PRESET_LABELS, QUALITY_LABELS, RES_LABELS, setFrameCap, setQualityChoice, setQualityLevel, setQualityOverride, setResolution, useQuality, useQualityChoice, useQualitySettings, type Preset, type QualityChoice, type Res } from "@/lib/quality";
+import { FPS_CHOICES, FPS_LABELS, PRESET_LABELS, QUALITY_LABELS, RES_CHOICES, RES_LABELS, setFrameCap, setQualityChoice, setQualityLevel, setQualityOverride, setResolution, useQuality, useQualityChoice, useQualitySettings, type Preset, type QualityChoice, type Res } from "@/lib/quality";
 import { togglePause, usePaused } from "@/lib/pause";
 import { play } from "@/lib/sfx";
 import { setMusicMuted, setMusicVolume, useMusic } from "@/lib/musicDirector";
@@ -1648,7 +1648,7 @@ export function SceneControls({ mobile, quiet, onQuiet, nav, onNav }: { mobile: 
               <div className="flex flex-col gap-1">
                 <span className={label}>Resolution</span>
                 <div className="flex gap-0.5" role="radiogroup" aria-label="Resolution">
-                  {(Object.keys(RES_LABELS) as Res[]).map((r) => (
+                  {RES_CHOICES.map((r) => (
                     <button key={r} type="button" role="radio" aria-checked={qs.res === r} className={seg(qs.res === r)} onClick={() => setResolution(r)}>
                       {RES_LABELS[r]}
                     </button>
