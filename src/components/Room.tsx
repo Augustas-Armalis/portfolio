@@ -3,7 +3,7 @@
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Environment, Html } from "@react-three/drei";
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpen, Camera as CameraIcon, Headphones as Headphones2, PenLine, Piano, Power, Send, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { BookOpen, Camera as CameraIcon, Headphones as Headphones2, PenLine, Piano, Power, Send, type LucideIcon } from "lucide-react";
 import * as THREE from "three";
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { owner, type UserId } from "@/content";
@@ -28,7 +28,7 @@ import { Journey } from "./scene/home/JourneyScene";
 import { inJourneyForest } from "./scene/home/land";
 import { FOREST_K } from "./scene/home/Woods";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
-import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
+import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SceneControls, SketchUI } from "./scene/ModeUI";
 import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
 import { loader } from "./scene/Overlays";
 import { Post, photoCtl, postCtl, type Capture } from "./scene/Post";
@@ -2289,17 +2289,11 @@ export default function Room({
           <NavBar
             key="nav"
             nav={nav}
-            onNav={(n) => {
-              if (n === "explore") navRef.current?.explore();
-              else navRef.current?.back();
-              setNav(n);
-            }}
             onBack={() => {
               navRef.current?.back();
               setNav("orbit");
             }}
             mobile={isMobile}
-            label={isMobile ? "Drag to look · pinch to zoom" : `${sky.label || "Live sky"} · drag to look around`}
           />
         )}
       </AnimatePresence>
@@ -2358,33 +2352,28 @@ export default function Room({
         )}
       </AnimatePresence>
 
-      {/* the place has a sound of its own; one small pill silences it */}
+      {/* the scene's settings and its sound, side by side in the top right corner, always there */}
       <AnimatePresence>
         {revealed && introDone && active && stage !== "boot" && stage !== "approach" && stage !== "done" && (
-          <Glass
-            key="mute"
-            className={`!absolute z-30 ${isMobile ? "" : "right-4 top-4"}`}
-            style={isMobile ? { top: "max(12px, env(safe-area-inset-top))", right: "max(14px, env(safe-area-inset-right))" } : undefined}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={GLASS_SPRING}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              aria-label={quiet ? "Turn ambient sound on" : "Mute ambient sound"}
-              aria-pressed={quiet}
-              className={`lg-btn grid place-items-center text-white ${isMobile ? "h-11 w-11" : "h-9 w-9"}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                startAmbience();
-                setAmbienceMuted(!quiet);
-              }}
-            >
-              {quiet ? <VolumeX size={16} strokeWidth={2} /> : <Volume2 size={16} strokeWidth={2} />}
-            </button>
-          </Glass>
+          <SceneControls
+            key="controls"
+            mobile={isMobile}
+            quiet={quiet}
+            onQuiet={() => {
+              startAmbience();
+              setAmbienceMuted(!quiet);
+            }}
+            {...(mode === "none" && (stage === "idle" || stage === "unfocus")
+              ? {
+                  nav,
+                  onNav: (n: "orbit" | "explore") => {
+                    if (n === "explore") navRef.current?.explore();
+                    else navRef.current?.back();
+                    setNav(n);
+                  },
+                }
+              : null)}
+          />
         )}
       </AnimatePresence>
       <GlassStyles />
