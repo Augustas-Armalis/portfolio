@@ -148,25 +148,27 @@ function broad(seed: number, rich: number) {
   const at = (k: number) => V(lean * k * k + Math.sin(k * 2.2 + seed) * 0.12, fork * k, Math.cos(k * 1.7 + seed) * 0.1);
   limb(m, [at(0), at(0.35), at(0.7), at(1)], 0.34, 0.2, rich ? 9 : 5, rich ? 6 : 2, BARK, BARK2, 0, 0.6);
   const top = at(1);
-  const W = H * (0.36 + r() * 0.07);
-  // the crown is a tall rounded heap (an egg on its broad end): lobes set on a dome from the lowest boughs to the top
-  const mid = H * 0.64;
+  const W = H * (0.43 + r() * 0.09);
+  // the crown is a broad spreading head, wider than it is tall and never regular: lobes of unlike sizes set loosely on
+  // a low dome, some standing out past it, one side fuller than the other
+  const mid = H * 0.62;
+  const side = r() * 6.28;
   const heart = V(top.x + lean * 0.3, mid, 0);
   const lo: V3 = [0.03, 0.085, 0.03];
   const hi: V3 = [0.075, 0.15, 0.045];
   const rings = rich ? [5, 5, 4, 1] : [3, 3, 1];
   rings.forEach((count, ri) => {
     const t = ri / (rings.length - 1); // 0 the lowest ring .. 1 the top
-    const y = H * (0.44 + 0.5 * t);
-    const out = W * Math.sqrt(Math.max(0, 1 - Math.pow((y - mid) / (H * 0.42), 2))) * 0.8;
+    const y = H * (0.46 + 0.4 * t);
+    const out = W * Math.sqrt(Math.max(0, 1 - Math.pow((y - mid) / (H * 0.36), 2))) * 0.9;
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + ri * 1.1 + r() * 0.7;
-      const d = count === 1 ? 0 : out * (0.72 + r() * 0.3);
-      const w = W * (0.42 + r() * 0.14) * (1 - 0.25 * Math.abs(t - 0.4));
-      const c = V(heart.x + Math.cos(a) * d, y + (r() - 0.5) * H * 0.05, heart.z + Math.sin(a) * d);
+      const d = count === 1 ? out * 0.25 * r() : out * (0.58 + r() * 0.5) * (1 + 0.22 * Math.cos(a - side));
+      const w = W * (0.3 + r() * 0.22) * (1 - 0.25 * Math.abs(t - 0.4));
+      const c = V(heart.x + Math.cos(a) * d, y + (r() - 0.5) * H * 0.11, heart.z + Math.sin(a) * d);
       // a bough out to each of the lower lobes
       if (ri < 2 && (rich || i % 2 === 0)) limb(m, [top.clone().setY(top.y - 0.3), top.clone().lerp(c, 0.5).add(V(0, H * 0.04, 0)), c.clone().setY(c.y - w * 0.35)], 0.13, 0.03, rich ? 6 : 3, rich ? 4 : 2, BARK2, BARK2);
-      lobe(m, r, c, [w, w * (0.82 + r() * 0.2), w * (0.92 + r() * 0.16)], rich ? 15 : 6, w * (rich ? 0.42 : 0.62), 0, heart, W * 1.2, lo, hi);
+      lobe(m, r, c, [w * (0.95 + r() * 0.25), w * (0.66 + r() * 0.2), w * (0.9 + r() * 0.25)], rich ? 15 : 6, w * (rich ? 0.44 : 0.64), 0, heart, W * 1.2, lo, hi);
     }
   });
   return m.geometry();
@@ -339,9 +341,33 @@ function bush(seed: number, rich: number) {
 const BUILD: Record<TreeKind, (seed: number, rich: number) => THREE.BufferGeometry> = { broad, birch, pine, spruce, cypress, bush };
 const SEEDS: Record<TreeKind, number[]> = { broad: [13, 57, 91], birch: [7, 23, 41], pine: [11, 29, 47], spruce: [5, 19, 37], cypress: [3, 17, 31], bush: [9, 21, 33] };
 export const VARIANTS = 2;
+
+// ---------- the tree library: one for the home field, the journey and the painted worlds ----------
+//
+//   buildTree(kind, variant, rich)  a whole tree as ONE geometry (trunk, boughs and leaf clumps), origin at its foot,
+//                                   about 10 to 18 m tall. kind: broad | birch | pine | spruce | cypress | bush;
+//                                   variant 0..VARIANTS-1; rich 1 the full cut (150 to 200 clumps), 0 the coarse one.
+//   makeLeafTexture()               the sheet of leaf clumps the geometry's cards wear (the material's uLeafTex).
+//   makeFarTreeTexture(), FAR_KIND  one painted card a tree, for woods far off.
+//
+// All three are made once and shared: every caller gets the same geometry and the same textures, so a wood in the
+// journey, the town's lindens and a world's grove cost no second copy on the card and no second build behind the
+// loader. (Disposing one is harmless: three puts it back on the card the next time it is drawn.) Draw a tree with
+// an InstancedMesh of the geometry and makeHomeTreeMaterial(makeLeafTexture()) from Forest.tsx: instance matrices
+// place and scale it, instance colours tint its leaves; it sways, takes the sky's light and the air, and its
+// leaf edges are antialiased by coverage. A tree's cut is chosen once, where it stands: nothing switches level as
+// the eye moves, so nothing pops.
+const GEO = new Map<string, THREE.BufferGeometry>();
 export function buildTree(kind: TreeKind, variant: number, rich: number) {
-  return BUILD[kind](SEEDS[kind][variant % SEEDS[kind].length], rich);
+  const v = variant % SEEDS[kind].length;
+  const key = `${kind}:${v}:${rich ? 1 : 0}`;
+  let g = GEO.get(key);
+  if (!g) GEO.set(key, (g = BUILD[kind](SEEDS[kind][v], rich ? 1 : 0)));
+  return g;
 }
+export const TREE_KINDS: TreeKind[] = ["broad", "birch", "pine", "spruce", "cypress", "bush"];
+let LEAVES: THREE.Texture | null = null;
+let FAR: THREE.Texture | null = null;
 
 // ---------- the painted sheets ----------
 function sheet(size: number) {
@@ -367,6 +393,7 @@ function finish(c: HTMLCanvasElement) {
 // Four clumps of leaves, 2 x 2: broad leaves, a hanging birch spray, a tuft of needles, a dense round mass.
 // Alpha is the leaves; the green channel is each leaf's own tone (those on top are lighter).
 export function makeLeafTexture() {
+  if (LEAVES) return LEAVES;
   const S = 256;
   const { c, g } = sheet(S * 2);
   const r = rng(733);
@@ -443,13 +470,14 @@ export function makeLeafTexture() {
       leaf(cx + Math.cos(a) * d, cy + Math.sin(a) * d, 12 + r() * 6, 8 + r() * 4, r() * 6.283, 0.4 + 0.6 * (i / 150) * (0.7 + 0.3 * r()));
     }
   });
-  return finish(c);
+  return (LEAVES = finish(c));
 }
 
 // Four whole trees for the far woods, 2 x 2, each standing on the bottom of its cell: a broad crown, a pine, a
 // spruce, a narrow flame. Red is which way the form faces across (left 0 .. right 1), green how much it looks up
 // (the tops of its lumps are light, their undersides dark), blue 1 for leaves and 0 for bark.
 export function makeFarTreeTexture() {
+  if (FAR) return FAR;
   const S = 256;
   const { c, g } = sheet(S * 2);
   const r = rng(1291);
@@ -536,7 +564,7 @@ export function makeFarTreeTexture() {
       }
     }
   });
-  return finish(c);
+  return (FAR = finish(c));
 }
 
 // what a far tree is: which drawing it wears, how wide and tall, its two greens

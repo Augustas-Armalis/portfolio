@@ -203,9 +203,11 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         vec2 face = vec2(cos(yaw), sin(yaw));
         vec2 sideDir = vec2(-face.y, face.x);
         // wind: slow rolling gusts + a quicker flutter
-        float g2 = vnoise(root * 1.3 - uWindDir * uTime * 1.6 + r * 3.0);
+        // (the quick small stirring is kept slight and slow: hundreds of thin bright blades each twitching on its own is
+        // not wind, it is a flicker)
+        float g2 = vnoise(root * 0.9 - uWindDir * uTime * 0.9 + r * 3.0);
         float wave = windWave(root);
-        float lean = bend * 0.5 + (wave * 0.85 + g2 * 0.25) * uWind + sin(uTime * (1.7 + r) + r * 31.0) * 0.035 * uWind;
+        float lean = bend * 0.5 + (wave * 0.85 + g2 * 0.16) * uWind + sin(uTime * (1.1 + r * 0.6) + r * 31.0) * 0.016 * uWind;
         // (a blade pressed aside by something keeps to its own way: the wind only stirs it)
         float own = smoothstep(0.95, 1.2, bend);
         vec2 bdir = normalize(mix(face, uWindDir, clamp(0.35 + wave * 0.5, 0.0, 1.0) * uWind * (1.0 - own) + 0.0001));
@@ -253,7 +255,9 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         float dist = length(vWorld - cameraPosition);
 
         // close to: a blade with a dark foot in its neighbours' shade, a green body and a sun-bleached tip
-        vec3 rootC = fieldA * 0.17;
+        // (the dark between the blades is deepest right at the eye; a little way off it is shallower, so the field is not
+        // a mesh of black and bright threads)
+        vec3 rootC = fieldA * mix(0.17, 0.36, smoothstep(1.2, 4.5, dist));
         vec3 midC = fieldA * 0.72;
         vec3 tipC = mix(fieldA * 1.7, vec3(0.4, 0.37, 0.15), 0.12 + 0.34 * vDry);
         vec3 alb = mix(rootC, midC, smoothstep(0.0, 0.45, vT));
@@ -269,10 +273,8 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         // light through the blade when the sun is behind it
         float back = pow(clamp(dot(-V, uKeyDir), 0.0, 1.0), 4.0);
         col += alb * vec3(1.0, 0.85, 0.35) * sunC * back * vT * vT * 0.9 * sh;
-        // sheen
-        vec3 H = normalize(uKeyDir + V);
-        col += sunC * 0.035 * pow(max(dot(n, H), 0.0), 24.0) * vT * sh;
-        col *= 1.0 + vWave * 0.38 * vT;
+        // (no glint on a blade: a sharp highlight on something a few pixels wide that moves is a spark every frame)
+        col *= 1.0 + vWave * 0.24 * vT;
 
         // further off every blade takes exactly the light of the field under it: no speckle, no edge, only its nap
         vec3 nap = fieldFar(fieldC, dist) * (0.86 + 0.24 * vT) * (0.93 + 0.14 * vRand) * (1.0 + vWave * 0.16);
@@ -290,7 +292,8 @@ export function Grass({ mobile, wind, fogDensity, density = 1 }: { mobile: boole
     () =>
       mobile
         ? [
-            { count: Math.round(95000 * density), rMin: 0, rMax: 15, width: 0.013 / Math.sqrt(density), grow: 0.2, height: [0.2, 0.44], linear: true, fadeOut: [9, 15] },
+            // (a phone's blades by the desk are cut in two pieces, not three: at its size no one can tell, and it is two fifths fewer triangles)
+            { seg: 2, count: Math.round(95000 * density), rMin: 0, rMax: 15, width: 0.013 / Math.sqrt(density), grow: 0.2, height: [0.2, 0.44], linear: true, fadeOut: [9, 15] },
             { seg: 2, count: Math.round(30000 * density), rMin: 0, rMax: 0, wrap: 76, width: 0.06 / Math.sqrt(density), height: [0.22, 0.46] },
             { seg: 2, count: Math.round(34000 * density), rMin: 0, rMax: 0, wrap: INNER_TILE, inner: true, width: 0.045 / Math.sqrt(density), height: [0.24, 0.5] },
             { count: Math.round(40000 * density), rMin: 0, rMax: 0, wrap: 18, walk: true, width: 0.022 / Math.sqrt(density), height: [0.2, 0.44] },
@@ -526,7 +529,7 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
     // a head (quad) and under it a stalk (a thin quad): aPart 0 head, 1 stalk
     g.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0, -1, 0, 1, 1, 0, 1, 1, 1, 1, -1, 1, 1], 3));
     g.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]);
-    const count = mobile ? 8000 : 27000;
+    const count = mobile ? 5200 : 27000;
     let s = 4242;
     const rnd = () => {
       s = (s * 16807) % 2147483647;
