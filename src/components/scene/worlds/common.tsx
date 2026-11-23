@@ -73,10 +73,11 @@ export function FarGround({ id, def, pal }: { id: WorldId; def: WorldDef; pal: G
           vec3 base = vec3(${mean.map((x) => x.toFixed(4)).join(", ")});
           base *= 0.86 + 0.28 * vnoise(vWorld.xz * 0.004);
           vec3 ground = base * (uSkyCol * 0.7 + uKeyCol * (0.22 + 0.5 * max(uKeyDir.y, 0.0)) * smoothstep(-0.02, 0.08, uKeyDir.y));
-          ${wet ? `// still water: the sky mirrored, more of it the lower the eye looks, the dark depth where it looks down
-          vec3 sky = skyBase(normalize(vec3(d.x, abs(d.y) + 0.015, d.z))) * 0.9;
-          float fr = 0.05 + 0.95 * pow(1.0 - clamp(abs(d.y), 0.0, 1.0), 6.0);
-          vec3 col = mix(ground, sky, fr);` : `vec3 sky = airCol(d) * 0.86;
+          ${wet ? `// still water, as makeWater draws it far off: the sky mirrored, more of it the lower the eye looks
+          vec3 sky = skyBase(normalize(vec3(d.x, abs(d.y) + 0.002, d.z)));
+          float fr = 0.05 + 0.95 * pow(1.0 - clamp(abs(d.y), 0.0, 1.0), 5.0);
+          vec3 deep = vec3(0.02, 0.045, 0.055) * (uSkyCol * 2.2 + 0.15);
+          vec3 col = mix(deep, sky, clamp(fr * 0.82 + 0.18, 0.0, 1.0));` : `vec3 sky = airCol(d) * 0.86;
           float k = smoothstep(900.0, 5200.0, dist);
           vec3 col = mix(ground, sky, k);`}
           col = applyAir(col, vWorld);
