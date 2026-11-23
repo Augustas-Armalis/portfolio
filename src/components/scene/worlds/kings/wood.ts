@@ -227,7 +227,8 @@ export const aisleClear = (z: number) => 44 + 146 * THREE.MathUtils.smoothstep(3
 export type Trunk = { x: number; z: number; R: number; H: number; fork?: number; aim?: number; far?: boolean };
 export type Walk = { a: V3; b: V3 };
 export type WoodChunk = { geo: THREE.BufferGeometry; essential: number };
-export type WoodBuilt = { chunks: WoodChunk[]; trunks: Trunk[]; lamps: Halo[]; stars: Halo[]; walks: Walk[] };
+// towns: where each huddle of houses stands and how far it runs (the souls go up into them: Kings.tsx)
+export type WoodBuilt = { chunks: WoodChunk[]; trunks: Trunk[]; lamps: Halo[]; stars: Halo[]; walks: Walk[]; towns: { p: V3; half: number; along: V3 }[] };
 
 export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: number): Generator<void, WoodBuilt, void> {
   let began = performance.now();
@@ -244,6 +245,9 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
   };
   const zTop = def.path[0][1] + 70;
   const band = (z: number) => Math.max(0, Math.min(8, Math.floor((zTop + 240 - z) / 200)));
+  // (and each stretch in three: the aisle and either side of it, so what stands off to the side, in the mist, is a
+  // piece of its own that can be drawn plainly, or not at all when the eye is turned from it)
+  const cell = (x: number, z: number) => band(z) * 4 + (x < aisleX(z) - 140 ? 0 : x > aisleX(z) + 140 ? 2 : 1);
   const lamps: Halo[] = [];
   const stars: Halo[] = [];
   const walks: Walk[] = [];
@@ -320,8 +324,25 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
   }
 
   // ---------- towns ----------
-  const townAt: { p: V3; along: V3 }[] = [];
+  const townAt: { p: V3; along: V3; half: number }[] = [];
   let bright = 0.36;
+  // A lit window as a point of light just proud of a wall, so it is a spark from anywhere, and from far off, where the
+  // wall's own windows are smaller than a pixel, still a spark: so a town in the boughs is a dark huddle with its
+  // lights in it, as he painted them.
+  const rw = rng(4242);
+  const winLights = (px: number, py: number, pz: number, w: number, d: number, hh: number, yaw: number, n: number) => {
+    const c = Math.cos(yaw);
+    const s = Math.sin(yaw);
+    for (let i = 0; i < n; i++) {
+      const face = Math.floor(rw() * 4);
+      const across = face < 2 ? w : d;
+      const lx = face < 2 ? (rw() - 0.5) * across * 0.7 : (face === 2 ? 1 : -1) * (w / 2 + 0.25);
+      const lz = face < 2 ? (face === 0 ? 1 : -1) * (d / 2 + 0.25) : (rw() - 0.5) * across * 0.7;
+      const y = py + Math.min(hh - 1, 1.4 + rw() * Math.max(0.5, hh - 2.4));
+      const warm = rw();
+      lamps.push({ p: [px + lx * c - lz * s, y, pz + lx * s + lz * c], size: 0.9 + rw() * 0.5, col: warm < 0.65 ? [1, 0.62, 0.26] : warm < 0.9 ? [1, 0.46, 0.16] : [1, 0.8, 0.5], k: 2.2 + rw() * 1.6 });
+    }
+  };
   const house = (px: number, py: number, pz: number, a: number, sc: number) => {
     const kind = r();
     const seed = r();
@@ -380,7 +401,9 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
       b.roof(px, py + hh, pz, w * 0.7, w * 0.7, sp, yaw, ROOF_C);
       // some towers carry an onion dome under the spire, or a lantern at the top
       if (r() < 0.3) b.lump([px, py + hh + w * 0.2, pz], [w * 0.52, w * 0.6, w * 0.52], ROOF_C, ROOF, 1, 0, 0, true);
-      if (r() < bright + 0.14) lamps.push({ p: [px, py + hh * (0.6 + r() * 0.3), pz], size: 2.2 * Math.sqrt(sc), col: r() < 0.7 ? [1, 0.72, 0.38] : [1, 0.5, 0.22], k: 0.6 + r() * 0.5 });
+      // (the draws the one lamp it used to have took, so the rest of the wood is laid out as it was)
+      if (r() < bright + 0.14) for (let i = 0; i < 3; i++) r();
+      if (rw() < bright + 0.3) winLights(px, py, pz, w * 0.7, w * 0.7, hh, yaw, 1 + Math.floor(rw() * 3));
     } else {
       b.walls(px, py - 0.6, pz, w, hh + 0.6, d, yaw, wc, WALL, seed);
       b.roof(px, py + hh, pz, w, d, (2.2 + r() * 1.6) * sc, yaw, ROOF_C);
@@ -390,7 +413,8 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
         b.walls(px + w * 0.22, py + hh, pz, 0.7 * sc, 2.6 * sc, 0.7 * sc, yaw, ROOF_C, ROOF, seed);
         b.detail = false;
       }
-      if (r() < bright) lamps.push({ p: [px + (r() - 0.5) * w * 0.4, py + hh * 0.5, pz + (r() - 0.5) * w * 0.4], size: (1.6 + r() * 1.0) * Math.sqrt(sc), col: r() < 0.7 ? [1, 0.72, 0.38] : [1, 0.5, 0.22], k: 0.5 + r() * 0.5 });
+      if (r() < bright) for (let i = 0; i < 5; i++) r();
+      if (rw() < bright + 0.3) winLights(px, py, pz, w, d, hh, yaw, 1 + Math.floor(rw() * 2));
     }
   };
   // a huddle of houses and towers on a bough: two uneven rows of them along it, as close as they will stand
@@ -404,7 +428,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
       house(c[0] + al[0] * o1 - al[2] * side, c[1] - Math.abs(side) * 0.25, c[2] + al[2] * o1 + al[0] * side, a, sc * (0.85 + r() * 0.35));
     }
     const half = (n * 4.6 * sc) / 2;
-    townAt.push({ p: c, along: al });
+    townAt.push({ p: c, along: al, half });
     walks.push({ a: [c[0] - al[0] * half, c[1] + 0.2, c[2] - al[2] * half], b: [c[0] + al[0] * half, c[1] + 0.2, c[2] + al[2] * half] });
   };
 
@@ -518,7 +542,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     if (!lo) for (let j = 0; j < 1 + (r() < 0.4 ? 1 : 0); j++) grow(at(0.55 + r() * 0.25), a0 + 1.6 + r() * 3, 46 + r() * 40, 30 + r() * 30, t.R * 0.34);
   };
   for (const t of trunks) {
-    use(t.far ? 100 + Math.floor(((Math.atan2(t.z - 150, t.x) + Math.PI) / (Math.PI * 2)) * 5.999) : band(t.z));
+    use(t.far ? 100 + Math.floor(((Math.atan2(t.z - 150, t.x) + Math.PI) / (Math.PI * 2)) * 5.999) : cell(t.x, t.z));
     tree(t);
     if (performance.now() - began > budget) {
       yield;
@@ -533,7 +557,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     const up = 34 + r() * 26;
     const m = (u: number, lift: number): V3 => [a[0] + (c[0] - a[0]) * u, a[1] + (c[1] - a[1]) * u + up * lift, a[2] + (c[2] - a[2]) * u + Math.sin(u * 3.14) * (r() - 0.5) * 30];
     const rad = 4.6 + r() * 1.6;
-    use(band((a[2] + c[2]) / 2));
+    use(cell((a[0] + c[0]) / 2, (a[2] + c[2]) / 2));
     const rib = b.tube([a, m(0.2, 0.62), m(0.5, 1), m(0.8, 0.62), c], [rad * 1.5, rad, rad * 0.9, rad, rad * 1.5], BARK_TOP, BARK_TOP, BARK, { sides: lo ? 7 : 9, seg: lo ? 14 : 22, twist: 1, ph: n, flute: () => 0.07 });
     const mid = m(0.5, 1);
     // the towns over the aisle are the ones seen from beneath: nearly every house of theirs shows a light
@@ -559,7 +583,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     const mid: V3 = [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2 - sag, (a[2] + c[2]) / 2];
     const q1: V3 = [(a[0] * 3 + c[0]) / 4, (a[1] * 3 + c[1]) / 4 - sag * 0.8, (a[2] * 3 + c[2]) / 4];
     const q3: V3 = [(a[0] + c[0] * 3) / 4, (a[1] + c[1] * 3) / 4 - sag * 0.8, (a[2] + c[2] * 3) / 4];
-    use(band(mid[2]));
+    use(cell(mid[0], mid[2]));
     b.tube([a, q1, mid, q3, c], [rad * 1.2, rad, rad * 0.9, rad, rad * 1.2], BARK_TOP, BARK_TOP, BARK, { sides: 9, seg: 20, twist: 1, flute: () => 0.07 });
     town([mid[0], mid[1] + rad * 0.85, mid[2]], Math.atan2(c[2] - a[2], c[0] - a[0]), n, sc, rad * 1.3);
   };
@@ -588,7 +612,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
       used.set(i, (used.get(i) ?? 0) + 1);
       used.set(j, (used.get(j) ?? 0) + 1);
       nBridge++;
-      use(band(A[2]));
+      use(cell(A[0], A[2]));
       b.detail = true;
       const sag = d * 0.12;
       const N = 10;
@@ -622,7 +646,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     const sx = t.along[0] * 0.65;
     const sz = t.along[2] * 0.65;
     const p = t.p;
-    use(band(p[2]));
+    use(cell(p[0], p[2]));
     b.detail = true;
     b.quad([p[0] - sx + dx, p[1] - len, p[2] - sz + dz], [p[0] + sx + dx, p[1] - len, p[2] + sz + dz], [p[0] + sx, p[1], p[2] + sz], [p[0] - sx, p[1], p[2] - sz], DARK, LADDER, [0, 0, 1, len]);
     void i;
@@ -642,7 +666,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     const [x, z] = along();
     const big = i < nStone * 0.3;
     const s = big ? 2.5 + r() * r() * 9 : 0.8 + r() * 1.8;
-    use(band(z));
+    use(cell(x, z));
     b.detail = true;
     b.lump([x, gy(x, z) + s * 0.25, z], [s * (1 + r() * 0.5), s * (0.55 + r() * 0.3), s * (1 + r() * 0.5)], [0.07, 0.066, 0.058], BARK, big ? 2 : 1, 0.16, i * 3.1, true);
   }
@@ -651,7 +675,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
   for (let i = 0; i < nFern; i++) {
     const [x, z] = along();
     if (wet(x, z)) continue;
-    use(band(z));
+    use(cell(x, z));
     b.detail = true;
     const g0 = gy(x, z);
     const s = 2.2 + r() * 2.6;
@@ -676,7 +700,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
   for (let i = 0; i < nMush; i++) {
     const [x, z] = along();
     if (wet(x, z)) continue;
-    use(band(z));
+    use(cell(x, z));
     b.detail = true;
     // most are the pale blue-green of foxfire, a few amber
     const gc: V3 = r() < 0.75 ? [0.3, 0.85, 0.68] : [1, 0.62, 0.26];
@@ -701,13 +725,13 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
   began = performance.now();
 
   // white lights hung far up among the boughs, small as stars
-  const nStar = lo ? 90 : 260;
+  const nStar = lo ? 60 : 170;
   for (let i = 0; i < nStar; i++) {
     const x = (r() - 0.5) * 1100;
     const z = KINGS.z + 420 - r() * 980;
     const y = by + 30 + Math.pow(r(), 0.8) * 250;
     if (Math.abs(x) < 190 && Math.abs(z - KINGS.z) < 90 && y < by + 5.6 * R) continue;
-    stars.push({ p: [x, y, z], size: 2.0 + r() * r() * 3.0, col: r() < 0.72 ? [0.86, 0.92, 1.0] : [1, 0.86, 0.64], k: 0.7 + r() * 0.8 });
+    stars.push({ p: [x, y, z], size: 2.0 + r() * r() * 2.6, col: r() < 0.72 ? [0.78, 0.88, 1.0] : [1, 0.86, 0.64], k: 0.4 + r() * 0.45 });
   }
   // the pieces are made one at a time
   const chunks: WoodChunk[] = [];
@@ -717,7 +741,7 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     chunks.push({ geo, essential: geo.userData.essential as number });
   }
   yield;
-  return { chunks, trunks: trunks.filter((t) => !t.far), lamps, stars, walks };
+  return { chunks, trunks: trunks.filter((t) => !t.far), lamps, stars, walks, towns: townAt.map((t) => ({ p: t.p, half: t.half, along: t.along })) };
 }
 
 export function makeWoodMaterial() {
@@ -738,6 +762,8 @@ export function makeWoodMaterial() {
         float kind = vCol.a;
         float isBark = 1.0 - step(0.5, kind);
         float isWall = step(1.5, kind) * (1.0 - step(2.5, kind));
+        // (the towns: walls, roofs, the small figures on the boughs: dark shapes against the night, their light their own)
+        float isTown = step(1.5, kind) * (1.0 - step(4.5, kind));
         float isLadder = step(4.5, kind) * (1.0 - step(5.5, kind));
         float isLamp = step(5.5, kind) * (1.0 - step(6.5, kind));
         float isFern = step(6.5, kind) * (1.0 - step(7.5, kind));
@@ -781,16 +807,20 @@ export function makeWoodMaterial() {
         vec2 wc = vec2(vTex.x / 2.0, vTex.y / 2.7);
         vec2 wi = floor(wc); vec2 wf = fract(wc) - 0.5;
         float wfw = fw * 0.45;
-        float win = (1.0 - smoothstep(0.19 - wfw, 0.19 + wfw, abs(wf.x))) * (1.0 - smoothstep(0.2 - wfw, 0.2 + wfw, abs(wf.y + 0.04)));
+        // (small: a lit window is a spark in a dark wall, as he dotted them)
+        float win = (1.0 - smoothstep(0.12 - wfw, 0.12 + wfw, abs(wf.x))) * (1.0 - smoothstep(0.15 - wfw, 0.15 + wfw, abs(wf.y + 0.04)));
         float mull = max(1.0 - smoothstep(0.015, 0.035, abs(wf.x)), 1.0 - smoothstep(0.015, 0.035, abs(wf.y + 0.04)));
         // (more of them are lit near the eye than far from it: as the plane comes by, a town wakes, window by window)
         float wake = 1.0 - smoothstep(70.0, 260.0, length(cameraPosition - vWorld));
-        float wth = mix(0.6, 0.26, wake);
+        float wth = mix(0.5, 0.18, wake);
         float litW = smoothstep(wth - 0.03, wth + 0.03, hash12(wi + 3.7));
         float crisp = 1.0 - smoothstep(0.35, 1.5, fw);
         float candle = 0.84 + 0.16 * sin(uTime * (0.6 + hash12(wi) * 0.8) + hash12(wi + 1.0) * 40.0);
-        float glowW = mix(0.016, win * litW * (1.0 - mull * 0.6 * crisp), crisp) * isWall * candle;
-        vec3 emit = mix(vec3(1.0, 0.56, 0.22), vec3(1.0, 0.74, 0.4), hash12(wi + 9.0)) * glowW * 1.25;
+        // (far off, where a window is smaller than a pixel, the wall stays a dark shape: what shows of its town from
+        // there is its lamps, which are never smaller than a point of light; see makeLamps)
+        crisp = 1.0 - smoothstep(0.25, 0.9, fw);
+        float glowW = mix(0.003, win * litW * (1.0 - mull * 0.5 * crisp), crisp) * isWall * candle;
+        vec3 emit = mix(vec3(1.0, 0.5, 0.18), vec3(1.0, 0.7, 0.36), hash12(wi + 9.0)) * glowW * 3.2;
         alb = mix(alb, alb * 0.5, win * (1.0 - litW) * crisp * isWall);
         emit += vCol.rgb * isLamp * 2.2;
         alb *= 1.0 - isLamp;
@@ -806,15 +836,17 @@ export function makeWoodMaterial() {
         float wrap = mix(clamp(dl.x * 0.7 + 0.3, 0.0, 1.0), abs(dl.x) * 0.7 + 0.3, isFern);
         // the feet of the wood stand in their own shade
         float foot = mix(0.5, 1.0, smoothstep(0.0, 16.0, vWorld.y)) * mix(1.0, 0.45, groove);
-        vec3 col = alb * (coolFill(n) * foot + DOME_WARM * att * wrap * wrap * 3.7);
+        // (the wood is darker than the kings: the light reaches into it, it does not flood it; the towns least of all)
+        float reach = mix(2.5, 1.0, isTown);
+        vec3 col = alb * (coolFill(n) * foot * mix(0.85, 0.6, isTown) + DOME_WARM * att * wrap * wrap * reach);
         // every edge turned to the light takes it; the far edge keeps a thread of the night's blue, and stands off the mist
         float fres = pow(1.0 - abs(dot(n, V)), 2.6);
-        col += DOME_WARM * alb * fres * att * clamp(dl.x + 0.45, 0.0, 1.0) * 2.4;
+        col += DOME_WARM * alb * fres * att * clamp(dl.x + 0.45, 0.0, 1.0) * mix(1.3, 0.5, isTown);
         col += vec3(0.014, 0.026, 0.03) * fres * clamp(0.4 - dl.x, 0.0, 1.0) * 0.55;
         // damp moss gives the light back a little
         col += DOME_WARM * vec3(0.5, 0.9, 0.4) * moss * att * pow(max(dot(n, normalize(normalize(uDome - vWorld) + V)), 0.0), 8.0) * 0.12;
         // high in the vault the boughs take a little of the towns' own light, here and there, from beneath
-        col += alb * vec3(1.0, 0.56, 0.26) * smoothstep(0.52, 0.82, vnoise(vWorld.xz * 0.017 + vWorld.y * 0.011 + 5.0)) * smoothstep(70.0, 150.0, vWorld.y) * (0.6 + 0.4 * clamp(-n.y, 0.0, 1.0)) * 0.9 * isBark;
+        col += alb * vec3(1.0, 0.52, 0.22) * smoothstep(0.56, 0.84, vnoise(vWorld.xz * 0.017 + vWorld.y * 0.011 + 5.0)) * smoothstep(70.0, 150.0, vWorld.y) * (0.3 + 0.7 * clamp(-n.y, 0.0, 1.0)) * 0.4 * isBark;
         col += emit;
         gl_FragColor = vec4(kingsAir(col, vWorld), 1.0);
         ${GLSL_END}

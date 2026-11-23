@@ -4,9 +4,9 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { WorldBase, useDisposable, type WorldProps } from "./common";
+import { Ground, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, haloGeometry, makeTempera, rng, type GroundPalette, type Halo, type V3 } from "./kit";
-import { HomeWindow } from "./kings/homeWindow";
+import { HomeWindow, homeWindowK } from "./kings/homeWindow";
 import { kingSteps, makeCrownMaterial, makeKingMaterial } from "./kings/figures";
 import { makeUnderstory } from "./kings/trees";
 import { BY, DOME_AT, DOME_U, GLSL_END, GLSL_KINGS, GLSL_KINGS_CORE, KINGS_UNIFORMS, R } from "./kings/light";
@@ -391,6 +391,90 @@ function makeMotes(o: { col: V3; col2: V3; size: number; wander: number; rise: n
   });
 }
 
+// ---------- the souls ----------
+// This wood is where the journey of the souls ends: the ones that left the Funeral world come here to live in the
+// little cities in the trees. Each is a faint cold light that rises from the floor of the wood, slowly, wavering as
+// a flame does in still air, and goes up into one of the towns; as it nears the lit windows it takes their warmth,
+// and at the town it goes in and is gone. Never many at once, never fast: you notice one, then another.
+function soulsGeometry(towns: { p: V3; half: number; along: V3 }[], n: number, seed: number) {
+  const r = rng(seed);
+  const from = new Float32Array(n * 4);
+  const to = new Float32Array(n * 4);
+  const box = new THREE.Box3();
+  // (the towns the eye can see from the way in: in the vault over the aisle and on the boughs behind the kings)
+  const seen = towns.filter((t) => Math.abs(t.p[0] - aisleX(t.p[2])) < 230 && t.p[2] < def.path[0][1] - 60);
+  const list = seen.length ? seen : towns;
+  for (let i = 0; i < n && list.length; i++) {
+    const t = list[Math.floor(r() * list.length)];
+    const u = (r() - 0.5) * 1.6 * t.half;
+    const tx = t.p[0] + t.along[0] * u;
+    const tz = t.p[2] + t.along[2] * u;
+    const a = r() * Math.PI * 2;
+    const d = 20 + r() * 70;
+    const fx = tx + Math.cos(a) * d;
+    const fz = tz + Math.sin(a) * d;
+    const fy = groundAt(def, fx, fz) + 1.5 + r() * 4;
+    // where it starts, the town it goes to, how long the going takes (seconds), and its own moment in that
+    from.set([fx, fy, fz, 55 + r() * 50], i * 4);
+    to.set([tx, t.p[1] + 1.5 + r() * 3, tz, r()], i * 4);
+    box.expandByPoint(new THREE.Vector3(fx, fy, fz)).expandByPoint(new THREE.Vector3(tx, t.p[1] + 6, tz));
+  }
+  const g = new THREE.BufferGeometry();
+  // (a point each; its place is worked out in the shader)
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  g.setAttribute("aFrom", new THREE.BufferAttribute(from, 4));
+  g.setAttribute("aTo", new THREE.BufferAttribute(to, 4));
+  g.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+  g.boundingSphere.radius += 30;
+  return g;
+}
+function makeSouls() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: { ...KINGS_UNIFORMS },
+    vertexShader: /* glsl */ `
+      attribute vec4 aFrom; attribute vec4 aTo; uniform float uTime; uniform vec4 uFogK; uniform float uMist;
+      varying float vA; varying float vWarm;
+      void main(){
+        float s = aTo.w;
+        float t = fract(uTime / aFrom.w + s);
+        // slow at the start, slower still as it reaches the town
+        float e = t * t * (3.0 - 2.0 * t);
+        e = mix(t, e, 0.7);
+        vec3 p = mix(aFrom.xyz, aTo.xyz, vec3(e * 0.85 + 0.15 * t, pow(e, 0.85), e * 0.85 + 0.15 * t));
+        // a flame's waver in still air, and a slow drift round, both quieting as it arrives
+        float sway = (1.0 - e) * (1.0 - e);
+        p.x += (sin(uTime * 0.31 + s * 40.0) * 5.0 + sin(uTime * 0.83 + s * 13.0) * 1.6) * sway;
+        p.z += (cos(uTime * 0.27 + s * 23.0) * 5.0 + cos(uTime * 0.71 + s * 7.0) * 1.6) * sway;
+        p.y += sin(uTime * 0.5 + s * 31.0) * 0.8 * sway;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        float d = -mv.z;
+        // in at the floor, gone at the windows (and a breath brighter just before it goes in)
+        float life = smoothstep(0.0, 0.12, t) * (1.0 - smoothstep(0.9, 1.0, t)) * (0.75 + 0.6 * smoothstep(0.7, 0.92, t));
+        float pulse = 0.8 + 0.2 * sin(uTime * (0.7 + s * 0.6) + s * 50.0);
+        vWarm = smoothstep(0.45, 0.95, t);
+        float px = 1.8 * 620.0 / max(d, 1.0);
+        float sz = max(px, 2.0);
+        vA = life * pulse * (px / sz) * (px / sz) * smoothstep(4.0, 20.0, d) * exp(-d * (uFogK.x * 0.35 + uMist * 1.5));
+        gl_PointSize = min(sz, 26.0);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      varying float vA; varying float vWarm;
+      void main(){
+        vec2 c = gl_PointCoord - 0.5;
+        float r2 = dot(c, c) * 4.0;
+        float a = exp(-r2 * 4.0) * 0.5 + exp(-r2 * 22.0);
+        // cold and pale as it leaves the ground, the windows' gold by the time it is home
+        vec3 col = mix(vec3(0.62, 0.8, 1.0), vec3(1.0, 0.72, 0.4), vWarm);
+        gl_FragColor = vec4(col * a * vA * 1.4, 1.0);
+        ${GLSL_END}
+      }`,
+  });
+}
+
 // Leaves coming down through the wood, one here, one there, turning over as they fall; lit like everything else.
 function leavesGeometry(n: number, seed: number) {
   const r = rng(seed);
@@ -697,6 +781,9 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
   const birdG = new THREE.BufferGeometry();
   birdG.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0.9, -6.4, 1.9, 1.9, -2.6, 0.3, -0.9, 0, 0, 0.9, 2.6, 0.3, -0.9, 6.4, 1.9, 1.9, 0, 0, 1.6, -0.7, 0, -0.4, 0.7, 0, -0.4], 3));
 
+  // the picture itself: the kings are painted over with its own strokes (kings/figures.ts)
+  const kingsMap = typeof document !== "undefined" ? new THREE.TextureLoader().load("/assets/ciurlionis/kings.jpg") : null;
+  if (kingsMap) kingsMap.anisotropy = 4;
   // the plane is eased round every trunk
   def.obstacles.length = OWN_OBSTACLES;
   for (const t of wood.trunks) def.obstacles.push({ x: t.x, z: t.z, r: t.R + 6, h: t.H });
@@ -707,14 +794,15 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
     bark: makeWoodMaterial(),
     left: left.geo,
     leftFar: leftFar.geo,
-    leftMat: makeKingMaterial(left),
+    leftMat: makeKingMaterial(left, kingsMap),
     leftCrown: left.crown,
-    leftCrownMat: makeCrownMaterial(left),
+    leftCrownMat: makeCrownMaterial(left, kingsMap),
     right: right.geo,
     rightFar: rightFar.geo,
-    rightMat: makeKingMaterial(right),
+    rightMat: makeKingMaterial(right, kingsMap),
     rightCrown: right.crown,
-    rightCrownMat: makeCrownMaterial(right),
+    rightCrownMat: makeCrownMaterial(right, kingsMap),
+    kingsMap,
     little: k.build(),
     lit: makeTempera({ amb: 0.5, key: 0.2, dab: 0.5 }),
     domeGeo: new THREE.SphereGeometry(R, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -732,6 +820,8 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
     fireflyMat: makeMotes({ col: [0.75, 1.0, 0.42], col2: [1.0, 0.86, 0.4], size: 0.62, wander: 3.2, rise: 0, blink: 1 }),
     embers,
     emberMat: makeMotes({ col: [1, 0.5, 0.18], col2: [1, 0.76, 0.4], size: 0.42, wander: 2.2, rise: 1.6, blink: 0.3 }),
+    souls: soulsGeometry(wood.towns, props.mobile ? 40 : Math.round(150 * fx), 1911),
+    soulMat: makeSouls(),
     leaves: leavesGeometry(props.mobile ? 90 : Math.round(240 * fx), 31),
     leafMat: makeLeaves(),
     walkers: walkersGeometry(wood.walks, props.mobile ? 26 : 80, 9),
@@ -759,6 +849,7 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
   const kingRefs = useRef<(THREE.Mesh | null)[]>([]);
   const lod = useRef({ near: false });
   const bell = useRef<THREE.Group>(null);
+  const little = useRef<THREE.Mesh>(null);
   const swing = useRef(0);
   const b = useDisposable(() => {
     // made ahead of time while the plane was over the sea, or here and now
@@ -790,7 +881,7 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       const bs = c.geo.boundingSphere;
       if (!m || !bs) return;
       const d = Math.hypot(bs.center.x - cx, bs.center.y - cy, bs.center.z - cz) - bs.radius;
-      const count = d > 240 ? c.essential : Infinity;
+      const count = d > 130 ? c.essential : Infinity;
       if (c.geo.drawRange.count !== count) c.geo.setDrawRange(0, count);
     });
     const dk = Math.hypot(cx, cy - DOME_AT.y, cz - KINGS.z);
@@ -817,6 +908,8 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
     kingRefs.current.forEach((m, i) => {
       if (m) m.visible = !live || i < 2 === lod.current.near;
     });
+    // (the homestead under the glass is covered wholly once the window on home has opened)
+    if (little.current) little.current.visible = homeWindowK() < 0.985;
     const m = bird.current;
     if (m) {
       // every half minute or so it crosses above the two crowns
@@ -848,7 +941,9 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
   return (
     <>
       <mesh ref={night} geometry={b.nightGeo} material={b.nightMat} renderOrder={-9} frustumCulled={false} />
-      <WorldBase id="kings" def={def} pal={KINGS_PAL} props={props} grass={false} pathTint={[1, 0.8, 0.52]} pathGain={0.05} angels={false} marks={false} groundSize={3400} />
+      <WorldBase id="kings" def={def} pal={KINGS_PAL} props={props} grass={false} pathTint={[1, 0.8, 0.52]} pathGain={0.05} angels={false} marks={false} ground={false} />
+      {/* (the floor of the wood, at the coarser of the two grids: under the mist and the roots its cells never show, and it is a hundred thousand triangles fewer) */}
+      <Ground def={def} pal={KINGS_PAL} mobile size={2800} />
       <mesh geometry={b.waterGeo} material={b.waterMat} renderOrder={1} />
       {b.woodChunks.map((c, i) => (
         <mesh
@@ -875,7 +970,7 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       ))}
       <mesh geometry={b.leftCrown} material={b.leftCrownMat} />
       <mesh geometry={b.rightCrown} material={b.rightCrownMat} />
-      <mesh geometry={b.little} material={b.lit} />
+      <mesh ref={little} geometry={b.little} material={b.lit} />
       <mesh geometry={b.domeGeo} material={b.domeSky} position={at} />
       <HomeWindow mobile={props.mobile} />
       <mesh geometry={b.domeGeo} material={b.domeGlass} position={at} renderOrder={5} />
@@ -890,6 +985,7 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       <mesh geometry={b.lampGeo} material={b.lampMat} renderOrder={6} />
       <points geometry={b.fireflies} material={b.fireflyMat} renderOrder={7} />
       <points geometry={b.embers} material={b.emberMat} renderOrder={7} />
+      <points geometry={b.souls} material={b.soulMat} renderOrder={7} />
       <mesh ref={owl} geometry={b.owlG} material={b.owlMat} visible={false} />
       <mesh ref={bird} geometry={b.birdG} material={b.birdMat} />
     </>
