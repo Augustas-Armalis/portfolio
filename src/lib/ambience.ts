@@ -62,8 +62,9 @@ const WIND_CEIL = 1000;
 const BEDS: Record<string, Bed> = {
   // home: an empty field. Soft filtered wind, nothing else (and the field's music: see deskMusic below)
   // (a little quieter than it was: about 2.5 dB down by day and at night)
-  desk: bed({ wind: 0.75, hp: 80, lp: 650 }), // about -42.5 by day, -46.5 at night (measured: see the home scene's report)
-  avenue: bed({ wind: 0.72, hp: 80, lp: 760 }), // the wood: the same air, a little more of it
+  // (home has no ambience of its own at all: the owner wants only the field music he chose there)
+  desk: bed({ wind: 0 }), // about -42.5 by day, -46.5 at night (measured: see the home scene's report)
+  avenue: bed({ wind: 0 }), // the wood: the same air, a little more of it
   // the painted worlds
   sun: bed({ wind: 1.6, hp: 150, lp: 950 }), // high open air
   stars: bed({ wind: 0.78, hp: 80, lp: 620 }), // a low breath in the dark: -40
@@ -79,7 +80,7 @@ const BEDS: Record<string, Bed> = {
   none: bed({ wind: 0.6, hp: 90, lp: 700 }),
 };
 const PLACE_BED: Record<Place, string> = { meadow: "desk", forest: "avenue", sea: "sea", sky: "sky", none: "none" };
-const WORLD_BED: Record<string, string> = { home: "", desk: "desk", road: "desk", forest: "avenue" };
+const WORLD_BED: Record<string, string> = { home: "desk", desk: "desk", road: "desk", forest: "avenue" };
 function bedOf(s: Scene): string {
   if (s.world) {
     const k = WORLD_BED[s.world] ?? s.world;
