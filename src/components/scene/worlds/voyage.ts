@@ -363,8 +363,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     terrain: FRIEND_TERRAIN,
     water: null,
     // (the air leans the plane back from the walls: from 620 m off the middle of the chamber)
-    centre: [0, 290],
-    radius: 520,
+    centre: [0, 330],
+    radius: 540,
     ceil: 150,
     entry: FRIEND_ENTRY,
     // in the heart of the orb she holds out: the plane flies into its light, and through it into the Sun
