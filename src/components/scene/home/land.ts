@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { HOME_GATE_Z, roadX } from "../flightPath";
 import { pathW, pathX } from "../shared";
-import { FARM, groveWood, mainPathD, sidePathD, fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyArea, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
+import { FARM, groveWood, joinD, mainPathD, sidePathD, fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyArea, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
 
 // The land the desk stands in, written once and read by everything that
 // stands on it. The desk is at the origin and the visitor looks north (-z).
@@ -455,7 +455,7 @@ export function forestD(x: number, z: number) {
   }
   // the sacred grove's wood, thick round its clearing and along the hidden path to it; both paths kept open
   d = Math.max(d, groveWood(x, z));
-  d *= sstep(2.5, 4.5, mainPathD(x, z)) * sstep(1.3, 2.6, sidePathD(x, z));
+  d *= sstep(2.5, 4.5, mainPathD(x, z)) * sstep(1.3, 2.6, sidePathD(x, z)) * sstep(3, 5.5, joinD(x, z));
   // the old forest of the journey, from the town's edge to the mountain (journey.ts)
   d = Math.max(d, journeyWood(x, z) * (0.82 + 0.18 * mid));
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
@@ -493,6 +493,7 @@ export function plantHome(amount: number): HomeTree[] {
     return u < 0.52 ? "broad" : u < 0.74 ? "birch" : u < 0.9 ? "pine" : "bush";
   };
   const push = (x: number, z: number, kind: TreeKind, s: number, lod: 0 | 1 | 2) => {
+    if (joinD(x, z) < 5) return;
     trees.push({ x, y: landH(x, z), z, s, kind, v: Math.floor(r() * 3), rot: r() * 6.283, tint: r(), lod: lod === 0 && hyp(x, z) < 82 ? -1 : lod });
   };
   const near = (x: number, z: number): 0 | 1 => (hyp(x, z) < 115 || (z < 0 && Math.abs(x - roadX(z)) < 24 && z > HOME_GATE_Z - 20) ? 0 : 1);

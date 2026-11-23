@@ -187,6 +187,7 @@ export function makeLandMaterial() {
         }
         // the footpath: worn sandy earth, a little paler down the middle, grass closing in softly from both sides
         float onPath = 0.0;
+        vec3 pathEarth = vec3(0.0);
         float c0p = inland(p);
         {
           float pw = pathW(p.y);
@@ -197,10 +198,13 @@ export function makeLandMaterial() {
           onPath = (1.0 - smoothstep(0.42 + n2 * 0.3, 1.02 + n2 * 0.34, px)) * along;
           float fine = vnoise(p * 9.0) * 0.6 + vnoise(p * 31.0) * 0.4;
           vec3 earth = vec3(0.37, 0.32, 0.235) * (0.9 + 0.2 * fine);
+          // (the main path from the desk is this same path running on: measured the same way, one worn middle)
+          px = min(px, deskPk(p));
           earth *= 1.0 + 0.12 * (1.0 - smoothstep(0.0, 0.55, px));
           // small pale pebbles pressed into it
           vec2 pc = p * 11.0; float ph = hash12(floor(pc));
           earth = mix(earth, vec3(0.5, 0.47, 0.41), step(0.955, ph) * (1.0 - smoothstep(0.18, 0.4, length(fract(pc) - 0.5))) * (1.0 - smoothstep(0.03, 0.12, fw)));
+          pathEarth = earth;
           alb = mix(alb, earth, onPath);
         }
         // the town's streets (journey.ts): cobbles set in packed earth, worn smooth down the middle
@@ -236,9 +240,7 @@ export function makeLandMaterial() {
           // grove a narrow dark trace half under the grass
           vec2 hp = homePaths(p);
           if (hp.x + hp.y > 0.001) {
-            float fineE = vnoise(p * 9.0) * 0.6 + vnoise(p * 31.0) * 0.4;
-            vec3 earthM = vec3(0.42, 0.37, 0.27) * (0.9 + 0.2 * fineE);
-            alb = mix(alb, earthM, hp.x);
+            alb = mix(alb, pathEarth, hp.x);
             vec3 earthS = mix(vec3(0.13, 0.1, 0.07), vec3(0.08, 0.1, 0.05), vnoise(p * 2.1));
             alb = mix(alb, earthS, hp.y * 0.55);
             onPath = max(onPath, max(hp.x, hp.y * 0.6));
@@ -248,7 +250,11 @@ export function makeLandMaterial() {
           if (tr > 0.001) {
             vec3 tc = mix(vec3(0.09, 0.065, 0.045), vec3(0.16, 0.11, 0.07), vnoise(p * 1.9)) * (0.8 + 0.3 * vnoise(p * 7.0));
             tc = mix(tc, vec3(0.05, 0.08, 0.03), smoothstep(0.5, 0.8, vnoise(p * 0.9 + 4.0)) * 0.6);
-            alb = mix(alb, tc, tr * 0.92);
+            // (off the quay it is the quay's packed earth, laid over the cobbles as they thin out, and darkens to
+            // the forest's earth over the next thirty metres)
+            vec3 worn = vec3(0.3, 0.25, 0.18) * (0.85 + 0.3 * vnoise(p * 0.7));
+            tc = mix(worn, tc, smoothstep(-300.0, -332.0, p.x));
+            alb = mix(alb, tc, tr * 0.92 * smoothstep(-286.0, -302.0, p.x));
             onPath = max(onPath, tr);
           }
         }
