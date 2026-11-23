@@ -8,7 +8,7 @@ import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, 
 import { Birds, type Flock } from "./life";
 import { buildCastle } from "./fairy/castle";
 import { MT, PEAKS, WARDS, buildMountain, buildPeaks, buildRamp, mountainCrowns, peakRadius, rampLine, roadLine, surfaceY } from "./fairy/mountain";
-import { GLSL_GROUND_LIFE, Kindling, archGeometry, leafyMesh, makeLeafyMaterial, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp } from "./fairy/shared";
+import { GLSL_GROUND_LIFE, Kindling, SunShafts, type Beam, archGeometry, leafyMesh, makeLeafyMaterial, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp } from "./fairy/shared";
 import { WORLDS, gateOf, groundAt, pathOf } from "./voyage";
 
 // Fairy Tale (Castle Fairy Tale, 1909), after the painting and after the way the film "Angelų takais" built it
@@ -44,11 +44,22 @@ const HAMLETS: [x: number, z: number, r: number][] = [
   [1350, -900, 240],
   [-1300, 900, 240],
 ];
+// The wood the plane arrives in: on the far slope of the rise, a track winding through it to the crest.
+const ARRIVAL = { z0: 1535, z1: 1600, half: 300, soft: 110 };
+const sm = (a: number, b: number, v: number) => {
+  const t = Math.min(1, Math.max(0, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+const inArrival = (x: number, z: number) => sm(ARRIVAL.z0, ARRIVAL.z1, z) * (1 - sm(ARRIVAL.half, ARRIVAL.half + ARRIVAL.soft, Math.abs(x)));
+const GLSL_ARRIVAL = `smoothstep(${ARRIVAL.z0.toFixed(1)}, ${ARRIVAL.z1.toFixed(1)}, p.y) * (1.0 - smoothstep(${ARRIVAL.half.toFixed(1)}, ${(ARRIVAL.half + ARRIVAL.soft).toFixed(1)}, abs(p.x)))`;
+// (the track: winding under the trees, then straight over the crest to where the pale road begins)
+const trackX = (z: number) => (z >= 1560 ? 46 * Math.sin((z - 1560) / 62) : 4 * (1 - sm(1440, 1560, z)));
 const woodF = (x: number, z: number) => {
   let F = Math.sin(x * 0.0041 + 1.3) * Math.sin(z * 0.0052 + 0.4) + 0.55 * Math.sin((x + z) * 0.0093 + 2.0) + 0.3 * Math.sin(x * 0.019 - z * 0.015 + 0.7) + 0.12;
   const dm = Math.hypot(x - MT.x, z - MT.z);
   F += 1.5 * Math.exp(-Math.pow((dm - 450) / 190, 2));
   for (const [hx, hz, hr] of HAMLETS) F -= 1.7 * Math.exp(-((x - hx) ** 2 + (z - hz) ** 2) / (hr * hr));
+  F += 2.4 * inArrival(x, z);
   return F;
 };
 const GLSL_WOOD = /* glsl */ `
@@ -57,6 +68,7 @@ float fairyF(vec2 p){
   float dm = length(p - vec2(${f4(MT.x)}, ${f4(MT.z)}));
   F += 1.5 * exp(-(dm - 450.0) * (dm - 450.0) / 36100.0);
   ${HAMLETS.map(([x, z, r]) => `{ vec2 d = p - vec2(${f4(x)}, ${f4(z)}); F -= 1.7 * exp(-dot(d, d) / ${f4(r * r)}); }`).join("\n  ")}
+  F += 2.4 * ${GLSL_ARRIVAL};
   return F;
 }`;
 // the road over the plain: from the rise, by the first hamlet, to where the mountain's own road begins
@@ -72,6 +84,7 @@ export const FAIRY_PAL: GroundPalette = {
     decl: /* glsl */ `
       ${GLSL_WOOD}
       ${GLSL_GROUND_LIFE}
+      float fairyTrack(float z){ return z >= 1560.0 ? 46.0 * sin((z - 1560.0) / 62.0) : 4.0 * (1.0 - smoothstep(1440.0, 1560.0, z)); }
       float fairyWay(float z){ return ${f4(WAY0.x0)} + (z - ${f4(WAY0.z0)}) * ${f4(WAY0.k)} + 46.0 * sin(z * 0.011 + 0.4) * sin((z - ${f4(WAY0.z0)}) / ${f4(WAY0.z1 - WAY0.z0)} * 3.14159265); }
     `,
     lit: /* glsl */ `
@@ -105,6 +118,21 @@ export const FAIRY_PAL: GroundPalette = {
         float wd = abs(p.x - fairyWay(p.y));
         float way = (1.0 - smoothstep(3.2, 5.0, wd)) * step(${f4(WAY0.z0)}, p.y) * step(p.y, ${f4(WAY0.z1)});
         col = mix(col, vec3(0.74, 0.66, 0.5) * light, way * 0.9);
+        // the arrival wood: sun let down through the leaves in warm patches that drift, litter and moss underfoot,
+        // and the track itself, two ruts in dark earth, paling toward the crest where the road begins
+        {
+          float inW = ${GLSL_ARRIVAL};
+          float near = 1.0 - smoothstep(1.0, 4.0, fpx);
+          float dap = smoothstep(0.58, 0.76, vnoise(p * 0.15 + vec2(uTime * 0.012, 0.0)) * 0.62 + vnoise(p * 0.41 + 5.0) * 0.38) * near;
+          col = mix(col, vec3(0.1, 0.085, 0.04) * light, inW * 0.4 * vnoise(p * 0.55) * near);
+          col += vec3(0.13, 0.12, 0.045) * light * dap * inW;
+          float tw = abs(p.x - fairyTrack(p.y)) + (vnoise(p * 0.21) - 0.5) * 1.4;
+          float trk = (1.0 - smoothstep(2.3, 4.3, tw)) * step(${f4(WAY0.z1)}, p.y) * (1.0 - smoothstep(1870.0, 1900.0, p.y));
+          vec3 earth = vec3(0.34, 0.27, 0.16) * (0.8 + 0.4 * vnoise(p * 0.8));
+          earth *= 1.0 - 0.3 * (1.0 - smoothstep(0.0, 0.5, abs(tw - 1.3))) * near;
+          earth = mix(vec3(0.74, 0.66, 0.5), earth, smoothstep(1450.0, 1560.0, p.y));
+          col = mix(col, earth * light * (1.0 + 0.7 * dap * inW), trk * 0.92);
+        }
         // the meadows between: flowers in drifts and one by one, stones, strokes of turf
         col = groundLife(col, p, gd, px, light, (1.0 - wood) * (1.0 - fld) * (1.0 - way), vec3(1.0, 0.84, 0.25), vec3(0.86, 0.3, 0.42));
       }
@@ -117,6 +145,7 @@ const GRASS_MASK = /* glsl */ `
   float dm = length(p - vec2(${f4(MT.x)}, ${f4(MT.z)}));
   F += 1.5 * exp(-(dm - 450.0) * (dm - 450.0) / 36100.0);
   ${HAMLETS.map(([x, z, r]) => `{ vec2 d = p - vec2(${f4(x)}, ${f4(z)}); F -= 1.7 * exp(-dot(d, d) / ${f4(r * r)}); }`).join("\n  ")}
+  F += 2.4 * ${GLSL_ARRIVAL};
   return smoothstep(-0.75, -0.5, F) * (1.0 - smoothstep(-0.12, 0.02, F)) * (1.0 - smoothstep(330.0, 400.0, dm));`;
 
 // ---------- pennants on the highest spires ----------
@@ -217,7 +246,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const close: Crown[] = [];
     const track = pathOf("fairy").pts.filter((_, i) => i % 6 === 0);
     const nearTrack = (x: number, z: number) => track.some((q) => q.y < 300 && Math.abs(q.x - x) < 170 && Math.abs(q.z - z) < 170);
-    const nearN = Math.round(7000 * few);
+    const nearN = Math.round(6000 * few);
     for (let i = 0, guard = 0; i < nearN && guard < nearN * 8; guard++) {
       const a = r() * Math.PI * 2;
       const d = Math.sqrt(r()) * 1180;
@@ -232,13 +261,22 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       (nearTrack(x, z) ? close : plain).push({ p: [x, g(x, z) - s * 0.1, z], r: s, h: 0.95 + r() * 0.55, seed: r() });
       i++;
     }
-    const farN = Math.round(5200 * few * Math.min(1, props.far + 0.2));
+    const edge: Crown[] = [];
+    const farN = Math.round(4800 * few * Math.min(1, props.far + 0.2));
     for (let i = 0, guard = 0; i < farN && guard < farN * 8; guard++) {
       const a = r() * Math.PI * 2;
       const d = 1100 + Math.pow(r(), 0.8) * 1500;
       const x = 60 + Math.cos(a) * d;
       const z = 120 + Math.sin(a) * d;
       if (woodF(x, z) < 0.05 + r() * 0.15) continue;
+      // (the arrival wood is planted with real trees, below; and about the crest, where the plane comes out of
+      // it, every tree is a real one too: no round crown stands where it is seen close)
+      if (Math.abs(x) < 200 && z > 1480) continue;
+      if (Math.abs(x) < 430 && z > 1270) {
+        edge.push({ p: [x, g(x, z) - 0.4, z], r: 6 + r() * 3, h: 1, seed: r() });
+        i++;
+        continue;
+      }
       const s = 9 + (d - 1100) * 0.008 + r() * 6;
       (nearTrack(x, z) ? close : plain).push({ p: [x, g(x, z) - s * 0.1, z], r: s, h: 1.1 + r() * 0.55, seed: r() });
       i++;
@@ -262,8 +300,8 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const nearTrees: Crown[] = [];
     const midTrees: Crown[] = [];
     const low = pathOf("fairy").pts.filter((q, i) => i % 4 === 0 && q.y < 150);
-    const NEAR_MAX = props.mobile ? 40 : 130;
-    const MID_MAX = props.mobile ? 420 : 1050;
+    const NEAR_MAX = props.mobile ? 30 : 60;
+    const MID_MAX = props.mobile ? 340 : 540;
     const ranked = close
       .map((c) => {
         let d = 1e9;
@@ -279,8 +317,46 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       else if (midTrees.length < MID_MAX) midTrees.push(tree);
       else plain.push(c);
     }
+    midTrees.push(...edge);
+    // ---- the arrival wood: tall trees close on either hand of the track, their crowns meeting over it; they
+    // stand back and open where the plane rises to the crest. Ferns and low growth along the verges.
+    const ferns: Crown[] = [];
+    {
+      const step = props.mobile ? 23 : 17;
+      for (let z = 1490; z < 1885; z += step) {
+        for (let x = -190; x <= 190; x += step) {
+          const tz = z + (r() - 0.5) * step * 0.8;
+          const tx = x + (r() - 0.5) * step * 0.8;
+          const d = Math.abs(tx - trackX(tz));
+          // (the way itself is clear: wider and wider toward the crest, where the plane climbs out)
+          const clear = 12 + Math.max(0, 1672 - tz) * 0.62;
+          if (d < clear) continue;
+          if (r() > sm(1480, 1560, tz) * (d < 60 ? 1 : 0.42)) continue;
+          const big = (d < 45 ? 11 : 9) + r() * 3.5 - Math.max(0, 1640 - tz) * 0.03;
+          (d < 36 && !props.mobile ? nearTrees : midTrees).push({ p: [tx, g(tx, tz) - 0.5, tz], r: big, h: 1.3 + r() * 0.25, seed: r() });
+        }
+      }
+      for (let i = 0; i < (props.mobile ? 150 : 430); i++) {
+        const z = 1548 + r() * 335;
+        const sd = r() < 0.5 ? -1 : 1;
+        const d = 6.5 + Math.pow(r(), 1.5) * 48 + Math.max(0, 1620 - z) * 0.1;
+        const x = trackX(z) + sd * d;
+        const sz = 0.8 + r() * r() * 1.3;
+        ferns.push({ p: [x, g(x, z) - 0.25, z], r: sz, h: 0.7 + r() * 0.5, seed: r() });
+      }
+    }
     const leaves = makeLeafTexture();
     const leafy = makeLeafyMaterial(leaves);
+    const bushGeo = buildTree("bush", 0, 0);
+    const fernMesh = leafyMesh(ferns, bushGeo, makeLeafyMaterial(leaves, { lit: [1.2, 1.3, 0.66], shade: [1.05, 1.25, 0.8] }), 1.3);
+    bushGeo.dispose();
+    // sun come down through the canopy onto the track, and a thin mist lying in the wood
+    const shafts: Beam[] = [];
+    for (let i = 0; i < (props.mobile ? 6 : 13); i++) {
+      const z = 1590 + (i / 12) * 270 + (r() - 0.5) * 12;
+      const x = trackX(z) + (r() - 0.5) * 26;
+      shafts.push({ foot: [x, g(x, z), z], len: 46 + r() * 22, w: 3.4 + r() * 3.6, k: 0.42 + r() * 0.3 });
+    }
     const treeMeshes = [0, 1].flatMap((v) => {
       const rich = buildTree("broad", v, props.mobile ? 0 : 1);
       const coarse = buildTree("broad", v, 0);
@@ -485,6 +561,11 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       belt.push({ p: [MT.x + Math.cos(a) * d, y0 + 205 + r() * 90, MT.z + Math.sin(a) * d], w: 70 + r() * 70, seed: r(), tall: 0.7 });
     }
     const puffs: Puff[] = [];
+    for (let i = 0; i < (props.mobile ? 6 : 14); i++) {
+      const z = 1570 + (i / 13) * 300;
+      const x = trackX(z) + (r() - 0.5) * 90;
+      puffs.push({ p: [x, g(x, z) + 4 + r() * 7, z], size: 46 + r() * 40, a: 0.26 });
+    }
     // air in layers: a band of low mist across the valley between the rise and the mountain (the mountain stands
     // up out of it), mist in the woods about its foot, and long banks behind it so the far plain goes back in steps
     for (let i = 0; i < (props.mobile ? 10 : 24); i++) {
@@ -519,6 +600,8 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       { c: [MT.x + 30, y0 + 560, MT.z + 30], r: 210, n: props.mobile ? 6 : 14, size: 2.0, speed: 11 },
       { c: [MT.x - 20, y0 + 730, MT.z - 10], r: 90, n: props.mobile ? 5 : 9, size: 2.6, speed: 9 },
       { c: [120, 120, 520], r: 150, n: props.mobile ? 6 : 12, size: 1.5, speed: 10 },
+      // small birds under the trees of the arrival wood
+      { c: [trackX(1720), g(trackX(1720), 1720) + 13, 1720], r: 44, n: props.mobile ? 4 : 9, size: 0.8, speed: 6 },
       { c: [-420, 150, 200], r: 190, n: props.mobile ? 5 : 11, size: 1.5, speed: 11 },
       { c: [520, 200, -700], r: 160, n: props.mobile ? 5 : 10, size: 1.7, speed: 10 },
     ];
@@ -550,12 +633,13 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       leaves,
       leafy,
       treeMeshes,
+      fernMesh,
+      shafts,
       cypress: cypressMesh(cyp, makeCrownMaterial({ a: [0.045, 0.12, 0.06], b: [0.07, 0.15, 0.06], shade: [0.02, 0.05, 0.055], wind: 0.5, gold: 0 })),
       set: k.build(),
       lamps,
-      heaps: heapMesh(heapBlobs(heaps, 5), heapMat, props.mobile ? 1 : 2),
+      heaps: heapMesh([...heapBlobs(heaps, 5), ...heapBlobs(belt, 13)], heapMat, props.mobile ? 1 : 2),
       far: heapMesh(heapBlobs(far, 9), heapMat, 1),
-      belt: heapMesh(heapBlobs(belt, 13), heapMat, props.mobile ? 1 : 2),
       heapMat,
       puffs,
       flocks,
@@ -601,8 +685,9 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       <RisingFlock origin={[36, b.flockY, 1040]} n={props.mobile ? 24 : 60} reach={210} size={1.5} tint={[0.14, 0.09, 0.1]} away={[0.5, -0.86]} />
       <primitive object={b.heaps} />
       <primitive object={b.far} />
-      <primitive object={b.belt} />
       <Birds flocks={b.flocks} tint={[0.14, 0.09, 0.1]} />
+      <primitive object={b.fernMesh} />
+      <SunShafts list={b.shafts} tint={[1, 0.92, 0.62]} />
       <points geometry={b.motes} material={b.moteMat} />
       {props.effects > 0.2 && <Mist puffs={b.puffs} />}
     </>
