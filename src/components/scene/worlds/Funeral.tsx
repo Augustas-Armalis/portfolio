@@ -262,7 +262,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       glows.push({ p: [o.x, L.y[L.iOut] + 20, o.z], size: 70, col: [0.16, 0.34, 0.9], k: 0.07 });
     }
     // the sheet of light deep in the cave it comes out of, a little way in from the vault's end
-    const iV = 5;
+    const iV = Math.max(2, L.iIn - 7);
     const veil = { p: [L.pts[iV].x, L.y[iV] + CAVE.top * 0.52, L.pts[iV].z] as V3, yaw: Math.atan2(L.tan[iV][0], L.tan[iV][1]) };
     glows.push({ p: veil.p, size: 80, col: [0.4, 0.5, 0.32], k: 0.08 });
     // candles along the road's edges all the way up, warm against the blue, now on one side, now on the other
@@ -400,8 +400,8 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
   }, [props.mobile, props.effects > 0.5]);
   useEffect(() => () => dropFuneralRock(b.rock), [b]);
   useFrame(({ camera }) => {
-    // made ready ahead of time, it waits
-    if (voyage.cur !== "funeral") return;
+    // (what does not depend on the eye is kept up whether or not this is the world that stands: seen through the
+    // grotto's window before it is entered, it is already as it will be)
     // A bell-light passes up the procession: from the cave it comes out of, along every turn of the road, to the
     // cave at the pass, which flares as it arrives; then, after a silence, another. (Counted on the sky's clock.)
     {
@@ -415,6 +415,8 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       FUNERAL_U.uCaveK.value = 1 + 1.5 * Math.exp(-d * d);
       FUNERAL_U.uBorn.value = (L.iOut - 16) * L.STEP;
     }
+    // made ready ahead of time, it waits
+    if (voyage.cur !== "funeral") return;
     b.souls.update(camera);
     shell.current?.position.copy(camera.position).sub(ORIGIN);
     aurora.current?.position.copy(camera.position).sub(ORIGIN);

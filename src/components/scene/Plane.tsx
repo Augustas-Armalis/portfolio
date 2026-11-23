@@ -189,6 +189,8 @@ export function Plane({
       pathI: 0,
       seek: 0,
       gateSide: -1,
+      gateBack: false, // the hand has missed the gate and is flying back out to come at it again
+      gateWait: 0, // seconds the hand has spent at the end of the way without getting through
       camYaw: 0,
       camPitch: 0,
       // free look: where the eye is turned from straight behind the plane, and where it is turning to
@@ -406,6 +408,8 @@ export function Plane({
     st.pathI = 0;
     st.seek = 0;
     st.gateSide = -1;
+    st.gateBack = false;
+    st.gateWait = 0;
     st.gateAlong = NaN;
     st.snap = true;
     trails.reset();
@@ -495,13 +499,55 @@ export function Plane({
       const ahead = Math.round((24 + st.speed * 1.7) / 4);
       const ti = def.loop ? (st.pathI + ahead) % n : Math.min(n - 1, st.pathI + ahead);
       const tp = path.pts[ti];
-      const dx = tp.x - lx;
-      const dz = tp.z - lz;
+      let tx = tp.x;
+      let ty = tp.y;
+      let tz = tp.z;
+      // The end of the way is the gate, and the hand flies the GATE, not the last point of the path. Aimed at that
+      // last point, a plane that came in too high or too wide could only circle it for ever (the point was nearer
+      // than it can turn). Instead it follows the line through the gate: its mark runs ahead of it along that
+      // line and on out the far side, so it straightens up and goes through. If it has missed (it is past the
+      // gate's plane, or too far to one side to make it), it flies back out to a point well before the gate, four
+      // turning-circles away, comes round, and lines up again.
+      const gt = def.loop || voyage.phase !== "open" ? null : gateAt(id);
+      if (gt) {
+        const hgx = -Math.sin(gt.yaw);
+        const hgz = -Math.cos(gt.yaw);
+        const rx = lx - gt.pos.x;
+        const rz = lz - gt.pos.z;
+        const along = hgx * rx + hgz * rz;
+        const side = Math.abs(-hgz * rx + hgx * rz);
+        const R = st.speed / 0.5; // the circle it turns in at this pace
+        const D = Math.max(170, R * 4);
+        const off = Math.hypot(rx, rz);
+        const ending = (ti >= n - 1 || st.gateBack) && off < D * 3 + 400;
+        if (ending) {
+          if (along > 6 || (along > -R * 1.1 && side > 17) || st.pos.y - gt.pos.y > 24 + Math.max(0, -along) * 0.45) st.gateBack = true;
+          else if (st.gateBack && along < -D * 0.7) st.gateBack = false;
+          const to = st.gateBack ? -D : Math.min(along + Math.max(45, R * 1.5), 60);
+          tx = gt.pos.x + hgx * to;
+          tz = gt.pos.z + hgz * to;
+          ty = gt.pos.y - 2;
+        } else st.gateBack = false;
+        // (it has been round this gate a long while and is still not through: it is simply let through)
+        if (off < 450) st.gateWait += dt * a;
+        else if (off > 700) st.gateWait = 0;
+        if (st.gateWait > 40) {
+          st.gateWait = 0;
+          st.gateBack = false;
+          voyage.next = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1] ?? null;
+          if (voyage.next) voyage.phase = "closing";
+        }
+      }
+      const dx = tx - lx;
+      const dz = tz - lz;
       const err = wrap(Math.atan2(-dx, -dz) - st.yaw);
       const ax = THREE.MathUtils.clamp(-err * 1.5, -1, 1);
-      const ay = THREE.MathUtils.clamp((Math.atan2(tp.y - st.pos.y, Math.hypot(dx, dz) + 6) / 0.5) * 1.5, -1, 1);
+      const ay = THREE.MathUtils.clamp((Math.atan2(ty - st.pos.y, Math.hypot(dx, dz) + 6) / 0.5) * 1.5, -1, 1);
       sx = sx * (1 - a) + ax * a;
       sy = sy * (1 - a) + ay * a;
+    } else {
+      st.gateBack = false;
+      st.gateWait = 0;
     }
 
     // near the gate, and headed for it, the plane is drawn gently to its middle: nobody misses the way on
@@ -545,7 +591,21 @@ export function Plane({
     const g0b = ground;
     let pushX = 0;
     let pushZ = 0;
+    // (nothing leans it aside in the gate's own way: whatever stands there, the way through is open, and a plane
+    // lined up on the gate was being pushed off it at the last moment by the gate's own surroundings)
+    let gateway = false;
+    {
+      const gw = voyage.phase === "open" ? gateAt(id) : null;
+      if (gw) {
+        const rx = lx - gw.pos.x;
+        const rz = lz - gw.pos.z;
+        const along = -Math.sin(gw.yaw) * rx - Math.cos(gw.yaw) * rz;
+        const side = Math.abs(Math.cos(gw.yaw) * rx - Math.sin(gw.yaw) * rz);
+        gateway = along > -150 && along < 30 && side < 24 + Math.max(0, -along) * 0.25 && Math.abs(st.pos.y - gw.pos.y) < 45;
+      }
+    }
     for (const ob of def.obstacles) {
+      if (gateway) break;
       const ox = lx - ob.x;
       const oz = lz - ob.z;
       const d = Math.hypot(ox, oz);
@@ -618,7 +678,8 @@ export function Plane({
     // and at a cruise the quiet hand takes its time everywhere
     st.cruise = damp(st.cruise, voyage.cruise ? 1 : 0, 1.4, dt);
     // (a world built several times the size of the others is flown that much faster: WorldDef.pace; the top speed is held near the ordinary one)
-    const pace = (id === "kings" ? kingsPace(lz - KINGS.z) : (def.pace ?? 1)) * (1 - 0.55 * st.cruise * a);
+    // (coming round for another go at a gate, it takes its time: a tighter circle)
+    const pace = (id === "kings" ? kingsPace(lz - KINGS.z) : (def.pace ?? 1)) * (1 - 0.55 * st.cruise * a) * (st.gateBack ? 0.65 : 1);
     const vT = opts.launching ? Math.min(speedOf(voyage.throttle), 2 + st.t * 3.6) : Math.min(speedOf(voyage.throttle) * pace, SPEED.max * Math.max(1, (def.pace ?? 1) * 0.5)) - Math.sin(st.pitch) * 9 * pace;
     // (eased twice over: the pace a moment ago leads the pace now, so a change of speed has no corner in it)
     st.speedT = damp(st.speedT, Math.max(SPEED.min * 0.8, vT), opts.launching ? 3 : 1.6, dt);
@@ -715,7 +776,7 @@ export function Plane({
       if (voyage.held > (voyage.quick ? 0.3 : 0.75) && voyage.frames >= (voyage.quick ? 3 : 5) && !voyage.skyFrom) voyage.phase = "opening";
     } else {
       // (after a window there was never more than a breath of cloud at the frame's edges: it is gone in a moment)
-      voyage.veil = Math.max(0, voyage.veil - dt / (st.windowed ? 0.5 : 1.7));
+      voyage.veil = Math.max(0, voyage.veil - dt / (st.windowed ? 0.9 : 1.7));
       if (voyage.veil <= 0) {
         voyage.phase = "open";
         st.windowed = false;
@@ -748,11 +809,13 @@ export function Plane({
     st.pathI = 0;
     st.seek = 0;
     st.gateSide = -1;
+    st.gateBack = false;
+    st.gateWait = 0;
     st.gateAlong = NaN;
     st.idle = Math.max(st.idle, 0);
     updateNose();
     st.windowed = true;
-    voyage.veil = 0.32;
+    voyage.veil = 0.16;
     voyage.held = 0;
     voyage.phase = "opening";
   };
@@ -776,6 +839,8 @@ export function Plane({
       st.idle = 9;
       st.pathI = 0;
       st.gateSide = -1;
+    st.gateBack = false;
+    st.gateWait = 0;
       st.fov = cam.fov;
       st.qFrom.copy(cam.quaternion);
       st.nearOn = false;

@@ -221,7 +221,9 @@ export function makeHeapMaterial(o: { lit?: V3; shade?: V3; rim?: number; drift?
         vec3 pp = position * (1.0 + uRise * (0.1 * sin(position.y * 4.2 - uTime * 0.7 + instanceMatrix[3].y * 0.05 + ph * 9.0) + 0.05 * sin(position.x * 5.0 + position.y * 7.0 - uTime * 1.1)));
         vec4 lp = instanceMatrix * vec4(pp, 1.0);
         // cloud is never quite still: the whole sky drifts a little, each heap breathing in its place
-        lp.xyz += vec3(sin(uTime * 0.05 + ph) * 6.0 + uTime * 0.6, sin(uTime * 0.07 + ph * 1.7) * 1.5, cos(uTime * 0.045 + ph * 1.3) * 4.0) * uDrift;
+        // (it wanders about its place and comes back: a drift that only ever went one way carried the heaps off across
+        // the world with the hours, until one hung dark over the lens)
+        lp.xyz += vec3(sin(uTime * 0.05 + ph) * 6.0 + sin(uTime * 0.0035 + ph * 0.6) * 150.0, sin(uTime * 0.07 + ph * 1.7) * 1.5, cos(uTime * 0.045 + ph * 1.3) * 4.0) * uDrift;
         // a cloud that parts: its lobes draw away to either side of a line through (uPart.x, uPart.y), by uPart.z metres
         if (uPart.z > 0.0) { vec2 d = instanceMatrix[3].xz - uPart.xy; lp.xz += normalize(d + vec2(1e-3)) * uPart.z * (0.6 + 0.4 * fract(ph * 7.1)); lp.y += uPart.z * 0.12 * (fract(ph * 3.3) - 0.3); }
         vec4 wp = modelMatrix * lp;
@@ -878,7 +880,7 @@ const isShown = (o: THREE.Object3D) => {
 // A pointed arch standing free: an opening `w` wide whose point is `h` above its foot, in a wall `t` thick all
 // round and `depth` through. It lies in the XY plane, its foot on y = 0, centred through its depth: turn it to
 // the gate's yaw and a sheet of light can hang in it.
-export function archGeometry(w: number, h: number, t: number, depth: number) {
+export function archGeometry(w: number, h: number, t: number, depth: number, curve = 12) {
   const shape = (ww: number, hh: number, flat = false) => {
     const half = ww / 2;
     const spring = Math.max(hh * 0.35, hh - half * 1.6);
@@ -898,7 +900,7 @@ export function archGeometry(w: number, h: number, t: number, depth: number) {
   };
   const outer = shape(w + t * 2, h + t * 1.3);
   outer.holes.push(shape(w, h));
-  const g = new THREE.ExtrudeGeometry(outer, { depth, bevelEnabled: false, curveSegments: 12 });
+  const g = new THREE.ExtrudeGeometry(outer, { depth, bevelEnabled: false, curveSegments: curve });
   g.translate(0, 0, -depth / 2);
   return g;
 }
@@ -908,7 +910,8 @@ export function archGeometry(w: number, h: number, t: number, depth: number) {
 // short trunk and boughs, and a crown of many small leaf clumps, each a card that turns to the eye and wears a
 // painted cluster of leaves, cut soft by the lens's multisampling. Painted here in his manner: a round heaped
 // crown, deep greens, olive in the shade, a gentle warm light on top, never acid.
-export function makeLeafyMaterial(leaves: THREE.Texture, o: { lit?: V3; shade?: V3 } = {}) {
+// (bloom: the foliage is blossom of this colour, not leaves)
+export function makeLeafyMaterial(leaves: THREE.Texture, o: { lit?: V3; shade?: V3; bloom?: V3 } = {}) {
   return new THREE.ShaderMaterial({
     alphaToCoverage: true,
     uniforms: { ...SKY_U, ...WORLD_U, uLeafTex: { value: leaves } },
@@ -969,6 +972,7 @@ export function makeLeafyMaterial(leaves: THREE.Texture, o: { lit?: V3; shade?: 
           float k = fract(vSeed * 7.31);
           alb *= mix(vec3(1.0), vec3(1.45, 1.2, 0.62), smoothstep(0.8, 0.98, k) * 0.7);
           alb *= mix(vec3(1.0), vec3(0.7, 0.9, 1.08), smoothstep(0.22, 0.04, k) * 0.7);
+          ${o.bloom ? `alb = ${v3(o.bloom)} * (0.66 + 0.5 * t.g / max(t.a, 0.3)); alb = mix(alb, vec3(1.0, 0.93, 0.9), 0.55 * smoothstep(0.55, 1.0, fract(k * 5.3 + vLeaf.x * 0.37 + vUv.x * 0.2)));` : ""}
           ao = vLeaf.y;
         } else {
           alb *= 0.8 + 0.4 * vnoise(vec2(atan(vLocal.z, vLocal.x) * 4.0, vLocal.y * 1.3));

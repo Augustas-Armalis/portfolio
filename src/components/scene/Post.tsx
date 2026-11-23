@@ -3,6 +3,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { noteGpu } from "@/lib/quality";
 import { SKY_U } from "./sky";
 
 // (read once a frame: kept, not made anew)
@@ -704,10 +705,13 @@ function build(level: number) {
   const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ao, ao2, ldr, ...hist, pick];
   // (hist: which of the two holds the frame before, whether it holds one at all, and how the camera saw the world then)
   const past = { i: 0, ok: false, vp: new THREE.Matrix4(), eye: new THREE.Vector3(), q: new THREE.Quaternion(), at: 0, ray: 0 };
-  return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, hist, past, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, steady, tail, w: 0, h: 0 };
+  return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, hist, past, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, steady, tail, warmed: 0, w: 0, h: 0 };
 }
 
 const sunV = new THREE.Vector3();
+// every pass, in the order they are made: those every frame needs first
+const WARM = ["half", "ao", "aoBlur", "down", "up", "comp", "paint", "steady", "tile", "tile2", "dof", "tent", "mask", "rays"] as const;
+const FIRST = 7; // how many of them a frame cannot be drawn without
 const VP = new THREE.Matrix4();
 
 export function Post({ level }: { level: number }) {
@@ -715,6 +719,8 @@ export function Post({ level }: { level: number }) {
   // linear float targets need the extension; without it the scene is drawn as before
   const ok = useMemo(() => gl.capabilities.isWebGL2 && (gl.extensions.has("EXT_color_buffer_float") || gl.extensions.has("EXT_color_buffer_half_float")), [gl]);
   const lv = ok ? level : 0;
+  // (the card's name, for the quality gear: asked of this context, never of one made for the purpose)
+  useEffect(() => noteGpu(gl.getContext()), [gl]);
   const p = useMemo(() => (lv > 0 ? build(lv) : null), [lv]);
   useEffect(
     () => () => {
@@ -804,6 +810,26 @@ export function Post({ level }: { level: number }) {
       gl.setRenderTarget(target);
       gl.render(p.quad, p.cam);
     };
+    // The lens is fourteen programs, and making them all in its first frame was one task of half a second (two
+    // seconds on a slow machine). They are made one a frame instead. While the loader's own picture covers the
+    // canvas (postCtl.overlay) nothing of the scene needs to reach the screen, so for those first frames the scene
+    // is only drawn into its target (which also warms its own shaders and buffers) and one pass of the lens is
+    // made; the loader is laid over as always. Where there is no loader over it (a change of gear in mid-visit)
+    // the passes a frame cannot do without are made at once, as before, and the rest one a frame.
+    if (p.warmed < WARM.length) {
+      const covered = !!postCtl.overlay && !out;
+      if (!covered) while (p.warmed < FIRST) run(p.m[WARM[p.warmed++]], p.pick);
+      else if (p.warmed < FIRST) {
+        run(p.m[WARM[p.warmed++]], p.pick);
+        POST_U.uLinearOut.value = 1;
+        gl.setRenderTarget(p.full);
+        gl.render(scene, camera);
+        POST_U.uLinearOut.value = 0;
+        overlay();
+        return;
+      }
+      if (p.warmed >= FIRST && p.warmed < WARM.length) run(p.m[WARM[p.warmed++]], p.pick);
+    }
     p.depthU.uNear.value = pc.near;
     p.depthU.uFar.value = pc.far;
     p.cocU.uFocus.value = focusM;

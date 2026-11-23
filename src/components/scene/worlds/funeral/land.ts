@@ -233,7 +233,8 @@ function build() {
   // the path of light: out of the cave over the road's middle, rising as the valley opens so the whole climb is
   // seen at once; then down beside the road on its valley side, a little above the hoods; round each turn on the
   // outside, over the drop, looking back at the crowd on the edge; at the pass over their heads and in
-  const iIn = ctlI[0] + 16;
+  // (the plane arrives a little way inside the mouth: a few seconds of dark with the night's blue ahead, not a long tunnel)
+  const iIn = Math.max(8, iOut - 36);
   const path: [number, number, number][] = [];
   for (let i = iIn; i <= iGate + 10; i += 10) {
     const p = pts[i];

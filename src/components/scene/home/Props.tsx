@@ -426,14 +426,62 @@ function build() {
   const Lh = PLACES.lighthouse;
   const ly = landH(Lh.x, Lh.z) - 0.5;
   b.at(Lh.x, ly, Lh.z);
-  b.cyl(0, 0, 0, 3.1, 2.1, 19, 16, [0.62, 0.6, 0.56], 0, [0.8, 0.78, 0.74]);
-  b.cyl(0, 6.2, 0, 2.8, 2.55, 2.6, 16, [0.55, 0.14, 0.1]);
-  b.cyl(0, 12.6, 0, 2.47, 2.25, 2.4, 16, [0.55, 0.14, 0.1]);
-  b.cyl(0, 19, 0, 2.7, 2.7, 0.3, 16, [0.12, 0.12, 0.13]);
-  b.cyl(0, 19.3, 0, 1.4, 1.4, 2.2, 10, LAMP, 1.6);
-  b.cyl(0, 21.5, 0, 1.9, 0, 1.6, 10, [0.12, 0.12, 0.13]);
-  b.box(4.2, 2, 2.5, 5, 4, 6, PLASTER);
-  b.roof(4.2, 4, 2.5, 5, 6, 2.4, TILE, PLASTER);
+  // a stone plinth, then the tower in bands of white and red, tapering, its door and small windows
+  b.cyl(0, -1, 0, 4.0, 3.7, 2.6, 16, [0.3, 0.29, 0.27], 0, [0.36, 0.34, 0.31]);
+  const LH = 26;
+  const R0 = 3.15;
+  const R1 = 2.05;
+  const rAt = (y: number) => R0 + (R1 - R0) * (y / LH);
+  const BANDS = 7;
+  for (let i = 0; i < BANDS; i++) {
+    const y0 = 1.6 + (i / BANDS) * (LH - 1.6);
+    const y1 = 1.6 + ((i + 1) / BANDS) * (LH - 1.6);
+    const red = i % 2 === 1;
+    const c: [number, number, number] = red ? [0.5, 0.12, 0.09] : [0.82, 0.8, 0.76];
+    b.cyl(0, y0, 0, rAt(y0), rAt(y1), y1 - y0, 24, c, 0, c);
+  }
+  b.box(0, 2.9, rAt(2.9) - 0.02, 1.1, 2.3, 0.12, [0.15, 0.1, 0.07]);
+  for (let i = 0; i < 4; i++) {
+    const y = 7 + i * 5;
+    const a = i * 1.7;
+    b.at(Lh.x + Math.cos(a) * rAt(y), ly, Lh.z + Math.sin(a) * rAt(y), -a + Math.PI / 2);
+    b.box(0, y, 0, 0.55, 0.9, 0.12, [0.08, 0.08, 0.1], 0.3);
+  }
+  b.at(Lh.x, ly, Lh.z);
+  // the gallery: a dark iron platform on corbels, a railing of posts and a rail
+  b.cyl(0, LH, 0, 3.3, 3.3, 0.3, 24, [0.12, 0.12, 0.13]);
+  b.cyl(0, LH - 0.6, 0, 2.15, 3.3, 0.6, 24, [0.7, 0.68, 0.64]);
+  for (let i = 0; i < 28; i++) {
+    const a = (i / 28) * Math.PI * 2;
+    b.box(Math.cos(a) * 3.15, LH + 0.8, Math.sin(a) * 3.15, 0.06, 1.0, 0.06, [0.1, 0.1, 0.11]);
+  }
+  b.cyl(0, LH + 1.25, 0, 3.18, 3.18, 0.07, 28, [0.1, 0.1, 0.11]);
+  // the lantern room: glass in a cage of mullions, the lamp lit within; a dome, a vent ball, a vane
+  b.cyl(0, LH + 0.3, 0, 1.7, 1.7, 0.6, 16, [0.12, 0.12, 0.13]);
+  b.cyl(0, LH + 0.9, 0, 1.55, 1.55, 2.4, 16, LAMP, 1.6);
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    b.box(Math.cos(a) * 1.6, LH + 2.1, Math.sin(a) * 1.6, 0.07, 2.4, 0.07, [0.1, 0.1, 0.11]);
+  }
+  b.cyl(0, LH + 3.3, 0, 1.95, 0.25, 1.5, 16, [0.12, 0.13, 0.13]);
+  b.cyl(0, LH + 4.8, 0, 0.25, 0.25, 0.4, 8, [0.12, 0.13, 0.13]);
+  b.box(0, LH + 5.6, 0, 0.04, 1.4, 0.04, [0.1, 0.1, 0.1]);
+  b.box(0.25, LH + 6.0, 0, 0.6, 0.12, 0.02, [0.1, 0.1, 0.1]);
+  // the keeper's house beside it: white walls, a red roof, its chimney, a low wall round the yard
+  b.box(6.2, 2.0, 3.2, 6, 4, 7, PLASTER);
+  b.roof(6.2, 4, 3.2, 6, 7, 2.8, TILE, PLASTER);
+  b.box(7.6, 6.2, 3.2, 0.6, 2.2, 0.6, PLASTER);
+  for (const z of [0.6, 3.2, 5.8]) b.box(9.22, 2.2, z, 0.06, 1.1, 0.8, [0.5, 0.36, 0.14], 0.9);
+  b.box(3.2, 2.2, 6.72, 0.9, 1.1, 0.06, [0.5, 0.36, 0.14], 0.9);
+  for (const [x0, z0, x1, z1] of [
+    [-5, -5, 11, -5],
+    [11, -5, 11, 9],
+    [11, 9, -5, 9],
+  ] as [number, number, number, number][]) {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    b.at(Lh.x + (x0 + x1) / 2, ly, Lh.z + (z0 + z1) / 2, Math.atan2(x1 - x0, z1 - z0) + Math.PI / 2);
+    b.box(0, 0.5, 0, len, 1.0, 0.45, [0.34, 0.32, 0.29]);
+  }
   return b.geometry();
 }
 
@@ -495,7 +543,7 @@ export function PropLights() {
     g.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
     g.setIndex([0, 1, 2, 0, 2, 3]);
     const S = PLACES.shrine;
-    const at = [P.x - 0.32, SEA + 0.95 + 1.82, P.z1 - 0.3, 0.55, Lh.x, landH(Lh.x, Lh.z) + 19.9, Lh.z, 7.0, S.x, landH(S.x, S.z) + 2.35, S.z + 0.2, 0.3];
+    const at = [P.x - 0.32, SEA + 0.95 + 1.82, P.z1 - 0.3, 0.55, Lh.x, landH(Lh.x, Lh.z) - 0.5 + 28.1, Lh.z, 7.0, S.x, landH(S.x, S.z) + 2.35, S.z + 0.2, 0.3];
     g.setAttribute("aAt", new THREE.InstancedBufferAttribute(new Float32Array(at), 4));
     g.instanceCount = 3;
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);

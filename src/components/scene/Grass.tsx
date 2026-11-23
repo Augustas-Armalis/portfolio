@@ -52,8 +52,11 @@ const sstep = (a: number, b: number, x: number) => {
 
 function scatter(g: THREE.InstancedBufferGeometry, ring: Ring, seed: number) {
   let s = seed;
+  // (the same sequence as (s * 16807) % 2147483647, without the slow float remainder: this runs some ten
+  // million times while the field is laid out)
   const rnd = () => {
-    s = (s * 16807) % 2147483647;
+    const x = s * 16807;
+    s = x - Math.floor(x / 2147483647) * 2147483647;
     return (s - 1) / 2147483646;
   };
   const off = new Float32Array(ring.count * 3);
@@ -183,7 +186,7 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         lod *= smoothstep(0.6, 1.5, streamD(root));
         // (and none on the lake's sandy rim: pale tufts stood in a row on the sand there)
         lod *= smoothstep(1.3, 1.75, lk);
-        lod *= (1.0 - smoothstep(0.15, 0.6, townStreet(root))) * (1.0 - smoothstep(0.2, 0.7, forestTrack(root))) * (1.0 - caveIn(root));
+        lod *= (1.0 - smoothstep(0.15, 0.6, townStreet(root))) * (1.0 - smoothstep(0.2, 0.7, forestTrack(root))) * (1.0 - caveIn(root)) * (1.0 - fieldPlot(root).z);
         float h = aShape.x * max(lod, 0.001) * mix(1.0, 0.6, smoothstep(0.3, 0.8, woods)); float w = aShape.y; float bend = aShape.z; float r = aShape.w;
         #ifdef WRAP
           #ifdef FAR

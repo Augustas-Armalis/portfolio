@@ -9,8 +9,25 @@ import { Kit, paint, type V3 } from "../kit";
 export const ISLE = { meadow: 525, tread: 13.5, rise: 4.8, n: 24, base: 9 };
 export const TOP_R = ISLE.meadow - ISLE.n * ISLE.tread;
 export const TOP_Y = ISLE.base + ISLE.n * ISLE.rise;
-// how high the stone stands at a distance from the middle (the ground's own height outside the steps)
-export const stoneAt = (r: number) => (r >= ISLE.meadow ? ISLE.base : ISLE.base + Math.min(ISLE.n, Math.floor((ISLE.meadow - r) / ISLE.tread) + 1) * ISLE.rise);
+// Two garden terraces break the flight into three: each takes the place of three steps, a wall of lit niches
+// before it and a broad level of lawn, beds and trees behind. They go all the way round but for the great flight
+// on the north side, which climbs straight through them (`gap`: the half-angle left open there).
+export const TERRACES = [
+  { i0: 6, n: 3, gap: 0.165 },
+  { i0: 14, n: 3, gap: 0.2 },
+].map((t) => ({ ...t, r0: ISLE.meadow - t.i0 * ISLE.tread, r1: ISLE.meadow - (t.i0 + t.n) * ISLE.tread, y0: ISLE.base + t.i0 * ISLE.rise, y1: ISLE.base + (t.i0 + t.n) * ISLE.rise + 0.4 }));
+const FLIGHT = -Math.PI / 2;
+// how far a bearing lies from the great flight's own
+export const offFlight = (a: number) => Math.abs(Math.atan2(Math.sin(a - FLIGHT), Math.cos(a - FLIGHT)));
+// water let down the mount from the court in narrow rills, a fall at every step and a long one at each terrace wall
+export const RILLS = [Math.PI, Math.PI - 0.85, Math.PI + 0.85, 0.5, -0.5, Math.PI / 2];
+// how high the stone stands at a distance from the middle (the ground's own height outside the steps); with a
+// bearing, the terraces are counted (without one: the plain steps, as on the great flight)
+export const stoneAt = (r: number, a?: number) => {
+  if (r >= ISLE.meadow) return ISLE.base;
+  if (a !== undefined) for (const t of TERRACES) if (r <= t.r0 && r > t.r1 && offFlight(a) > t.gap) return t.y1;
+  return ISLE.base + Math.min(ISLE.n, Math.floor((ISLE.meadow - r) / ISLE.tread) + 1) * ISLE.rise;
+};
 
 const TREAD: V3 = [0.66, 0.53, 0.24];
 const LIP: V3 = [0.92, 0.78, 0.4];
@@ -20,7 +37,7 @@ const mix3 = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + 
 
 // The steps: ring within ring. Each tread is palest along its lip and shaded in the nook under the next riser,
 // so the flight reads as steps from any distance without a single line being drawn on it.
-export function buildSteps(mobile: boolean) {
+export function buildSteps(mobile: boolean, ground?: (x: number, z: number) => number) {
   const seg = mobile ? 96 : 220;
   const pos: number[] = [];
   const col: number[] = [];
@@ -85,6 +102,101 @@ export function buildSteps(mobile: boolean) {
   const k1 = ring(POOL_R, TOP_Y + 1.3, TREAD);
   band(k0, k1);
   band(k1, ring(POOL_R, TOP_Y - 3, NOOK));
+  // ---- the terraces
+  const arc = (r: number, y: number, c: V3, glow: number, a0: number, a1: number, n: number, alt?: V3[], every = 6) => {
+    const b = pos.length / 3;
+    for (let i = 0; i <= n; i++) {
+      const a = a0 + ((a1 - a0) * i) / n;
+      pos.push(Math.cos(a) * r, y, Math.sin(a) * r);
+      const j = Math.floor(i / every);
+      const kc = alt && j % 2 === 1 ? alt[((j - 1) / 2) % alt.length | 0] : c;
+      col.push(kc[0], kc[1], kc[2], glow);
+    }
+    return b;
+  };
+  const span = (a: number, b: number, n: number) => {
+    for (let i = 0; i < n; i++) idx.push(a + i, a + i + 1, b + i, a + i + 1, b + i + 1, b + i);
+  };
+  const vert = (x: number, y: number, z: number, c: V3, glow: number) => {
+    pos.push(x, y, z);
+    col.push(c[0], c[1], c[2], glow);
+    return pos.length / 3 - 1;
+  };
+  // (a face seen from either side)
+  const quad2 = (a: number, b: number, c: number, d: number) => idx.push(a, b, c, b, d, c, a, c, b, b, c, d);
+  const HEDGE: V3 = [0.07, 0.17, 0.08];
+  const HEDGE_LIT: V3 = [0.16, 0.3, 0.1];
+  for (const t of TERRACES) {
+    const a0 = FLIGHT + t.gap;
+    const a1 = FLIGHT + Math.PI * 2 - t.gap;
+    const n = mobile ? 180 : 420;
+    const top = t.y1 + 1.5;
+    const A = (r: number, y: number, c: V3, glow = 0.04, alt?: V3[], every?: number) => arc(r, y, c, glow, a0, a1, n, alt, every);
+    // the wall, darker at its foot; a pale band and parapet at its head
+    span(A(t.r0, t.y0 - 0.6, mix3(FACE, NOOK, 0.6)), A(t.r0, t.y1 - 1.6, FACE), n);
+    span(A(t.r0, t.y1 - 1.6, LIP), A(t.r0, top, LIP, 0.06), n);
+    span(A(t.r0, top, LIP, 0.06), A(t.r0 - 1.2, top, LIP, 0.06), n);
+    span(A(t.r0 - 1.2, top, TREAD), A(t.r0 - 1.2, t.y1, NOOK), n);
+    // the level: a paved walk along the parapet, lawn with beds of flowers in it, a hedge, a walk at the back
+    // (the level itself is the garden's own mesh, buildGardens: here only what stands up out of it)
+    // a kerb of pale stone between the walk and the lawn
+    span(A(t.r0 - 7.5, t.y1, NOOK), A(t.r0 - 7.5, t.y1 + 0.38, LIP), n);
+    span(A(t.r0 - 7.5, t.y1 + 0.38, LIP), A(t.r0 - 8.2, t.y1 + 0.38, LIP), n);
+    span(A(t.r0 - 8.2, t.y1 + 0.38, TREAD), A(t.r0 - 8.2, t.y1, NOOK), n);
+    span(A(t.r1 + 10.5, t.y1, HEDGE), A(t.r1 + 10.5, t.y1 + 2.6, HEDGE_LIT), n);
+    span(A(t.r1 + 10.5, t.y1 + 2.6, HEDGE_LIT), A(t.r1 + 8, t.y1 + 2.6, HEDGE_LIT), n);
+    span(A(t.r1 + 8, t.y1 + 2.6, HEDGE), A(t.r1 + 8, t.y1, HEDGE), n);
+    // the niches in the wall: here the lit depth of each, deep amber at the sill and dark at the head; the frame
+    // that stands out round it, so that it is seen to go into the wall, is buildNiches
+    const nb = nicheBays(t, mobile);
+    const hw = 2.5 / t.r0;
+    const rn = t.r0 + 0.45;
+    const AMBER: V3 = [1.0, 0.58, 0.2];
+    const DEEP: V3 = [0.1, 0.05, 0.08];
+    for (let j = 0; j < nb; j++) {
+      const a = a0 + ((j + 0.5) / nb) * (a1 - a0);
+      const at = (da: number, y: number, c: V3, glow: number) => vert(Math.cos(a + da) * rn, y, Math.sin(a + da) * rn, c, glow);
+      const v0 = at(-hw, t.y0 + 0.6, AMBER, 0.5);
+      const v1 = at(hw, t.y0 + 0.6, AMBER, 0.5);
+      const v2 = at(-hw, t.y0 + NICHE.y + NICHE.h * 0.84, DEEP, 0.03);
+      const v3 = at(hw, t.y0 + NICHE.y + NICHE.h * 0.84, DEEP, 0.03);
+      const v4 = at(0, t.y0 + NICHE.y + NICHE.h + 0.3, DEEP, 0.02);
+      idx.push(v0, v1, v2, v1, v3, v2, v2, v3, v4);
+    }
+    // where it ends at the great flight: a plain cheek of stone on either side
+    for (const a of [a0, a1]) {
+      const c = Math.cos(a);
+      const sn = Math.sin(a);
+      quad2(vert(c * t.r0, t.y0 - 0.6, sn * t.r0, FACE, 0.04), vert(c * t.r1, t.y0 - 0.6, sn * t.r1, FACE, 0.04), vert(c * t.r0, top, sn * t.r0, LIP, 0.05), vert(c * t.r1, top, sn * t.r1, LIP, 0.05));
+    }
+  }
+  // ---- the rills end in round basins of stone standing in the meadow's edge (the water itself is buildRills)
+  const WATER: V3 = [0.4, 0.66, 0.7];
+  for (const a of RILLS) {
+    const c = Math.cos(a);
+    const sn = Math.sin(a);
+    // at the foot it is gathered in a round basin of stone standing in the meadow's edge
+    {
+      const R = 8.5;
+      const cx = c * (ISLE.meadow + R - 1);
+      const cz = sn * (ISLE.meadow + R - 1);
+      const y0 = (ground ? ground(cx, cz) : ISLE.base) - 1;
+      const n = 18;
+      const circle = (r: number, y: number, k: V3, glow: number) => {
+        const b = pos.length / 3;
+        for (let j = 0; j <= n; j++) {
+          const q = (j / n) * Math.PI * 2;
+          pos.push(cx + Math.cos(q) * r, y, cz + Math.sin(q) * r);
+          col.push(k[0], k[1], k[2], glow);
+        }
+        return b;
+      };
+      // (rings are joined as the steps are: outward faces from foot to head, level ones from rim inward)
+      span(circle(R, y0, mix3(FACE, NOOK, 0.5), 0.04), circle(R, y0 + 3, FACE, 0.04), n);
+      span(circle(R, y0 + 3, LIP, 0.05), circle(R - 1.3, y0 + 3, LIP, 0.05), n);
+      span(circle(R - 1.3, y0 + 2.6, WATER, 0.22), circle(0.01, y0 + 2.6, [0.36, 0.6, 0.64], 0.16), n);
+    }
+  }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute("aCol", new THREE.Float32BufferAttribute(col, 4));
@@ -94,6 +206,112 @@ export function buildSteps(mobile: boolean) {
   return g;
 }
 export const POOL_R = 62;
+
+// the niches of the terrace walls: how many, and their measure (sill above the wall's foot, height of the opening)
+export const NICHE = { w: 4.4, y: 4.6, h: 6.2, t: 1.0, depth: 1.7 };
+export const nicheBays = (t: (typeof TERRACES)[number], mobile: boolean) => Math.round(((Math.PI * 2 - t.gap * 2) * t.r0) / (mobile ? 16 : 9));
+// Each niche's frame: a pointed arch of stone standing out of the wall, its jambs and head going back to the lit
+// depth behind, a sill under it.
+export function buildNiches(k: Kit, mobile: boolean) {
+  for (const t of TERRACES) {
+    const a0 = FLIGHT + t.gap;
+    const a1 = FLIGHT + Math.PI * 2 - t.gap;
+    const nb = nicheBays(t, mobile);
+    for (let j = 0; j < nb; j++) {
+      const a = a0 + ((j + 0.5) / nb) * (a1 - a0);
+      const rr = t.r0 + NICHE.depth / 2;
+      k.add(archGeometry(NICHE.w, NICHE.h, NICHE.t, NICHE.depth, mobile ? 3 : 4), [Math.cos(a) * rr, t.y0 + NICHE.y, Math.sin(a) * rr], [0.5, 0.39, 0.18], { top: [0.95, 0.8, 0.44], rot: [0, Math.PI / 2 - a, 0], glow: 0.05 });
+      if (!mobile) k.box(NICHE.w + 3, 0.7, 1.2, [Math.cos(a) * (t.r0 + NICHE.depth + 0.3), t.y0 + 0.5, Math.sin(a) * (t.r0 + NICHE.depth + 0.3)], [0.6, 0.48, 0.24], { top: [0.95, 0.8, 0.44], rot: [0, Math.PI / 2 - a, 0], glow: 0.04 });
+    }
+  }
+}
+
+// The levels of the terraces: one band each, from the walk behind the parapet to the foot of the steps above.
+// What is on them (paving, lawn, beds of flowers) is drawn by the garden's own material from where each point lies.
+export function buildGardens(mobile: boolean) {
+  const pos: number[] = [];
+  const r0s: number[] = [];
+  const idx: number[] = [];
+  for (const t of TERRACES) {
+    const a0 = FLIGHT + t.gap;
+    const a1 = FLIGHT + Math.PI * 2 - t.gap;
+    const n = mobile ? 180 : 420;
+    const b = pos.length / 3;
+    for (const r of [t.r0 - 1.2, t.r1]) {
+      for (let i = 0; i <= n; i++) {
+        const a = a0 + ((a1 - a0) * i) / n;
+        pos.push(Math.cos(a) * r, t.y1, Math.sin(a) * r);
+        r0s.push(t.r0);
+      }
+    }
+    // (wound to face the sky)
+    for (let i = 0; i < n; i++) idx.push(b + i, b + n + 1 + i, b + i + 1, b + i + 1, b + n + 1 + i, b + n + 2 + i);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("aR0", new THREE.Float32BufferAttribute(r0s, 1));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  return g;
+}
+
+// The rills: water let down from the court on a few bearings, over every tread and down every riser, across
+// each terrace and down its wall in one long fall. aUv: across (-1..1) and metres run from the top; aMix: how
+// much it is falling, and how much foam (where it lands, and at each lip).
+export function buildRills() {
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const mx: number[] = [];
+  const idx: number[] = [];
+  for (const a of RILLS) {
+    const c = Math.cos(a);
+    const sn = Math.sin(a);
+    let run = 0;
+    const seg = (rA: number, yA: number, rB: number, yB: number, hw: number, fall: number, fA: number, fB: number) => {
+      const b = pos.length / 3;
+      const len = Math.hypot(rB - rA, yB - yA);
+      for (const [r, y, v, f] of [
+        [rA, yA, run, fA],
+        [rB, yB, run + len, fB],
+      ] as const)
+        for (const side of [-1, 1]) {
+          pos.push(c * r - sn * hw * side, y, sn * r + c * hw * side);
+          uv.push(side, v);
+          mx.push(fall, f);
+        }
+      idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+      run += len;
+    };
+    const level = (rIn: number, rLip: number, y: number, hw: number) => {
+      seg(rIn, y, rIn + 2.6, y, hw, 0, 1, 0.1);
+      seg(rIn + 2.6, y, rLip - 1.2, y, hw, 0, 0.1, 0);
+      seg(rLip - 1.2, y, rLip, y, hw, 0, 0, 0.55);
+    };
+    let i = ISLE.n - 1;
+    while (i >= 0) {
+      const t = TERRACES.find((q) => i >= q.i0 && i < q.i0 + q.n);
+      if (t) {
+        const lip = t.r0 + NICHE.depth + 0.3;
+        level(t.r1, lip, t.y1 + 0.3, 2.4);
+        seg(lip, t.y1 + 0.3, lip, t.y0 + 0.2, 2.9, 1, 0.5, 1);
+        i = t.i0 - 1;
+        continue;
+      }
+      const r0 = ISLE.meadow - i * ISLE.tread;
+      const y1 = ISLE.base + (i + 1) * ISLE.rise;
+      level(r0 - ISLE.tread, r0 + 0.35, y1 + 0.25, 2.4);
+      seg(r0 + 0.35, y1 + 0.25, r0 + 0.35, y1 - ISLE.rise + 0.2, 2.4, 1, 0.5, 1);
+      i--;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("aUv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute("aMix", new THREE.Float32BufferAttribute(mx, 2));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  return g;
+}
 export const COLONNADE = { r: 112, n: 28, h: 46 };
 
 // ---------- wings ----------

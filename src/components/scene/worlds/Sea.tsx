@@ -195,19 +195,22 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
     };
   }, [props.mobile]);
   // the world's own sky turns with the plane's distance to the island (re-blended only when the step changes)
+  // (It is this world's only while this world stands: two worlds are mounted at once, the one flown and the next
+  // one waiting behind its window, and each may have a sky of its own to turn. So it is taken up in the frame loop
+  // when this is the world that stands, and given up only if it is still this one's.)
+  const skyMod = useRef((s: SkyState) => {
+    if (voyage.cur !== "sea" || dusk.k <= 0.002) return s;
+    const q = Math.round(dusk.k * 160) / 160;
+    if (q !== dusk.keyK || !dusk.sky) {
+      dusk.keyK = q;
+      const e = q * q * (3 - 2 * q);
+      dusk.sky = mixSky(s, NIGHT, e);
+    }
+    return dusk.sky;
+  }).current;
   useEffect(() => {
-    voyage.skyMod = (s) => {
-      if (voyage.cur !== "sea" || dusk.k <= 0.002) return s;
-      const q = Math.round(dusk.k * 160) / 160;
-      if (q !== dusk.keyK || !dusk.sky) {
-        dusk.keyK = q;
-        const e = q * q * (3 - 2 * q);
-        dusk.sky = mixSky(s, NIGHT, e);
-      }
-      return dusk.sky;
-    };
     return () => {
-      voyage.skyMod = null;
+      if (voyage.skyMod === skyMod) voyage.skyMod = null;
       dusk.k = 0;
       dusk.sky = null;
       dusk.keyK = -1;
@@ -219,15 +222,32 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
   }, []);
   const ev = useRef({ on: false, wake: -1, pod: false, podT0: -1, magic: 0, open: 0 });
   // (a moment of the flight: worlds/moments.tsx; in development __moments.fire("dolphins") brings them at once)
-  const pod = useMoment("sea", { id: "dolphins", after: 18, at: [60, 9, 330], within: 270, ease: 1, hold: 44, out: 1 });
+  const pod = useMoment("sea", { id: "dolphins", after: 18, at: [322, 9, 400], within: 270, ease: 1, hold: 44, out: 1 });
   useDeepLens("sea");
   useFrame(({ camera }) => {
     // made ready ahead of time, it waits: the air is still the world's before it
     const e = ev.current;
     if (voyage.cur !== "sea") {
+      // (seen through the Finale's window before it is entered, it is already as it will be on entering: evening,
+      // the mouth shut, no lights on the water, the two eyes small and steady; nothing changes at the crossing)
       e.on = false;
+      dusk.k = 0;
+      ISLAND_U.uOpen.value = 0;
+      ISLAND_U.uMagic.value = 0;
+      const ca0 = b.core.getAttribute("aCol") as THREE.InstancedBufferAttribute;
+      const ga0 = b.glow.getAttribute("aCol") as THREE.InstancedBufferAttribute;
+      for (let i = 0; i < 2; i++) {
+        ca0.setW(i, EYE_CORE[1] * 0.24);
+        ga0.setW(i, EYE_GLOW[1] * 0.24);
+        ISLAND_U.uEyeK.value.setComponent(i, 0.24);
+      }
+      ca0.needsUpdate = true;
+      ga0.needsUpdate = true;
+      b.moteMat.uniforms.uGain.value = 0.06;
+      b.spiritMat.uniforms.uGain.value = 0;
       return;
     }
+    if (voyage.skyMod !== skyMod) voyage.skyMod = skyMod;
     const now = SKY_U.uTime.value;
     if (!e.on) {
       // each coming is the first: the eyes are shut, the pod has not been

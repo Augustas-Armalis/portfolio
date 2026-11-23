@@ -203,6 +203,18 @@ export function makeLandMaterial() {
             alb = mix(alb, sc, clamp(st * 1.15 - 0.1 + edge * 0.0, 0.0, 1.0));
             onPath = max(onPath, st);
           }
+          // the farmland east of the road: strips of rye, flax and potatoes in furrows, grass headlands between
+          vec3 fp = fieldPlot(p);
+          if (fp.z > 0.001) {
+            float fur = 0.5 + 0.5 * sin(fp.y * 6.2832 / 0.9);
+            float keepF = 1.0 - smoothstep(0.15, 0.6, fw);
+            vec3 fc = fp.x < 0.5 ? mix(vec3(0.34, 0.27, 0.1), vec3(0.46, 0.37, 0.16), vnoise(p * 0.3))
+                    : fp.x < 1.5 ? mix(vec3(0.12, 0.19, 0.1), vec3(0.17, 0.22, 0.2), vnoise(p * 0.25))
+                    : mix(vec3(0.1, 0.13, 0.05), vec3(0.2, 0.15, 0.09), fur * keepF + 0.5 * (1.0 - keepF));
+            fc *= mix(1.0, 0.82 + 0.3 * fur, keepF * (fp.x < 0.5 ? 0.5 : 1.0));
+            alb = mix(alb, fc, fp.z * 0.85);
+            onPath = max(onPath, fp.z * 0.7);
+          }
           // the forest's track: dark earth, needles, moss creeping in from its edges
           float tr = forestTrack(p);
           if (tr > 0.001) {

@@ -25,6 +25,7 @@ import { Clouds } from "./scene/home/Clouds";
 import { Butterflies, Flock, Motes, Skein } from "./scene/home/Life";
 import { PropLights, Props } from "./scene/home/Props";
 import { Journey } from "./scene/home/JourneyScene";
+import { FOREST_K } from "./scene/home/Woods";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
 import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
@@ -656,9 +657,9 @@ function Scene({
   // still fetching (textures, the sky HDRI), upload every texture, compile
   // every program, draw a few hidden frames, and only then report ready, so
   // nothing hitches once the dark lifts. Each step moves the loader's line.
-  // compileAsync can throw from inside its own polling (a material swapped
-  // mid-compile), so compile synchronously, guarded; the line itself is a CSS
-  // transition and keeps gliding. Always reveal within 9 s regardless.
+  // The programs are compiled off the main thread (compileAsync, guarded: it can
+  // throw from inside its own polling when a material is swapped mid-compile, and
+  // then they are made on first draw). Always reveal within 9 s regardless.
   useEffect(() => {
     let dead = false;
     let done = false;
@@ -701,7 +702,6 @@ function Scene({
           const im = x.image as { width?: number; complete?: boolean } | null;
           if (!im || !im.width || im.complete === false) return;
           seen.add(x);
-          gl.initTexture(x);
         };
         scene.traverse((o) => {
           const ms = (o as THREE.Mesh).material;
@@ -711,6 +711,14 @@ function Scene({
             if (us) for (const k in us) up(us[k]?.value);
           }
         });
+        // (put on the card a few at a time, eight milliseconds' worth and then a breath: all of them in one go was
+        // a single long task, and the loader's line stood still for it)
+        const list = [...seen];
+        for (let i = 0; i < list.length && !dead; ) {
+          const t = performance.now();
+          while (i < list.length && performance.now() - t < 8) gl.initTexture(list[i++]);
+          if (i < list.length) await wait(0);
+        }
       } catch {
         /* uploaded on first draw instead */
       }
@@ -1407,7 +1415,8 @@ function Scene({
     // arrival mist thins out, continuously, as the camera comes down
     const at = introAt.current;
     const mist = instant || (at !== null && now - at > ARR) ? 0 : cloudMist(cam.position.y);
-    SKY_U.uMist.value = Math.max(mist, voyage.mist);
+    // (and in the journey's forest, its fog: so the gate's veil and the path of light go into it with the land)
+    SKY_U.uMist.value = Math.max(mist, voyage.mist, FOREST_K.fog.value * 0.019);
     // The lens's near plane. A centimetre at the desk (things there are looked at from a hand's breadth), but with a
     // centimetre the depth a kilometre off is good to no better than six metres: seen from the sky, the mountains'
     // feet, the far woods and the sea all flickered against the land under them. So it moves out with the eye's

@@ -37,7 +37,7 @@ export function riverD(x: number, z: number) {
 export const TOWN = { x: -246, z: riverZ(-246), r: 92 };
 export const SQUARE = { x: -262, z: riverZ(-262) + 34 };
 export const CHURCH = { x: -270, z: riverZ(-270) + 60 };
-export const HILL = { x: -212, z: riverZ(-212) - 92, h: 27, top: 20, foot: 80, step: 4.5, terr: 0.9 };
+export const HILL = { x: -212, z: riverZ(-212) - 92, h: 22, top: 20, foot: 82, step: 4.5, terr: 0.9 };
 // the street that winds up the hill from the quay to the castle's gate: its angle round the hill at a radius
 export const hillRoadA = (r: number) => Math.atan2(TOWN.z - HILL.z, TOWN.x - HILL.x) + (r - HILL.top) * 0.045;
 // the hill's own height over the valley floor: a dome, its flanks gently terraced so houses stand on the flats
@@ -55,16 +55,17 @@ export function riverLand(h: number, x: number, z: number) {
   if (x > RIVER.x0 - 2 || x < RIVER.x1) return h;
   const d = riverD(x, z);
   const tw = Math.hypot(x - TOWN.x, z - TOWN.z);
-  const wv = Math.max(1 - sst(26, 70, d), 1 - sst(TOWN.r, TOWN.r + 55, tw));
+  // (it comes in over twenty metres out of the lake: no step where it begins)
+  const wv = Math.max(1 - sst(26, 70, d), 1 - sst(TOWN.r, TOWN.r + 55, tw)) * sst(RIVER.x0 - 2, RIVER.x0 - 22, x);
   if (wv <= 0) return h + hillH(x, z);
   const w = riverW(x);
   const wl = riverWL(x);
-  const bank = wl + 1.15 * sst(w, w + 3.5, d) + 0.03 * Math.max(0, d - w - 3.5);
+  const bank = wl + 1.0 * sst(w - 0.4, w + 8, d) + 0.03 * Math.max(0, d - w - 8);
   const bed = wl - 1.05 * (1 - (d / w) * (d / w));
   let v = d < w ? bed : bank;
   // (out at the valley's edge it rises with the land; the river's own cut always wins near the water)
   v = h + (v - h) * wv + hillH(x, z);
-  return Math.min(v, d < w + 3.5 ? bank : 1e9);
+  return d < w + 8 ? h + (Math.min(v, bank) - h) * sst(RIVER.x0 - 2, RIVER.x0 - 22, x) : v;
 }
 
 // the same in GLSL (land.ts includes it before its own landH)
@@ -106,15 +107,15 @@ float riverLand(float h, vec2 p){
   if (p.x > ${f(RIVER.x0 - 2)} || p.x < ${f(RIVER.x1)}) return h;
   float d = riverD(p);
   float tw = length(p - vec2(${f(TOWN.x)}, ${f(TOWN.z)}));
-  float wv = max(1.0 - sst(26.0, 70.0, d), 1.0 - sst(${f(TOWN.r)}, ${f(TOWN.r + 55)}, tw));
+  float wv = max(1.0 - sst(26.0, 70.0, d), 1.0 - sst(${f(TOWN.r)}, ${f(TOWN.r + 55)}, tw)) * sst(${f(RIVER.x0 - 2)}, ${f(RIVER.x0 - 22)}, p.x);
   if (wv <= 0.0) return h + hillH(p);
   float w = riverW(p.x);
   float wl = riverWL(p.x);
-  float bank = wl + 1.15 * sst(w, w + 3.5, d) + 0.03 * max(0.0, d - w - 3.5);
+  float bank = wl + 1.0 * sst(w - 0.4, w + 8.0, d) + 0.03 * max(0.0, d - w - 8.0);
   float bed = wl - 1.05 * (1.0 - (d / w) * (d / w));
   float v = d < w ? bed : bank;
   v = h + (v - h) * wv + hillH(p);
-  return min(v, d < w + 3.5 ? bank : 1e9);
+  return d < w + 8.0 ? h + (min(v, bank) - h) * sst(${f(RIVER.x0 - 2)}, ${f(RIVER.x0 - 22)}, p.x) : v;
 }
 // the river's surface over a point (-1e4 where there is none)
 float riverLevel(vec2 p){ return riverD(p) < riverW(p.x) + 0.6 ? riverWL(p.x) : -1e4; }
@@ -235,5 +236,80 @@ float caveIn(vec2 p){
   float u = c * q.x - s * q.y;
   float a = -s * q.x - c * q.y;
   return (1.0 - sst(${f(MOUTH.half + 4)}, ${f(MOUTH.half + 8)}, abs(u))) * sst(-8.0, -3.0, a) * (1.0 - sst(${f(MOUTH.depth + 2)}, ${f(MOUTH.depth + 6)}, a));
+}
+`;
+
+// how far a point is from the flight's way over the open land (the road, the lake, the river and the town: the
+// forest's stretch has its own trees), for whoever plants whole trees near it instead of painted cards
+const OPEN_WAY = JOURNEY.slice(2, 16);
+const OPEN_BOX = (() => {
+  const xs = JOURNEY.slice(2, 16).map((p) => p[0]);
+  const zs = JOURNEY.slice(2, 16).map((p) => p[1]);
+  return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+})();
+export function routeD(x: number, z: number) {
+  // (most of the land is far from it: those are answered without walking the line)
+  const bx = Math.max(OPEN_BOX.x0 - x, 0, x - OPEN_BOX.x1);
+  const bz = Math.max(OPEN_BOX.z0 - z, 0, z - OPEN_BOX.z1);
+  if (bx * bx + bz * bz > 300 * 300) return 1e9;
+  let best = 1e9;
+  for (let i = 0; i < OPEN_WAY.length - 1; i++) {
+    const [ax, az] = OPEN_WAY[i];
+    const [bx, bz] = OPEN_WAY[i + 1];
+    const dx = bx - ax;
+    const dz = bz - az;
+    const t = Math.min(1, Math.max(0, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+    best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t));
+  }
+  return best;
+}
+
+// ---------- the sacred hill (alkakalnis) where the old road ends ----------
+// A round green hill at the end of the avenue the desk looks down, a great oak on its crown, an aukuras (a stone
+// altar with its fire kept burning) before the oak, carved wooden posts round them, a ring of stones.
+export const SACRED = { x: 2, z: -318, h: 13, top: 12, foot: 58 };
+export function sacredH(x: number, z: number) {
+  const r = Math.hypot(x - SACRED.x, z - SACRED.z);
+  if (r >= SACRED.foot) return 0;
+  return SACRED.h * (1 - sst(SACRED.top, SACRED.foot, r));
+}
+export const GLSL_SACRED = /* glsl */ `
+float sacredH(vec2 p){
+  float r = length(p - vec2(${f(SACRED.x)}, ${f(SACRED.z)}));
+  if (r >= ${f(SACRED.foot)}) return 0.0;
+  return ${f(SACRED.h)} * (1.0 - sst(${f(SACRED.top)}, ${f(SACRED.foot)}, r));
+}
+`;
+
+// ---------- the farmland east of the road ----------
+// Strip fields on a slightly skewed grid: rye (gold), flax (blue-green), potatoes (dark), some left to meadow. A
+// farmstead (sodyba) in among them and a post windmill on a knoll (Sacred.tsx builds them).
+export const FARM = { x0: 48, x1: 430, z0: -330, z1: 30, rot: 0.32, cw: 44, cd: 19 };
+export const FARMSTEAD = { x: 150, z: -120 };
+export const MILL = { x: 236, z: -205 };
+// how much a point is farmland (JS, for the trees: they keep off the fields but stand along their edges)
+export function fieldK(x: number, z: number) {
+  if (x < FARM.x0 || x > FARM.x1 || z < FARM.z0 || z > FARM.z1) return 0;
+  const edge = sst(FARM.x0, FARM.x0 + 30, x) * (1 - sst(FARM.x1 - 40, FARM.x1, x)) * sst(FARM.z0, FARM.z0 + 30, z) * (1 - sst(FARM.z1 - 30, FARM.z1, z));
+  const away = sst(60, 90, Math.hypot(x, z)) * sst(40, 70, Math.hypot(x - SACRED.x, z - SACRED.z));
+  return edge * away;
+}
+export const GLSL_FIELDS = /* glsl */ `
+// a field plot under a point: x the crop (0 rye, 1 flax, 2 potatoes, 3 meadow), y across its furrows (m), z how much
+vec3 fieldPlot(vec2 p){
+  if (p.x < ${f(FARM.x0)} || p.x > ${f(FARM.x1)} || p.y < ${f(FARM.z0)} || p.y > ${f(FARM.z1)}) return vec3(3.0, 0.0, 0.0);
+  float c = cos(${f(FARM.rot)}), s = sin(${f(FARM.rot)});
+  vec2 q = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+  vec2 cell = floor(q / vec2(${f(FARM.cw)}, ${f(FARM.cd)}));
+  vec2 inC = fract(q / vec2(${f(FARM.cw)}, ${f(FARM.cd)})) * vec2(${f(FARM.cw)}, ${f(FARM.cd)});
+  float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+  float crop = h < 0.32 ? 0.0 : h < 0.52 ? 1.0 : h < 0.74 ? 2.0 : 3.0;
+  // a grass headland between plots
+  float head = smoothstep(0.8, 2.2, min(min(inC.x, ${f(FARM.cw)} - inC.x), min(inC.y, ${f(FARM.cd)} - inC.y)));
+  float edge = sst(${f(FARM.x0)}, ${f(FARM.x0 + 30)}, p.x) * (1.0 - sst(${f(FARM.x1 - 40)}, ${f(FARM.x1)}, p.x)) * sst(${f(FARM.z0)}, ${f(FARM.z0 + 30)}, p.y) * (1.0 - sst(${f(FARM.z1 - 30)}, ${f(FARM.z1)}, p.y));
+  float away = sst(60.0, 90.0, length(p)) * sst(40.0, 70.0, length(p - vec2(${f(SACRED.x)}, ${f(SACRED.z)}))) * sst(22.0, 34.0, length(p - vec2(${f(FARMSTEAD.x)}, ${f(FARMSTEAD.z)}))) * sst(12.0, 20.0, length(p - vec2(${f(MILL.x)}, ${f(MILL.z)})));
+  // (no field across the road)
+  float road = sst(10.0, 22.0, abs(p.x - 1.45 - 0.6 * sin(p.y * 0.043 - 1.1)));
+  return vec3(crop, inC.y, head * edge * away * road * step(crop, 2.5));
 }
 `;

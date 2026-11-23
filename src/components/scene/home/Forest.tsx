@@ -133,7 +133,7 @@ export function makeHomeTreeMaterial(leaves: THREE.Texture) {
 }
 
 // the far woods: one card a tree
-function makeFarMaterial(sheet: THREE.Texture) {
+export function makeFarMaterial(sheet: THREE.Texture) {
   return new THREE.ShaderMaterial({
     alphaToCoverage: true,
     uniforms: { ...SKY_U, ...HOME_U, uFarTex: { value: sheet } },
@@ -200,7 +200,7 @@ const KINDS: TreeKind[] = ["broad", "birch", "pine", "spruce", "cypress", "bush"
 // the layer the lake's mirror draws (see Water)
 export const MIRROR_LAYER = 2;
 
-function farBlock(list: HomeTree[], mat: THREE.Material) {
+export function farBlock(list: HomeTree[], mat: THREE.Material) {
   const g = new THREE.InstancedBufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3));
   g.setIndex([0, 1, 2, 0, 2, 3]);

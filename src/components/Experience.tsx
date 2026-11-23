@@ -65,9 +65,15 @@ export default function Experience() {
 
   // the OS is its own download (Shells.tsx): fetched for this device while the intro plays, at once if the OS is
   // already what is on screen (reduced motion goes straight to it)
+  // (not behind the loader, where its 360 ms of script on a slowed machine landed in the middle of the scene being
+  // made, and not during the descent: nine seconds after the loader has gone, in a quiet moment)
   useEffect(() => {
-    if (isMobile !== null) warmShell(isMobile, phase !== "room");
-  }, [isMobile, phase]);
+    if (isMobile === null) return;
+    if (phase !== "room") return warmShell(isMobile, true);
+    if (loaderOn) return;
+    const t = window.setTimeout(() => warmShell(isMobile), 9000);
+    return () => window.clearTimeout(t);
+  }, [isMobile, phase, loaderOn]);
 
   const handoff = useCallback(
     (t?: UserId) => {

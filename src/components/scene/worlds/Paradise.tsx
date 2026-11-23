@@ -4,9 +4,10 @@ import * as THREE from "three";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, makeWater, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
-import { Procession, RayedSun, RisingFlock, SunShafts, heapBlobs, heapMesh, makeHeapMaterial, useDeepLens, type Beam, type Heap } from "./fairy/shared";
-import { COLONNADE, ISLE, POOL_R, TOP_R, TOP_Y, Wings, buildColonnade, buildSteps, seraph, stoneAt } from "./paradise/isle";
-import { Blooms, Butterflies, CloudDeck, Ship, makeWingMaterial, type Bloom, type Flutter } from "./paradise/life";
+import { Procession, RayedSun, RisingFlock, SunShafts, heapBlobs, heapMesh, leafyMesh, makeHeapMaterial, makeLeafyMaterial, useDeepLens, type Beam, type Crown, type Heap } from "./fairy/shared";
+import { buildTree, makeLeafTexture } from "../home/trees";
+import { COLONNADE, ISLE, POOL_R, RILLS, TERRACES, TOP_R, TOP_Y, Wings, buildColonnade, buildGardens, buildNiches, buildRills, buildSteps, offFlight, seraph, stoneAt } from "./paradise/isle";
+import { Blooms, Butterflies, CloudDeck, Ship, makeGardenMaterial, makeRillMaterial, makeWingMaterial, type Bloom, type Flutter } from "./paradise/life";
 import { makeSea } from "./paradise/sea";
 import { WORLDS, groundAt } from "./voyage";
 
@@ -96,7 +97,7 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
     let n = 0;
     const angelAt = (x: number, z: number, s: number, yaw: number, pose?: number, o: { wing?: V3; robe?: V3; open?: number; glow?: number } = {}) => {
       const rr = Math.hypot(x, z);
-      const y = rr >= ISLE.meadow ? g(x, z) - 0.05 : stoneAt(rr);
+      const y = rr >= ISLE.meadow ? g(x, z) - 0.05 : stoneAt(rr, Math.atan2(z, x));
       seraph(k, wings, [x, y, z], s, yaw, { robe: o.robe ?? ROBES[n % ROBES.length], wing: o.wing ?? WING_COLS[(n * 3 + 1) % WING_COLS.length], pose: pose ?? [0, 3, 1, 0, 2, 3][n % 6], glow: o.glow ?? 0.07, open: o.open ?? 0.3 + r() * 0.3 });
       n++;
       return y;
@@ -181,6 +182,62 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       angelAt(x, z, 7.5, Math.atan2(-x, -z), i % 2 ? 1 : 0, { glow: 0.12 });
     }
     buildColonnade(k);
+    buildNiches(k, props.mobile);
+    // ---- the garden terraces: dark cypresses and trees in blossom along them, lamps on the parapet, tall angels
+    // looking out to sea, and a pylon with a light on it where each ends at the great flight
+    const cyp: Crown[] = [];
+    const bloss: Crown[] = [];
+    // a tree in blossom (the shared trees' own broad tree, its leaves turned to blossom): where it stands, how big
+    const blossom = (x: number, y: number, z: number, sz: number) => bloss.push({ p: [x, y - 0.3, z], r: sz, h: 0.95 + r() * 0.2, seed: r() });
+    const clearOf = (a: number, by: number) => RILLS.every((q) => Math.abs(Math.atan2(Math.sin(a - q), Math.cos(a - q))) > by);
+    TERRACES.forEach((t, ti) => {
+      const a0 = -Math.PI / 2 + t.gap;
+      const a1 = -Math.PI / 2 + Math.PI * 2 - t.gap;
+      const nC = Math.round(((a1 - a0) * t.r1) / (props.mobile ? 44 : 21));
+      for (let i = 0; i < nC; i++) {
+        const a = a0 + ((i + 0.5) / nC) * (a1 - a0);
+        if (!clearOf(a, 9 / t.r1)) continue;
+        // cypresses in threes before the hedge, a tree in blossom between each three
+        if (i % 4 !== 3) cyp.push({ p: [Math.cos(a) * (t.r1 + 13.5), t.y1 - 0.3, Math.sin(a) * (t.r1 + 13.5)], r: 6 + r() * 1.8, h: 1.05 + r() * 0.2, seed: r() });
+        else {
+          const rr = t.r0 - 15 - r() * 4;
+          const sz = 6.2 + r() * 2.2;
+          const [x, z] = [Math.cos(a) * rr, Math.sin(a) * rr];
+          blossom(x, t.y1, z, sz);
+        }
+      }
+      const nL = Math.round(((a1 - a0) * t.r0) / (props.mobile ? 60 : 27));
+      for (let i = 0; i <= nL; i++) {
+        const a = a0 + (i / nL) * (a1 - a0);
+        const [x, z] = polar(a, t.r0 - 0.6);
+        k.add(new THREE.CylinderGeometry(0.5, 0.75, 3.2, 6), [x, t.y1 + 3.1, z], [0.6, 0.48, 0.24], { top: [0.98, 0.84, 0.5], glow: 0.08 });
+        k.add(new THREE.SphereGeometry(0.85, 8, 6), [x, t.y1 + 5.3, z], [1, 0.9, 0.62], { glow: 0.9 });
+        halos.push({ p: [x, t.y1 + 5.3, z], size: 5.5, col: [1, 0.88, 0.58], k: 0.5 });
+      }
+      const nA = props.mobile ? 6 : ti === 0 ? 16 : 12;
+      for (let i = 0; i < nA; i++) {
+        const a = a0 + ((i + 0.5) / nA) * (a1 - a0) + (r() - 0.5) * 0.08;
+        if (!clearOf(a, 14 / t.r0)) continue;
+        const [x, z] = polar(a, t.r0 - 6);
+        const s = 10 + (i % 3) * 2;
+        const y = angelAt(x, z, s, Math.atan2(x, z) + (r() - 0.5) * 0.5, i % 2 ? 0 : 3, { open: 0.5, glow: 0.12 });
+        glows.push({ p: [x, y + s * 1.7, z], size: s * 1.3, col: [1, 0.95, 0.76], k: 0.18 });
+      }
+      for (const a of [a0, a1]) {
+        const [x, z] = polar(a, t.r0 - 4);
+        k.box(8, t.y1 - t.y0 + 10, 8, [x, (t.y1 + t.y0) / 2 + 4.4, z], [0.5, 0.4, 0.19], { top: [0.98, 0.84, 0.5], rot: [0, -a, 0], glow: 0.06 });
+        k.add(new THREE.SphereGeometry(2.6, 10, 8), [x, t.y1 + 12.4, z], [1, 0.9, 0.6], { glow: 0.9 });
+        glows.push({ p: [x, t.y1 + 12.4, z], size: 26, col: [1, 0.86, 0.54], k: 0.5 });
+      }
+    });
+    // trees in blossom at the foot of the steps too, all round the meadow's inner edge (but not across the great flight)
+    for (let i = 0; i < (props.mobile ? 30 : 76); i++) {
+      const a = (i / 76) * Math.PI * 2 + (r() - 0.5) * 0.03;
+      if (offFlight(a) < 0.2 || !clearOf(a, 0.03)) continue;
+      const [x, z] = polar(a, ISLE.meadow + 7 + r() * 9);
+      const sz = 5.6 + r() * 2.6;
+      blossom(x, g(x, z) - 0.4, z, sz);
+    }
     for (let i = 0; i < COLONNADE.n; i += 2) {
       const a = ((i + 0.5) / COLONNADE.n) * Math.PI * 2;
       halos.push({ p: [Math.cos(a) * COLONNADE.r, TOP_Y + COLONNADE.h + 8, Math.sin(a) * COLONNADE.r], size: 7, col: [1, 0.9, 0.6], k: 0.55 });
@@ -275,12 +332,26 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       const d = 1500 + r() * 900;
       puffs.push({ p: [Math.cos(a) * d, 18 + r() * 20, Math.sin(a) * d], size: 200 + r() * 200, a: 0.45 });
     }
+    const leaves = makeLeafTexture();
+    const cypressGeo = buildTree("cypress", 0, props.mobile ? 0 : 1);
+    const broadGeo = buildTree("broad", 1, props.mobile ? 0 : 1);
+    const cypM = leafyMesh(cyp, cypressGeo, makeLeafyMaterial(leaves, { lit: [1.3, 1.16, 0.8], shade: [1.25, 1.3, 0.95] }));
+    const blossM = leafyMesh(bloss, broadGeo, makeLeafyMaterial(leaves, { lit: [1.08, 1.0, 0.94], shade: [1.05, 0.92, 0.98], bloom: [0.84, 0.36, 0.48] }));
+    cypressGeo.dispose();
+    broadGeo.dispose();
     return {
       base: props,
       set: k.build(),
       wings: wings.build(),
       wingMat: makeWingMaterial(),
-      steps: buildSteps(props.mobile),
+      steps: buildSteps(props.mobile, g),
+      cyp: cypM,
+      bloss: blossM,
+      leaves,
+      gardens: buildGardens(props.mobile),
+      gardenMat: makeGardenMaterial(),
+      rills: buildRills(),
+      rillMat: makeRillMaterial(),
       tempera: makeTempera({ amb: 0.84, key: 0.5, dab: 0.8, grain: 0.7, wrap: 0.6, irid: 0.14, rim: [0.5, 0.45, 0.25], rimPow: 3 }),
       stone: makeTempera({ amb: 0.8, key: 0.62, dab: 0.9, wrap: 0.3 }),
       sea: makeSea({ def, sand: SAND, deep: [0.05, 0.1, 0.09], shallow: [0.22, 0.34, 0.2], tint: [0.95, 1.0, 1.02], calm: 0.45 }),
@@ -313,6 +384,10 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
         <circleGeometry args={[POOL_R + 0.5, 64]} />
       </mesh>
       <mesh geometry={b.set} material={b.tempera} />
+      <mesh geometry={b.gardens} material={b.gardenMat} />
+      <mesh geometry={b.rills} material={b.rillMat} renderOrder={1} />
+      <primitive object={b.cyp} />
+      <primitive object={b.bloss} />
       <mesh geometry={b.wings} material={b.wingMat} />
 {/* a boat puts out from the sand as the plane comes to the shore; two more are far out already */}
       <Ship from={[-742, 0.2, 40]} heading={-1.9} reach={380} />

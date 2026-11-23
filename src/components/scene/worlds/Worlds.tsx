@@ -7,7 +7,7 @@ import { postCtl } from "../Post";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { CAVE } from "../home/journey";
-import { PortalView, portalRig } from "./portal";
+import { PortalView, PortalWindow, portalRig } from "./portal";
 import { LightGate, LightPath, type WorldProps } from "./common";
 import { Birds, type Flock } from "./life";
 import { PlayFrame } from "./play";
@@ -18,7 +18,7 @@ import FuneralWorld, { prepareFuneral } from "./Funeral";
 import GateWorld from "./Gate";
 import KingsWorld, { dropKings, prepareKings } from "./Kings";
 import ParadiseWorld from "./Paradise";
-import RexWorld from "./Rex";
+import RexWorld, { prepareRex } from "./Rex";
 import SeaWorld from "./Sea";
 import SeaFinaleWorld from "./SeaFinale";
 import StarsWorld, { prepareStars } from "./Stars";
@@ -118,7 +118,7 @@ const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNod
 // one left behind is unmounted (and its geometry, materials and textures disposed) as the plane arrives.
 type Drawn = THREE.Mesh | THREE.Points | THREE.Line;
 // (step 0, for a world with something heavy in it: that is made first, a few milliseconds a frame)
-const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { friendship: (props) => prepareFriendship(props), kings: (props) => prepareKings(props), stars: (props) => prepareStars(props), funeral: (props) => prepareFuneral(props) };
+const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { friendship: (props) => prepareFriendship(props), kings: (props) => prepareKings(props), stars: (props) => prepareStars(props), funeral: (props) => prepareFuneral(props), rex: (props) => prepareRex(props) };
 function useWarmWorld(cur: WorldId, props: WorldProps) {
   const { gl, camera, scene } = useThree();
   const [warm, setWarm] = useState<WorldId | null>(null);
@@ -310,6 +310,8 @@ export function Worlds(props: WorldProps) {
           <LightPath id="home" def={WORLDS.home} angels effects={props.effects} from={10} />
           {/* the home gate is the veil inside the cave's arch (home/journey.ts, home/Cave.tsx draw the stone) */}
           <LightGate id="home" def={WORLDS.home} look="veil" half={CAVE.half} rise={CAVE.rise} />
+          {/* and the next world seen live through it, crossed into at once (portal.tsx) */}
+          <PortalWindow id="home" def={WORLDS.home} half={CAVE.half} rise={CAVE.rise} />
           {/* a small flock over the road that parts round the plane as it passes (worlds/play.tsx) */}
           {props.effects > 0.25 && <Birds flocks={HOME_FLOCKS} scatter={15} seed={11} />}
         </group>

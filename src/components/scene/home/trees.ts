@@ -526,16 +526,21 @@ export function makeFarTreeTexture() {
     list.sort((a, b) => b[1] - a[1]);
     for (const [x, y, rr] of list) blob(ox + cx + x * rx, oy + cy + y * ry * flat, rr, x * 0.95, 0.5 - y * 0.42 + (r() - 0.5) * 0.12);
   };
-  // 0: a broad crown on a short trunk
+  // 0: a broad crown on a short trunk: a heaped, uneven mass of smaller lumps that comes down low, never a ball on a stick
   at(0, (ox, oy) => {
-    trunk(ox + 128, oy + 256, oy + 170, 9, 6);
-    heap(ox, oy, 128, 124, 104, 92, 60, [22, 34]);
+    trunk(ox + 128, oy + 256, oy + 196, 10, 7, 3);
+    heap(ox, oy, 128, 150, 108, 84, 46, [16, 26], 1);
+    heap(ox, oy, 92, 104, 58, 52, 22, [13, 21]);
+    heap(ox, oy, 162, 92, 56, 56, 22, [13, 21]);
+    heap(ox, oy, 124, 62, 52, 38, 16, [11, 18]);
   });
   // 1: a pine: bare trunk, a flat-topped head
   at(1, (ox, oy) => {
     trunk(ox + 128, oy + 256, oy + 70, 6, 3.5, 6);
-    heap(ox, oy, 132, 62, 72, 34, 20, [15, 23]);
-    heap(ox, oy, 104, 96, 30, 14, 5, [11, 15]);
+    heap(ox, oy, 136, 58, 70, 30, 18, [12, 19]);
+    heap(ox, oy, 100, 84, 40, 18, 9, [10, 15]);
+    heap(ox, oy, 160, 92, 34, 14, 7, [9, 13]);
+    heap(ox, oy, 118, 118, 22, 10, 4, [8, 11]);
   });
   // 2: a spruce: tiers narrowing to a spire
   at(2, (ox, oy) => {

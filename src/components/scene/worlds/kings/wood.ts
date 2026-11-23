@@ -221,6 +221,9 @@ class Build {
   }
 }
 
+// how wide the way is kept clear at a given z (the aisle, the clearing by the water, the glade before the kings)
+export const aisleClear = (z: number) => 44 + 146 * THREE.MathUtils.smoothstep(350 - (z - KINGS.z), 0, 280) + 30 * Math.exp(-(((z - KINGS.z - 520) / 70) ** 2));
+
 export type Trunk = { x: number; z: number; R: number; H: number; fork?: number; aim?: number; far?: boolean };
 export type Walk = { a: V3; b: V3 };
 export type WoodChunk = { geo: THREE.BufferGeometry; essential: number };
@@ -257,7 +260,8 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
   const sm = (a: number, c: number, x: number) => THREE.MathUtils.smoothstep(x, a, c);
   // the aisle the plane comes up is narrow between the trunks, opens once into a clearing by the water, and widens
   // into the glade before the kings, so nothing stands between them and the eye
-  const clear = (z: number) => 44 + 146 * sm(0, 280, 350 - ahead(z)) + 30 * Math.exp(-(((ahead(z) - 520) / 70) ** 2));
+  const clear = aisleClear;
+  void sm;
   const tryTrunk = (x: number, z: number, rad: number, H: number, o2: Partial<Trunk> = {}) => {
     if (Math.abs(x - aisleX(z)) < clear(z) + rad && ahead(z) > -70) return false;
     if (Math.abs(ahead(z)) < 80 && Math.abs(x) < 228) return false;

@@ -7,6 +7,7 @@ import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, WORLD_U, makeTempera, rng, type GroundPalette, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { greatSunMaterial } from "./sun/life";
+import { PORTAL_U } from "./portal";
 import { buildWisps, makeWispMaterial } from "./sea/water";
 import { makeCloudPaint, paintedCloudGeometry, type PCloud } from "./stars/forms";
 import { SKY_U, airState, mixSky, type SkyState } from "../sky";
@@ -223,21 +224,23 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
   const deckRef = useRef<THREE.Group>(null);
   const rainRef = useRef<THREE.Mesh>(null);
   const crashRef = useRef<THREE.Mesh>(null);
+  // (the storm's sky is this world's only while this world stands: the next world waits mounted behind its window
+  // and has a sky of its own to turn, so this is taken up in the frame loop and given up only if it is still ours)
+  const skyMod = useRef((sky: SkyState) => {
+    if (voyage.cur !== "seafinale" || storm.k <= 0.003) return sky;
+    const q = Math.round(storm.k * 240) / 240;
+    if (q !== storm.keyK || !storm.sky) {
+      storm.keyK = q;
+      storm.sky = mixSky(sky, STORM, q);
+    }
+    return storm.sky;
+  }).current;
   useEffect(() => {
-    voyage.skyMod = (sky) => {
-      if (voyage.cur !== "seafinale" || storm.k <= 0.003) return sky;
-      const q = Math.round(storm.k * 240) / 240;
-      if (q !== storm.keyK || !storm.sky) {
-        storm.keyK = q;
-        storm.sky = mixSky(sky, STORM, q);
-      }
-      return storm.sky;
-    };
     return () => {
-      voyage.skyMod = null;
+      if (voyage.skyMod === skyMod) voyage.skyMod = null;
       Object.assign(storm, { k: 0, keyK: -1, sky: null });
-      FINALE_U.uRise.value = 1;
-      FINALE_U.uSwell.value = 1;
+      FINALE_U.uRise.value = 0.02;
+      FINALE_U.uSwell.value = 0.4;
       FINALE_U.uCrash.value = 0;
       FINALE_U.uStorm.value = 0;
       FINALE_U.uFlash.value = 0;
@@ -246,9 +249,22 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
   useFrame(({ camera }) => {
     const e = ev.current;
     if (voyage.cur !== "seafinale") {
+      // (seen through the Offering's window before it is entered, it is already as it will be on entering: a quiet
+      // sea in gentle weather, the wave not yet risen; nothing jumps at the crossing)
       e.on = false;
+      storm.k = 0;
+      FINALE_U.uRise.value = 0.02;
+      FINALE_U.uStorm.value = 0;
+      FINALE_U.uSwell.value = 0.4;
+      FINALE_U.uCrash.value = 0;
+      FINALE_U.uFlash.value = 0;
+      deckRef.current?.position.set(0, 300, -7000);
+      b.sunMat.uniforms.uGain.value = 0.26;
+      b.boltMat.uniforms.uBolt.value.y = 99;
+      b.deckMat.uniforms.uSelf.value = 0;
       return;
     }
+    if (voyage.skyMod !== skyMod) voyage.skyMod = skyMod;
     const t = SKY_U.uTime.value;
     if (!e.on) Object.assign(e, { on: true, p: 0, ps: 0, last: t, nextBolt: 0, boltAt: -99 });
     const dt = Math.min(0.1, Math.max(0, t - e.last));
@@ -325,6 +341,8 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     const eye: V3 = [camera.position.x - ORIGIN.x, camera.position.y - ORIGIN.y, camera.position.z - ORIGIN.z];
     rainRef.current?.position.set(eye[0], eye[1], eye[2]);
     crashRef.current?.position.set(eye[0], eye[1], eye[2]);
+    // (the window onto the next world, when there is one, shows through the crash)
+    b.crashMat.uniforms.uThin.value = PORTAL_U.uPortalK.value;
     // one ship works her way right up the face as the wave stands, hangs under the crest, and is thrown back
     const crestK = sm(p, 0.42, 0.62) * (1 - sm(p, 0.74, 0.9));
     const { up, fwd, right, m } = tmp.current;
@@ -361,7 +379,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
   });
   return (
     <>
-      <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.9, 0.6]} pathGain={0.3} angels={false} marks={false} />
+      <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.9, 0.6]} pathGain={0.3} angels={false} marks={false} gateSize={[32, 42]} />
       {/* (hung beyond the wave, which is further off than the shared sun stands) */}
       <mesh material={b.sunMat} frustumCulled={false} renderOrder={-4}>
         <planeGeometry args={[2, 2]} />

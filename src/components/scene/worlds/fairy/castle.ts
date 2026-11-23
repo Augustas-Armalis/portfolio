@@ -160,23 +160,75 @@ export function buildCastle(mobile: boolean, r: () => number) {
   };
 
   // A flight of steps wound on a drum's face, from bearing a0 at height y0 to bearing a1 at y1: each step a
-  // slab let into the wall and carried on a corbel, a low parapet on its open side. It begins and ends on
-  // something real (a landing, a court, a door).
-  const perron = (w: { x: number; z: number; R: number }, a0: number, y0: number, a1: number, y1: number, width = 9) => {
+  // slab carried on a corbel, a low parapet on its open side. It begins and ends on something real (a landing, a
+  // court, a door). Where a tower's bastion stands on the drum in its way (`round`), the flight goes out round
+  // it, as a gallery does, never through it.
+  type Bastion = { a: number; R: number };
+  const perron = (w: { x: number; z: number; R: number }, a0: number, y0: number, a1: number, y1: number, width = 9, round: Bastion[] = []) => {
+    const wallAt = (a: number) => {
+      let rho = w.R;
+      for (const b of round) {
+        const da = a - b.a;
+        const Rb = b.R * 1.27;
+        const sn = w.R * Math.sin(da);
+        if (Math.abs(da) < 1.2 && Math.abs(sn) < Rb) rho = Math.max(rho, w.R * Math.cos(da) + Math.sqrt(Rb * Rb - sn * sn));
+      }
+      return rho;
+    };
+    // the way itself, sampled finely, and its length
+    const N = 260;
+    const pts: { x: number; z: number; s: number }[] = [];
+    for (let i = 0; i <= N; i++) {
+      const a = a0 + ((a1 - a0) * i) / N;
+      const rr = wallAt(a) + width / 2 - 0.6;
+      const x = w.x + Math.sin(a) * rr;
+      const z = w.z + Math.cos(a) * rr;
+      pts.push({ x, z, s: i ? pts[i - 1].s + Math.hypot(x - pts[i - 1].x, z - pts[i - 1].z) : 0 });
+    }
+    const total = pts[N].s;
+    const at = (s: number) => {
+      let j = 1;
+      while (j < N && pts[j].s < s) j++;
+      const p0 = pts[j - 1];
+      const p1 = pts[j];
+      const f = (s - p0.s) / Math.max(1e-4, p1.s - p0.s);
+      return [p0.x + (p1.x - p0.x) * f, p0.z + (p1.z - p0.z) * f] as const;
+    };
     const n = Math.max(5, Math.round(Math.abs(y1 - y0) / 1.5));
-    const rr = w.R + width / 2 - 0.6;
-    const seg = (Math.abs(a1 - a0) * (w.R + width / 2)) / n + 0.7;
+    const seg = total / n + 0.7;
     for (let i = 0; i < n; i++) {
-      const a = a0 + ((a1 - a0) * (i + 0.5)) / n;
+      const sm = ((i + 0.5) / n) * total;
+      const [px, pz] = at(sm);
+      const [ax, az] = at(Math.max(0, sm - seg * 0.5));
+      const [bx, bz] = at(Math.min(total, sm + seg * 0.5));
+      const tl = Math.max(1e-4, Math.hypot(bx - ax, bz - az));
+      const tx = (bx - ax) / tl;
+      const tz = (bz - az) / tl;
+      // outward: square to the way, on the side away from the drum
+      const sd = tz * (px - w.x) - tx * (pz - w.z) > 0 ? 1 : -1;
+      const ox = tz * sd;
+      const oz = -tx * sd;
+      const yaw = Math.atan2(-tz, tx);
       const yT = y0 + ((y1 - y0) * (i + 1)) / n;
-      const px = w.x + Math.sin(a) * rr;
-      const pz = w.z + Math.cos(a) * rr;
-      k.box(seg, 5, width, [px, yT - 2.5, pz], mixc(STONE, STONE_LIT, 0.35), { top: STONE_LIT, rot: [0, a, 0], glow: 0.06 });
-      k.box(seg, 1.5, 0.9, [w.x + Math.sin(a) * (w.R + width - 1), yT + 0.75, w.z + Math.cos(a) * (w.R + width - 1)], STONE_LIT, { rot: [0, a, 0], glow: 0.06 });
+      k.box(seg, 5, width, [px, yT - 2.5, pz], mixc(STONE, STONE_LIT, 0.35), { top: STONE_LIT, rot: [0, yaw, 0], glow: 0.06 });
+      k.box(seg, 1.5, 0.9, [px + ox * (width / 2 - 0.4), yT + 0.75, pz + oz * (width / 2 - 0.4)], STONE_LIT, { rot: [0, yaw, 0], glow: 0.06 });
       // its corbel: a wedge of stone going back into the wall under it
-      if (i % 2 === 0) k.add(new THREE.CylinderGeometry(width * 0.62, 0.4, 9, 4, 1), [w.x + Math.sin(a) * (w.R + 1), yT - 9.4, w.z + Math.cos(a) * (w.R + 1)], DARK, { top: STONE, rot: [0, a + Math.PI / 4, 0], glow: 0.02 });
+      if (i % 2 === 0) k.add(new THREE.CylinderGeometry(width * 0.62, 0.4, 9, 4, 1), [px - ox * (width / 2 - 1.6), yT - 9.4, pz - oz * (width / 2 - 1.6)], DARK, { top: STONE, rot: [0, yaw + Math.PI / 4, 0], glow: 0.02 });
     }
   };
+  // A straight flight cut up a slope, from one place to another: deep steps bedded in the rock under them.
+  const stair = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, width = 4) => {
+    const n = Math.max(4, Math.round(Math.abs(y1 - y0) / 1.5));
+    const run = Math.hypot(x1 - x0, z1 - z0) / n;
+    const yaw = Math.atan2(-(z1 - z0), x1 - x0);
+    for (let i = 0; i < n; i++) {
+      const f = (i + 0.5) / n;
+      const yT = y0 + ((y1 - y0) * (i + 1)) / n;
+      k.box(run + 0.5, 12, width, [x0 + (x1 - x0) * f, yT - 6, z0 + (z1 - z0) * f], mixc(DARK, STONE, 0.5), { top: STONE_LIT, rot: [0, yaw, 0], glow: 0.05 });
+    }
+  };
+  // the towers on each ward's rim, as the flights must go round them
+  const RIM: Bastion[][] = [[], [], []];
 
   // a ward: a drum of stone standing out of the rock, buttressed, with its curtain wall and towers on the open side
   WARDS.forEach((w0, wi) => {
@@ -227,6 +279,7 @@ export function buildCastle(mobile: boolean, r: () => number) {
       if (wi === 0 && i === nt / 2) continue;
       const R = (wi === 0 ? 8.6 : wi === 1 ? 7.2 : 5.8) * (0.85 + r() * 0.35) * (mid ? 1.15 : 1);
       const H = (wi === 0 ? 66 : wi === 1 ? 60 : 52) * (0.78 + r() * 0.5) + (i % 2 ? 13 : 0) + (mid ? 16 : 0);
+      RIM[wi].push({ a, R });
       tower(w.x + Math.sin(a) * w.R, w.y - 10, w.z + Math.cos(a) * w.R, R, H, { roof: (i + wi) % 3 === 2 ? 1 : (i + wi) % 5 === 3 ? 2 : 0, turrets: i % 4 === 1 });
       seated(w.x + Math.sin(a) * w.R, w.y - 9, w.z + Math.cos(a) * w.R, R);
     }
@@ -287,8 +340,10 @@ export function buildCastle(mobile: boolean, r: () => number) {
     // from the road's door two flights wind up the drum's face to the landing before the great door: the left
     // one from the road itself, the right one from a round lookout that answers it on the other side
     const aL = a + 0.2;
-    perron(w, aL, door.y, -0.5, w.y - 4.5);
-    perron(w, -aL, door.y, 0.5, w.y - 4.5);
+    // (round every bastion on the way, and the gate towers themselves at the end)
+    const round0 = [...RIM[0], { a: -0.312, R: 12.5 }, { a: 0.312, R: 12.5 }];
+    perron(w, aL, door.y, -0.5, w.y - 4.5, 9, round0);
+    perron(w, -aL, door.y, 0.5, w.y - 4.5, 9, round0);
     // each arrives at a door in the flank of a gate tower, and through the tower at the landing
     for (const sx of [-1, 1]) archway(w.x + sx * (24.5 + 12.2), w.y - 4.5, gz + 3, (sx * Math.PI) / 2, 5, 10, 2.2);
     {
@@ -317,9 +372,51 @@ export function buildCastle(mobile: boolean, r: () => number) {
   // from the lower court two flights wind up the middle drum to a gate in its wall
   {
     const w = WARDS[1];
-    perron(w, -1.2, WARDS[0].y, -0.16, w.y - 1, 7);
-    perron(w, 1.2, WARDS[0].y, 0.16, w.y - 1, 7);
-    archway(w.x, w.y, w.z + w.R - 0.6, 0, 7, 11.5, 3);
+    // (they go out round the bastions between, and meet on a landing before the door in the middle tower's foot)
+    const mid = RIM[1].find((t) => Math.abs(t.a) < 0.01)?.R ?? 8;
+    perron(w, -1.2, WARDS[0].y, -0.04, w.y - 1, 7, RIM[1]);
+    perron(w, 1.2, WARDS[0].y, 0.04, w.y - 1, 7, RIM[1]);
+    const fz = w.z + w.R + mid * 1.27;
+    k.lathe(
+      [
+        [1.5, 0],
+        [5, 6],
+        [8.5, 10],
+        [8.5, 12],
+        [9.2, 12.01],
+        [9.2, 13.4],
+      ],
+      [w.x, w.y - 13, fz + 2.5],
+      DARK,
+      { top: STONE_LIT, seg: 14, glow: 0.04 },
+    );
+    archway(w.x, w.y - 1, w.z + w.R + mid * 0.92, 0, 4.6, 10, mid * 0.4);
+    L.glows.push({ p: [w.x, w.y + 5, fz + 6], size: 30, col: [1, 0.7, 0.34], k: 0.4 });
+  }
+  // from the middle court a stair turret at either end of the hall, its steps wound round it in the open, up to a
+  // door in the upper ward's wall; and from the upper court a stair cut in the rock beside the chapel, then round
+  // the keep's flank to its door, high in the stone
+  {
+    const w = WARDS[2];
+    for (const sx of [-1, 1]) {
+      const b = sx * 1.15;
+      const R = 3.6;
+      const wd = 3.2;
+      const tx = w.x + Math.sin(b) * (w.R + R + wd + 0.2);
+      const tz = w.z + Math.cos(b) * (w.R + R + wd + 0.2);
+      tower(tx, WARDS[1].y - 6, tz, R, w.y - WARDS[1].y + 26, { roof: sx > 0 ? 1 : 2, rh: 24 });
+      // (the last step stands against the upper ward's wall, at its door)
+      const end = b + Math.PI;
+      perron({ x: tx, z: tz, R }, end - sx * 9.6, WARDS[1].y, end, w.y - 0.5, wd);
+      archway(w.x + Math.sin(b) * (w.R + 0.4), w.y - 0.5, w.z + Math.cos(b) * (w.R + 0.4), b, 3.2, 7, 1.6);
+      L.windows.push({ p: [tx, w.y + 6, tz], size: 4, col: [1, 0.72, 0.36], k: 0.5 });
+    }
+    const K = { x: w.x + 1, z: 6, R: 15 };
+    const b0 = 0.85;
+    stair(27, w.y, 30, K.x + Math.sin(b0) * (K.R + 2.5), 590, K.z + Math.cos(b0) * (K.R + 2.5), 4.4);
+    perron(K, b0, 590, 1.5, 613, 5);
+    archway(K.x + Math.sin(1.58) * (K.R + 0.3), 613, K.z + Math.cos(1.58) * (K.R + 0.3), 1.58, 3.6, 8, 1.8);
+    L.glows.push({ p: [K.x + Math.sin(1.4) * (K.R + 8), 618, K.z + Math.cos(1.4) * (K.R + 8)], size: 24, col: [1, 0.72, 0.36], k: 0.4 });
   }
   // the hall on the middle ward: a long roof, a row of tall windows, a flèche
   {

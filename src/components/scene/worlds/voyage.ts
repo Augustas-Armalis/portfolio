@@ -461,8 +461,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: 0, z: -420, r: 34, h: 1000 },
     ],
     canvases: [
-      { painting: "stars-allegro", x: -56, z: 585, yaw: 1.1 },
-      { painting: "stars-andante", x: -59, z: 442, yaw: 0.02 },
+      // (well along the way: nothing hangs in the first view of the pyramid)
+      { painting: "stars-allegro", x: -150, z: 330, yaw: 1.1 },
+      { painting: "stars-andante", x: -170, z: 120, yaw: 0.02 },
     ],
   },
   rex: {
@@ -565,14 +566,24 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 50],
     radius: 1560,
     ceil: 660,
-    entry: { x: 0, z: 1500, above: 48, yaw: 0 },
+    entry: { x: -45, z: 1840, above: 7.5, yaw: -0.155 },
     gate: { x: 646, z: -1335, above: 70, yaw: -0.363 },
-    // down off the rise and low over the fields; then a long climb straight at the castle, the mountain rising to
+    // in low under the trees of a wood, along a winding track (Fairy.tsx trackX), the castle only glimpsed
+    // through the leaves; up off the track where the wood opens, over the crest of the rise, and the whole plain
+    // and the mountain are there at once. Then down off the rise and low over the fields; then a long climb straight at the castle, the mountain rising to
     // fill the sky, to pass close under its towers by its right flank and the slim peak beside it; and away over
     // the plain beyond, down toward the sun
     path: [
-      [0, 1500, 48],
-      [3, 1380, 47],
+      [-45, 1840, 7.5],
+      [-31, 1800, 7.5],
+      [-4, 1760, 7.5],
+      [24, 1720, 7.5],
+      [43, 1680, 8],
+      [44, 1640, 10],
+      [28, 1600, 16],
+      [8, 1560, 24],
+      [0, 1500, 38],
+      [3, 1380, 43],
       [6, 1260, 45],
       [10, 1130, 52],
       [16, 1010, 59],
@@ -608,6 +619,11 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -100, z: -246, r: 40, h: 640 },
       { x: -18, z: -334, r: 48, h: 660 },
       { x: 58, z: -320, r: 36, h: 610 },
+      // the gate of the way on (Fairy.tsx): the piers of its arch and the two towers beside them, the opening left free
+      ...[-1, 1].flatMap((sd) => [
+        { x: 646 + Math.cos(-0.363) * sd * 23, z: -1335 - Math.sin(-0.363) * sd * 23, r: 5, h: 104 },
+        { x: 646 + Math.cos(-0.363) * sd * 34, z: -1335 - Math.sin(-0.363) * sd * 34, r: 9.5, h: 118 },
+      ]),
     ],
     canvases: [{ painting: "fairy-tale", x: -46, z: 1290, yaw: 0.5 }],
   },
@@ -635,18 +651,19 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [-100, 0],
     radius: 1050,
     ceil: 300,
-    entry: { x: -770, z: 660, above: 26, yaw: 0 },
+    entry: { x: -1040, z: 150, above: 30, yaw: -1.39 },
     gate: { x: 0, z: 111, above: 131, yaw: Math.PI },
-    // in over the sea to the sand, round the isle along the shore with the meadow on the right, then inland and
-    // straight up the great flight to the court, over its pool, and out through the portal in the colonnade's far side
+    // in over the sea straight at the isle, the whole mount ahead with its terraces and falling water; then left
+    // along the shore with the meadow on the right, inland, and straight up the great flight to the court, over
+    // its pool, and out through the portal in the colonnade's far side
     path: [
-      [-770, 660, 26],
-      [-764, 520, 22],
-      [-744, 380, 18],
-      [-712, 250, 15],
-      [-672, 130, 14],
-      [-640, 0, 13],
-      [-627, -127, 13],
+      [-1040, 150, 30],
+      [-940, 132, 26],
+      [-850, 104, 21],
+      [-770, 56, 17],
+      [-705, -14, 14],
+      [-655, -95, 13],
+      [-616, -175, 13],
       [-589, -249, 13],
       [-528, -361, 13],
       [-446, -459, 13],
@@ -668,14 +685,23 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     obstacles: [
       { x: 0, z: 0, r: 520, h: 5 },
       { x: 0, z: 0, r: 475, h: 20 },
+      { x: 0, z: 0, r: 446, h: 44 },
       { x: 0, z: 0, r: 430, h: 36 },
       { x: 0, z: 0, r: 385, h: 52 },
       { x: 0, z: 0, r: 340, h: 68 },
+      { x: 0, z: 0, r: 338, h: 82 },
       { x: 0, z: 0, r: 295, h: 84 },
       { x: 0, z: 0, r: 250, h: 100 },
       { x: 0, z: 0, r: 205, h: 114 },
+      // the court's colonnade, column by column (isle.ts COLONNADE: the bays north and south stand open), and the
+      // two piers of the portal in its far side: the plane goes between them, not round the whole ring
+      ...Array.from({ length: 28 }, (_, i) => i)
+        .filter((i) => i !== 20 && i !== 21 && i !== 6 && i !== 7)
+        .map((i) => ({ x: Math.cos(((i + 0.5) / 28) * Math.PI * 2) * 112, z: Math.sin(((i + 0.5) / 28) * Math.PI * 2) * 112, r: 3.4, h: 162 })),
+      { x: -19, z: 111, r: 4, h: 166 },
+      { x: 19, z: 111, r: 4, h: 166 },
     ],
-    canvases: [{ painting: "paradise", x: -622, z: 196, yaw: -1.0 }],
+    canvases: [{ painting: "paradise", x: -668, z: 54, yaw: -1.67 }],
   },
   gate: {
     id: "gate",
@@ -747,6 +773,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: 800, z: 450, r: 34, h: 130 },
       { x: 980, z: 880, r: 34, h: 130 },
       { x: 320, z: -40, r: 56, h: 90 },
+      // the two needles the way on stands between, where the plane meets them (they lean together overhead)
+      { x: -41, z: -720, r: 7, h: 140 },
+      { x: 41, z: -720, r: 7, h: 140 },
     ],
     canvases: [{ painting: "offering", x: -44, z: 1300, yaw: 0.42 }],
   },
@@ -765,24 +794,26 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     radius: 1340,
     ceil: 260,
     // (it comes in a kilometre and a half from the island's head: a long while over the glass with the whole of it in view)
-    entry: { x: 80, z: 900, above: 14, yaw: -0.05 },
+    // (the way in is laid toward the island's head, not its middle: on a tall narrow screen the head and its two
+    // eyes are then in the frame from the first, the long back running off to the left)
+    entry: { x: 300, z: 900, above: 14, yaw: -0.092 },
     // between the island's two eyes, at the waterline: a low grotto runs into the rock, and that is the way on
     // (no arch of light: worlds/Sea.tsx)
     gate: { x: GROTTO.x, z: GROTTO.z - 30, above: 9, yaw: 0 },
-    // out over the glass toward the whole island, a little aside so it lies broadside, then in toward the head
-    // as the dusk falls, down the eyes' paths and between them
+    // out over the glass toward the island's head, the whole of it lying broadside to the left; then in under the
+    // head as night falls, down the eyes' paths and between them
     path: [
-      [80, 900, 14],
-      [90, 770, 12],
-      [86, 640, 11],
-      [74, 510, 10],
-      [62, 380, 9],
-      [30, 240, 9],
-      [-10, 100, 9],
-      [-10, -50, 9],
-      [50, -170, 9],
-      [170, -280, 9],
-      [320, -370, 9],
+      [300, 900, 14],
+      [312, 770, 12],
+      [322, 640, 11],
+      [328, 510, 10],
+      [326, 380, 9],
+      [316, 250, 9],
+      [300, 130, 9],
+      [292, 10, 9],
+      [300, -110, 9],
+      [330, -220, 9],
+      [384, -320, 9],
       [GROTTO.x - 30, GROTTO.z + 75, 9],
       [GROTTO.x - 5, GROTTO.z + 22, 9],
       [GROTTO.x, GROTTO.z - 30, 9],
@@ -798,7 +829,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -500, z: -640, r: 50, h: 60, bell: true },
       { x: 720, z: -640, r: 55, h: 70, bell: true },
     ],
-    canvases: [{ painting: "tranquility", x: -40, z: 400, yaw: 0.8 }],
+    canvases: [{ painting: "tranquility", x: 250, z: 420, yaw: 0.8 }],
   },
   seafinale: {
     id: "seafinale",
