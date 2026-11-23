@@ -84,6 +84,8 @@ type State = {
   limiter: DynamicsCompressorNode;
   makeup: GainNode; // takes the compressor's own make-up gain back out
   hush: GainNode; // the last node: 0 under ?mute=1 / aos-mute, else 1
+  muffle?: BiquadFilterNode; // music and flight only: opened wide, closed to a dull murmur while paused
+  muffleGain?: GainNode;
   wired: number; // version of the wiring (hot reload)
   voices: Map<string, Voice>;
   byEl: WeakMap<HTMLMediaElement, Voice>;
@@ -100,7 +102,7 @@ const DEV = process.env.NODE_ENV !== "production";
 const CHANNELS: Channel[] = ["music", "flight", "ambience", "piano", "sfx"];
 const MUTE_KEY = "ag-ambience";
 const HUSH_KEY = "aos-mute";
-const WIRING = 2;
+const WIRING = 3;
 
 // The fixed mix: what each channel is multiplied by on its way to the bus.
 // Music at a comfortable 65 %; the played piano and the few effects a little
@@ -250,6 +252,8 @@ function wire(s: State) {
   s.bus?.disconnect();
   s.makeup?.disconnect();
   s.hush?.disconnect();
+  s.muffle?.disconnect();
+  s.muffleGain?.disconnect();
   s.bus = ctx.createGain();
   s.limiter = ctx.createDynamicsCompressor();
   s.limiter.threshold.value = LIMIT.threshold;
@@ -267,10 +271,17 @@ function wire(s: State) {
   s.hush = ctx.createGain();
   s.hush.gain.value = audioHushed() ? 0 : 1;
   s.trims = {} as Record<Channel, GainNode>;
+  // (the music's own way to the bus passes a low-pass and a gain: wide open, until the scene is paused)
+  s.muffle = ctx.createBiquadFilter();
+  s.muffle.type = "lowpass";
+  s.muffle.frequency.value = 20000;
+  s.muffle.Q.value = 0.5;
+  s.muffleGain = ctx.createGain();
+  s.muffle.connect(s.muffleGain).connect(s.bus);
   for (const c of CHANNELS) {
     const t = (s.trims[c] = ctx.createGain());
     t.gain.value = MIX[c];
-    s.channels[c].connect(t).connect(s.bus);
+    s.channels[c].connect(t).connect(c === "music" || c === "flight" ? s.muffle : s.bus);
     if (c !== "ambience" && c !== "sfx") s.channels[c].connect(s.analyser);
   }
   s.bus.connect(s.limiter).connect(s.makeup).connect(s.sink).connect(s.hush).connect(ctx.destination);
@@ -1009,4 +1020,16 @@ function devHook(s: State) {
     return { ok: problems.length === 0, problems, audible: loud.map((v) => `${v.id}@${r3(v.gain ? v.gain.gain.value : v.el.volume)}`) };
   };
   Object.assign(window, { __audio: { report, check, voices: s.voices, state: s, stop: stopOwner, mute: setSceneMuted } });
+}
+
+// Paused: the music plays on as if through a wall (a low-pass to about 700 Hz and -6 dB over 0.4 s), and opens again.
+export function setMuffled(on: boolean) {
+  if (typeof window === "undefined") return;
+  const g = (window as unknown as { __aosAudio?: State }).__aosAudio;
+  if (!g || !g.muffle || !g.muffleGain) return;
+  const t = g.ctx.currentTime;
+  g.muffle.frequency.cancelScheduledValues(t);
+  g.muffle.frequency.setTargetAtTime(on ? 700 : 20000, t, 0.13);
+  g.muffleGain.gain.cancelScheduledValues(t);
+  g.muffleGain.gain.setTargetAtTime(on ? 0.5 : 1, t, 0.13);
 }
