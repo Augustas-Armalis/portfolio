@@ -100,8 +100,8 @@ export function buildGrotto() {
     [3, 1.03],
     [-6, 1.02],
   ];
-  const STEPS = 14;
-  for (let i = 1; i <= STEPS; i++) rings.push([GROTTO.z - 10 - (i / STEPS) * GROTTO.deep, 1.02 - 0.36 * Math.pow(i / STEPS, 1.6)]);
+  const STEPS = 18;
+  for (let i = 1; i <= STEPS; i++) rings.push([GROTTO.z - 10 - (i / STEPS) * GROTTO.deep, 1.02 - 0.52 * Math.pow(i / STEPS, 1.4)]);
   rings.forEach(([z, s], ri) => {
     for (let a = 0; a <= NA; a++) {
       const [u, y] = arch(a, s * (ri > 1 ? 1 + (noise2(a * 0.7, ri * 0.9) - 0.5) * 0.22 : 1));
@@ -156,6 +156,19 @@ const GROTTO_GLSL = /* glsl */ `
     float u = (l.x - GRT.x) / GRT.z;
     float hgt = GRT.w * sqrt(max(0.0, 1.0 - u * u));
     return abs(u) < 1.0 ? hgt - l.y : -abs(l.x - GRT.x) + GRT.z;
+  }
+  // The mouth as it opens: wider and taller as e goes from 0 to 1, and along its upper lip a row of rock teeth of
+  // different lengths, hanging, that grow as it gains its full gape. Returns how high the opening reaches at ou
+  // (the way across it, -1..1): below that, the face is not there.
+  float mouthWide(float e){ return 0.42 + 0.58 * e; }
+  float mouthTop(float ou, float e){
+    float arch = GRT.w * e * sqrt(max(0.0, 1.0 - ou * ou));
+    float f = ou * 5.2 + 0.5 * sin(ou * 6.0);
+    float id = floor(f);
+    float h = fract(sin(id * 12.9898) * 43758.5453);
+    float tooth = 1.0 - abs(fract(f) * 2.0 - 1.0);
+    float len = (2.0 + 7.5 * h * h) * smoothstep(0.1, 0.75, e) * (1.0 - ou * ou * ou * ou);
+    return arch - len * pow(tooth, 1.25);
   }`;
 
 // The island's paint: matte green rock in the evening, a wet dark line where it meets the glass, moss on what
@@ -184,8 +197,8 @@ export function makeIslandMaterial() {
         // (shut, the face is whole rock and nothing shows of it from the bay; it opens from the waterline, a low
         // arch that widens and rises as the plane comes in under the head at night)
         if (gin > 0.0 && uOpen > 0.01) {
-          float ou = (vLocal.x - GRT.x) / (GRT.z * (0.3 + 0.7 * uOpen));
-          if (abs(ou) < 1.0 && vLocal.y < GRT.w * uOpen * sqrt(max(0.0, 1.0 - ou * ou))) discard;
+          float ou = (vLocal.x - GRT.x) / (GRT.z * mouthWide(uOpen));
+          if (abs(ou) < 1.0 && vLocal.y < mouthTop(ou, uOpen)) discard;
         }
         vec3 n = normalize(vN);
         vec3 V = normalize(cameraPosition - vWorld);
@@ -280,13 +293,14 @@ export function makeGrottoMaterial() {
       ${GLSL_NOISE}
       ${GLSL_SKY}
       ${GLSL_AIR}
+      ${GROTTO_GLSL}
       void main(){
         float deep = vK.x;
         if (uOpen < 0.02) discard;
         if (deep < 0.005) {
           // (the lip of the mouth is only where the mouth has opened)
-          float ou = (vLocal.x - ${GROTTO.x.toFixed(1)}) / (${GROTTO.half.toFixed(1)} * (0.3 + 0.7 * uOpen) + 1.5);
-          if (abs(ou) >= 1.0 || vLocal.y > ${GROTTO.top.toFixed(1)} * uOpen * sqrt(max(0.0, 1.0 - ou * ou)) + 1.5) discard;
+          float ou = (vLocal.x - ${GROTTO.x.toFixed(1)}) / (${GROTTO.half.toFixed(1)} * mouthWide(uOpen) + 1.5);
+          if (abs(ou) >= 1.0 || vLocal.y > mouthTop(ou, uOpen) + 1.5) discard;
         }
         float rib = vnoise(vec2(vLocal.x * 0.3 + vLocal.z * 0.21, vLocal.y * 0.22)) * 0.6 + vnoise(vLocal.xz * 0.9 + vLocal.y * 0.8) * 0.4;
         vec3 alb = vec3(0.022, 0.042, 0.034) * (0.45 + 1.2 * rib);
