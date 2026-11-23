@@ -28,7 +28,7 @@ export const DOME_U = {
   uOccC: { value: [occ(-3.55, -0.4, 0), occ(-2.3, 2.5, 0), occ(3.75, 0.2, 0), occ(2.2, 2.95, 0)] },
   uOccR: { value: [new THREE.Vector3(1.5 * R, 2.7 * R, 1.7 * R), new THREE.Vector3(0.85 * R, 0.8 * R, 0.8 * R), new THREE.Vector3(1.55 * R, 3.1 * R, 1.75 * R), new THREE.Vector3(0.9 * R, 0.8 * R, 0.85 * R)] },
   // x: how thick the mist is (per metre at its thickest), y: how much of the light hangs in it, z: how strongly the shafts are cut, w: how light the mist itself is
-  uFogK: { value: new THREE.Vector4(0.0048, 1.3, 1, 1) },
+  uFogK: { value: new THREE.Vector4(0.0066, 1.3, 1, 0.82) },
   // what happens as the plane comes on (set each frame by the world): x: the little world's light (1, and brighter as
   // the kings lean to it), y: how far they have leaned (0..1), z: how many of the stars are out (0..1)
   uEvt: { value: new THREE.Vector4(1, 0, 0.3, 0) },
@@ -46,11 +46,12 @@ const vec3 DOME_WARM = vec3(1.0, 0.62, 0.31);
 vec3 nightBands(vec3 d){
   float e = asin(clamp(d.y, -1.0, 1.0));
   float az = atan(d.x, -d.z);
-  vec3 col = mix(vec3(0.014, 0.034, 0.05), vec3(0.003, 0.008, 0.015), smoothstep(0.08, 0.95, e));
+  vec3 col = mix(vec3(0.01, 0.025, 0.038), vec3(0.002, 0.006, 0.012), smoothstep(0.08, 0.95, e));
   float st = vnoise(vec2(az * 2.2, e * 110.0)) * 0.6 + vnoise(vec2(az * 7.0 + 3.0, e * 240.0 + 7.0)) * 0.4;
   float low = smoothstep(-0.05, 0.03, e) * (1.0 - smoothstep(0.22, 0.7, e));
-  vec3 blue = mix(vec3(0.016, 0.04, 0.064), vec3(0.03, 0.068, 0.1), smoothstep(0.5, 0.74, st));
-  col = mix(col, blue, smoothstep(0.42, 0.6, st) * low * 0.9);
+  // (the bands are quiet: a few long strokes a shade lighter, never stripes)
+  vec3 blue = mix(vec3(0.013, 0.032, 0.05), vec3(0.022, 0.05, 0.074), smoothstep(0.5, 0.74, st));
+  col = mix(col, blue, smoothstep(0.45, 0.62, st) * low * 0.75);
   return mix(col, vec3(0.008, 0.018, 0.024), smoothstep(0.0, -0.08, e));
 }
 
@@ -63,7 +64,10 @@ float mistAt(vec3 p){
   // a blanket that lies between the roots, a taller haze through the trunks, thin air above
   // (it stands back from the little world: in the glade the air is clearer, and what is dark there stays dark)
   float open = mix(0.4, 1.0, smoothstep(140.0, 520.0, length(p.xz - uDome.xz)));
-  return (exp(-h / 12.0) * (0.16 + 1.9 * bank) + exp(-h / 75.0) * (0.2 + 0.46 * bank) + 0.045) * open;
+  // (and a third, slower layer: deep banks rolling between the trunks at the height of the towns' feet)
+  vec2 q3 = p.xz * 0.0028 + vec2(-uTime * 0.0021, uTime * 0.0016);
+  float mid = smoothstep(0.35, 0.85, vnoise(q3 + 11.0)) * exp(-abs(p.y - 46.0) / 26.0);
+  return (exp(-h / 12.0) * (0.22 + 2.1 * bank) + exp(-h / 75.0) * (0.22 + 0.5 * bank) + mid * 0.55 + 0.05) * open;
 }
 
 // ---- the light ----

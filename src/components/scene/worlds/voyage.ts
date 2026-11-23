@@ -904,26 +904,27 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     gate: null,
     // a long way in: the path winds wide between the great trunks, so that from the entry the kings are hidden and
     // their light is only glimpsed through the wood, now on one side, now on the other;
-    // then it straightens into the glade, low, so the kings stand over the plane like hills for the whole of the
-    // approach; only at the last does it climb to their hands, and between them into the light
+    // then it straightens into the glade and rises with it, gently and early, so the kings stand over the plane like
+    // hills as it comes and it is already at the height of their hands well before them: the last hundred and fifty
+    // metres are level, straight at the light, and the plane goes into it without turning its eye up or down
     path: [
       [0, 700, 14],
       [-30, 632, 14],
       [-66, 560, 15],
       [-62, 490, 15],
       [-22, 420, 16],
-      [36, 350, 16],
-      [52, 285, 17],
-      [30, 222, 19],
-      [6, 156, 22],
-      [0, 80, 27],
-      [0, 20, 34],
-      [0, -40, 46],
-      [0, -85, 58],
-      [0, -112, 68],
+      [36, 350, 17],
+      [52, 285, 19],
+      [30, 222, 23],
+      [6, 156, 29],
+      [0, 80, 38],
+      [0, 20, 50],
+      [0, -30, 62],
+      [0, -70, 72],
+      [0, -105, 77.5],
       [0, KINGS.z + KINGS.domeR + 5, KINGS.domeY + KINGS.domeR * 0.3],
-      [0, KINGS.z, KINGS.domeY + KINGS.domeR * 0.28],
-      [0, KINGS.z - 40, KINGS.domeY + KINGS.domeR * 0.28],
+      [0, KINGS.z, KINGS.domeY + KINGS.domeR * 0.3],
+      [0, KINGS.z - 40, KINGS.domeY + KINGS.domeR * 0.3],
     ],
     obstacles: [
       { x: -114, z: KINGS.z, r: 60, h: 190 },
@@ -962,11 +963,13 @@ export const KINGS_WATER = -1.3;
 // The eye is raised from the plane's own line toward the middle of the picture (between the dome and the
 // crowns) and the lens opens a little as they come near, so both crowned heads stay in the frame until the
 // plane is almost at their hands; then it comes down to the light.
+// (It lets go of the lift long before the hands, slowly, so the last of the way is looked at level, straight into the
+// light, and nothing turns at the crossing.)
 export function kingsView(y: number, ahead: number) {
-  const w = smooth01((500 - ahead) / 170) * (1 - smooth01((100 - ahead) / 60));
-  const mid = kingsDome().y + KINGS.domeR * (1.85 + 0.25 * smooth01((230 - ahead) / 130));
-  // how far above level the eye should look, and how much of that it has taken up
-  const elev = Math.atan2(mid - y, Math.max(ahead, 30));
+  const w = smooth01((500 - ahead) / 170) * (1 - smooth01((260 - ahead) / 150));
+  const mid = kingsDome().y + KINGS.domeR * (1.5 + 0.2 * smooth01((330 - ahead) / 130));
+  // how far above level the eye should look, and how much of that it has taken up (never more than a sixth of a right angle)
+  const elev = Math.min(0.27, Math.atan2(mid - y, Math.max(ahead, 60)));
   // (a tall narrow screen sees less to either side: there the lens opens further, so both kings are still in it)
   const tall = typeof window !== "undefined" && window.innerHeight > window.innerWidth * 1.15;
   const fov = 50 + (tall ? 30 : 16) * smooth01((330 - ahead) / 190) - (tall ? 16 : 10) * smooth01((95 - ahead) / 60);
