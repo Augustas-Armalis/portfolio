@@ -7,7 +7,7 @@ import { GLSL_SKY, SKY_U } from "../sky";
 import { WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, haloGeometry, makeTempera, rng, type GroundPalette, type Halo, type V3 } from "./kit";
 import { HomeWindow } from "./kings/homeWindow";
-import { PaintedKings } from "./kings/painted";
+import { SolidKings, dropKingsSolid, kingsVoxel, stepKingsSolid } from "./kings/solid";
 import { makeUnderstory } from "./kings/trees";
 import { BY, DOME_AT, DOME_U, GLSL_END, GLSL_KINGS, GLSL_KINGS_CORE, KINGS_UNIFORMS, R } from "./kings/light";
 import { aisleX, makeWoodMaterial, woodGeometry, type Walk } from "./kings/wood";
@@ -836,7 +836,7 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       {b.under.meshes.map((m, i) => (
         <primitive key={i} object={m} />
       ))}
-      <PaintedKings />
+      <SolidKings mobile={props.mobile} trees={props.trees} />
       <mesh geometry={b.little} material={b.lit} />
       <mesh geometry={b.domeGeo} material={b.domeSky} position={at} />
       <HomeWindow mobile={props.mobile} />
@@ -895,17 +895,22 @@ export function prepareKings(props: Pick<WorldProps, "mobile" | "trees" | "effec
   const key = woodKey(props);
   if (madeWood && madeWood.key !== key) dropKings();
   const g = madeWood ? null : woodSteps(props, budget);
+  const voxel = kingsVoxel(props);
   return () => {
-    if (!g || madeWood) return true;
-    const r = g.next();
-    if (r.done) madeWood = { key, wood: r.value };
-    return !!r.done;
+    // (the wood first, then the two kings: never both in one frame)
+    if (g && !madeWood) {
+      const r = g.next();
+      if (r.done) madeWood = { key, wood: r.value };
+      return false;
+    }
+    return stepKingsSolid(voxel, budget);
   };
 }
 // a flight that ends before the kings lets go of whatever was made for them
 export function dropKings() {
   const w = madeWood?.wood as Record<string, unknown> | undefined;
   madeWood = null;
+  dropKingsSolid();
   if (w) letGo(w);
 }
 function letGo(w: Record<string, unknown>) {
