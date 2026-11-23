@@ -312,9 +312,9 @@ export function makeLandMaterial() {
           float keep2 = (1.0 - smoothstep(4.0, 22.0, fw)) * (1.0 - smoothstep(260.0, 1300.0, dist));  // chop and swell
           // two scales of travelling waves, and on the sea a long swell coming in to the beach
           vec2 pf = isRiver ? p + vec2(uTime * 0.42, -uTime * 0.42 * riverSlope(p.x)) : p;
-          // (the wave sheets are read through frames turned against one another, and through a slow warp of the place, so
-          // the texture's own period never shows: no grid, no tiles, near or from the sky)
-          vec2 pw = pf + (texture2D(uCloudTex, p / 83.0 + 0.31).rg - 0.5) * 6.0 * keep2;
+          // (the wave sheets are read through frames turned against one another, at scales that do not divide, so the
+          // texture's own period never shows: no grid, no tiles, near or from the sky)
+          vec2 pw = pf;
           const mat2 RA = mat2(0.8387, -0.5446, 0.5446, 0.8387);
           const mat2 RB = mat2(0.3624, 0.9320, -0.9320, 0.3624);
           const mat2 RC = mat2(-0.4161, 0.9093, -0.9093, -0.4161);
