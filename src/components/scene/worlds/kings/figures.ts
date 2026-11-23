@@ -334,9 +334,24 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number, far = 
 
 // ---------- how they are painted and lit ----------
 const S = (p: V3) => new THREE.Vector3(ORIGIN.x + p[0], ORIGIN.y + p[1], ORIGIN.z + p[2]);
-function kingUniforms(k: King) {
+// His own paint, read off the picture (kings.jpg): for each king the stretch of it that is his robe, his hair and beard,
+// his face, and his crown (x, y of the corner and the width and height, in the picture's own 0..1, y up), and how light
+// each stretch is on the whole (so laying it on lightens and darkens about the clay's own colour, never shifts it).
+const WIN = {
+  pale: { cloth: [0.094, 0.201, 0.141, 0.266], hair: [0.156, 0.367, 0.094, 0.2], skin: [0.3, 0.47, 0.05, 0.07], crown: [0.25, 0.567, 0.141, 0.1], mean: [0.191, 0.208, 0.287, 0.2] },
+  dark: { cloth: [0.734, 0.267, 0.141, 0.333], hair: [0.66, 0.45, 0.06, 0.12], skin: [0.578, 0.5, 0.109, 0.125], crown: [0.563, 0.584, 0.109, 0.067], mean: [0.169, 0.237, 0.217, 0.224] },
+};
+const v4 = (a: number[]) => new THREE.Vector4(a[0], a[1], a[2], a[3]);
+function kingUniforms(k: King, map: THREE.Texture | null = null) {
   const hd = new THREE.Vector3(...k.headDir).normalize();
+  const w = k.side < 0 ? WIN.pale : WIN.dark;
   return {
+    tPaint: { value: map },
+    uWinCloth: { value: v4(w.cloth) },
+    uWinHair: { value: v4(w.hair) },
+    uWinSkin: { value: v4(w.skin) },
+    uWinCrown: { value: v4(w.crown) },
+    uPaintMean: { value: v4(w.mean) },
     uNeck: { value: S(k.neck) },
     uHeadDir: { value: hd },
     uChest: { value: S(k.chest) },
@@ -370,10 +385,30 @@ vec3 alive(vec3 p, float t, float R){
 }
 `;
 
-export function makeKingMaterial(k: King) {
+// his paint laid over a form from three sides, each where the form faces it, the stretch of the picture repeated
+// mirror-wise (so the coordinates never jump and no seam is drawn)
+const GLSL_PAINT = /* glsl */ `
+uniform sampler2D tPaint; uniform vec4 uPaintMean;
+vec3 hisPaint(vec2 c, vec4 win){ vec2 t = abs(fract(c) * 2.0 - 1.0); return texture2D(tPaint, win.xy + t * win.zw).rgb; }
+vec3 paintOn(vec3 p, vec3 n, float span, vec4 win){
+  vec3 tw = pow(abs(n), vec3(3.0)); tw /= tw.x + tw.y + tw.z;
+  vec3 q = p / (span * 2.0);
+  return hisPaint(q.zy + vec2(0.13, 0.41), win) * tw.x + hisPaint(q.xz + vec2(0.31, 0.07), win) * tw.y + hisPaint(q.xy, win) * tw.z;
+}
+// lay a stretch of his paint over a colour: light and dark as his strokes are (about its own mean), and its colour leaning to theirs
+vec3 layPaint(vec3 alb, vec3 pc, float mean, float lk, float hk, float lo, float hi){
+  float l = dot(pc, vec3(0.3, 0.55, 0.15));
+  float k = clamp(l / mean, lo, hi);
+  alb *= mix(1.0, k, lk);
+  vec3 hue = pc / max(l, 0.02);
+  return mix(alb, dot(alb, vec3(0.3, 0.55, 0.15)) * hue, hk);
+}
+`;
+
+export function makeKingMaterial(k: King, map: THREE.Texture | null = null) {
   const pale = k.side < 0;
   return new THREE.ShaderMaterial({
-    uniforms: { ...KINGS_UNIFORMS, ...kingUniforms(k) },
+    uniforms: { ...KINGS_UNIFORMS, ...kingUniforms(k, map) },
     vertexShader: /* glsl */ `
       attribute vec4 aCol; attribute vec2 aPat; attribute vec4 aWhat; attribute float aAO;
       uniform float uTime; uniform float uR;
@@ -389,7 +424,9 @@ export function makeKingMaterial(k: King) {
     fragmentShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vObj; varying vec3 vN; varying vec4 vCol; varying vec2 vPat; varying vec4 vWhat; varying float vAO;
       uniform vec2 uAxis; uniform float uSide; uniform vec3 uHeadC; uniform vec3 uHeadF; uniform vec3 uCrownUp; uniform vec2 uHairDir; uniform float uFaceShade;
+      uniform vec4 uWinCloth; uniform vec4 uWinHair; uniform vec4 uWinSkin;
       ${GLSL_KINGS}
+      ${GLSL_PAINT}
       float lineAA(float x, float w, float fw){ return 1.0 - smoothstep(w - fw, w + fw, abs(x)); }
       ${
         pale
@@ -431,13 +468,13 @@ export function makeKingMaterial(k: King) {
                // red work: small crowded marks filling the band
                vec2 rc = vec2(c, s) / 1.9; vec2 ri = floor(rc);
                float red = step(0.72, bk) * step(0.3, hash12(ri)) * (1.0 - smoothstep(0.2, 0.42, length(fract(rc) - 0.5 - (vec2(hash12(ri + 2.0), hash12(ri + 5.0)) - 0.5) * 0.4)));
-               vec3 thread = mix(vec3(0.36, 0.17, 0.04), vec3(0.46, 0.27, 0.06), hash12(vec2(bi, floor(s / 2.2))));
+               vec3 thread = mix(vec3(0.26, 0.12, 0.035), vec3(0.34, 0.2, 0.05), hash12(vec2(bi, floor(s / 2.2))));
                float gold = clamp(ladder * 0.95 + zig * step(0.3, bk) * (1.0 - step(0.72, bk)) * 0.9 + knot * 0.9 + edge * 0.5, 0.0, 1.0);
-               thread = mix(vec3(0.36, 0.06, 0.022), thread, clamp(gold * 3.0, 0.0, 1.0));
+               thread = mix(vec3(0.24, 0.05, 0.02), thread, clamp(gold * 3.0, 0.0, 1.0));
                float worked = clamp(gold + red * 0.9, 0.0, 1.0);
                float bodyP = clamp(ladder * step(0.45, bk) + edge * 0.4, 0.0, 1.0) * 0.8;
                // (far off the stitches run together into the colour they make of the cloth)
-               float amt = mix(mix(0.05, 0.26, rich), mix(bodyP, worked, rich), soft) * 0.9 * (1.0 - smoothstep(2.4, 5.0, fw));
+               float amt = mix(mix(0.04, 0.18, rich), mix(bodyP, worked, rich), soft) * 0.62 * (1.0 - smoothstep(2.4, 5.0, fw));
                return vec4(thread, amt);
              }`
       }
@@ -533,6 +570,26 @@ export function makeKingMaterial(k: King) {
           alb = mix(alb, alb * vec3(1.12, 0.8, 0.74), skinW * front * (1.0 - smoothstep(0.02, 0.06, abs(fb + 0.432))) * (1.0 - smoothstep(0.08, 0.14, fz)) * smoothstep(0.44, 0.5, fa) * 0.5);
         }
         alb *= 1.0 + (dabs(vObj) - 0.5) * 0.18;
+        // and over all of it, his: the robe's own stretch of the picture on the cloth, the hair's on hair and beard, the
+        // face's on the skin. It is what takes the clay's smoothness off: dragged strokes, the canvas's weave through
+        // thin paint, colour broken into the colours he used.
+        {
+          vec3 pn = normalize(vN);
+          float hairOnly = smoothstep(0.5, 0.9, hairW);
+          vec3 pcC = paintOn(vObj, pn, 46.0, uWinCloth);
+          vec3 pcH = paintOn(vObj + vec3(7.0, 0.0, 3.0), pn, 30.0, uWinHair);
+          vec3 pcS = paintOn(vObj, pn, 14.0, uWinSkin);
+          alb = mix(alb, layPaint(alb, pcC, uPaintMean.x, 0.9, 0.5, 0.3, 2.4), clothW * (1.0 - hairOnly));
+          alb = mix(alb, layPaint(alb, pcH, uPaintMean.y, 0.55, 0.15, 0.45, 1.9), hairOnly);
+          alb = mix(alb, layPaint(alb, pcS, uPaintMean.z, 0.35, 0.2, 0.7, 1.35), skinW);
+          float lC = dot(pcC, vec3(0.3, 0.55, 0.15)) / uPaintMean.x;
+          float lH = dot(pcH, vec3(0.3, 0.55, 0.15)) / uPaintMean.y;
+          height += (clamp(lC, 0.3, 2.4) - 1.0) * 0.1 * clothW * (1.0 - hairOnly) + (clamp(lH, 0.4, 2.2) - 1.0) * 0.06 * hairOnly;
+          // (and long strokes laid down the fall of the cloth, the way he dragged the brush)
+          float lng = vnoise(vec2((vObj.x + vObj.z) * 0.32, vObj.y * 0.04)) * 0.6 + vnoise(vec2((vObj.x - vObj.z) * 0.9, vObj.y * 0.11 + 3.0)) * 0.4;
+          alb *= 1.0 + (lng - 0.5) * 0.4 * clothW * (1.0 - hairOnly);
+          height += (lng - 0.5) * 0.12 * clothW;
+        }
         n = bumpN(n, vWorld, height, 1.0);
 
         // the one light, wrapped a little round the form (further round skin); creases keep their shade
@@ -546,25 +603,31 @@ export function makeKingMaterial(k: King) {
         float lit = mix(wrap * wrap, 0.16 + 0.6 * wrap, 0.55 * clothW);
         // the dark king's face is sunk in the shade of hood and crown
         float sunk = 1.0 - uFaceShade * skinW;
-        vec3 warm = DOME_WARM * att * lit * mix(3.7, 3.0, clothW) * mix(1.0, ao, 0.7) * sunk;
+        // (the light as it falls on them is a little less orange than in the wood: the picture's kings are cool, the
+        // warmth is in the light's edge, not over the whole of them)
+        const vec3 KLIGHT = vec3(1.0, 0.7, 0.47);
+        vec3 warm = KLIGHT * att * lit * mix(3.2, 2.3, clothW) * mix(1.0, ao, 0.7) * sunk;
         // light that has gone a little way into skin comes out redder at the edge of the shade
         vec3 sss = vec3(1.0, 0.3, 0.13) * att * skinW * smoothstep(0.0, 0.45, wrap) * (1.0 - smoothstep(0.3, 0.95, wrap)) * 1.6 * sunk;
-        vec3 col = alb * (coolFill(n) * ao * ao + warm + sss);
+        // (the shade is the night's: cooler and a little bluer than the wood's umber)
+        vec3 shade = coolFill(n) * 1.35 + vec3(0.006, 0.016, 0.03) * (0.6 + 0.4 * n.y);
+        vec3 col = alb * (shade * ao * ao + warm + sss);
         // every edge turned toward it takes the light: the nap of the cloth, the down on a cheek, a sleeve's hem
-        float fres = pow(1.0 - abs(dot(n, V)), 2.6);
-        col += DOME_WARM * alb * fres * att * clamp(dl.x + 0.5, 0.0, 1.0) * (1.5 + (0.5 + 3.2 * uFaceShade) * skinW + 0.4 * hairW) * ao;
+        // (a thin line of it, not a sheen: a broad one is what makes clay look like plastic)
+        float fres = pow(1.0 - abs(dot(n, V)), 3.4);
+        col += DOME_WARM * alb * fres * att * clamp(dl.x + 0.5, 0.0, 1.0) * (0.6 + (0.4 + 3.0 * uFaceShade) * skinW + 0.3 * hairW) * ao;
         // and on the far side a thread of the night's blue
-        col += vec3(0.016, 0.042, 0.07) * fres * clamp(0.35 - dl.x, 0.0, 1.0) * ao * (0.5 + alb.g * 4.0);
+        col += vec3(0.02, 0.05, 0.085) * fres * clamp(0.35 - dl.x, 0.0, 1.0) * ao * (0.6 + alb.g * 4.0);
         // hair takes a sheen along its strands
         {
           vec3 Tg = vec3(uHairDir, 0.0);
           Tg = normalize(Tg - n * dot(Tg, n) + n * (strand - 0.5) * 0.3);
           float th1 = dot(Tg, normalize(Ld + V));
           float th2 = dot(Tg, normalize(vec3(0.0, 1.0, 0.0) + V));
-          col += hairW * (DOME_WARM * alb * att * pow(max(1.0 - th1 * th1, 0.0), 22.0) * 3.2 * clamp(dl.x + 0.4, 0.0, 1.0) + vec3(0.02, 0.045, 0.07) * pow(max(1.0 - th2 * th2, 0.0), 30.0) * 0.5) * ao * (0.5 + strand);
+          col += hairW * (DOME_WARM * alb * att * pow(max(1.0 - th1 * th1, 0.0), 22.0) * 1.8 * clamp(dl.x + 0.4, 0.0, 1.0) + vec3(0.02, 0.045, 0.07) * pow(max(1.0 - th2 * th2, 0.0), 30.0) * 0.5) * ao * (0.5 + strand);
         }
         // silk thread: a soft light of its own colour where it lies toward the dome (never brighter than the dome makes it)
-        col += thread * stitched * att * (0.12 + 0.4 * pow(max(dot(n, normalize(Ld + V)), 0.0), 10.0)) * clamp(dl.x + 0.3, 0.0, 1.0);
+        col += thread * stitched * att * (0.05 + 0.2 * pow(max(dot(n, normalize(Ld + V)), 0.0), 10.0)) * clamp(dl.x + 0.3, 0.0, 1.0);
         // the bodies go down into the dark
         col *= mix(0.42, 1.0, smoothstep(uDome.y - uR * 3.2, uDome.y - uR * 0.5, vWorld.y));
         gl_FragColor = vec4(kingsAir(col, vWorld), 1.0);
@@ -575,11 +638,11 @@ export function makeKingMaterial(k: King) {
 
 // Worked gold: a chased band, a row of stones, beaded rims; it takes the dome's light broadly and gives back
 // soft glints that wander as the eye moves, and no sparkle.
-export function makeCrownMaterial(k: King) {
+export function makeCrownMaterial(k: King, map: THREE.Texture | null = null) {
   const pale = k.side < 0;
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { ...KINGS_UNIFORMS, ...kingUniforms(k) },
+    uniforms: { ...KINGS_UNIFORMS, ...kingUniforms(k, map) },
     vertexShader: /* glsl */ `
       attribute vec4 aCol;
       uniform float uTime; uniform float uR;
@@ -594,8 +657,10 @@ export function makeCrownMaterial(k: King) {
       }`,
     fragmentShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vObj; varying vec3 vN; varying vec4 vCol;
-      uniform vec3 uCrownC; uniform vec3 uCrownUp;
+      uniform vec3 uCrownC; uniform vec3 uCrownUp; uniform vec4 uWinCrown;
       ${GLSL_KINGS}
+      ${GLSL_PAINT}
+      float lineAA(float x, float w, float fw){ return 1.0 - smoothstep(w - fw, w + fw, abs(x)); }
       void main(){
         vec3 n = normalize(vN);
         vec3 V = normalize(cameraPosition - vWorld);
@@ -631,7 +696,17 @@ export function makeCrownMaterial(k: King) {
         alb *= mix(1.0, 0.62 + 0.6 * smoothstep(-0.6, 0.6, lattice), fine * band);
         alb *= 0.8 + 0.4 * hm;
         vec3 gem = hash12(vec2(si, 7.0)) < 0.5 ? vec3(0.34, 0.025, 0.02) : vec3(0.03, 0.09, 0.11);
-        alb = mix(alb, gem, stone);
+        alb = mix(alb, gem, stone * 0.7);
+        // He painted the crowns, he did not cast them: hatched upright in a darker colour between strokes of the light
+        // one, the points outlined, his own reds and ochres in it. So: his paint over the gold, and the hatching.
+        {
+          vec3 pcr = paintOn(vObj, normalize(vN), 7.0, uWinCrown);
+          alb = layPaint(alb, pcr, uPaintMean.w, 0.75, 0.5, 0.35, 2.2);
+          float hu = u / ${pale ? "0.9" : "0.62"};
+          float hfw = fwidth(hu);
+          float hatch = lineAA(fract(hu + 0.15 * vnoise(vec2(hu * 0.3, hh * 0.4))) - 0.5, 0.17, hfw) * (1.0 - smoothstep(0.25, 0.7, hfw));
+          alb *= 1.0 - hatch * ${pale ? "0.5" : "0.62"} * mix(1.0, 0.6, 1.0 - band);
+        }
 
         vec3 Ld = normalize(uDome + vec3(0.0, uR * 0.35, 0.0) - vWorld);
         vec2 dl = domeLight(vWorld, n);
@@ -643,7 +718,7 @@ export function makeCrownMaterial(k: King) {
         float nh = max(dot(n, Hh), 0.0);
         float metal = 1.0 - inner;
         float glint = pow(nh, 9.0) * 0.9 + pow(nh, 46.0) * (0.5 + 0.5 * vnoise(vObj.xy * 0.7 + vObj.z * 0.5)) * 1.3;
-        col += mix(alb * 4.5, vec3(1.0, 0.78, 0.5), 0.2) * glint * att * metal * step(0.0, dl.x + 0.2) * mix(1.0, 1.6, stone);
+        col += mix(alb * 2.6, vec3(1.0, 0.78, 0.5), 0.12) * glint * 0.45 * att * metal * step(0.0, dl.x + 0.2) * mix(1.0, 1.6, stone);
         // and the night, thinly, on whatever is turned from the light
         float fres = pow(1.0 - abs(dot(n, V)), 3.0);
         col += (DOME_WARM * alb * 2.2 * att * clamp(dl.x + 0.5, 0.0, 1.0) + vec3(0.012, 0.03, 0.05) * clamp(0.4 - dl.x, 0.0, 1.0)) * fres * metal;
