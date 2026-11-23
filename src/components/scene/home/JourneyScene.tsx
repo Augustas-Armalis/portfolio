@@ -108,13 +108,13 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     const f = st.f;
     const night = THREE.MathUtils.smoothstep(f, marks.forest - 0.04, marks.deep);
     FOREST_K.night.value = Math.max(night, SKY_U.uNight.value * 0.8);
-    const fog = THREE.MathUtils.smoothstep(f, marks.forest - 0.03, marks.forest + 0.08) * (1 - THREE.MathUtils.smoothstep(f, marks.cave - 0.1, marks.cave - 0.02));
+    const fog = THREE.MathUtils.smoothstep(f, marks.forest - 0.03, marks.forest + 0.08) * (1 - THREE.MathUtils.smoothstep(f, marks.cave - 0.2, marks.cave - 0.07));
     FOREST_K.fog.value = fog;
     // the air: a light mist over the town's roofs (smoke and evening damp), and in the forest a soft fog lit by the
     // moon, thick enough that the trunks fade within a few tens of metres; it lifts before the mountain
     const town = THREE.MathUtils.smoothstep(f, marks.town - 0.1, marks.town) * (1 - THREE.MathUtils.smoothstep(f, marks.forest - 0.04, marks.forest + 0.02));
     if (voyage.cur === "home") {
-      HOME_U.uAirK.value.x = AIR0 + 0.0022 * town + 0.0145 * fog;
+      HOME_U.uAirK.value.x = AIR0 + 0.0022 * town + 0.004 * fog;
       HOME_U.uFogGlow.value.w = 0.62 * fog;
     } else HOME_U.uFogGlow.value.w = 0;
   });

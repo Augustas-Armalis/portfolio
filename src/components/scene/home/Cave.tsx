@@ -493,7 +493,7 @@ function makeStoneMaterial() {
         vec3 V = normalize(cameraPosition - vWorld);
         col += uLead * pow(max(dot(reflect(-V, n), toSrc), 0.0), 18.0) * 0.25 * inside * fine * (kind < 1.5 || (kind > 3.5 && kind < 4.5) ? 1.0 : 0.3);
         // (inside the cave there is no air of the land)
-        col = mix(homeAir(col, vWorld), col, inside);
+        col = homeAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

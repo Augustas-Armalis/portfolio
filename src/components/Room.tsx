@@ -25,6 +25,7 @@ import { Clouds } from "./scene/home/Clouds";
 import { Butterflies, Flock, Motes, Skein } from "./scene/home/Life";
 import { PropLights, Props } from "./scene/home/Props";
 import { Journey } from "./scene/home/JourneyScene";
+import { FOREST_K } from "./scene/home/Woods";
 import { coverReady, getMats, makeScreenMaterial } from "./scene/materials";
 import { BookUI, CameraUI, FlightUI, MusicUI, NavBar, PianoUI, SketchUI } from "./scene/ModeUI";
 import { LOADER_T, makeLoaderOverlay } from "./scene/Loader";
@@ -1393,7 +1394,8 @@ function Scene({
     // arrival mist thins out, continuously, as the camera comes down
     const at = introAt.current;
     const mist = instant || (at !== null && now - at > ARR) ? 0 : cloudMist(cam.position.y);
-    SKY_U.uMist.value = Math.max(mist, voyage.mist);
+    // (and in the journey's forest, its fog: so the gate's veil and the path of light go into it with the land)
+    SKY_U.uMist.value = Math.max(mist, voyage.mist, FOREST_K.fog.value * 0.0105);
     // The lens's near plane. A centimetre at the desk (things there are looked at from a hand's breadth), but with a
     // centimetre the depth a kilometre off is good to no better than six metres: seen from the sky, the mountains'
     // feet, the far woods and the sea all flickered against the land under them. So it moves out with the eye's
