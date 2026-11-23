@@ -109,7 +109,9 @@ export function ContactShadows({ strength = 1 }: { strength?: number }) {
     const over = scene.overrideMaterial;
     const bg = scene.background;
     const ca = gl.getClearAlpha();
+    const due = gl.shadowMap.needsUpdate;
     gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = false;
     scene.overrideMaterial = k.depth;
     scene.background = null;
     gl.setClearAlpha(0);
@@ -136,6 +138,7 @@ export function ContactShadows({ strength = 1 }: { strength?: number }) {
       scene.background = bg;
       gl.setClearAlpha(ca);
       gl.shadowMap.autoUpdate = auto;
+      gl.shadowMap.needsUpdate = due;
       gl.setRenderTarget(prev);
     }
   });
