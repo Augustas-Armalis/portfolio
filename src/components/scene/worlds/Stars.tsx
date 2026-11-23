@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { SKY_U } from "../sky";
-import { Gallery, Halos, LightGate, LightPath, useDisposable, type WorldProps } from "./common";
+import { FarGround, Gallery, Halos, LightGate, LightPath, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, makeWater, pointsGeometry, rng, type Halo, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { linesGeometry, makeCloudPaint, makeLineMaterial, makeRayDiscMaterial, makeSoftMaterial, paintedCloudGeometry, softGeometry, type PCloud, type Seg, type Soft } from "./stars/forms";
@@ -272,6 +272,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       <mesh material={b.water} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
         <planeGeometry args={[9000, 9000]} />
       </mesh>
+      <FarGround id="stars" def={def} pal={{ a: [0, 0, 0], b: [0, 0, 0], c: [0, 0, 0] }} />
       <LightPath id="stars" def={def} tint={[1, 0.92, 0.7]} gain={1.4} effects={props.effects} angels={false} />
       {/* the way on: the door's own sheet of light, and the next world seen in it */}
       <LightGate id="stars" def={def} tint={[1, 0.86, 0.6]} gain={1.1} look="veil" half={DOOR.half} rise={DOOR.top - 32} />

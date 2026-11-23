@@ -10,7 +10,7 @@ import { bakeHomeSolids, homeGround } from "./homeGround";
 import { useTrails } from "./PlaneTrails";
 import { carryY, gateToEntry, portalReady, portalSwap } from "./worlds/portal";
 import { arriveGolden } from "./sky";
-import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
+import { GATE_REACH, KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
 // A folded paper plane that lives on the desk. Click it and it takes off down
 // the road, and from there it is yours: it glides. The pointer (or A / D, or a
@@ -743,7 +743,8 @@ export function Plane({
         const rz = st.pos.z - o.z - gate.pos.z;
         const along = -Math.sin(gate.yaw) * rx - Math.cos(gate.yaw) * rz;
         const side = Math.abs(Math.cos(gate.yaw) * rx - Math.sin(gate.yaw) * rz);
-        const inside = side < 19 && ry < 26;
+        const reach = GATE_REACH[id];
+        const inside = side < (reach?.[0] ?? 19) && ry < (reach?.[1] ?? 26);
         const crossed = Number.isFinite(st.gateAlong) && st.gateAlong < 0 !== along < 0 && Math.abs(along - st.gateAlong) < 40;
         const through = inside && (crossed || Math.abs(along) < 3.5);
         if (process.env.NODE_ENV !== "production" && crossed && !inside && side < 60) console.warn(`[voyage] ${id}: passed the gate's plane outside it (${side.toFixed(1)} m aside, ${ry.toFixed(1)} m above its middle)`);

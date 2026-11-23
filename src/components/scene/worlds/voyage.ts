@@ -8,7 +8,7 @@ import { airState, arrivalHours, mixSky, skyState, type Air, type SkyState } fro
 import { FRIEND_CANVAS, FRIEND_ENTRY, FRIEND_GATE, FRIEND_OBSTACLES, FRIEND_PATH, FRIEND_TERRAIN } from "./friendship/shape";
 import { funeralLand } from "./funeral/land";
 import { GROTTO } from "./sea/shape";
-import { FINALE_ENTRY, FINALE_GATE, FINALE_PATH, FINALE_TERRAIN } from "./seafinale/shape";
+import { FINALE_ENTRY, FINALE_GATE, FINALE_OPENING, FINALE_PATH, FINALE_TERRAIN } from "./seafinale/shape";
 import { SUN_CANVAS, SUN_ENTRY, SUN_GATE, SUN_OBSTACLES, SUN_PATH, SUN_SKY, SUN_TERRAIN } from "./sun/shape";
 
 // Angelų takas, the path of angels. The paper plane's flight is a pilgrimage
@@ -32,6 +32,9 @@ export const WORLD_ORDER: WorldId[] = ["home", "friendship", "sun", "stars", "re
 // Fairy Tale of the Kings: where the two kings stand, and the small lit world they hold between their hands
 export const KINGS = { z: -170, domeY: 70, domeR: 30 };
 export const ORIGIN = new THREE.Vector3(-2500, 0, -2700);
+// How far from a gate's middle still counts as through it, where a world's gate is wider than the ordinary one:
+// [sideways, above the gate's middle] in metres (Plane.tsx; the ordinary gate is 19 and 26)
+export const GATE_REACH: Partial<Record<WorldId, [number, number]>> = { seafinale: [FINALE_OPENING[0] * 0.9, FINALE_OPENING[1]] };
 
 // ---------- the ground ----------
 // One analytic height field per world: a sum of sine waves, round hills (or
@@ -268,21 +271,21 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // behind the great wave, so the water is lit through
   seafinale: {
     label: "Sonata of the Sea: Finale",
-    zenith: [0.15, 0.1, 0.05],
-    upper: [0.36, 0.26, 0.12],
-    horizon: [0.62, 0.47, 0.22],
-    glow: [1.0, 0.74, 0.32],
-    amb: [0.36, 0.38, 0.27],
-    key: [1.0, 0.84, 0.5],
+    zenith: [0.08, 0.12, 0.13],
+    upper: [0.2, 0.29, 0.29],
+    horizon: [0.5, 0.57, 0.5],
+    glow: [0.95, 0.82, 0.5],
+    amb: [0.3, 0.4, 0.37],
+    key: [0.98, 0.92, 0.66],
     keyI: 1.25,
     sunAz: -4,
     sunEl: 12,
     keyAz: -4,
     keyEl: 17,
-    cloudLit: [1.0, 0.86, 0.56],
-    cloudShade: [0.5, 0.42, 0.3],
+    cloudLit: [0.96, 0.92, 0.74],
+    cloudShade: [0.4, 0.46, 0.42],
     night: 0,
-    exposure: 0.8,
+    exposure: 0.82,
     fx: [0.0, 0.7, 0.0, 0],
   },
   // Funeral Symphony VI: a vast night of ultramarine pastel, the sky the lightest thing in it; a thin moon with
@@ -843,9 +846,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     terrain: FINALE_TERRAIN,
     water: null,
     centre: [-500, 350],
-    radius: 3300,
-    ceil: 1950,
-    pace: 3.0,
+    radius: 3900,
+    ceil: 2300,
+    pace: 3.2,
     entry: FINALE_ENTRY,
     // at the wave's far end, in the hanging lace of its crest: out through it, into calm (no arch of light)
     gate: FINALE_GATE,

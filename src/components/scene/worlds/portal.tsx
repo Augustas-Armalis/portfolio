@@ -7,6 +7,7 @@ import { POST_U, postCtl } from "../Post";
 import { GLSL_SKY, SKY_U, applySky, clockHours, skyState, type SkyState } from "../sky";
 import { GLSL_AIR, WORLD_U, setWorldAir } from "./kit";
 import { GLSL_HOME_AIR, HOME_U } from "../home/land";
+import { FINALE_OPENING } from "./seafinale/shape";
 import { WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, originOf, voyage, voyageSky, type WorldDef, type WorldId } from "./voyage";
 
 // Gates are windows. As the plane nears a gate the opening shows the next world itself, live: that world (already
@@ -41,7 +42,7 @@ export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPor
 // after the worlds change places is the frame before.
 const STILL_U = { tStill: { value: null as THREE.Texture | null }, uStillMat: { value: new THREE.Matrix4() }, uStillOn: { value: 0 }, uLiveK: { value: 0 } };
 // A gate whose opening in the world is not the size of its sheet of light: [half-width, rise above the way's height].
-const OPENING: Partial<Record<WorldId, [number, number]>> = { sun: [23, 33], stars: [50, 80], rex: [40, 72] };
+const OPENING: Partial<Record<WorldId, [number, number]>> = { sun: [23, 33], stars: [50, 80], rex: [40, 72], seafinale: FINALE_OPENING };
 const state = { next: null as WorldId | null, k: 0, fresh: 0, tick: 0, still: null as WorldId | null, live: 0 };
 
 const E = new THREE.Vector3();

@@ -3,7 +3,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
+import { LightGate, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, WORLD_U, makeTempera, rng, type GroundPalette, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { greatSunMaterial } from "./sun/life";
@@ -14,7 +14,7 @@ import { SKY_U, airState, mixSky, type SkyState } from "../sky";
 import { ORIGIN, WORLDS, pathOf, voyage } from "./voyage";
 import { useDeepLens } from "./fairy/shared";
 import { FINALE_U, buildCrest, buildSea, buildSpray, makeBoltMaterial, makeCrashMaterial, makeCrestMaterial, makeRainMaterial, rainGeometry, makeSeaMaterial, makeSprayMaterial, signTexture } from "./seafinale/ocean";
-import { SHIPS, bodyAt, onFace, swellAt, swellDamp } from "./seafinale/shape";
+import { FINALE_OPENING, SHIPS, bodyAt, onFace, swellAt, swellDamp } from "./seafinale/shape";
 
 // Sonata of the Sea. Finale (Jūros sonata. Finale, 1908). One colossal green wave rearing over the whole
 // picture and curling forward, its crest breaking into fingers of foam like lace; small sailing ships riding
@@ -240,7 +240,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       if (voyage.skyMod === skyMod) voyage.skyMod = null;
       Object.assign(storm, { k: 0, keyK: -1, sky: null });
       FINALE_U.uRise.value = 0.02;
-      FINALE_U.uSwell.value = 0.4;
+      FINALE_U.uSwell.value = 0.5;
       FINALE_U.uCrash.value = 0;
       FINALE_U.uStorm.value = 0;
       FINALE_U.uFlash.value = 0;
@@ -255,7 +255,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       storm.k = 0;
       FINALE_U.uRise.value = 0.02;
       FINALE_U.uStorm.value = 0;
-      FINALE_U.uSwell.value = 0.4;
+      FINALE_U.uSwell.value = 0.5;
       FINALE_U.uCrash.value = 0;
       FINALE_U.uFlash.value = 0;
       deckRef.current?.position.set(0, 300, -7000);
@@ -299,13 +299,14 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     // (it is fifteen hundred metres when it falls); it rises fastest at first, when it is far off
     const rise = 0.02 + 0.98 * Math.pow(sm(p, 0.04, 0.985), 0.8);
     // the weather: gentle, then turning as the wave stands up, at its height along the face
-    const k = sm(p, 0.1, 0.5);
+    // (a turning of the weather, not a storm: the sea runs higher and the sky cools and thickens, and a thin rain comes)
+    const k = 0.5 * sm(p, 0.1, 0.5);
     // the end: the crest comes down over the last of the way
     const crash = sm(p, 0.91, 0.985);
     storm.k = k;
     FINALE_U.uRise.value = rise;
     FINALE_U.uStorm.value = k;
-    FINALE_U.uSwell.value = 0.4 + 1.5 * k;
+    FINALE_U.uSwell.value = 0.5 + 1.4 * k;
     FINALE_U.uCrash.value = crash;
     WORLD_U.uFogD.value = def.fog[0] * (1 + 2.6 * k);
     // the deck of cloud rolls in from behind the wave and comes down a little
@@ -314,7 +315,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     b.sunMat.uniforms.uGain.value = 0.26 * (1 - k) * (1 - k);
     // lightning: once the storm is up, a forked stroke somewhere in the cloud ahead every few seconds; for the
     // instant it lasts the cloud is lit from within and the sea and the wave take its light (soft, and clamped)
-    if (k > 0.55 && t > e.nextBolt) {
+    if (false && k > 0.55 && t > e.nextBolt) {
       e.boltAt = t;
       e.seed = (e.seed * 7.31 + 1.7) % 97;
       e.nextBolt = t + 3.5 + ((e.seed * 3.3) % 5.5);
@@ -379,7 +380,9 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
   });
   return (
     <>
-      <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.9, 0.6]} pathGain={0.3} angels={false} marks={false} gateSize={[32, 42]} />
+      <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[0.9, 0.96, 0.8]} pathGain={0.3} angels={false} marks={false} gateSize={FINALE_OPENING} />
+      {/* the way on: the whole curl of the wave's end, a lancet of light as wide as the curl and as tall */}
+      <LightGate id="seafinale" def={def} tint={[1, 0.96, 0.8]} gain={1.3} look="veil" half={FINALE_OPENING[0]} rise={FINALE_OPENING[1]} />
       {/* (hung beyond the wave, which is further off than the shared sun stands) */}
       <mesh material={b.sunMat} frustumCulled={false} renderOrder={-4}>
         <planeGeometry args={[2, 2]} />

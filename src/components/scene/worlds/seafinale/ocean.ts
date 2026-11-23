@@ -63,11 +63,11 @@ const LACE_GLSL = /* glsl */ `
     return smoothstep(0.8, 0.96, wall) * mix(1.0 - smoothstep(0.2, 0.34 + w, length(c)), 0.22, smoothstep(0.3, 0.9, w));
   }
   uniform float uStorm; uniform float uFlash;
-  const vec3 W_DEEP = vec3(0.03, 0.03, 0.012);
-  const vec3 W_GREEN = vec3(0.1, 0.17, 0.03);
-  const vec3 W_LIME = vec3(0.4, 0.42, 0.07);
-  const vec3 W_GOLD = vec3(0.86, 0.62, 0.14);
-  const vec3 W_FOAM = vec3(0.98, 0.9, 0.7);
+  const vec3 W_DEEP = vec3(0.012, 0.03, 0.034);
+  const vec3 W_GREEN = vec3(0.035, 0.15, 0.115);
+  const vec3 W_LIME = vec3(0.2, 0.4, 0.3);
+  const vec3 W_GOLD = vec3(0.56, 0.74, 0.6);
+  const vec3 W_FOAM = vec3(0.94, 0.97, 0.92);
   // the water's own colour by how thin it is between the eye and the light: umber-green, green, yellow-green, gold;
   // and as the storm comes up the whole of it goes over to slate and dark teal, a cold pale green where it is thinnest
   vec3 waterCol(float thin){
@@ -184,7 +184,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         float toSun = pow(max(dot(-V, Lh), 0.0), 2.0);
         vec3 water = waterCol(thin * (0.72 + 0.28 * toSun));
         // (the troughs of the swell are umber, as his foreground waves are)
-        water = mix(water, mix(vec3(0.04, 0.024, 0.01), vec3(0.008, 0.016, 0.03), uStorm), (1.0 - onWave) * smoothstep(1.5, -3.5, sw) * 0.42);
+        water = mix(water, mix(vec3(0.012, 0.026, 0.03), vec3(0.008, 0.016, 0.03), uStorm), (1.0 - onWave) * smoothstep(1.5, -3.5, sw) * 0.42);
         // lit from within: the low sun behind the water
         vec3 col = water * (uSkyCol * 0.95 + uKeyCol * (0.12 + thin * (0.5 + 0.9 * toSun)));
         // the long fine lines of the water drawn up the face, lighter and darker, always moving up
@@ -192,7 +192,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         col *= 1.0 + (line - 0.5) * 1.2 * onWave * front;
         // under the overhanging crest the face stands in the wave's own shade: umber, as he painted the hollow
         float hollow = smoothstep(0.5, 0.72, up + (line - 0.5) * 0.16) * (1.0 - smoothstep(0.88, 0.99, up)) * onWave * front * smoothstep(${(900 * WK).toFixed(1)}, ${(700 * WK).toFixed(1)}, abs(s));
-        col = mix(col, mix(vec3(0.062, 0.036, 0.015), vec3(0.012, 0.028, 0.045), uStorm) * (0.45 + 1.1 * line) * (uSkyCol * 1.05 + uKeyCol * 0.1), hollow * 0.93);
+        col = mix(col, mix(vec3(0.016, 0.04, 0.05), vec3(0.012, 0.028, 0.045), uStorm) * (0.45 + 1.1 * line) * (uSkyCol * 1.05 + uKeyCol * 0.1), hollow * 0.93);
         // the sky in it: strongly at a grazing eye on the open sea, hardly at all on the lit face
         vec3 r = reflect(-V, n); r.y = abs(r.y) + 0.002; r = normalize(r);
         float fres = 0.03 + 0.97 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
@@ -245,7 +245,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         }
         vec3 foamCol = mix(W_FOAM, vec3(0.8, 0.9, 0.95), uStorm * 0.8) * (uSkyCol * 0.85 + uKeyCol * (0.3 + 0.25 * toSun));
         col = mix(col, foamCol, clamp(foam, 0.0, 1.0) * 0.8);
-        col = mix(col, vec3(0.95, 0.52, 0.1) * (uSkyCol * 0.8 + uKeyCol * (0.35 + 0.6 * toSun)), clamp(bead, 0.0, 1.0) * 0.75);
+        col = mix(col, vec3(0.85, 0.7, 0.34) * (uSkyCol * 0.8 + uKeyCol * (0.35 + 0.6 * toSun)), clamp(bead, 0.0, 1.0) * 0.5);
         col = mix(col, foamCol * 1.1, sign);
         col += flashOn(0.14 + 0.34 * clamp(foam, 0.0, 1.0) + 0.2 * thin);
         col = applyAir(col, vWorld);
@@ -421,9 +421,9 @@ export function makeCrestMaterial() {
         vec3 col = water * (uSkyCol * 0.95 + uKeyCol * (0.2 + (0.5 + 1.3 * pow(toSun, 2.0)) * (0.3 + 0.7 * thin)));
         // seen from under, in the hollow, it is the wave's own shade with the light coming through in lines
         // (umber, as he painted the hollow: the lace hangs pale over the dark)
-        col = mix(col, col * mix(vec3(0.3, 0.2, 0.11), vec3(0.14, 0.2, 0.26), uStorm), under * (1.0 - 0.45 * pow(toSun, 3.0)) * 0.9);
+        col = mix(col, col * mix(vec3(0.16, 0.26, 0.26), vec3(0.14, 0.2, 0.26), uStorm), under * (1.0 - 0.45 * pow(toSun, 3.0)) * 0.9);
         // the sun itself, seen through the sheet
-        col += uKeyCol * vec3(0.95, 1.0, 0.55) * pow(toSun, 46.0) * (0.25 + 0.75 * thin) * 1.2;
+        col += uKeyCol * vec3(0.85, 1.0, 0.75) * pow(toSun, 46.0) * (0.25 + 0.75 * thin) * 1.2;
         // falling water: long lines down the sheet
         float line = vnoise(vec2(s * 0.24, v * 5.0 - uTime * 0.22)) * 0.6 + vnoise(vec2(s * 0.7, v * 11.0 - uTime * 0.4)) * 0.4;
         col *= 0.62 + 0.76 * line;
@@ -510,7 +510,7 @@ export function makeSprayMaterial() {
         float body = 1.0 - smoothstep(0.75, 1.0, r);
         vec3 V = normalize(cameraPosition - vWorld);
         float toSun = pow(max(dot(-V, uSunDir), 0.0), 2.0);
-        vec3 col = mix(vec3(0.98, 0.9, 0.7), vec3(1.0, 0.72, 0.26), vK * 0.7) * (uSkyCol * 0.85 + uKeyCol * (0.3 + 0.9 * toSun));
+        vec3 col = mix(vec3(0.95, 0.97, 0.9), vec3(0.8, 0.9, 0.72), vK * 0.6) * (uSkyCol * 0.85 + uKeyCol * (0.3 + 0.9 * toSun));
         col *= 0.8 + 0.4 * smoothstep(0.2, -0.6, c.y);
         gl_FragColor = vec4(applyAir(col, vWorld), body * vA * 0.85);
         ${END}
