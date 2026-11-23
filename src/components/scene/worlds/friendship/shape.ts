@@ -17,8 +17,12 @@ export const ORB = { x: 0, y: 132, z: -36, r: 34 };
 export const PAINT = { w: 1280, h: 1481, cx: 252, cy: 785, r: 207, s: 34 / 207 };
 // where things of the picture stand in the cave (metres)
 const px = (x: number, y: number) => ({ x: ORB.x + (x - PAINT.cx) * PAINT.s, y: ORB.y + (PAINT.cy - y) * PAINT.s });
-// her head (the middle of her face, in the picture), for the lens and the lights
-export const HEAD = { ...px(800, 560), z: -4, h: 40 };
+// Her, sculpted (friendship/figure.ts): the middle of her head, the upright plane she is halved by, and her own
+// measure (her head is about 1.4 of it tall). She is a third larger than the picture has her beside the orb.
+export const HER = { x: 140, y: 187, z: -50, u: 76 };
+// the middle of her face, for the lens and the lights
+export const HEAD = { x: 112, y: 180, z: -50, h: 60 };
+void px;
 
 // the floor of the cave: nearly level, a long low swell under her and a hollow before her where the mist lies
 export const FRIEND_TERRAIN: Terrain = {
@@ -101,7 +105,8 @@ export const ARCH = { x: -3, z: 345 };
 // the clearing she stands in, where no tree grows (an ellipse round the picture), and the lane the way keeps open
 export function clear(x: number, z: number, pathX: (z: number) => number) {
   // (in front of her only: behind her the wood stands close, dark trunks going up into the haze as his strokes do)
-  const inClearing = ((x - 55) / 200) ** 2 + ((z - 150) / 215) ** 2 < 1 || (z > -40 && z < 150 && x > -110 && x < 200);
+  // (and none where she herself stands, shoulder to shoulder)
+  const inClearing = ((x - 55) / 200) ** 2 + ((z - 150) / 215) ** 2 < 1 || (z > -40 && z < 150 && x > -110 && x < 200) || ((x - 190) / 125) ** 2 + ((z + 50) / 150) ** 2 < 1;
   const inLane = z > -60 && Math.abs(x - pathX(z)) < 20;
   return inClearing || inLane;
 }
@@ -111,6 +116,6 @@ export const FRIEND_CANVAS = { x: -40, z: 600, yaw: 0.6 };
 
 // what the plane slides round: her body, her head, the arm she holds out (the hand under the orb is below the way)
 export const FRIEND_OBSTACLES: Obstacle[] = [
-  { x: 115, z: -10, r: 58, h: 270 },
-  { x: 62, z: 0, r: 26, h: 120 },
+  { x: 180, z: -50, r: 92, h: 270 },
+  { x: 100, z: 8, r: 34, h: 96 },
 ];
