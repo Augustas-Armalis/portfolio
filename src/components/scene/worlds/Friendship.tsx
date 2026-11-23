@@ -15,7 +15,7 @@ import { forestSteps, pathX, withOrb, type Forest } from "./friendship/forest";
 import { makeMotesMaterial, makeOrbMaterial, makeStreaksMaterial, motesGeometry, streaksGeometry } from "./friendship/light";
 import { fernGeometry, makeFernMaterial } from "./friendship/ferns";
 import { makeWaterMaterial, waterGeometry } from "./friendship/water";
-import { crownGeometry, makePaintedMaterial, maskTexture, reliefGeometry } from "./friendship/painted";
+import { herSteps, makeHerMaterial, makeRaysMaterial, raysGeometry, type Her } from "./friendship/figure";
 import { FRIEND_PATH, HEAD, ORB, TUNNEL, floorAt } from "./friendship/shape";
 
 // Friendship (Draugystė, 1906–1907). In the picture a figure in profile, her face lit gold from the orb, a crown of
@@ -26,7 +26,7 @@ import { FRIEND_PATH, HEAD, ORB, TUNNEL, floorAt } from "./friendship/shape";
 // trunks going into the haze, roots hang from the vault, ferns and mossy stones lie on a soft misted floor, small
 // mushrooms glow, shafts of light come down from far above. The plane comes in low under the trees, the orb's
 // light glimpsed far off between the trunks; the wood opens through an arch of rock, and across the clearing she
-// stands, colossal, exactly as he painted her (she IS his painting: friendship/painted.ts), her hand holding the
+// stands, colossal, sculpted in clay as the kings are (friendship/figure.ts), her hand holding the
 // orb out over the way. The plane rises straight at it; in its heart is the Sonata of the Sun (worlds/portal.tsx),
 // and it flies into the light and out into that world.
 //
@@ -35,15 +35,27 @@ import { FRIEND_PATH, HEAD, ORB, TUNNEL, floorAt } from "./friendship/shape";
 
 const def = WORLDS.friendship;
 const keyOf = (p: Pick<WorldProps, "mobile">) => (p.mobile ? "m" : "d");
-let made: { key: string; forest: Forest } | null = null;
+// her two forms: as she is seen close, and in coarse clay for the long way in
+type Figure = { near: Her; far: Her };
+function* figureSteps(mobile: boolean, budget: number): Generator<void, Figure, void> {
+  const near = yield* herSteps(mobile, budget);
+  const far = yield* herSteps(mobile, budget, true);
+  return { near, far };
+}
+function* allSteps(mobile: boolean, budget: number): Generator<void, { forest: Forest; figure: Figure }, void> {
+  const forest = yield* forestSteps(mobile, budget);
+  const figure = yield* figureSteps(mobile, budget);
+  return { forest, figure };
+}
+let made: { key: string; forest: Forest; figure: Figure } | null = null;
 export function prepareFriendship(props: Pick<WorldProps, "mobile">, budget = 4) {
   const key = keyOf(props);
   if (made && made.key !== key) dropFriendship();
-  const g = made ? null : forestSteps(props.mobile, budget);
+  const g = made ? null : allSteps(props.mobile, budget);
   return () => {
     if (!g || made) return true;
     const r = g.next();
-    if (r.done) made = { key, forest: r.value };
+    if (r.done) made = { key, ...r.value };
     return !!r.done;
   };
 }
@@ -52,9 +64,13 @@ function letGoForest(f: Forest) {
   for (const x of [f.leafy, f.stone, f.rock, f.rockMat, f.roots, f.shrooms]) x.dispose();
 }
 export function dropFriendship() {
-  const f = made?.forest;
+  const m = made;
   made = null;
-  if (f) letGoForest(f);
+  if (m) {
+    letGoForest(m.forest);
+    m.figure.near.geo.dispose();
+    m.figure.far.geo.dispose();
+  }
 }
 
 // The light through which the plane leaves when the crossing is made under cloud (a phone, Low, the next world not
@@ -74,20 +90,22 @@ function letLightGo() {
 }
 
 export default function FriendshipWorld({ props }: { props: WorldProps }) {
-  const forest = useMemo(() => {
-    if (made && made.key === keyOf(props)) return made.forest;
+  const all = useMemo(() => {
+    if (made && made.key === keyOf(props)) return made;
     // (not made ahead: made here, all at once; the crossing's cloud covers it)
-    const g = forestSteps(props.mobile, Infinity);
+    const g = allSteps(props.mobile, Infinity);
     let r = g.next();
     while (!r.done) r = g.next();
-    made = { key: keyOf(props), forest: r.value };
-    return r.value;
+    made = { key: keyOf(props), ...r.value };
+    return made;
   }, [props.mobile]);
+  const forest = all.forest;
+  const figure = all.figure;
   useEffect(
     () => () => {
-      if (made?.forest === forest) dropFriendship();
+      if (made === all) dropFriendship();
     },
-    [forest],
+    [all],
   );
   const b = useDisposable(() => {
     const m = props.mobile;
@@ -161,17 +179,13 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
     const map = new THREE.TextureLoader().load("/assets/ciurlionis/friendship.jpg");
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 8;
-    const mask = maskTexture();
     return {
       cave: caveGeometry(m),
       caveMat: makeCaveMaterial(),
-      relief: reliefGeometry(m ? 120 : 200, m ? 140 : 232),
-      crownSheet: crownGeometry(m ? 40 : 70, m ? 46 : 80),
       map,
-      mask,
-      herCore: makePaintedMaterial(map, mask, 0),
-      herEdge: makePaintedMaterial(map, mask, 1),
-      crown: makePaintedMaterial(map, mask, 2),
+      herMat: makeHerMaterial(figure.near),
+      rays: raysGeometry(figure.near, m ? 320 : 700),
+      raysMat: makeRaysMaterial(),
       ferns: fernGeometry(forest.ferns, m),
       water: waterGeometry(pathX, m),
       waterMat: makeWaterMaterial(),
@@ -203,7 +217,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       flies,
       fliesMat: makeMotesMaterial([0.85, 1.0, 0.45]),
     };
-  }, [props.mobile, forest]);
+  }, [props.mobile, forest, figure]);
   // The story, in beats (worlds/moments.tsx): the dark tunnel and its drips of light; a warm glow far ahead; the
   // cavern opening, a wood inside the mountain lit through cracks high above; fireflies showing the way; the mist
   // parting before her; the orb brightening and opening as the plane rises to it.
@@ -237,20 +251,23 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       if (lit) letLightGo();
     };
   }, []);
-  // She turns a little with the eye, about the orb's upright (so the hand never leaves it): a picture seen from
-  // the side would be squeezed; this keeps it nearly square to whoever looks, the way a painted card stays readable.
-  const her = useRef<THREE.Group>(null);
+  // she stands in clay now, and stands still; far off in the haze she is drawn in her coarse form
+  const herNear = useRef<THREE.Mesh>(null);
+  const herFar = useRef<THREE.Mesh>(null);
+  const lod = useRef({ near: true });
   useFrame(({ camera, size }) => {
-    if (her.current && voyage.cur === "friendship") {
-      const o = FRIEND_U.uOrb.value;
-      // (turned toward the eye as seen from her face, not the orb: the painting stays within some 25 degrees of square)
-      const f = HEAD.x + o.x - ORB.x;
-      const want = THREE.MathUtils.clamp(Math.atan2(camera.position.x - f, camera.position.z - o.z) * 0.6, -0.5, 0.5);
-      her.current.rotation.y += (want - her.current.rotation.y) * 0.08;
+    {
+      const dh = Math.hypot(camera.position.x - ORIGIN.x - HEAD.x, camera.position.y - ORIGIN.y - HEAD.y, camera.position.z - ORIGIN.z - HEAD.z);
+      if (lod.current.near ? dh > 640 : dh < 590) lod.current.near = !lod.current.near;
+      // (while the world is still being made ready under another sky both forms stand, so both are sent to the card)
+      const live = voyage.cur === "friendship";
+      if (herNear.current) herNear.current.visible = !live || lod.current.near;
+      if (herFar.current) herFar.current.visible = !live || !lod.current.near;
     }
     const px = (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360)) / Math.max(size.height, 1);
     b.motesMat.uniforms.uPx.value = px;
     b.streaksMat.uniforms.uPx.value = px;
+    b.raysMat.uniforms.uPx.value = px;
     b.dripsMat.uniforms.uPx.value = px;
     b.fliesMat.uniforms.uPx.value = px;
     if (voyage.cur !== "friendship") return;
@@ -294,14 +311,10 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       <mesh geometry={forest.shrooms} material={b.shroomMat} />
       <mesh geometry={b.ferns} material={b.fernMat} />
       <mesh geometry={b.water} material={b.waterMat} renderOrder={1} />
-      {/* her: the painting's own figure on its relief, the crown of rays keyed out and added behind */}
-      <group ref={her} position={[ORB.x, 0, ORB.z]}>
-        <group position={[-ORB.x, 0, -ORB.z]}>
-          <mesh geometry={b.crownSheet} material={b.crown} renderOrder={2} frustumCulled={false} />
-          <mesh geometry={b.relief} material={b.herCore} frustumCulled={false} />
-          <mesh geometry={b.relief} material={b.herEdge} renderOrder={3.8} frustumCulled={false} />
-        </group>
-      </group>
+      {/* her: sculpted, in two forms; and the crown of rays, strands of light from the band on her hair */}
+      <mesh ref={herNear} geometry={figure.near.geo} material={b.herMat} />
+      <mesh ref={herFar} geometry={figure.far.geo} material={b.herMat} />
+      <mesh geometry={b.rays} material={b.raysMat} renderOrder={3.9} />
       {/* (drawn after the mist: it is a light, and the veil before her never greys it) */}
       <mesh geometry={b.orb} material={b.orbMat} position={[ORB.x, ORB.y, ORB.z]} renderOrder={3.5} />
       <LightPath id="friendship" def={def} tint={[1, 0.86, 0.56]} gain={0.3} angels={false} marks={false} effects={props.effects} />

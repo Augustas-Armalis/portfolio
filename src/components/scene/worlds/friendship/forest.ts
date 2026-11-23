@@ -298,6 +298,11 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     }
     // (never down into the way)
     if (top - len < 60 && Math.abs(x - pathX(z)) < 30) continue;
+    // (and none through her, her crown, or the air before her face and the orb; the rest hang where they did)
+    if (x > -90 && x < 310 && z > -190 && z < 150) {
+      r();
+      continue;
+    }
     rk.tube(pts, 0.5 + r() * 1.3, [0.03, 0.035, 0.025], { seg: 10, sides: 5, top: [0.05, 0.06, 0.04] });
   }
   const roots = rk.build();
