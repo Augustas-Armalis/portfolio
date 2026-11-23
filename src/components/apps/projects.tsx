@@ -45,6 +45,8 @@ function ProductPage({ id, p }: { id: AppId; p: Project }) {
   const pad = compact ? "px-5" : "px-10 @max-[559px]:px-6";
   return (
     <article className="@container pb-12">
+      {/* a window's top edge stays readable once the page scrolls under the traffic lights */}
+      {!compact && <div data-drag="" aria-hidden className="sticky top-0 z-10 -mb-[40px] h-[40px] bg-[var(--bg)]/75 backdrop-blur-xl [mask-image:linear-gradient(to_bottom,black_60%,transparent)]" />}
       {/* the head: the window's drag area on the desktop, under the status bar and Close row on a phone */}
       <header data-drag={compact ? undefined : ""} className={`${pad} flex items-center gap-5 ${compact ? "pt-[calc(var(--phone-top)+60px)]" : "pt-[52px]"} pb-6 @max-[459px]:gap-4`}>
         <AppIcon id={id} size={compact ? 92 : 118} />
