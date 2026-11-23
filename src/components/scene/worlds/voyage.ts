@@ -357,15 +357,18 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "friendship",
     place: "none",
     air: AIR.friendship,
-    // (thick air: the far wall is half gone into it, the passage behind wholly; nothing in a cave is seen for kilometres)
-    fog: [0.0009, 0.0011, 1500, 2600],
+    // (a cavern three kilometres across: its air is thick enough to lose the far wall and the vault, thin enough that
+    // she is seen, a shape in the haze, from the throat a kilometre and a half away)
+    fog: [0.00027, 0.0006, 2700, 4300],
     // the cave's floor; the cave itself, the figure and the orb are built (worlds/friendship/)
     terrain: FRIEND_TERRAIN,
     water: null,
-    // (the air leans the plane back from the walls: from 620 m off the middle of the chamber)
-    centre: [0, 330],
-    radius: 760,
-    ceil: 150,
+    // (the air leans the plane back from the cavern's walls; the tunnel it came in by is inside the round)
+    centre: [0, -640],
+    radius: 1720,
+    ceil: 470,
+    // (a world several times the size of the rest: flown the faster for it)
+    pace: 2.0,
     entry: FRIEND_ENTRY,
     // in the heart of the orb she holds out: the plane flies into its light, and through it into the Sun
     gate: FRIEND_GATE,

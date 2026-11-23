@@ -2,7 +2,12 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
 import { GLSL_AIR, WORLD_U, noise2, ridge2 } from "../kit";
-import { CAVE_Z, ORB, TUNNEL, caveAt, floorAt } from "./shape";
+import { CAVE_Z, HALL, HER_K, ORB, TUNNEL, caveAt, floorAt } from "./shape";
+
+const sst = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 // The cave and the light in it. Everything here is lit by one thing only: the orb she holds (a point of light
 // with a soft fall-off), and the dim green air. The rock is painted as the picture's ground is: deep teal-green
@@ -35,6 +40,8 @@ vec4 orbLight(vec3 p, vec3 n, float wrap, float reach){
   float diff = clamp((ndl + wrap) / (1.0 + wrap), 0.0, 1.0);
   // soft near the orb (no hot spot where the hand holds it), a long tail out to the walls
   float att = 1.0 / (1.0 + pow(max(d - ${(ORB.r * 0.6).toFixed(1)}, 0.0) / reach, 2.0));
+  // (the mountain stands between it and the hall of fog and the tunnel: there only what comes in by the throat)
+  att *= mix(0.07, 1.0, 1.0 - smoothstep(${(HALL.z1 - 130 - ORB.z).toFixed(1)}, ${(HALL.z1 + 260 - ORB.z).toFixed(1)}, p.z - uOrb.z));
   return vec4(orbCol() * diff * att * uOrbK, ndl);
 }
 // The orb's light in the air between the eye and a point: the haze glows round it as round a lamp in fog, and
@@ -47,11 +54,14 @@ vec3 orbScatter(vec3 p){
   vec3 rd = dv / max(L, 0.001);
   vec3 oc = uOrb - ro;
   float b = dot(oc, rd);
-  float h = max(length(oc - rd * b), ${(ORB.r * 0.9).toFixed(1)});
+  float h = max(length(oc - rd * b), ${(ORB.r * 0.9).toFixed(1)}) / ${HER_K.toFixed(3)};
   // (the angle the lit stretch of the ray spans, and a fall-off with its nearest distance that is softer than a
   // true lamp's: near the orb the haze is a glow, not a white-out)
   float span = atan((L - b) / h) - atan(-b / h);
-  return vec3(1.0, 0.74, 0.4) * span * 26.0 / pow(h + 50.0, 1.6) * uOrbK;
+  // (measured in the orb's own size, so the glow is as wide about a great orb as about a small one; and a faint
+  // long tail of it reaches the whole cavern)
+  float shut = mix(0.25, 1.0, 1.0 - smoothstep(${(HALL.z1 - 60 - ORB.z).toFixed(1)}, ${(HALL.z1 + 360 - ORB.z).toFixed(1)}, ro.z - uOrb.z));
+  return vec3(1.0, 0.74, 0.4) * span * (26.0 / pow(h + 50.0, 1.6) + 0.006 / (1.0 + h * 0.004)) * uOrbK * shut;
 }
 `;
 
@@ -66,9 +76,10 @@ export function caveGeometry(mobile: boolean) {
   const wallK = new Float32Array((NZ + 1) * (NA + 1));
   const [z0, z1] = CAVE_Z;
   for (let j = 0; j <= NZ; j++) {
-    // (rings closer together at the ends, where the dome closes)
+    // (two fifths of the rings are spent on the tunnel and the hall of fog, which are flown close along; the cavern
+    // has the rest, closer together toward its far end where the dome closes)
     const s = j / NZ;
-    const z = z0 + (z1 - z0) * (s - Math.sin(s * Math.PI * 2) * 0.06);
+    const z = s < 0.6 ? z0 + (HALL.z1 - z0) * Math.pow(s / 0.6, 0.85) : HALL.z1 + (z1 - HALL.z1) * ((s - 0.6) / 0.4);
     const { w, top } = caveAt(z);
     const yc = top * 0.34;
     const hy = top - yc;
@@ -82,12 +93,16 @@ export function caveGeometry(mobile: boolean) {
       let x = w * ex;
       let y = yc + hy * ey;
       // the rock pressed in: upright folds and broad swellings, less near the floor and at the vault's crown
-      const arc = th * 520;
+      const arc = th * Math.max(520, w * 0.74);
       const up = Math.max(0, y) / Math.max(top, 1);
       const fold = ridge2(arc * 0.011, y * 0.0026 + z * 0.0009, 4);
       const swell = noise2(arc * 0.0035 + 3.1, z * 0.0042 + 1.7);
+      // (in the cavern the rock stands in and out by hundreds of metres: buttresses, bays, hanging curtains)
+      const big = sst(260, 1200, w);
+      const bay = noise2(arc * 0.0011 + 9.2, z * 0.0012 + 4.4) - 0.5;
+      const curtain = ridge2(arc * 0.0042 + 2.0, z * 0.0019, 3);
       const k = Math.min(1, w / 160) * (0.25 + 0.75 * Math.sin(Math.min(1, up * 1.4) * Math.PI * 0.5));
-      const push = (fold * 34 + swell * 46 - 16) * k;
+      const push = ((fold * 34 + swell * 46 - 16) * (1 + 1.2 * big) + (bay * 520 + curtain * 150) * big) * k;
       // pushed toward the middle of the section
       const nx = -ex;
       const ny = -(y - yc) / Math.max(hy, 1);
@@ -224,15 +239,16 @@ export function makeCaveMaterial() {
         float pool = smoothstep(0.24 + aa, 0.24 - aa, poolN) * isFloor * inC;
         vec3 alb = mix(wall, floorC, isFloor);
         // the light of the orb, and the dim air's own light in the shade
-        vec4 o = orbLight(vWorld, n, 0.35, 240.0);
-        vec3 amb = uSkyCol * (0.55 + 0.45 * n.y) * 1.1;
+        vec4 o = orbLight(vWorld, n, 0.35, 1150.0);
+        // (the tunnel is dark: what light there is in it is ahead)
+        vec3 amb = uSkyCol * (0.55 + 0.45 * n.y) * 1.1 * mix(0.5, 1.0, inC);
         vec3 col = alb * (amb + o.rgb * 2.3);
         // in the tunnel: the cavern's light coming in at its far mouth, green-gold, along the wet walls
         vec3 mouth = vec3(0.0, 22.0, ${(TUNNEL.z0 - 30).toFixed(1)});
         vec3 toM = mouth - P;
         float dm = length(toM);
-        float mouthL = (0.25 + 0.75 * max(dot(n, toM / dm), 0.0)) / (1.0 + pow(dm / 70.0, 2.0)) * (1.0 - inC * 0.6);
-        col += alb * vec3(0.7, 0.85, 0.45) * mouthL * 2.2;
+        float mouthL = (0.25 + 0.75 * max(dot(n, toM / dm), 0.0)) / (1.0 + pow(dm / 110.0, 2.0)) * (1.0 - inC * 0.6);
+        col += alb * vec3(0.9, 0.8, 0.45) * mouthL * 1.5;
         // damp: a sheen on the wet rock where it faces the orb
         vec3 toO = normalize(uOrb - vWorld);
         float spec = pow(max(dot(reflect(-V, n), toO), 0.0), 24.0);
@@ -246,9 +262,9 @@ export function makeCaveMaterial() {
           col = mix(col, water, pool * 0.9);
         }
         // the lower walls stand in their own shade
-        col *= mix(0.65, 1.0, smoothstep(0.0, 60.0, vWorld.y));
+        col *= mix(0.65, 1.0, smoothstep(0.0, 140.0, vWorld.y));
         // light through cracks high in the vault: thin pale lines that glow
-        float vault = smoothstep(-0.3, -0.7, n.y) * smoothstep(250.0, 380.0, P.y) * inC;
+        float vault = smoothstep(-0.3, -0.7, n.y) * smoothstep(250.0, 700.0, P.y) * inC;
         col += vec3(0.75, 0.85, 0.55) * (1.0 - smoothstep(0.0, 0.012 + fwh * 0.006, c2)) * vault * 0.8 * uCracks;
         col = applyAir(col, vWorld) + orbScatter(vWorld);
         gl_FragColor = vec4(col, 1.0);

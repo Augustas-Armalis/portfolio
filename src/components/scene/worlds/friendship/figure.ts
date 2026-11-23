@@ -4,9 +4,13 @@ import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
 import { GLSL_AIR, WORLD_U, noise2, rng, type V3 } from "../kit";
 import { Clay, type Paint } from "../sculpt";
-import { ORIGIN } from "../voyage";
 import { FRIEND_U, GLSL_ORB } from "./cave";
-import { HER, ORB } from "./shape";
+import { HER_K, MODEL } from "./shape";
+
+// (she is made about a small orb in her own measure, and stood in the cavern much larger: see shape.ts. Everything
+// in this file is in the measure she is made in; the world places and sizes her.)
+const HER = MODEL.her;
+const ORB = MODEL.orb;
 
 // Her, built up in clay the way the kings are (kings/figures.ts), the size of a hill.
 //
@@ -46,8 +50,8 @@ export function* herSteps(coarse: boolean, budget: number, far = false): Generat
   const sk: [number, number, number, number] = [0, 0, 1, 0];
   const hr: [number, number, number, number] = [0, 0, 0, 1];
   const paints: Paint[] = [
-    { col: [0.6, 0.43, 0.24], kind: 1, what: sk, grp: 0 },
-    { col: [0.07, 0.07, 0.05], kind: 1, what: hr, grp: 1 },
+    { col: [0.6, 0.41, 0.205], kind: 1, what: sk, grp: 0 },
+    { col: [0.15, 0.09, 0.045], kind: 1, what: hr, grp: 1 },
     { col: [0.56, 0.3, 0.2], kind: 1, what: sk, grp: 0 },
     { col: [0.78, 0.55, 0.16], kind: 3, what: [0, 0, 0, 0], grp: 2 },
     { col: [0.05, 0.128, 0.124], kind: 0, what: [1, 0, 0, 0], grp: 3 },
@@ -99,8 +103,6 @@ export function* herSteps(coarse: boolean, budget: number, far = false): Generat
   // the hair: drawn back smooth over the whole head from the brow and the temples, and gathered behind in a knot
   head.ball(F(-0.2, 0.16), rr(0.6, 0.6, 0.53), HAIR, { ...ax, k: 0.06 * U, soft: 0.7 });
   for (const s of [-1, 1]) head.ball(F(-0.1, -0.02, s * 0.4), rr(0.28, 0.38, 0.13), HAIR, { ...ax, k: 0.06 * U, soft: 0.6 });
-  head.limb(F(-0.55, 0.02), F(-0.86, -0.14), 0.26 * U, 0.24 * U, HAIR, { k: 0.1 * U, soft: 0.8 });
-  head.ball(F(-0.92, -0.16), rr(0.31, 0.3, 0.3), HAIR, { ...ax, k: 0.08 * U, soft: 0.8 });
   // the band: a plain hoop of gold lying on the hair, low on the brow and rising toward the back of the head
   const beta = 0.27;
   const e1: V3 = [f[0] * Math.cos(beta) - up[0] * Math.sin(beta), f[1] * Math.cos(beta) - up[1] * Math.sin(beta), 0];
@@ -110,6 +112,31 @@ export function* herSteps(coarse: boolean, budget: number, far = false): Generat
   const rb = 0.55 * U;
   // (everything above the band is hair: the hairline is the band itself)
   head.ball([bc[0] + bn[0] * 0.03 * U, bc[1] + bn[1] * 0.03 * U, bc[2]], rr(0.645, 0.4, 0.565), HAIR, { x: e1, y: bn, k: 0.03 * U, soft: 0.5 });
+  // ---- the hair ----
+  // Under the band it is loose: one great fall of it down her back to below the shoulders, heavy locks to either
+  // side of the neck, one lying forward over each shoulder, and the ends of it lifted and carried back on the slow
+  // air of the cavern, as the rays of her crown are. Of one clay, so the locks run into each other.
+  const hair = new Clay(0.07 * U);
+  hair.chain([F(-0.5, 0.26), F(-0.74, -0.3), F(-0.8, -0.9), F(-0.92, -1.5), F(-1.16, -2.05), F(-1.5, -2.5)], [0.42 * U, 0.5 * U, 0.48 * U, 0.42 * U, 0.3 * U, 0.14 * U], HAIR, { flat: 1.35, k: 0.1 * U, soft: 1 });
+  for (const s of [-1, 1]) {
+    hair.chain([F(-0.16, 0.1, s * 0.42), F(-0.32, -0.45, s * 0.5), F(-0.4, -1.0, s * 0.62), F(-0.54, -1.6, s * 0.62), F(-0.78, -2.15, s * 0.52)], [0.2 * U, 0.24 * U, 0.22 * U, 0.17 * U, 0.07 * U], HAIR, { k: 0.07 * U, soft: 1 });
+    hair.chain([F(-0.07, -0.08, s * 0.44), F(-0.05, -0.68, s * 0.5), F(0.02, -1.28, s * 0.66), F(0.05, -1.86, s * 0.74)], [0.11 * U, 0.13 * U, 0.1 * U, 0.04 * U], HAIR, { k: 0.05 * U, soft: 1 });
+    hair.chain([F(-0.6, -0.1, s * 0.3), F(-0.9, -0.7, s * 0.56), F(-1.0, -1.35, s * 0.84), F(-1.22, -1.9, s * 0.98)], [0.2 * U, 0.22 * U, 0.17 * U, 0.06 * U], HAIR, { k: 0.07 * U, soft: 1 });
+  }
+  // (and over the great fall, locks of their own: each a little proud of it, each with its own wave, so it is hair
+  // and not a hood)
+  for (let i = 0; i < 9; i++) {
+    const zs = (i - 4) * 0.125;
+    const wv = 0.07 * Math.sin(i * 2.3);
+    const lng = 1 + 0.14 * Math.cos(i * 1.9);
+    hair.chain(
+      [F(-0.6, 0.22, zs * 0.8), F(-0.98 + wv, -0.4, zs * 1.15), F(-1.02 - wv, -1.0 * lng, zs * 1.3 + wv), F(-1.16 + wv, -1.62 * lng, zs * 1.42), F(-1.42, -2.2 * lng, zs * 1.5 - wv), F(-1.7 - wv, -2.66 * lng, zs * 1.56)],
+      [0.12 * U, 0.15 * U, 0.14 * U, 0.12 * U, 0.08 * U, 0.025 * U],
+      HAIR,
+      { k: 0.045 * U, soft: 1 },
+    );
+  }
+
   // ---- the body ----
   // She wears a robe: over both shoulders, open at the throat, and straight down into the floor. The near arm is
   // in a wide sleeve to the middle of the forearm, and from under the forearm the sleeve falls in a long sheet
@@ -189,8 +216,9 @@ export function* herSteps(coarse: boolean, budget: number, far = false): Generat
     yield* body.meshSteps(1.15 * v, paints, undefined, budget, far ? {} : { detail: folds, band: 8.5 }),
     yield* head.meshSteps(0.5 * v, paints, undefined, budget),
     yield* hand.meshSteps(0.28 * v, paints, undefined, budget),
+    yield* hair.meshSteps(1.25 * v, paints, undefined, budget),
   ];
-  if (process.env.NODE_ENV !== "production") console.info(`[friendship] her${far ? " (far)" : ""}, triangles: body ${Math.round(parts[0].index!.count / 3)}, head ${Math.round(parts[1].index!.count / 3)}, hand ${Math.round(parts[2].index!.count / 3)}`);
+  if (process.env.NODE_ENV !== "production") console.info(`[friendship] her${far ? " (far)" : ""}, triangles: body ${Math.round(parts[0].index!.count / 3)}, head ${Math.round(parts[1].index!.count / 3)}, hand ${Math.round(parts[2].index!.count / 3)}, hair ${Math.round(parts[3].index!.count / 3)}`);
   // (how open each point lies is reckoned point by point, and comes out grainy: it is run together over the skin,
   // so it shades a fold or the hollow of a hand and never speckles a cheek)
   for (const g of parts) {
@@ -238,15 +266,15 @@ export function* herSteps(coarse: boolean, budget: number, far = false): Generat
   const geo = mergeGeometries(parts)!;
   parts.forEach((p) => p.dispose());
   geo.computeBoundingSphere();
-  return { geo, headC: Hc, headF: f, up, chest: [Hc[0] + 0.4 * U, ys - 0.3 * U, Hc[2]], hairDir: [-f[0], -f[1]], band: { c: bc, e1, n: bn, ra, rb } };
+  return { geo, headC: Hc, headF: f, up, chest: [Hc[0] + 0.4 * U, ys - 0.3 * U, Hc[2]], hairDir: [0.32, -0.947], band: { c: bc, e1, n: bn, ra, rb } };
 }
 
 const END = /* glsl */ `
   #include <tonemapping_fragment>
   #include <colorspace_fragment>`;
-const S = (p: V3) => new THREE.Vector3(ORIGIN.x + p[0], ORIGIN.y + p[1], ORIGIN.z + p[2]);
+const S = (p: V3) => new THREE.Vector3(p[0], p[1], p[2]);
 
-export function makeHerMaterial(h: Her) {
+export function makeHerMaterial(h: Her, map: THREE.Texture) {
   return new THREE.ShaderMaterial({
     uniforms: {
       ...SKY_U,
@@ -258,29 +286,40 @@ export function makeHerMaterial(h: Her) {
       uChest: { value: S(h.chest) },
       uHairDir: { value: new THREE.Vector2(...h.hairDir) },
       uU: { value: HER.u },
-      uFloor: { value: ORIGIN.y },
+      uFloor: { value: 0 },
+      uS: { value: HER_K },
+      tMap: { value: map },
     },
     vertexShader: /* glsl */ `
       attribute vec4 aCol; attribute vec4 aWhat; attribute float aAO;
       uniform float uTime; uniform float uU; uniform vec3 uChest;
       varying vec3 vWorld; varying vec3 vObj; varying vec3 vN; varying vec4 vCol; varying vec4 vWhat; varying float vAO;
       void main(){
-        vec4 wp = modelMatrix * vec4(position, 1.0);
-        vObj = wp.xyz;
+        // (everything painted on her is laid in her own measure, as she was made: vObj; the world only places her)
+        vec3 p = position;
+        vObj = p;
         // she breathes, very slowly: the shoulders and the chest the least bit up and back (the hand does not move)
-        vec3 e = (wp.xyz - uChest) / (uU * 1.5);
-        wp.xyz += vec3(0.25, 1.0, 0.0) * exp(-dot(e, e)) * (0.5 + 0.5 * sin(uTime * 0.36)) * 1.1;
+        vec3 e = (p - uChest) / (uU * 1.5);
+        p += vec3(0.25, 1.0, 0.0) * exp(-dot(e, e)) * (0.5 + 0.5 * sin(uTime * 0.36)) * 1.1;
+        vec4 wp = modelMatrix * vec4(p, 1.0);
         vWorld = wp.xyz; vN = normalize(mat3(modelMatrix) * normal); vCol = aCol; vWhat = aWhat; vAO = aAO;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vObj; varying vec3 vN; varying vec4 vCol; varying vec4 vWhat; varying float vAO;
-      uniform vec3 uHeadC; uniform vec3 uHeadF; uniform vec3 uUp; uniform vec2 uHairDir; uniform float uU; uniform float uFloor; uniform vec3 uChest;
+      uniform vec3 uHeadC; uniform vec3 uHeadF; uniform vec3 uUp; uniform vec2 uHairDir; uniform float uU; uniform float uFloor; uniform vec3 uChest; uniform float uS; uniform sampler2D tMap;
       ${GLSL_NOISE}
       ${GLSL_SKY}
       ${GLSL_AIR}
       ${GLSL_ORB}
       float lineAA(float x, float w, float fw){ return 1.0 - smoothstep(w - fw, w + fw, abs(x)); }
+      // His own pastel: a piece of the picture's ground (its lower left, where there is nothing but strokes: deep
+      // green, teal, ochre, flecks of gold), laid over her again and again, each time turned over where it meets
+      // the last so no edge shows.
+      vec3 hisPaint(vec2 c){
+        vec2 t = abs(fract(c / 500.0) * 2.0 - 1.0);
+        return texture2D(tMap, vec2(0.05, 0.06) + t * vec2(0.4, 0.3)).rgb;
+      }
       // a height drawn on a surface pushes its normal about (from the screen's own derivatives)
       vec3 bumpN(vec3 n, vec3 P, float h, float k){
         vec3 dpx = dFdx(P); vec3 dpy = dFdy(P);
@@ -331,6 +370,20 @@ export function makeHerMaterial(h: Her) {
         cloth *= 1.0 + (stroke - 0.5) * 0.7 + (tooth - 0.5) * 0.12 * fine;
         alb = mix(mix(alb * (1.0 + (stroke - 0.5) * 0.14), skin, skinW), cloth, clothW);
         float height = stroke * mix(0.06, 0.22, clothW) + tooth * mix(0.01, 0.04, clothW) * fine;
+        // and over that, his: laid on from three sides, each where she faces it. It lightens and darkens her as his
+        // strokes do the paper, and leans her colour toward the colour of each stroke.
+        {
+          vec3 tw = pow(abs(n), vec3(3.0)); tw /= tw.x + tw.y + tw.z;
+          vec3 hp = hisPaint(vObj.zy + 13.0) * tw.x + hisPaint(vObj.xz + 31.0) * tw.y + hisPaint(vObj.xy) * tw.z;
+          float hl = dot(hp, vec3(0.3, 0.55, 0.15));
+          float hk = clamp(hl / 0.17, 0.4, 2.3);
+          vec3 hue = hp / max(hl, 0.03);
+          float on = 1.0 - 0.7 * hairW;
+          // (on her skin thinly, and only its broad lights and darks: his flecks of gold would be freckles)
+          alb *= mix(1.0, mix(hk, clamp(hk, 0.75, 1.25), skinW), mix(0.4, 0.9, clothW) * on);
+          alb = mix(alb, dot(alb, vec3(0.3, 0.55, 0.15)) * hue, mix(0.1, 0.6, clothW) * on);
+          height += (hk - 1.0) * mix(0.06, 0.16, clothW) * on;
+        }
         // the robe is edged with gold wherever it ends against her skin: at the throat, at the sleeve's mouth
         float seam = clothW * skinW * 4.0;
         float edge = smoothstep(0.45, 0.85, seam);
@@ -346,7 +399,7 @@ export function makeHerMaterial(h: Her) {
         strand = mix(strand, 0.5 * (vnoise(vec2(hAcross * 1.5 + 7.0, hAlong * 0.04)) + vnoise(vec2(vObj.z * 1.5 + 3.0, hAlong * 0.04))), 0.4 * fine);
         float lockN = 0.5 * (vnoise(vec2(hAcross * 0.17 + 3.0, hAlong * 0.007)) + vnoise(vec2(vObj.z * 0.17 + 5.0, hAlong * 0.007)));
         strand = mix(strand, lockN, 0.5);
-        alb *= 1.0 + hW * (strand - 0.5) * 1.6;
+        alb *= 1.0 + hW * (strand - 0.5) * 1.9;
         height += hW * strand * 0.5;
         // the band is worked: small bosses all along it
         alb *= 1.0 + step(2.5, vCol.a) * (vnoise(vObj.xy * 0.5 + vObj.z * 0.4) - 0.5) * 0.5;
@@ -378,6 +431,8 @@ export function makeHerMaterial(h: Her) {
         // the orb, and how near it is
         vec3 Lv = uOrb - vWorld; float d = length(Lv); vec3 Ld = Lv / max(d, 0.001);
         float ndl = dot(n, Ld);
+        // (reckoned in her own measure, so the light falls off across her as it did when she was small)
+        d /= uS;
         float att = uOrbK / (1.0 + pow(max(d - 20.0, 0.0) / 250.0, 2.0));
         float ao = mix(1.0, vAO, mix(0.5, 0.2, skinW));
         float wk = mix(0.25, 0.32, skinW);
@@ -390,8 +445,10 @@ export function makeHerMaterial(h: Her) {
         vec3 fill = vec3(0.035, 0.115, 0.105) * (0.62 + 0.38 * n.y) + vec3(0.03, 0.07, 0.035) * max(n.y, 0.0) * uCracks;
         // (gold keeps a little of its own colour in the shade, and skin near the orb a little of its warmth)
         fill = mix(fill, vec3(0.1, 0.085, 0.04), goldW * 0.8);
+        // (hair keeps its own brown in the shade: it is not the robe)
+        fill = mix(fill, vec3(0.06, 0.05, 0.04) * (0.62 + 0.38 * n.y), hairW * 0.75);
         fill += vec3(0.07, 0.026, 0.012) * skinW * min(att, 1.2) * att;
-        vec3 warm = orbCol() * att * lit * mix(2.5, 3.6, clothW) * mix(1.0, ao, mix(0.7, 1.0, clothW));
+        vec3 warm = orbCol() * att * lit * mix(1.9, 3.6, clothW) * mix(1.0, ao, mix(0.7, 1.0, clothW));
         // light that has gone a little way into skin comes out redder at the edge of the shade
         vec3 sss = vec3(1.0, 0.34, 0.12) * att * skinW * smoothstep(0.0, 0.45, wrap) * (1.0 - smoothstep(0.3, 0.95, wrap)) * 0.6 * open;
         // and thin things let it through: the fingers, the wing of the nose, an ear glow from within where the
@@ -409,14 +466,17 @@ export function makeHerMaterial(h: Her) {
           Tg = normalize(Tg - n * dot(Tg, n) + n * (strand - 0.5) * 0.3);
           float th1 = dot(Tg, normalize(Ld + V));
           col += hairW * orbCol() * (alb + 0.02) * att * pow(max(1.0 - th1 * th1, 0.0), 20.0) * 0.5 * clamp(ndl + 0.4, 0.0, 1.0) * ao * (0.5 + strand);
+          // (and the crown's own light lies along the top of every lock: gold going to green)
+          col += hairW * mix(vec3(0.5, 0.4, 0.12), vec3(0.24, 0.42, 0.16), strand) * (0.25 + strand) * pow(max(n.y, 0.0), 1.5) * smoothstep(-2.6, 0.6, dot(vObj - uHeadC, uUp) / uU) * 0.55;
           float nh = max(dot(n, normalize(Ld + V)), 0.0);
           col += goldW * alb * orbCol() * att * (pow(nh, 9.0) * 1.2 + pow(nh, 40.0) * 1.6) * step(0.0, ndl + 0.2);
         }
         // she goes down into the dark of the floor, unevenly, as mist takes a thing
         float low = vnoise(vObj.xz * 0.018 + 3.0) * 0.6 + vnoise(vObj.xy * 0.027 + vObj.z * 0.02) * 0.4;
-        float rise = smoothstep(uFloor + 4.0, uFloor + 104.0, vWorld.y + (low - 0.5) * 34.0);
-        col *= mix(0.05, 1.0, rise * rise);
-        col = mix(col, airCol(normalize(vWorld - cameraPosition)), airAmt(vWorld) * 0.34) + orbScatter(vWorld) * 0.42;
+        float rise = smoothstep(uFloor - 14.0, uFloor + 46.0, vObj.y + (low - 0.5) * 30.0);
+        col *= mix(0.08, 1.0, rise);
+        // (the cavern's air lies over her as over everything in it: from the throat she is a shape in the haze)
+        col = mix(col, airCol(normalize(vWorld - cameraPosition)), airAmt(vWorld) * 0.66) + orbScatter(vWorld) * 0.42;
         gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,
@@ -466,7 +526,7 @@ function strands(h: Her, count: number, seed: number): Strand[] {
       o,
       d: [dx, dy, dz],
       out: [ox, oy, oz],
-      len: U * (2.6 + 5.2 * long + 1.2 * r()),
+      len: U * (3.6 + 7.5 * long + 1.6 * r()),
       bend: 0.03 + 0.2 * r() * r(),
       // (one in five wanders)
       hel: r() < 0.2 ? 7 + 16 * r() : 1.5 * r(),
@@ -528,7 +588,7 @@ export function raysGeometry(h: Her, count: number, seed = 17) {
   g.setAttribute("aDat", new THREE.Float32BufferAttribute(dat, 2));
   g.setAttribute("aRnd", new THREE.Float32BufferAttribute(rnd, 3));
   g.setIndex(idx);
-  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(h.headC[0] + 60, h.headC[1] + 240, h.headC[2]), 760);
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(h.headC[0] + 120, h.headC[1] + 480, h.headC[2]), 1350);
   return g;
 }
 
@@ -538,8 +598,9 @@ export function makeRaysMaterial() {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, uPx: { value: 0.001 } },
+    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, uPx: { value: 0.001 }, uS: { value: HER_K } },
     vertexShader: /* glsl */ `
+      uniform float uS;
       attribute vec3 aDir; attribute vec3 aOut; attribute vec4 aPar; attribute vec2 aDat; attribute vec3 aRnd;
       uniform float uTime; uniform float uPx;
       varying float vE; varying float vT; varying float vDim; varying vec3 vRnd; varying vec3 vWorld; varying float vLen; varying float vWide;
@@ -555,7 +616,7 @@ export function makeRaysMaterial() {
         vec3 side = normalize(cross(tg, toEye));
         // a strand thins to nothing toward its end; never thinner than a pixel and a third (then it dims instead).
         // The ribbon itself is three times the thread: the rest of it is the thread's own soft glow.
-        float w = aPar.w * (1.0 - 0.7 * t);
+        float w = aPar.w * uS * (1.0 - 0.7 * t);
         float minW = dist * uPx * 1.3;
         vDim = clamp(w / max(minW, 1e-4), 0.0, 1.0);
         float core = max(w, minW);
@@ -620,7 +681,7 @@ export function rayMotesGeometry(h: Her, count: number, n: number, seed = 17) {
   g.setAttribute("aPar", new THREE.InstancedBufferAttribute(par, 4));
   g.setAttribute("aMo", new THREE.InstancedBufferAttribute(mo, 4));
   g.instanceCount = n;
-  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(h.headC[0] + 60, h.headC[1] + 240, h.headC[2]), 760);
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(h.headC[0] + 120, h.headC[1] + 480, h.headC[2]), 1350);
   return g;
 }
 
@@ -629,8 +690,9 @@ export function makeRayMotesMaterial() {
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, uPx: { value: 0.001 } },
+    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, uPx: { value: 0.001 }, uS: { value: HER_K } },
     vertexShader: /* glsl */ `
+      uniform float uS;
       attribute vec3 aO; attribute vec3 aDir; attribute vec3 aOut; attribute vec4 aPar; attribute vec4 aMo;
       uniform float uTime; uniform float uPx; uniform float uOrbK;
       varying vec2 vUv; varying float vA; varying vec3 vCol; varying vec3 vWorld;
@@ -640,7 +702,7 @@ export function makeRayMotesMaterial() {
         vec3 p = strandAt(aO, aDir, aOut, vec4(aPar.xyz, 0.0), aPar.w, t, uTime);
         vec4 mv = viewMatrix * modelMatrix * vec4(p, 1.0);
         float dist = -mv.z;
-        float size = aMo.z;
+        float size = aMo.z * uS;
         float minS = dist * uPx * 1.6;
         float dim = clamp(size / max(minS, 1e-4), 0.0, 1.0);
         size = max(size, minS);
