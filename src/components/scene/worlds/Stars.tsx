@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import * as THREE from "three";
 import { SKY_U } from "../sky";
 import { Gallery, Halos, LightGate, LightPath, Mist, useDisposable, type WorldProps } from "./common";
@@ -42,14 +42,9 @@ export const RIVER = { y: 430, z: -290, top: 44, fall: 84 };
 export const GLOBE = { x: -330, z: 150, r: 150 };
 const GOLD: V3 = [1.0, 0.82, 0.46];
 
-export default function StarsWorld({ props }: { props: WorldProps }) {
-  // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
-  useDeepLens("stars");
-  const wings = useRef<(THREE.Group | null)[]>([]);
-  const walker = useRef<THREE.Group>(null);
-  const globe = useRef<THREE.Group>(null);
-  const clock = useRef(0);
-  const b = useDisposable(() => {
+// The whole of it, made part by part with a pause after each, so that it can be made a little a frame under the
+// closed cloud (worlds/Worlds.tsx hands prepareStars to the plane) instead of all at once in one long frame.
+function* starsSteps(props: WorldProps) {
     const r = rng(1908);
     const g = (x: number, z: number) => groundAt(def, x, z);
     const fine = !props.mobile;
@@ -63,6 +58,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       return d;
     };
 
+    yield;
     // ----- the pyramid -----
     const py0 = g(PYR.x, PYR.z) - 8;
     const cone = (k2: number, seg: number) => {
@@ -92,6 +88,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
 
     }
 
+    yield;
     // ----- the river of stars -----
     const bandY = (x: number) => g(x, RIVER.z) + RIVER.y - 8;
     const river = riverGeometry(-1500, 1500, bandY, RIVER.z, RIVER.top, RIVER.fall, props.mobile ? 90 : 180);
@@ -118,6 +115,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       glows.push({ p: [x, bandY(x) + s * 1.7, RIVER.z], size: s * 2.4, col: [0.8, 0.9, 1], k: 0.3 });
     }
 
+    yield;
     // ----- the gold strings from the river, and the worlds threaded on them -----
     const threads: Seg[] = [];
     const orbs: Soft[] = [];
@@ -171,6 +169,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     halos.push({ p: [-1100, 1250, -1500], size: 150, col: [0.3, 0.42, 1.0], k: 1.3 });
     glows.push({ p: [-1100, 1250, -1500], size: 520, col: [0.2, 0.3, 0.9], k: 0.3 });
 
+    yield;
     // ----- the globe of the Andante -----
     const gy = g(GLOBE.x, GLOBE.z) + GLOBE.r * 0.44;
     glows.push({ p: [GLOBE.x, gy + 10, GLOBE.z], size: GLOBE.r * 2.5, col: [0.5, 0.9, 0.64], k: 0.3 });
@@ -187,6 +186,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     const haloRing = ribbonGeometry(ring(GLOBE.r * 1.75, new THREE.Euler(0.16, 0, 0.1), 0), 80, { closed: true, seg: 160 });
     const starRing = ribbonGeometry(ring(GLOBE.r * 1.07, new THREE.Euler(0.62, 0.3, 0.5), 9), 30, { closed: true, seg: 160, roll: () => Math.PI / 2 });
 
+    yield;
     // ----- the ribbon of stars the path climbs from the globe to the river -----
     const nearest = (x: number, z: number) => {
       let bi = 0;
@@ -199,6 +199,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     for (let i = i0; i <= i1; i += 6) sp.push(new THREE.Vector3(path[i].x, path[i].y - 9, path[i].z));
     const serpent = ribbonGeometry(sp, (t) => 34 * Math.min(1, t * 9, (1 - t) * 9) + 2, { seg: sp.length * 3 });
 
+    yield;
     // ----- bands of pale blue-green crossing the air -----
     const bands: { geo: THREE.BufferGeometry; mat: THREE.ShaderMaterial }[] = [];
     const nB = props.mobile ? 3 : 5;
@@ -217,6 +218,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       bands.push({ geo, mat: makeWaveBand({ a: green ? [0.04, 0.3, 0.26] : [0.08, 0.14, 0.42], b: green ? [0.3, 0.6, 0.42] : [0.3, 0.44, 0.8], thread: w % 2 ? [0.95, 0.86, 0.5] : [0.6, 0.95, 0.8], lines: 5 + (w % 3) * 2, seed: w * 1.37, gain: 0.8 }) });
     }
 
+    yield;
     // ----- clouds: rounded, layered, lit gold-green on the side of the light, receding to the horizon -----
     // (the low ones are the painting's own ochre and umber cloud; the high ones are blue-green and far)
     const warm: PCloud[] = [];
@@ -241,6 +243,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       puffs.push({ p: [x, g(x, z) + 6 + r() * 14, z], size: 90 + r() * 140, a: 0.5 });
     }
 
+    yield;
     // ----- constellations: they draw themselves as the plane comes near -----
     const segs: Seg[] = [];
     const figs: { c: THREE.Vector3; size: number }[] = [];
@@ -264,6 +267,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     }
     for (const s of figStars) halos.push({ p: s, size: 7 + r() * 7, col: [1, 0.95, 0.82], k: 0.75 });
 
+    yield;
     // ----- stars near at hand, drifting through everything -----
     const dust = pointsGeometry(props.mobile ? 500 : Math.round(1100 * props.effects + 600), (_, q) => [(q() - 0.5) * 2600, 10 + q() * 1000, 900 - q() * 2400, 0.4 + q() * q() * 1.8], 99);
 
@@ -337,7 +341,44 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       dust,
       dustMat: makePoints({ a: [1.0, 0.9, 0.62], b: [0.74, 0.88, 1.0], scale: 300, gain: 0.9, max: 18, drift: 2.4 }),
     };
-  }, [props.mobile, props.effects > 0.5]);
+}
+type StarsBuilt = ReturnType<typeof starsSteps> extends Generator<void, infer T, void> ? T : never;
+const starsKey = (p: WorldProps) => `${p.mobile}|${p.effects > 0.5}`;
+let madeStars: { key: string; v: StarsBuilt } | null = null;
+export function prepareStars(props: WorldProps) {
+  const key = starsKey(props);
+  if (madeStars && madeStars.key !== key) madeStars = null;
+  const g = madeStars ? null : starsSteps(props);
+  return () => {
+    if (!g || madeStars) return true;
+    const r = g.next();
+    if (r.done) madeStars = { key, v: r.value };
+    return !!r.done;
+  };
+}
+function buildStars(props: WorldProps): StarsBuilt {
+  if (madeStars && madeStars.key === starsKey(props)) return madeStars.v;
+  const g = starsSteps(props);
+  let r = g.next();
+  while (!r.done) r = g.next();
+  return r.value;
+}
+
+export default function StarsWorld({ props }: { props: WorldProps }) {
+  // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
+  useDeepLens("stars");
+  const wings = useRef<(THREE.Group | null)[]>([]);
+  const walker = useRef<THREE.Group>(null);
+  const globe = useRef<THREE.Group>(null);
+  const clock = useRef(0);
+  // (made ahead of time in slices if the cloud was closing on this world, or here and now)
+  const b = useDisposable(() => buildStars(props), [props.mobile, props.effects > 0.5]);
+  useEffect(
+    () => () => {
+      if (madeStars?.v === b) madeStars = null;
+    },
+    [b],
+  );
 
   useFrame(({ camera }) => {
     const t = SKY_U.uTime.value;

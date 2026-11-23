@@ -12,14 +12,14 @@ import { Birds, type Flock } from "./life";
 import { PlayFrame } from "./play";
 import { setWorldAir } from "./kit";
 import FairyWorld from "./Fairy";
-import FuneralWorld from "./Funeral";
+import FuneralWorld, { prepareFuneral } from "./Funeral";
 import GateWorld from "./Gate";
 import KingsWorld, { dropKings, prepareKings } from "./Kings";
 import ParadiseWorld from "./Paradise";
 import RexWorld from "./Rex";
 import SeaWorld from "./Sea";
 import SeaFinaleWorld from "./SeaFinale";
-import StarsWorld from "./Stars";
+import StarsWorld, { prepareStars } from "./Stars";
 import SunWorld from "./Sun";
 import { ORIGIN, WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, pathOf, useWorld, voyage, type WorldId } from "./voyage";
 
@@ -107,7 +107,7 @@ const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNod
 // one left behind is unmounted (and its geometry, materials and textures disposed) as the plane arrives.
 type Drawn = THREE.Mesh | THREE.Points | THREE.Line;
 // (step 0, for a world with something heavy in it: that is made first, a few milliseconds a frame)
-const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { kings: (props) => prepareKings(props) };
+const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { kings: (props) => prepareKings(props), stars: (props) => prepareStars(props), funeral: (props) => prepareFuneral(props) };
 function useWarmWorld(cur: WorldId, props: WorldProps) {
   const { gl, camera, scene } = useThree();
   const [warm, setWarm] = useState<WorldId | null>(null);
