@@ -32,6 +32,8 @@ const HEART = new THREE.Vector3(ORIGIN.x, ORIGIN.y + BY + R * 0.3, ORIGIN.z + KI
 const HOME_UP = 12;
 const HOME_TIP = -0.245;
 let golden: SkyState | null = null;
+// how much of the dome the window covers now (0..1): wholly covered, the modelled homestead under it need not be drawn
+export const homeWindowK = () => U.uHomeK.value;
 const SP = new THREE.Vector3();
 
 export function HomeWindow({ mobile }: { mobile: boolean }) {
@@ -50,6 +52,7 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
       spare: [] as THREE.Object3D[],
       thin: [] as [THREE.InstancedBufferGeometry, number][],
       sparse: [] as [THREE.InstancedMesh, number][],
+      land: [] as THREE.Mesh[],
       spareAt: -1,
     }),
     [],
@@ -95,8 +98,8 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
     const target = postCtl.sceneTarget;
     const stand = portalRig.stand;
     const d = HEART.distanceTo(voyage.planePos);
-    const able = !mobile && postCtl.level >= 1 && !!target && voyage.cur === "kings" && voyage.flying && voyage.phase === "open" && !voyage.homing && !!stand && portalRig.home.size > 0 && d < 330;
-    const want = able ? 1 - THREE.MathUtils.smoothstep(d, 240, 320) : 0;
+    const able = !mobile && postCtl.level >= 1 && !!target && voyage.cur === "kings" && voyage.flying && voyage.phase === "open" && !voyage.homing && !!stand && portalRig.home.size > 0 && d < 250;
+    const want = able ? 1 - THREE.MathUtils.smoothstep(d, 175, 245) : 0;
     if (process.env.NODE_ENV !== "production") Object.assign(window, { __homeWin: { able, d, k: rig.k, fresh: rig.fresh, level: postCtl.level, target: !!target, stand: !!stand, home: portalRig.home.size, phase: voyage.phase, flying: voyage.flying, cur: voyage.cur, U, portalRig, scene, gl, spare: rig.spare, thin: rig.thin } });
     rig.k += (want - rig.k) * (1 - Math.exp(-dt * 3));
     if (!able) {
@@ -148,11 +151,17 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
       rig.spare.length = 0;
       rig.thin.length = 0;
       rig.sparse.length = 0;
+      rig.land.length = 0;
       portalRig.home.forEach((grp) =>
         grp.traverse((o) => {
           const m = o as THREE.Mesh;
           if (!(m.isMesh || (o as THREE.Points).isPoints || (o as THREE.Line).isLine) || !m.geometry) return;
           const u = (m.material as THREE.ShaderMaterial).uniforms as Record<string, unknown> | undefined;
+          // (the land's levels, finest to coarsest: see below)
+          if (u && u.uCell && u.uHole && u.uCenter) {
+            rig.land.push(m);
+            return;
+          }
           const im = o as THREE.InstancedMesh;
           if (im.isInstancedMesh && !im.boundingSphere) im.computeBoundingSphere();
           if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
@@ -166,15 +175,17 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
           // (blades of every kind are drawn in rings that follow the eye, and carry this bound to say they have none)
           const grass = !!(u && u.uTile && u.uInner) || (!im.isInstancedMesh && bs.radius === 100000 && tris > 20000);
           // (and the clouds, which carry the greater one: a third of them is sky enough for a picture this small)
-          if (ig.isInstancedBufferGeometry && bs.radius === 1000000 && many > 6) rig.thin.push([ig, many]);
-          const away = (bs.radius < 1500 && far - bs.radius > 380) || (bs.radius < 600 && far > 400);
-          const small = tris < 1500 && far > 120;
+          if (ig.isInstancedBufferGeometry && bs.radius === 1000000 && many > 4) rig.thin.push([ig, many]);
+          // (the window is small and its middle is the desk: what is more than a couple of hundred metres off is haze in it)
+          // (and of the mountains only the nearest range: the others are a line of haze at this size)
+          const away = (bs.radius < 1500 && far - bs.radius > 220) || (bs.radius < 600 && far > 260) || (bs.radius < 100000 && far > 1000) || (bs.radius > 1500 && bs.radius < 100000);
+          const small = (tris < 1500 && far > 80) || (tris < 6000 && far > 160);
           const mote = !m.isMesh && far > 150;
           // (things strewn by the thousand, a few triangles each: flowers, tufts)
           const strewn = !im.isInstancedMesh && ig.isInstancedBufferGeometry && many > 1000 && tris / many < 24 && bs.radius < 100000;
           if (grass || away || small || mote || strewn) rig.spare.push(o);
-          // (and of a far stand of trees every other one makes the same wood at this size)
-          else if (im.isInstancedMesh && far > 200 && im.count > 40) rig.sparse.push([im, im.count]);
+          // (and of every stand of trees, far or near, every other one: at this size it makes the same wood)
+          else if (im.isInstancedMesh && im.count > 6) rig.sparse.push([im, far > 110 ? 4 : 3]);
         }),
       );
       // and of what stands on the desk only the large things: the rest are specks from here
@@ -196,8 +207,40 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
     // (the counts as they are this frame: home may change them itself)
     const thinWas = rig.thin.map(([g]) => g.instanceCount);
     const sparseWas = rig.sparse.map(([m]) => m.count);
-    rig.thin.forEach(([g], i) => (g.instanceCount = Math.ceil(thinWas[i] / 3)));
-    rig.sparse.forEach(([m], i) => (m.count = Math.ceil(sparseWas[i] / 2)));
+    rig.thin.forEach(([g], i) => (g.instanceCount = Math.ceil(thinWas[i] / 10)));
+    // The land is drawn in square levels round the eye (home/Terrain.tsx), and the eye they are round is this wood's,
+    // kilometres off: for the window they are set round the window's own eye, so the field under the desk is the fine
+    // land and not the coarsest. In a picture a quarter the size the two finest levels are below a pixel: the third is
+    // drawn whole in their place, and the three coarsest (past three kilometres, haze from here) not at all.
+    const landWas = rig.land.map((m) => {
+      const u = (m.material as THREE.ShaderMaterial).uniforms;
+      return { m, vis: m.visible, geo: m.geometry, hole: u.uHole.value as number, c: (u.uCenter.value as THREE.Vector2).clone() };
+    });
+    const eyeU = (rig.land[0]?.material as THREE.ShaderMaterial | undefined)?.uniforms.uEye;
+    const eyeWas = eyeU ? (eyeU.value as THREE.Vector2).clone() : null;
+    if (rig.land.length > 4) {
+      const cells = rig.land.map((m) => (m.material as THREE.ShaderMaterial).uniforms.uCell.value as number);
+      const sorted = [...cells].sort((a, b) => a - b);
+      const full = rig.land[cells.indexOf(sorted[0])].geometry;
+      const first = sorted[2];
+      const last = sorted[sorted.length - 4];
+      rig.land.forEach((m, i) => {
+        const u = (m.material as THREE.ShaderMaterial).uniforms;
+        const cell = cells[i];
+        if (cell < first || cell > last) {
+          m.visible = false;
+          return;
+        }
+        if (cell === first) {
+          m.geometry = full;
+          u.uHole.value = 0;
+        }
+        const s2 = cell * 2;
+        (u.uCenter.value as THREE.Vector2).set(Math.round(pc.position.x / s2) * s2, Math.round(pc.position.z / s2) * s2);
+      });
+      eyeU?.value.set(pc.position.x, pc.position.z);
+    }
+    rig.sparse.forEach(([m, k], i) => (m.count = Math.ceil(sparseWas[i] / k)));
     const standWas = stand!.visible;
     stand!.visible = false;
     const veilWas = rig.veil?.visible ?? false;
@@ -220,7 +263,10 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
     try {
       gl.setRenderTarget(rig.rt);
       gl.clear();
+      const t0 = gl.info.autoReset ? 0 : gl.info.render.triangles;
       gl.render(scene, pc);
+      // (development: what the window costs, for the world's budget)
+      if (process.env.NODE_ENV !== "production") (window as unknown as { __homeWinTris: number }).__homeWinTris = gl.info.render.triangles - t0;
       rig.fresh = true;
     } catch {
       rig.fresh = false;
@@ -237,6 +283,14 @@ export function HomeWindow({ mobile }: { mobile: boolean }) {
     rig.spare.forEach((o, i) => (o.visible = spareWas[i]));
     rig.thin.forEach(([g], i) => (g.instanceCount = thinWas[i]));
     rig.sparse.forEach(([m], i) => (m.count = sparseWas[i]));
+    for (const w of landWas) {
+      const u = (w.m.material as THREE.ShaderMaterial).uniforms;
+      w.m.visible = w.vis;
+      w.m.geometry = w.geo;
+      u.uHole.value = w.hole;
+      (u.uCenter.value as THREE.Vector2).copy(w.c);
+    }
+    if (eyeU && eyeWas) (eyeU.value as THREE.Vector2).copy(eyeWas);
     homeWas.forEach(([o, v]) => (o.visible = v));
     U.tHome.value = rig.rt.texture;
     U.uHomeRes.value.set(target!.width, target!.height);
