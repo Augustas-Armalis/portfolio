@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { SKY_U, mixSky, skyState, type SkyState } from "../sky";
 import { pathOf, voyage } from "../worlds/voyage";
 import { Cave } from "./Cave";
-import { Sacred, SeaBoats } from "./Sacred";
+import { Farm, Sacred, SeaBoats } from "./Sacred";
 import { FOREST_LINE, TOWN } from "./journey";
 import { HOME_U } from "./land";
 import { Town } from "./Town";
@@ -109,7 +109,7 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     const f = st.f;
     const night = THREE.MathUtils.smoothstep(f, marks.forest - 0.04, marks.deep);
     FOREST_K.night.value = Math.max(night, SKY_U.uNight.value * 0.8);
-    const fog = THREE.MathUtils.smoothstep(f, marks.forest - 0.03, marks.forest + 0.08) * (1 - THREE.MathUtils.smoothstep(f, marks.cave - 0.2, marks.cave - 0.07));
+    const fog = THREE.MathUtils.smoothstep(f, marks.forest - 0.03, marks.forest + 0.08) * (1 - 0.7 * THREE.MathUtils.smoothstep(f, marks.cave - 0.36, marks.cave - 0.16)) * (1 - THREE.MathUtils.smoothstep(f, marks.cave - 0.14, marks.cave - 0.05));
     FOREST_K.fog.value = fog;
     // the air: a light mist over the town's roofs (smoke and evening damp), and in the forest a soft fog lit by the
     // moon, thick enough that the trunks fade within a few tens of metres; it lifts before the mountain
@@ -126,6 +126,7 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
       <Cave />
       <Sacred mobile={mobile} />
       <SeaBoats />
+      <Farm />
     </group>
   );
 }

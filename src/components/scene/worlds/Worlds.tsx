@@ -7,12 +7,13 @@ import { postCtl } from "../Post";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { CAVE } from "../home/journey";
-import { PortalView, portalRig } from "./portal";
+import { PortalView, PortalWindow, portalRig } from "./portal";
 import { LightGate, LightPath, type WorldProps } from "./common";
 import { Birds, type Flock } from "./life";
 import { PlayFrame } from "./play";
 import { setWorldAir } from "./kit";
 import FairyWorld from "./Fairy";
+import FriendshipWorld, { dropFriendship, prepareFriendship } from "./Friendship";
 import FuneralWorld, { prepareFuneral } from "./Funeral";
 import GateWorld from "./Gate";
 import KingsWorld, { dropKings, prepareKings } from "./Kings";
@@ -102,7 +103,7 @@ const HOME_FLOCKS: Flock[] = [
   { c: [-3, 12, -150], r: 20, n: 7, size: 0.38, speed: 6.5, spread: 6 },
 ];
 
-const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld, seafinale: SeaFinaleWorld, funeral: FuneralWorld, kings: KingsWorld };
+const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { friendship: FriendshipWorld, sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld, seafinale: SeaFinaleWorld, funeral: FuneralWorld, kings: KingsWorld };
 
 // While the plane flies through one world the next is made ready behind it, a little at a time, so that
 // passing the gate is only cloud closing and opening:
@@ -117,7 +118,7 @@ const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNod
 // one left behind is unmounted (and its geometry, materials and textures disposed) as the plane arrives.
 type Drawn = THREE.Mesh | THREE.Points | THREE.Line;
 // (step 0, for a world with something heavy in it: that is made first, a few milliseconds a frame)
-const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { kings: (props) => prepareKings(props), stars: (props) => prepareStars(props), funeral: (props) => prepareFuneral(props), rex: (props) => prepareRex(props) };
+const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { friendship: (props) => prepareFriendship(props), kings: (props) => prepareKings(props), stars: (props) => prepareStars(props), funeral: (props) => prepareFuneral(props), rex: (props) => prepareRex(props) };
 function useWarmWorld(cur: WorldId, props: WorldProps) {
   const { gl, camera, scene } = useThree();
   const [warm, setWarm] = useState<WorldId | null>(null);
@@ -144,7 +145,10 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
     if (!voyage.flying) {
       // landed: the world that was waiting is let go
       if (warm) setWarm(null);
-      if (j.prepFor) dropKings();
+      if (j.prepFor) {
+        dropKings();
+        dropFriendship();
+      }
       j.id = j.prep = j.prepFor = j.closing = null;
       voyage.prep = null;
       j.since = 0;
@@ -306,6 +310,8 @@ export function Worlds(props: WorldProps) {
           <LightPath id="home" def={WORLDS.home} angels effects={props.effects} from={10} />
           {/* the home gate is the veil inside the cave's arch (home/journey.ts, home/Cave.tsx draw the stone) */}
           <LightGate id="home" def={WORLDS.home} look="veil" half={CAVE.half} rise={CAVE.rise} />
+          {/* and the next world seen live through it, crossed into at once (portal.tsx) */}
+          <PortalWindow id="home" def={WORLDS.home} half={CAVE.half} rise={CAVE.rise} />
           {/* a small flock over the road that parts round the plane as it passes (worlds/play.tsx) */}
           {props.effects > 0.25 && <Birds flocks={HOME_FLOCKS} scatter={15} seed={11} />}
         </group>

@@ -599,7 +599,8 @@ export function makeLedgeMaterial() {
           float pool = vnoise(vec2(vK.w * 0.045 - uTime * 0.02, vK.y * 1.6)) * 0.6 + vnoise(vec2(vK.w * 0.21, vK.y * 4.0 + 3.0)) * 0.4;
           float dab = vnoise(vLocal.xz * 0.9) * 0.5 + vnoise(vLocal.xz * 2.6 + 9.0) * 0.5;
           vec3 alb = mix(vec3(0.02, 0.03, 0.1), vec3(0.05, 0.055, 0.1), 0.4 + 0.6 * dab);
-          col = alb * (uSkyCol * 1.2 + uKeyCol * 0.16);
+          // (inside the cave it comes out of the road is almost black: only where the night reaches in does it take its blue)
+          col = alb * (uSkyCol * 1.2 + uKeyCol * 0.16) * mix(0.16, 1.0, smoothstep(uBorn + 10.0, uBorn + 90.0, vK.w));
           float mid = 1.0 - smoothstep(0.55, 1.0, abs(vK.y));
           // (no gold where no one walks yet: far inside the cave the road comes out of it is bare dark rock)
           col += GOLD * (0.04 + 0.2 * smoothstep(0.25, 0.8, pool) + 0.5 * bellAt(vK.w)) * (0.45 + 0.55 * dab) * mid * glowK() * 2.2 * smoothstep(uBorn - 6.0, uBorn + 40.0, vK.w);

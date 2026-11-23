@@ -92,6 +92,8 @@ const trackOf = (id: TrackId) => TRACKS.find((t) => t.id === id)!;
 export const WORLD_MUSIC: Record<string, { video: string; at: number; gain?: number; part: string }> = {
   road: { video: VIDEO.miske, at: 0, part: "In the Forest: the forest wakes" },
   forest: { video: VIDEO.miske, at: 0, part: "In the Forest: the forest wakes" },
+  // (the flight's one piece carries straight on through her cave: the same key as the road, nothing restarts)
+  friendship: { video: VIDEO.miske, at: 0, part: "In the Forest: the forest wakes" },
   sun: { video: VIDEO.jura, at: 2, part: "The Sea: the main theme" },
   stars: { video: VIDEO.jura, at: 410, gain: 0.9, part: "The Sea: the second theme" },
   rex: { video: VIDEO.jura, at: 1394, part: "The Sea: the inner recapitulation" },

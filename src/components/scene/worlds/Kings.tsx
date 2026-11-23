@@ -6,10 +6,11 @@ import * as THREE from "three";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, haloGeometry, makeTempera, rng, type GroundPalette, type Halo, type V3 } from "./kit";
-import { kingSteps, makeCrownMaterial, makeKingMaterial } from "./kings/figures";
+import { PaintedKings } from "./kings/painted";
+import { makeUnderstory } from "./kings/trees";
 import { BY, DOME_AT, DOME_U, GLSL_END, GLSL_KINGS, GLSL_KINGS_CORE, KINGS_UNIFORMS, R } from "./kings/light";
 import { aisleX, makeWoodMaterial, woodGeometry, type Walk } from "./kings/wood";
-import { KINGS, KINGS_WATER, ORIGIN, WORLDS, groundAt, heightGLSL, voyage } from "./voyage";
+import { KINGS, KINGS_WATER, ORIGIN, WORLDS, groundAt, heightGLSL } from "./voyage";
 
 // Fairy Tale of the Kings (Karalių pasaka, 1909). A night wood of enormous
 // trunks whose boughs close overhead; small towns and towers live in the
@@ -584,15 +585,6 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
   const by = BY;
   const wood = yield* woodGeometry({ mobile: props.mobile, trees: props.trees }, budget);
   yield;
-  const left = yield* kingSteps(-1, props.mobile, budget);
-  const right = yield* kingSteps(1, props.mobile, budget);
-  // (and each again in coarse clay, for the long way in, when they are small in the mist)
-  const leftFar = yield* kingSteps(-1, props.mobile, budget, true);
-  const rightFar = yield* kingSteps(1, props.mobile, budget, true);
-  leftFar.crown.dispose();
-  rightFar.crown.dispose();
-  yield;
-
   // ---------- the little world ----------
   // His own homestead under the glass, in the light of that picture: warm earth, a pale path, low houses with red
   // roofs, small dark trees against a cream sky (round ones, slim poplars), a thin tower, blue hills behind, a day
@@ -701,17 +693,8 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
   yield;
   return {
     woodChunks: wood.chunks,
+    under: makeUnderstory({ mobile: props.mobile, trees: props.trees }),
     bark: makeWoodMaterial(),
-    left: left.geo,
-    leftFar: leftFar.geo,
-    leftMat: makeKingMaterial(left),
-    leftCrown: left.crown,
-    leftCrownMat: makeCrownMaterial(left),
-    right: right.geo,
-    rightFar: rightFar.geo,
-    rightMat: makeKingMaterial(right),
-    rightCrown: right.crown,
-    rightCrownMat: makeCrownMaterial(right),
     little: k.build(),
     lit: makeTempera({ amb: 0.5, key: 0.2, dab: 0.5 }),
     domeGeo: new THREE.SphereGeometry(R, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -753,8 +736,6 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
   const owl = useRef<THREE.Mesh>(null);
   const night = useRef<THREE.Mesh>(null);
   const chunkRefs = useRef<(THREE.Mesh | null)[]>([]);
-  const kingRefs = useRef<(THREE.Mesh | null)[]>([]);
-  const lod = useRef({ near: false });
   const bell = useRef<THREE.Group>(null);
   const swing = useRef(0);
   const b = useDisposable(() => {
@@ -808,12 +789,6 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
       bl.rotation.z = Math.sin(time * 0.52) * swing.current;
       bl.rotation.x = Math.sin(time * 0.52 * 0.93 + 1.1) * swing.current * 0.35;
     }
-    if (lod.current.near ? dk > 470 : dk < 430) lod.current.near = !lod.current.near;
-    // (while the world is still being made ready under another sky, both forms stand, so both are sent to the card then)
-    const live = voyage.cur === "kings";
-    kingRefs.current.forEach((m, i) => {
-      if (m) m.visible = !live || i < 2 === lod.current.near;
-    });
     const m = bird.current;
     if (m) {
       // every half minute or so it crosses above the two crowns
@@ -857,18 +832,10 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
           material={b.bark}
         />
       ))}
-      {[b.left, b.right, b.leftFar, b.rightFar].map((g, i) => (
-        <mesh
-          key={i}
-          ref={(m) => {
-            kingRefs.current[i] = m;
-          }}
-          geometry={g}
-          material={i % 2 ? b.rightMat : b.leftMat}
-        />
+      {b.under.meshes.map((m, i) => (
+        <primitive key={i} object={m} />
       ))}
-      <mesh geometry={b.leftCrown} material={b.leftCrownMat} />
-      <mesh geometry={b.rightCrown} material={b.rightCrownMat} />
+      <PaintedKings />
       <mesh geometry={b.little} material={b.lit} />
       <mesh geometry={b.domeGeo} material={b.domeSky} position={at} />
       <mesh geometry={b.domeGeo} material={b.domeGlass} position={at} renderOrder={5} />
@@ -905,7 +872,6 @@ if (typeof window !== "undefined" && process.env.NODE_ENV !== "production")
         steps++;
         if (r.done) {
           const w = r.value as Record<string, unknown>;
-          const tris = (k: string) => Math.round(((w[k] as THREE.BufferGeometry).index?.count ?? 0) / 3);
           const chunks = w.woodChunks as { geo: THREE.BufferGeometry; essential: number }[];
           const out = {
             totalMs: Math.round(performance.now() - t0),
@@ -914,11 +880,6 @@ if (typeof window !== "undefined" && process.env.NODE_ENV !== "production")
             wood: chunks.reduce((a, c) => a + Math.round((c.geo.index?.count ?? 0) / 3), 0),
             woodFar: chunks.reduce((a, c) => a + Math.round(c.essential / 3), 0),
             pieces: chunks.length,
-            left: tris("left"),
-            right: tris("right"),
-            leftFar: tris("leftFar"),
-            rightFar: tris("rightFar"),
-            crowns: tris("leftCrown") + tris("rightCrown"),
           };
           letGo(w);
           return out;
@@ -949,5 +910,6 @@ function letGo(w: Record<string, unknown>) {
   for (const v of Object.values(w)) {
     if (v instanceof THREE.BufferGeometry || v instanceof THREE.Material || v instanceof THREE.Texture) v.dispose();
     else if (Array.isArray(v)) for (const c of v) (c as { geo?: THREE.BufferGeometry }).geo?.dispose();
+    else if (v && typeof v === "object" && Array.isArray((v as { meshes?: unknown }).meshes)) (v as { dispose: () => void }).dispose();
   }
 }
