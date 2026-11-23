@@ -237,3 +237,36 @@ float caveIn(vec2 p){
   return (1.0 - sst(${f(MOUTH.half + 4)}, ${f(MOUTH.half + 8)}, abs(u))) * sst(-8.0, -3.0, a) * (1.0 - sst(${f(MOUTH.depth + 2)}, ${f(MOUTH.depth + 6)}, a));
 }
 `;
+
+// how far a point is from the flight's way over the open land (the road, the lake, the river and the town: the
+// forest's stretch has its own trees), for whoever plants whole trees near it instead of painted cards
+const OPEN_WAY = JOURNEY.slice(2, 16);
+export function routeD(x: number, z: number) {
+  let best = 1e9;
+  for (let i = 0; i < OPEN_WAY.length - 1; i++) {
+    const [ax, az] = OPEN_WAY[i];
+    const [bx, bz] = OPEN_WAY[i + 1];
+    const dx = bx - ax;
+    const dz = bz - az;
+    const t = Math.min(1, Math.max(0, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+    best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t));
+  }
+  return best;
+}
+
+// ---------- the sacred hill (alkakalnis) where the old road ends ----------
+// A round green hill at the end of the avenue the desk looks down, a great oak on its crown, an aukuras (a stone
+// altar with its fire kept burning) before the oak, carved wooden posts round them, a ring of stones.
+export const SACRED = { x: 2, z: -318, h: 13, top: 12, foot: 58 };
+export function sacredH(x: number, z: number) {
+  const r = Math.hypot(x - SACRED.x, z - SACRED.z);
+  if (r >= SACRED.foot) return 0;
+  return SACRED.h * (1 - sst(SACRED.top, SACRED.foot, r));
+}
+export const GLSL_SACRED = /* glsl */ `
+float sacredH(vec2 p){
+  float r = length(p - vec2(${f(SACRED.x)}, ${f(SACRED.z)}));
+  if (r >= ${f(SACRED.foot)}) return 0.0;
+  return ${f(SACRED.h)} * (1.0 - sst(${f(SACRED.top)}, ${f(SACRED.foot)}, r));
+}
+`;
