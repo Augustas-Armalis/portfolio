@@ -139,7 +139,7 @@ export function Novel() {
             {book.chapters.map((c, i) => (
               <button type="button" key={c.id} onClick={() => setCh(i)} className="press-row flex min-h-[44px] w-full items-center pl-4">
                 <span className={`flex min-h-[44px] flex-1 items-center gap-2 pr-4 ${i ? "border-t-[0.5px] border-[var(--separator-opaque)]" : ""}`}>
-                  <span className="flex-1 text-[17px] tracking-[-0.02em] text-ink">{c.title}</span>
+                  <span className="flex-1 text-left text-[17px] tracking-[-0.02em] text-ink">{c.title}</span>
                   {saved?.ch === i && <span className="h-2 w-2 rounded-full bg-[#0A84FF]" />}
                   <span className="text-[15px] tabular-nums text-ink-3">{minutes(c.words)}</span>
                 </span>
