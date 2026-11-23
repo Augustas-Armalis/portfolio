@@ -9,7 +9,7 @@ import { ORIGIN, heightGLSL, voyage, type WorldDef } from "./worlds/voyage";
 import { DESK, GLSL_NOISE, GLSL_PATH, GLSL_SKY, pathW, pathX } from "./shared";
 import { SKY_U } from "./sky";
 import { GLSL_DESK_SHADOW } from "./World";
-import { GLSL_PATHS } from "./home/journey";
+import { GLSL_PATHS, deskPk } from "./home/journey";
 import { GLSL_FIELD, GLSL_HOME_AIR, GLSL_LAND, HOLD, HOME_U, timed } from "./home/land";
 
 // Instanced grass blades (after Ghost of Tsushima / al-ro / Codrops):
@@ -88,7 +88,7 @@ function scatter(g: THREE.InstancedBufferGeometry, ring: Ring, seed: number) {
     const fade = (ring.fadeIn ? sstep(ring.fadeIn[0], ring.fadeIn[1], r) : 1) * (ring.fadeOut ? 1 - sstep(ring.fadeOut[0], ring.fadeOut[1], r) : 1);
     // the dirt path: blades thin out and shorten toward its centre
     const pz = off[i * 3 + 1];
-    const onPath = Math.abs(off[i * 3] - pathX(pz)) / pathW(pz);
+    const onPath = Math.min(pz > -2 ? Math.abs(off[i * 3] - pathX(pz)) / pathW(pz) : 1e3, deskPk(off[i * 3], pz));
     // (the grass thins toward the path by there being fewer blades, each still a whole blade: short dark stubs
     // standing in the sand read as dirt)
     const pathK = sstep(0.5, 1.2, onPath);
@@ -164,9 +164,11 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
             lod = (1.0 - smoothstep(uTile * 0.3, uTile * 0.49, dc)) * smoothstep(8.0, 16.0, length(root));
           #endif
           // the road stays bare as far as it runs
-          float pk = abs(root.x - pathX(root.y)) / pathW(root.y);
+          // (and the main path from the desk is that same road running on, measured the same way, so the grass
+          // keeps one edge along both: no step where one ends and the other begins)
+          float pk = min(root.y > uRoadEnd ? abs(root.x - pathX(root.y)) / pathW(root.y) : 1e3, deskPk(root));
           // (fewer blades toward it, not shorter ones)
-          lod *= mix(1.0, step(aShape.w, smoothstep(0.55, 1.25, pk)), step(uRoadEnd, root.y));
+          lod *= step(aShape.w, smoothstep(0.55, 1.25, pk));
           // in flight a fine tile rides with the plane and the wide one makes room for it
           #ifdef WALK
             // the fine grass underfoot, wherever one walks to
@@ -191,7 +193,7 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         lod *= smoothstep(1.3, 1.75, lk);
         lod *= (1.0 - smoothstep(0.15, 0.6, townStreet(root))) * (1.0 - smoothstep(0.2, 0.7, forestTrack(root))) * (1.0 - caveIn(root)) * (1.0 - fieldPlot(root).z);
         vec2 hpath = homePaths(root);
-        lod *= (1.0 - smoothstep(0.2, 0.7, hpath.x)) * (1.0 - 0.65 * hpath.y);
+        lod *= 1.0 - 0.65 * hpath.y;
         float h = aShape.x * max(lod, 0.001) * mix(1.0, 0.6, smoothstep(0.3, 0.8, woods)); float w = aShape.y; float bend = aShape.z; float r = aShape.w;
         #ifdef WRAP
           #ifdef FAR

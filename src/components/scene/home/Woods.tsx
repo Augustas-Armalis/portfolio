@@ -8,7 +8,7 @@ import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { voyage } from "../worlds/voyage";
 import { farBlock, makeFarMaterial, makeHomeTreeMaterial } from "./Forest";
-import { FOREST_LINE, HILL, laneD, riverD, riverW, sst } from "./journey";
+import { FOREST_LINE, HILL, joinD, laneD, riverD, riverW, sst, TRACK_IN } from "./journey";
 import { GLSL_HOME_AIR, HOME_U, PLACES, landH, rng, type HomeTree, type TreeKind } from "./land";
 import { buildTree, makeFarTreeTexture, makeLeafTexture } from "./trees";
 
@@ -75,6 +75,8 @@ function plant(amount: number) {
       if (OWLS.some((o) => Math.hypot(x - o.x, z - o.z) < 4)) continue;
       // (none in the river, nor on its banks)
       if (riverD(x, z) < riverW(x) + 3.5) continue;
+      // (nor on the way in off the quay)
+      if (joinD(x, z) < 6) continue;
       if (u > (d < 26 ? 0.85 : 0.75)) continue;
       // by the lane only pines (their crowns are carried high: the plane flies under them), further in oaks and spruce
       const kind: TreeKind = d < 14 ? "pine" : k < 0.5 ? "pine" : k < 0.74 ? "spruce" : k < 0.97 ? "broad" : "birch";
@@ -524,7 +526,7 @@ export function Woods({ amount, mobile, effects }: { amount: number; mobile: boo
   );
 
   const fox = useRef<THREE.Mesh>(null);
-  const st = useRef({ al: 1.15, gait: 0, x: 0, z: 0, yaw: 0, init: false, frames: 0 });
+  const st = useRef({ al: TRACK_IN, gait: 0, x: 0, z: 0, yaw: 0, init: false, frames: 0 });
   useFrame(({ camera }, dtRaw) => {
     const dt = Math.min(dtRaw, 0.1);
     const s = st.current;
@@ -552,7 +554,7 @@ export function Woods({ amount, mobile, effects }: { amount: number; mobile: boo
     // middle of the wood it turns off between the trees
     let want = s.al;
     if (planeAl > 0.2 && planeAl < 5.6) want = Math.max(s.al, Math.min(5.9, planeAl + 0.9));
-    if (!inHome) want = 1.15;
+    if (!inHome) want = TRACK_IN;
     const prev = s.al;
     s.al = want < s.al ? want : s.al + Math.min(want - s.al, dt * 0.3);
     const moved = Math.abs(s.al - prev) / Math.max(dt, 1e-3);

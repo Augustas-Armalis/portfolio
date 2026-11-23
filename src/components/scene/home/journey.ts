@@ -162,14 +162,54 @@ function segD(x: number, z: number, a: [number, number], b: [number, number]) {
   const t = Math.min(1, Math.max(0, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz)));
   return { d: Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t), t };
 }
-// where the town's north quay ends, at its west end (the forest's track begins there)
-const QN: [number, number] = (() => {
-  const x = -304;
+// a point on the town's north quay street, at x (the quay runs riverW + 5.4 off the river's line, on its north side)
+const quayN = (x: number): [number, number] => {
   const sl = riverSlope(x);
   const n = Math.sqrt(1 + sl * sl);
   const off = riverW(x) + 5.4;
   return [x + (sl / n) * off, riverZ(x) - off / n];
+};
+// where the forest's track proper takes over from the way in off the quay (segment units along FOREST_LINE)
+export const TRACK_IN = 1.6;
+// the way from the quay into the forest: it leaves the quay street running on in the quay's own direction while the
+// cobbles thin out, and bends round into the track already heading where the track heads, no corner at either end
+// (a cubic curve, sampled into short straight pieces for the ground's shader)
+export const TRACK_JOIN: [number, number][] = (() => {
+  const p0 = quayN(-290);
+  const qa = quayN(-300);
+  const ql = Math.hypot(qa[0] - p0[0], qa[1] - p0[1]);
+  const t0 = [(qa[0] - p0[0]) / ql, (qa[1] - p0[1]) / ql];
+  const [ax, az] = FOREST_LINE[1];
+  const [bx, bz] = FOREST_LINE[2];
+  const L = Math.hypot(bx - ax, bz - az);
+  const k = TRACK_IN - 1;
+  const off = 1.8 * Math.sin(TRACK_IN * 2.3) + 0.9 * Math.sin(TRACK_IN * 5.1 + 1.0);
+  const dOff = (4.14 * Math.cos(TRACK_IN * 2.3) + 4.59 * Math.cos(TRACK_IN * 5.1 + 1.0)) / L;
+  const nx = -(bz - az) / L;
+  const nz = (bx - ax) / L;
+  const p3 = [ax + (bx - ax) * k + nx * off, az + (bz - az) * k + nz * off];
+  let t3 = [(bx - ax) / L + nx * dOff, (bz - az) / L + nz * dOff];
+  const tl = Math.hypot(t3[0], t3[1]);
+  t3 = [t3[0] / tl, t3[1] / tl];
+  const reach = Math.hypot(p3[0] - p0[0], p3[1] - p0[1]) * 0.4;
+  const p1 = [p0[0] + t0[0] * reach, p0[1] + t0[1] * reach];
+  const p2 = [p3[0] - t3[0] * reach, p3[1] - t3[1] * reach];
+  const out: [number, number][] = [];
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    const u = 1 - t;
+    const a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+    out.push([a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0], a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]]);
+  }
+  return out;
 })();
+// distance from the way in off the quay (anything set down keeps clear of it: houses, lanterns, trees)
+export const joinD = (x: number, z: number) => {
+  if (x > -270 || x < -350 || z > -155 || z < -255) return 1e9;
+  let best = 1e9;
+  for (let i = 0; i < TRACK_JOIN.length - 1; i++) best = Math.min(best, segD(x, z, TRACK_JOIN[i], TRACK_JOIN[i + 1]).d);
+  return best;
+};
 // distance from the forest's flight line, and how far along it (0 at the town, 1 at the cave)
 export function laneD(x: number, z: number) {
   let best = 1e9;
@@ -243,15 +283,30 @@ float forestTrack(vec2 p){
   if (p.x > -250.0 || p.x < -420.0 || p.y > -160.0 || p.y < -690.0) return 0.0;
   float best = 1e9; float sd = 0.0; float al = 0.0;
 ${segLines}
-  if (best > 8.0) return 0.0;
-  float off = 1.8 * sin(al * 2.3) + 0.9 * sin(al * 5.1 + 1.0);
-  // (its first stretch, from the flight line's start over the water, is not walked: the way comes in from the quay)
-  float ends = sst(0.95, 1.1, al) * (1.0 - sst(8.2, 8.9, al));
-  float tr = (1.0 - sst(1.1, 2.0, abs(sd - off))) * ends;
-  // (it begins where the town's north quay ends: a short way joins the two)
-  vec2 ca = vec2(${f(QN[0])}, ${f(QN[1])}); vec2 cb = vec2(${f(FOREST_LINE[1][0])}, ${f(FOREST_LINE[1][1])});
-  vec2 cq = p - ca; vec2 cab = cb - ca; float ct = clamp(dot(cq, cab) / dot(cab, cab), 0.0, 1.0);
-  return max(tr, 1.0 - sst(1.1, 2.0, length(cq - cab * ct)));
+  float tr = 0.0;
+  if (best < 8.0) {
+    float off = 1.8 * sin(al * 2.3) + 0.9 * sin(al * 5.1 + 1.0);
+    // (its first stretch, from the flight line's start over the water, is not walked: the way comes in from the quay)
+    float ends = sst(${f(TRACK_IN - 0.08)}, ${f(TRACK_IN + 0.02)}, al) * (1.0 - sst(8.2, 8.9, al));
+    tr = (1.0 - sst(1.1, 2.0, abs(sd - off))) * ends;
+  }
+  if (p.x < -350.0 || p.y < -255.0) return tr;
+  // (the way in off the quay: as wide as the quay street where it leaves it, narrowing to the track's width)
+  float jd = 1e9; float js = 0.0;
+  { vec2 a = vec2(${f(TRACK_JOIN[0][0])}, ${f(TRACK_JOIN[0][1])}); vec2 ab = vec2(${f(TRACK_JOIN[1][0] - TRACK_JOIN[0][0])}, ${f(TRACK_JOIN[1][1] - TRACK_JOIN[0][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (0.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[1][0])}, ${f(TRACK_JOIN[1][1])}); vec2 ab = vec2(${f(TRACK_JOIN[2][0] - TRACK_JOIN[1][0])}, ${f(TRACK_JOIN[2][1] - TRACK_JOIN[1][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (1.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[2][0])}, ${f(TRACK_JOIN[2][1])}); vec2 ab = vec2(${f(TRACK_JOIN[3][0] - TRACK_JOIN[2][0])}, ${f(TRACK_JOIN[3][1] - TRACK_JOIN[2][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (2.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[3][0])}, ${f(TRACK_JOIN[3][1])}); vec2 ab = vec2(${f(TRACK_JOIN[4][0] - TRACK_JOIN[3][0])}, ${f(TRACK_JOIN[4][1] - TRACK_JOIN[3][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (3.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[4][0])}, ${f(TRACK_JOIN[4][1])}); vec2 ab = vec2(${f(TRACK_JOIN[5][0] - TRACK_JOIN[4][0])}, ${f(TRACK_JOIN[5][1] - TRACK_JOIN[4][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (4.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[5][0])}, ${f(TRACK_JOIN[5][1])}); vec2 ab = vec2(${f(TRACK_JOIN[6][0] - TRACK_JOIN[5][0])}, ${f(TRACK_JOIN[6][1] - TRACK_JOIN[5][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (5.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[6][0])}, ${f(TRACK_JOIN[6][1])}); vec2 ab = vec2(${f(TRACK_JOIN[7][0] - TRACK_JOIN[6][0])}, ${f(TRACK_JOIN[7][1] - TRACK_JOIN[6][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (6.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[7][0])}, ${f(TRACK_JOIN[7][1])}); vec2 ab = vec2(${f(TRACK_JOIN[8][0] - TRACK_JOIN[7][0])}, ${f(TRACK_JOIN[8][1] - TRACK_JOIN[7][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (7.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[8][0])}, ${f(TRACK_JOIN[8][1])}); vec2 ab = vec2(${f(TRACK_JOIN[9][0] - TRACK_JOIN[8][0])}, ${f(TRACK_JOIN[9][1] - TRACK_JOIN[8][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (8.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[9][0])}, ${f(TRACK_JOIN[9][1])}); vec2 ab = vec2(${f(TRACK_JOIN[10][0] - TRACK_JOIN[9][0])}, ${f(TRACK_JOIN[10][1] - TRACK_JOIN[9][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (9.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[10][0])}, ${f(TRACK_JOIN[10][1])}); vec2 ab = vec2(${f(TRACK_JOIN[11][0] - TRACK_JOIN[10][0])}, ${f(TRACK_JOIN[11][1] - TRACK_JOIN[10][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (10.0 + t) / 12.0; } }
+  { vec2 a = vec2(${f(TRACK_JOIN[11][0])}, ${f(TRACK_JOIN[11][1])}); vec2 ab = vec2(${f(TRACK_JOIN[12][0] - TRACK_JOIN[11][0])}, ${f(TRACK_JOIN[12][1] - TRACK_JOIN[11][1])}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); float d = length(q - ab * t); if (d < jd) { jd = d; js = (11.0 + t) / 12.0; } }
+  float jw = mix(1.0, 0.0, sst(0.0, 0.45, js));
+  return max(tr, 1.0 - sst(1.1 + 0.5 * jw, 2.0 + 0.5 * jw, jd));
 }
 `;
 
@@ -388,6 +443,11 @@ function polyD(line: [number, number][], x: number, z: number) {
   return best;
 }
 export const mainPathD = (x: number, z: number) => (x > 12 || x < -200 || z > 2 || z < -140 ? 1e9 : polyD(MAIN_PATH, x, z));
+// the main path measured as the footpath measures itself (journey GLSL deskPk): distance over its half-width
+export const deskPk = (x: number, z: number) => {
+  const d = mainPathD(x, z);
+  return d > 1e8 ? 1e3 : d / (0.32 + Math.abs(z) * 0.006 + 1.3 * sst(-5, -75, z));
+};
 export const sidePathD = (x: number, z: number) => (x > 50 || x < -10 || z > -10 || z < -230 ? 1e9 : polyD(SIDE_PATH, x, z));
 // the sacred grove's wood: thick round the clearing and along the hidden path (0..1, the path itself kept open)
 export function groveWood(x: number, z: number) {
@@ -406,19 +466,28 @@ const segCode = (line: [number, number][], name: string) =>
     })
     .join("\n");
 export const GLSL_PATHS = /* glsl */ `
-// how much of the main path (x) and of the hidden one (y) lies at a point
-vec2 homePaths(vec2 p){
-  float dm = 1e9; float ds = 1e9;
+// the main path from the desk, as the footpath measures itself: distance from its line over its half-width there. It
+// IS the footpath behind the desk, the same line, the same width and the same worn edge, and it only begins to widen
+// a few metres past the desk, slowly, through the turn toward the town (1e3 where it does not run)
+float deskPk(vec2 p){
+  float dm = 1e9;
   if (p.x < 12.0 && p.x > -200.0 && p.y < 2.0 && p.y > -140.0) {
 ${segCode(MAIN_PATH, "dm")}
   }
+  if (dm > 1e8) return 1e3;
+  float w = 0.32 + abs(p.y) * 0.006 + 1.3 * sst(-5.0, -75.0, p.y);
+  return dm / w;
+}
+// how much of the main path (x) and of the hidden one (y) lies at a point
+vec2 homePaths(vec2 p){
+  float ds = 1e9;
   if (p.x < 50.0 && p.x > -10.0 && p.y < -10.0 && p.y > -230.0) {
 ${segCode(SIDE_PATH, "ds")}
   }
-  // (the main path as wide as the old footpath; the hidden one narrow, half lost under the grass)
-  // (as narrow as the footpath at the desk, opening gradually through the turn into a proper way to the town)
-  float hw = 0.34 + 0.8 * sst(-2.0, -70.0, p.y);
-  float m = 1.0 - sst(hw, hw + 0.25 + 0.35 * sst(-2.0, -40.0, p.y), dm + (vnoise(p * 0.9) - 0.5) * 0.3);
+  // (the main path's edge exactly the footpath's: the same ragged noise, the same soft fall into the grass)
+  float n2 = vnoise(p * 0.9);
+  float m = 1.0 - sst(0.42 + n2 * 0.3, 1.02 + n2 * 0.34, deskPk(p));
+  // (the hidden one narrow, half lost under the grass)
   float s = (1.0 - sst(0.2, 0.55, ds + (vnoise(p * 1.3) - 0.5) * 0.4)) * sst(0.4, 0.65, vnoise(p * 0.22 + 3.0)) * 0.7;
   return vec2(m, s);
 }
