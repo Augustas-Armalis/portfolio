@@ -62,7 +62,7 @@ import { SKY_U, applySky, clockHours, setTimeOverride, skyState } from "./scene/
 import { Forest } from "./scene/home/Forest";
 import { HomeWorld, Worlds } from "./scene/worlds/Worlds";
 import { makeArrival } from "./scene/worlds/arrive";
-import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, swapWorld, useWorld, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
+import { KINGS, ORIGIN, WORLDS, gateOf, groundAt, setFlight, stepSpeed, swapWorld, useWorld, voyage, voyageBusy, voyageSky, type WorldId } from "./scene/worlds/voyage";
 import { Sky, makeSkyMaterial } from "./scene/World";
 import { HomeMountains } from "./scene/home/Mountains";
 import { Land } from "./scene/home/Terrain";
@@ -77,6 +77,8 @@ import { CALM, HLAKE, HOLD, SEA, hLakeK, homeLand, landH } from "./scene/home/la
 
 type Stage = "idle" | "approach" | "boot" | "done" | "wake" | "focus" | "unfocus" | "fly" | "land";
 export type Mode = "none" | "piano" | "camera" | "music" | "book" | "sketch" | "plane";
+const FLIGHT_CODES: Record<string, string> = { KeyW: "w", KeyA: "a", KeyS: "s", KeyD: "d" };
+const flightKey = (e: KeyboardEvent) => FLIGHT_CODES[e.code] ?? e.key.toLowerCase();
 type Input = { dx: number; dy: number; zoom: number; dragging: boolean; last: number; px: number; py: number; moved: boolean; sx: number; sy: number; tx: number; ty: number; pinch: number; keys: Set<string>; jx: number; jy: number };
 
 const DUR = { approach: 1.55, push: 1.05, hold: 0.12, wake: 2.3, wakeDelay: 0.35, focus: 1.15 };
@@ -1552,8 +1554,8 @@ function Scene({
     }
     if (s === "fly") {
       const inp = input.current;
-      // the pointer (or a finger) is the stick; A / D bank, W / S (and Space) climb and dive, Shift and E open the
-      // throttle, Ctrl and Q close it (the slider works it too; the wheel is the lens's zoom).
+      // A / D (and the arrows) bank, W climbs and S dives; Space and Shift step the speed up and down (the keydown
+      // below: voyage.ts stepSpeed; the wheel is the lens's zoom).
       // With Follow the path on there is no stick (the mouse only looks, by dragging): the plane flies the path
       // through every gate, and the keys nudge it aside for as long as they are held.
       // (on a phone the stick is the glass one under the left thumb, and a drag anywhere else turns the eye)
@@ -1562,8 +1564,7 @@ function Scene({
       let sx = mobile ? inp.jx : 0; // (with a mouse the pointer is never a stick: the keys fly the plane, the mouse only looks)
       const bank = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
       if (bank) sx = bank;
-      const thr = (k.has("shift") || k.has("e") ? 1 : 0) - (k.has("control") || k.has("q") ? 1 : 0);
-      const climb = (k.has("w") || k.has("arrowup") || k.has(" ") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0);
+      const climb = (k.has("w") || k.has("arrowup") ? 1 : 0) - (k.has("s") || k.has("arrowdown") ? 1 : 0);
       // a drag is measured in screen widths, so the same sweep turns the eye as far on any screen
       const W = Math.max(320, window.innerWidth);
       // with the phone as the eye a drag moves what "straight ahead" is
@@ -1572,7 +1573,6 @@ function Scene({
       const fi = flightIn.current;
       fi.sx = sx;
       fi.sy = mobile ? inp.jy : 0;
-      fi.thr = thr;
       fi.climb = climb;
       fi.wheel = inp.zoom;
       fi.moved = inp.last;
@@ -2036,8 +2036,7 @@ export default function Room({
   useEffect(() => {
     const kd = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
-      // (Ctrl on its own is the plane's brake; with another key it is the browser's)
-      if (e.metaKey || e.altKey || (e.ctrlKey && !(mode === "plane" && k === "control"))) return;
+      if (e.metaKey || e.altKey || e.ctrlKey) return;
       if (k === "escape") return exit();
       if (mode === "piano" && KEYMAP[k] !== undefined && !e.repeat) {
         strike(KEYMAP[k]);
@@ -2056,11 +2055,27 @@ export default function Room({
           if ((e.target as HTMLElement | null)?.closest?.("button, a, input")) return;
           e.preventDefault();
         }
+        if (mode === "plane") {
+          // Space and Shift step the speed (one press, one step; a held key does not run on). Space must not scroll
+          // the page nor press the last button clicked.
+          const tag = (e.target as HTMLElement | null)?.tagName;
+          if (k === " " || k === "shift") {
+            if (tag === "INPUT" || tag === "TEXTAREA") return;
+            e.preventDefault();
+            if (!e.repeat) stepSpeed(k === " " ? 1 : -1);
+            return;
+          }
+          // (W A S D by their place on the keyboard: any layout, Caps Lock or a held Shift still flies)
+          input.current.keys.add(flightKey(e));
+        }
         input.current.keys.add(k);
         if (k.startsWith("arrow")) e.preventDefault();
       }
     };
-    const ku = (e: KeyboardEvent) => input.current.keys.delete(e.key.toLowerCase());
+    const ku = (e: KeyboardEvent) => {
+      input.current.keys.delete(e.key.toLowerCase());
+      input.current.keys.delete(flightKey(e));
+    };
     // a key still held when the window loses focus never gets its keyup
     const drop = () => input.current.keys.clear();
     window.addEventListener("keydown", kd);

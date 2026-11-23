@@ -1043,7 +1043,7 @@ export const voyage = {
   skyFrom: null as SkyState | null,
   skyT: 1,
   lastSky: null as SkyState | null,
-  throttle: 0.42,
+  throttle: 0.2, // one of SPEED_STEPS: Space and Shift (and the bar) step it
   guide: true, // the "follow the path" assist is allowed to take over
   cruise: false, // while the quiet hand flies, it flies slowly: time to look about
   lockView: false, // the eye stays where it was turned instead of easing back behind the plane
@@ -1115,6 +1115,16 @@ export function travelStep(dir: 1 | -1) {
 }
 // the world a pick is on its way to, for the list to mark; null in open air and once the plane has arrived
 export const useTravel = () => useSyncExternalStore(subscribe, () => (voyage.phase === "closing" ? voyage.next : null), () => null);
+// The speed, in six even steps from a slow drift to fast (Plane.tsx speedOf turns a step into metres a second).
+// Space steps it up, Shift down; the flight bar shows the same six.
+export const SPEED_STEPS = [0, 0.2, 0.4, 0.6, 0.8, 1];
+export const speedStepOf = (thr: number) => SPEED_STEPS.reduce((best, v, i) => (Math.abs(v - thr) < Math.abs(SPEED_STEPS[best] - thr) ? i : best), 0);
+export function setSpeedStep(i: number) {
+  voyage.throttle = SPEED_STEPS[Math.min(SPEED_STEPS.length - 1, Math.max(0, i))];
+  emit();
+}
+export const stepSpeed = (dir: 1 | -1) => setSpeedStep(speedStepOf(voyage.throttle) + dir);
+export const useSpeedStep = () => useSyncExternalStore(subscribe, () => speedStepOf(voyage.throttle), () => 1);
 export function setGuide(on: boolean) {
   voyage.guide = on;
   emit();
