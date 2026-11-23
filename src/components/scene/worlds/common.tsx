@@ -47,6 +47,54 @@ export function Ground({ def, pal, mobile, size = 2400 }: { def: WorldDef; pal: 
   return <mesh geometry={b.geo} material={b.mat} renderOrder={-5} />;
 }
 
+// ---------- the far ground ----------
+// Every world reads as endless: past the edge of its own ground or water, a plane as wide as the lens can see
+// follows the eye and carries the ground's mean colour out, then turns to the sky's own horizon colour with
+// distance, and the world's air takes it the rest of the way. It is drawn first and writes no depth, so the real
+// ground and water draw over it wherever they are (no z-fighting, no seam but a change of texture inside the haze).
+export function FarGround({ id, def, pal }: { id: WorldId; def: WorldDef; pal: GroundPalette }) {
+  const wet = def.water !== null;
+  const level = (def.water ?? def.terrain?.base ?? 0) - (wet ? 0.15 : 6);
+  const b = useDisposable(() => {
+    const mean: V3 = wet ? [0.02, 0.03, 0.035] : [(pal.a[0] * 2 + pal.b[0] + pal.c[0]) / 4, (pal.a[1] * 2 + pal.b[1] + pal.c[1]) / 4, (pal.a[2] * 2 + pal.b[2] + pal.c[2]) / 4];
+    const geo = new THREE.CircleGeometry(11500, 64);
+    geo.rotateX(-Math.PI / 2);
+    const mat = new THREE.ShaderMaterial({
+      depthWrite: false,
+      uniforms: { ...SKY_U, ...WORLD_U },
+      vertexShader: /* glsl */ `varying vec3 vWorld; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      fragmentShader: /* glsl */ `
+        varying vec3 vWorld;
+        ${GLSL_NOISE}
+        ${GLSL_SKY}
+        ${GLSL_AIR}
+        void main(){
+          vec3 dv = vWorld - cameraPosition; float dist = length(dv); vec3 d = dv / max(dist, 1e-3);
+          vec3 base = vec3(${mean.map((x) => x.toFixed(4)).join(", ")});
+          base *= 0.86 + 0.28 * vnoise(vWorld.xz * 0.004);
+          vec3 ground = base * (uSkyCol * 0.7 + uKeyCol * (0.22 + 0.5 * max(uKeyDir.y, 0.0)) * smoothstep(-0.02, 0.08, uKeyDir.y));
+          ${wet ? `// still water: the sky mirrored, more of it the lower the eye looks, the dark depth where it looks down
+          vec3 sky = skyBase(normalize(vec3(d.x, abs(d.y) + 0.015, d.z))) * 0.9;
+          float fr = 0.05 + 0.95 * pow(1.0 - clamp(abs(d.y), 0.0, 1.0), 6.0);
+          vec3 col = mix(ground, sky, fr);` : `vec3 sky = airCol(d) * 0.86;
+          float k = smoothstep(900.0, 5200.0, dist);
+          vec3 col = mix(ground, sky, k);`}
+          col = applyAir(col, vWorld);
+          gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    return { geo, mat };
+  }, [def, wet]);
+  const m = useRef<THREE.Mesh>(null);
+  useFrame(({ camera }) => {
+    const o = originOf(id);
+    m.current?.position.set(camera.position.x - o.x, level, camera.position.z - o.z);
+  });
+  return <mesh ref={m} geometry={b.geo} material={b.mat} renderOrder={-6} frustumCulled={false} />;
+}
+
 // ---------- the path of light ----------
 // A ribbon of light hanging in the air at the height the plane keeps, with a
 // slow pulse running along it toward the gate; at intervals a lantern of
@@ -890,9 +938,10 @@ export function Gallery({ def }: { def: WorldDef }) {
 // (`ground={false}`: the world draws its own land. The way on: `gate` says how it is drawn: "arch" the lancet of
 // light (default), "veil" only its sheet of light, sized by `gateSize` [half-width, rise], for a world that builds
 // its own opening, "none" nothing at all; `arch={false}` is the same as gate="none". See LightGate.)
-export function WorldBase({ id, def, pal, props, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true, ground = true, arch = true, gate = "arch", gateSize }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean; ground?: boolean; arch?: boolean; gate?: GateLook; gateSize?: [number, number] }) {
+export function WorldBase({ id, def, pal, props, horizon, grass = true, tip, pathTint, pathGain, gateTint, mask, tall, groundSize, angels = true, marks = true, ground = true, arch = true, gate = "arch", gateSize }: { id: WorldId; def: WorldDef; pal: GroundPalette; props: WorldProps; horizon?: boolean; grass?: boolean; tip?: V3; pathTint?: V3; pathGain?: number; gateTint?: V3; mask?: string; tall?: number; groundSize?: number; angels?: boolean; marks?: boolean; ground?: boolean; arch?: boolean; gate?: GateLook; gateSize?: [number, number] }) {
   return (
     <>
+      {(horizon ?? (ground || def.water !== null)) && <FarGround id={id} def={def} pal={pal} />}
       {ground && def.terrain && <Ground def={def} pal={pal} mobile={props.mobile} size={groundSize} />}
       {grass && def.terrain && <WorldGrass def={def} pal={pal} tip={tip} mobile={props.mobile} density={props.grass} wind={props.reduced ? 0.25 : 1} mask={mask} tall={tall} />}
       <LightPath id={id} def={def} tint={pathTint} gain={pathGain} effects={props.effects} angels={angels} marks={marks} />
