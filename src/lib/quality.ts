@@ -37,6 +37,8 @@ export type QualityOverrides = { resolution?: number; grass?: number; effects?: 
 type State = { choice: QualityChoice; auto: Preset; ceiling: Preset; overrides: QualityOverrides };
 
 const KEY = "ag-quality";
+// what Auto settled on the last time this machine was here: the next visit begins on it
+const KEY_AUTO = "ag-quality-auto";
 
 // First guess, before a single frame has been timed.
 export function detectPreset(): Preset {
@@ -63,8 +65,29 @@ export function detectPreset(): Preset {
   return "medium";
 }
 
+function remembered(): Preset | null {
+  try {
+    const k = JSON.parse(window.localStorage.getItem(KEY_AUTO) ?? "null") as { gear?: Preset; at?: number } | null;
+    // (kept for a month: a machine may have been busy that day, or have a new GPU since)
+    if (k && k.gear && ORDER.includes(k.gear) && typeof k.at === "number" && Date.now() - k.at < 30 * 864e5) return k.gear;
+  } catch {
+    /* nothing kept */
+  }
+  return null;
+}
+function remember(gear: Preset) {
+  try {
+    window.localStorage.setItem(KEY_AUTO, JSON.stringify({ gear, at: Date.now() }));
+  } catch {
+    /* not kept */
+  }
+}
 function load(): State {
-  const auto = detectPreset();
+  let auto = detectPreset();
+  // The gear is chosen before the scene is shown. First from what this machine could hold last time (never higher
+  // than the guess from its hardware); then, behind the loader, from the frames themselves (see `early` below).
+  const was = typeof window !== "undefined" ? remembered() : null;
+  if (was && ORDER.indexOf(was) < ORDER.indexOf(auto)) auto = was;
   const s: State = { choice: "auto", auto, ceiling: ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(auto) + 1)], overrides: {} };
   try {
     const raw = typeof window !== "undefined" ? window.localStorage.getItem(KEY) : null;
@@ -145,12 +168,14 @@ let fastFor = 0;
 let lastStep = 0;
 // `up: false` while flying: a step up mid-flight would rebuild grass, trees and the shadow map in the air (a
 // hitch for nothing); it waits for the desk. A step down is still taken, the device needs it.
-// The first seconds of a visit are the arrival: the camera comes down out of the sky while the last shaders are
-// made. A step UP there would rebuild the lens, the grass and the shadows in the middle of the one shot that must
-// be seamless, so there is none until the camera has settled. But a gear the machine cannot hold must not be
-// held either: during the arrival the way DOWN is quicker than usual. Half a second of frames over budget (the
-// middle frame of the last sixteen, so one stall while a shader is made does not count) and it steps down at
-// once, and again a second and a half later if that was not enough.
+// The first seconds of a visit are the loader and the arrival. Room times the frames it draws hidden behind the
+// loader as well as those of the descent, and they all come here: that is the benchmark. A step UP there would
+// rebuild the lens, the grass and the shadows in the middle of the one shot that must be seamless, so there is
+// none until the camera has settled. The way DOWN is quick and as far as it needs to be: the middle frame of the
+// last sixteen (so a stall while a shader is made does not count) over budget, and the gear drops at once: one
+// step if it is a little slow, two under 22 frames a second, three under 14, so a weak machine is on its own
+// gear before the loader lifts instead of walking down to it through the descent. Again three quarters of a
+// second later if that was not enough. Wherever Auto ends up is remembered for the next visit.
 const SETTLE_MS = 16000;
 const EARLY = new Float32Array(16);
 let earlyN = 0;
@@ -159,12 +184,13 @@ function early(dt: number, t: number) {
   const s = get();
   if (s.choice !== "auto" || dt <= 0) return;
   EARLY[earlyN++ % EARLY.length] = Math.min(dt, 0.5);
-  if (earlyN < EARLY.length || t - lastStep < 1500) return;
+  if (earlyN < EARLY.length || t - lastStep < 750) return;
   const mid = Array.from(EARLY).sort((a, b) => a - b)[EARLY.length >> 1];
   const i = ORDER.indexOf(s.auto);
   // (over budget: slower than 34 frames a second, which sixteen such frames make half a second of)
   if (mid <= 1 / 34 || i <= 0) return;
-  s.auto = ORDER[i - 1];
+  s.auto = ORDER[Math.max(0, i - (mid > 1 / 14 ? 3 : mid > 1 / 22 ? 2 : 1))];
+  remember(s.auto);
   s.ceiling = s.auto;
   window.setTimeout(() => (get().ceiling = ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(get().auto) + 1)]), 60000);
   lastStep = t;
@@ -197,5 +223,6 @@ export function reportFrame(dt: number, up = true) {
   else return;
   lastStep = now;
   slowFor = fastFor = 0;
+  remember(s.auto);
   emit(false);
 }
