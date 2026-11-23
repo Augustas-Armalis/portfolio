@@ -18,9 +18,9 @@ const END = /* glsl */ `
 // how far the great wave has risen (it stands a third lower when the plane arrives and rears to its full height as
 // it comes: the drawn water is never above the height field the plane flies by)
 export const FINALE_U = {
-  uRise: { value: 1 },
+  uRise: { value: 0.02 },
   // how hard the sea runs (1: as in a fresh breeze; under 1 a quiet sea, over it a storm's)
-  uSwell: { value: 1 },
+  uSwell: { value: 0.4 },
   // the end: the crest comes down over the plane (0..1)
   uCrash: { value: 0 },
   // how far the storm has come (0 gentle weather .. 1 the height of it)
