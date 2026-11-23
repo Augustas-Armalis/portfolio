@@ -318,7 +318,7 @@ export function Worlds(props: WorldProps) {
           {/* the home gate is the veil inside the cave's arch (home/journey.ts, home/Cave.tsx draw the stone) */}
           <LightGate id="home" def={WORLDS.home} look="veil" half={CAVE.half} rise={CAVE.rise} />
           {/* and the next world seen live through it, crossed into at once (portal.tsx) */}
-          <PortalWindow id="home" def={WORLDS.home} half={CAVE.half} rise={CAVE.rise} />
+          <PortalWindow id="home" def={WORLDS.home} half={CAVE.half} rise={CAVE.rise} fallback />
           {/* a small flock over the road that parts round the plane as it passes (worlds/play.tsx) */}
           {props.effects > 0.25 && <Birds flocks={HOME_FLOCKS} scatter={15} seed={11} />}
         </group>
