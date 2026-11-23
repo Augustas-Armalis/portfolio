@@ -8,7 +8,7 @@ import { ambienceListener } from "@/lib/ambience";
 import { postCtl } from "./Post";
 import { bakeHomeSolids, homeGround } from "./homeGround";
 import { useTrails } from "./PlaneTrails";
-import { gateToEntry, portalReady, portalSwap } from "./worlds/portal";
+import { carryY, gateToEntry, portalReady, portalSwap } from "./worlds/portal";
 import { arriveGolden } from "./sky";
 import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
@@ -232,6 +232,7 @@ export function Plane({
       camLiftV: 0,
       mouseWas: false,
       windowed: false, // the crossing just made was through a gate's window
+      paceW: 1, // the pace of the world that stands (WorldDef.pace)
       qFrom: new THREE.Quaternion(),
       upFrom: new THREE.Vector3(0, 1, 0),
     }),
@@ -301,7 +302,10 @@ export function Plane({
     st.camPitch = damp(st.camPitch, pitT, 2.2, dt);
     // the wheel or a pinch draws the eye in close behind the plane or out to a wide view (remembered for the visit)
     st.zoom += (zoomMem.v - st.zoom) * (1 - Math.exp(-dt * 5));
-    const dist = (1.32 + st.speed * 0.022) * st.zoom;
+    // (how far back it stands and how wide it looks go by the pace of flying, not by metres a second: a world built
+    // three times the size is flown three times as fast, and the eye should not stand off and stare for that)
+    const vc = st.speed / st.paceW;
+    const dist = (1.32 + vc * 0.022) * st.zoom;
     // the eye may be turned away from the plane's own line: it swings round the plane on the same boom
     const lw = smooth01(Math.hypot(st.lookYaw, st.lookPitch) / 0.5);
     const yawC = st.camYaw + st.lookYaw;
@@ -342,7 +346,7 @@ export function Plane({
       M4.lookAt(cam.position, st.look, cam.up);
       cam.quaternion.slerpQuaternions(st.qFrom, Q1.setFromRotationMatrix(M4), blend);
     } else cam.lookAt(st.look);
-    const fovT = Math.max(kv ? kv.fov : 0, 50 + clamp01((st.speed - SPEED.min) / (SPEED.cruise - SPEED.min)) * 16 + clamp01((st.speed - SPEED.cruise) / (SPEED.max - SPEED.cruise)) * 10);
+    const fovT = Math.max(kv ? kv.fov : 0, 50 + clamp01((vc - SPEED.min) / (SPEED.cruise - SPEED.min)) * 16 + clamp01((vc - SPEED.cruise) / (SPEED.max - SPEED.cruise)) * 10);
     st.fov += (fovT - st.fov) * (1 - Math.exp(-dt * 1.6));
     cam.fov = st.fov;
     cam.updateProjectionMatrix();
@@ -401,7 +405,17 @@ export function Plane({
     return gates.get(id) ?? null;
   };
 
+  // (into a world of another size the plane arrives already at that world's pace: the same flying, so the eye
+  // behind it has nothing to settle)
+  const repace = (id: WorldId) => {
+    const p = id === "kings" ? 1 : (WORLDS[id].pace ?? 1);
+    const k = p / st.paceW;
+    st.speed *= k;
+    st.speedT *= k;
+    st.paceW = p;
+  };
   const place = (id: WorldId, lp: THREE.Vector3, yaw: number) => {
+    repace(id);
     st.pos.copy(lp).add(originOf(id));
     st.yaw = yaw;
     st.pitch = st.roll = st.rollV = st.pitchV = st.yawR = st.yawRV = 0;
@@ -792,10 +806,16 @@ export function Plane({
       voyage.phase = "closing";
       return;
     }
+    const y0 = st.pos.y;
     st.pos.applyMatrix4(M4);
+    const yRigid = st.pos.y;
+    st.pos.y = carryY(y0);
+    repace(to);
     st.yaw += turn;
     st.camYaw += turn;
-    trails.carry(M4);
+    // (the mist goes with it; where the height was brought in toward the entry's it begins afresh instead of hanging apart from the wings)
+    if (Math.abs(st.pos.y - yRigid) < 0.3) trails.carry(M4);
+    else trails.reset();
     voyage.next = null;
     voyage.quick = true;
     swapWorld(to);
@@ -843,6 +863,7 @@ export function Plane({
     st.gateWait = 0;
       st.fov = cam.fov;
       st.qFrom.copy(cam.quaternion);
+      st.paceW = 1;
       st.nearOn = false;
       st.camLift = st.camLiftV = 0;
       st.camFrom.copy(cam.position);

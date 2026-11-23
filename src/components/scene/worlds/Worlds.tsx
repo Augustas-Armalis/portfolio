@@ -176,7 +176,9 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
     if (j.id !== next) {
       // let the world just arrived in settle (and the first moments of take-off pass) before any work is done
       if (j.since === 0) j.since = now;
-      if (now - j.since < 2500) return;
+      // (from home it begins as soon as the plane is clear of the desk: the first gate must always find its world
+      // ready, and the first crossing be through the window)
+      if (now - j.since < (cur === "home" ? 1200 : 2500)) return;
       // (development: window.__noWarm = true flies the old way, every world made under the cloud, for comparing)
       if (process.env.NODE_ENV !== "production" && (window as unknown as { __noWarm?: boolean }).__noWarm) return;
       if (PREPARE[next] && j.prepFor !== next) {
@@ -218,24 +220,29 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
     // give the driver a moment to finish compiling before anything is drawn with those shaders
     if (++j.wait < 24) return;
     if (j.drawn < j.list.length) {
-      const o = j.list[j.drawn++];
-      if (lit(o) || !o.parent) return;
-      // one pixel is enough to upload its buffers and textures
-      const fc = o.frustumCulled;
-      const ac = gl.autoClear;
-      o.frustumCulled = false;
-      gl.autoClear = false;
-      if (rt) {
-        const st = rt.scissorTest;
-        const sc = rt.scissor.clone();
-        rt.scissorTest = true;
-        rt.scissor.set(0, 0, 1, 1);
-        into(rt, () => gl.render(o, camera));
-        rt.scissorTest = st;
-        rt.scissor.copy(sc);
-      } else into(tiny, () => gl.render(o, camera));
-      gl.autoClear = ac;
-      o.frustumCulled = fc;
+      // (as many a frame as fit in three milliseconds, not one a frame: a world of four hundred things took four
+      // hundred frames, and a brisk flight from home could reach the gate first. One slow thing ends the frame's share.)
+      const t = performance.now();
+      while (j.drawn < j.list.length && performance.now() - t < 3) {
+        const o = j.list[j.drawn++];
+        if (lit(o) || !o.parent) continue;
+        // one pixel is enough to upload its buffers and textures
+        const fc = o.frustumCulled;
+        const ac = gl.autoClear;
+        o.frustumCulled = false;
+        gl.autoClear = false;
+        if (rt) {
+          const st = rt.scissorTest;
+          const sc = rt.scissor.clone();
+          rt.scissorTest = true;
+          rt.scissor.set(0, 0, 1, 1);
+          into(rt, () => gl.render(o, camera));
+          rt.scissorTest = st;
+          rt.scissor.copy(sc);
+        } else into(tiny, () => gl.render(o, camera));
+        gl.autoClear = ac;
+        o.frustumCulled = fc;
+      }
       return;
     }
     voyage.ready = next;
@@ -311,7 +318,7 @@ export function Worlds(props: WorldProps) {
           {/* the home gate is the veil inside the cave's arch (home/journey.ts, home/Cave.tsx draw the stone) */}
           <LightGate id="home" def={WORLDS.home} look="veil" half={CAVE.half} rise={CAVE.rise} />
           {/* and the next world seen live through it, crossed into at once (portal.tsx) */}
-          <PortalWindow id="home" def={WORLDS.home} half={CAVE.half} rise={CAVE.rise} />
+          <PortalWindow id="home" def={WORLDS.home} half={CAVE.half} rise={CAVE.rise} fallback />
           {/* a small flock over the road that parts round the plane as it passes (worlds/play.tsx) */}
           {props.effects > 0.25 && <Birds flocks={HOME_FLOCKS} scatter={15} seed={11} />}
         </group>

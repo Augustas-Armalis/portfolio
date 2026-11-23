@@ -2219,6 +2219,11 @@ export default function Room({
         camera={{ fov: RIG[isMobile ? "mobile" : "desktop"].fov, near: 0.01, far: 12000, position: [0, 1.2, 2.2] }}
         gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
         onCreated={({ gl }) => {
+          // Outside development three is not asked to check every program it makes (the link status and three info
+          // logs each): every one of those is a round trip to the GPU process that waits for it, and with some two
+          // hundred programs they were most of the longest task behind the loader. A broken shader would be found in
+          // development, where the checks stay on.
+          gl.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 0.9;
         }}

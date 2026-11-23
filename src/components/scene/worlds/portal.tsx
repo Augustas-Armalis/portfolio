@@ -39,6 +39,12 @@ const state = { next: null as WorldId | null, k: 0, fresh: 0, tick: 0 };
 
 const E = new THREE.Vector3();
 const G = new THREE.Vector3();
+// How high above or below the gate's middle a thing was, as it is carried to the entry: kept within a few metres
+// of the entry's own height (a gate taken at its foot, or one that stands far above its world, would otherwise set
+// the plane down at the water's edge to climb back to its way). The window's eye is carried by the same rule, so
+// what is seen through the gate is still exactly what is flown into.
+export const carried = { gateY: 0, entryY: 0 };
+export const carryY = (y: number) => carried.entryY + THREE.MathUtils.clamp(y - carried.gateY, -5, 9);
 const M1 = new THREE.Matrix4();
 const M2 = new THREE.Matrix4();
 export function gateToEntry(from: WorldId, to: WorldId, out: THREE.Matrix4): number | null {
@@ -48,6 +54,8 @@ export function gateToEntry(from: WorldId, to: WorldId, out: THREE.Matrix4): num
   G.copy(g.pos).add(originOf(from));
   E.copy(e.pos).add(originOf(to));
   const turn = e.yaw - g.yaw;
+  carried.gateY = G.y;
+  carried.entryY = E.y;
   // p' = E + R(turn) (p - G)
   out.makeTranslation(E.x, E.y, E.z).multiply(M1.makeRotationY(turn)).multiply(M2.makeTranslation(-G.x, -G.y, -G.z));
   return turn;
@@ -158,6 +166,8 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     cam.updateMatrixWorld();
     pc.matrixWorld.multiplyMatrices(rig.m, cam.matrixWorld);
     pc.matrixWorld.decompose(pc.position, pc.quaternion, rig.scale);
+    pc.position.y = carryY(cam.position.y);
+    pc.matrixWorld.compose(pc.position, pc.quaternion, rig.scale);
     pc.matrixAutoUpdate = false;
     pc.matrix.copy(pc.matrixWorld);
     pc.matrixWorldInverse.copy(pc.matrixWorld).invert();
