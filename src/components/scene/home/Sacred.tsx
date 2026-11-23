@@ -336,12 +336,15 @@ function buildFarm() {
   const b = new TB();
   const r = rng(707);
   const F = FARMSTEAD;
+  // (the houses' window frames and door lamps go to a builder of their own: the town's are not to be written into)
+  const det = new TB();
+  const lamps: number[][] = [];
   const WOOD: V3 = [0.22, 0.17, 0.12];
   const THATCH: V3 = [0.3, 0.25, 0.14];
   // the dwelling house, the barn across the yard, the granary (klėtis) raised on stones with its porch
-  house(b, F.x, F.z, 0.3, 11, 7, 3.0, { roof: "thatch", wall: "logs", accent: 0, porch: true, chimney: true, horses: true });
-  house(b, F.x + 4, F.z - 22, 0.3 + Math.PI, 16, 9, 4.2, { roof: "thatch", wall: "grey", accent: 1, porch: false, chimney: false, horses: false });
-  house(b, F.x - 16, F.z - 9, 0.3 + Math.PI / 2, 6, 5, 2.6, { roof: "shingle", wall: "logs", accent: 2, porch: true, chimney: false, horses: true });
+  house(b, F.x, F.z, 0.3, 11, 7, 3.0, { roof: "thatch", wall: "logs", accent: 0, porch: true, chimney: true, horses: true }, det, lamps);
+  house(b, F.x + 4, F.z - 22, 0.3 + Math.PI, 16, 9, 4.2, { roof: "thatch", wall: "grey", accent: 1, porch: false, chimney: false, horses: false }, det, lamps);
+  house(b, F.x - 16, F.z - 9, 0.3 + Math.PI / 2, 6, 5, 2.6, { roof: "shingle", wall: "logs", accent: 2, porch: true, chimney: false, horses: true }, det, lamps);
   // the well with its sweep
   const wx = F.x + 9;
   const wz = F.z - 10;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
@@ -205,11 +205,11 @@ function windowsOn(b: TB, x0: number, z0: number, x1: number, z1: number, win: n
     const bq = at(u + hu, v - hv, o1);
     const c = at(u + hu, v + hv, o1);
     const d = at(u - hu, v + hv, o1);
-    DET.quad(a, bq, c, d, col, m);
-    DET.quad(at(u - hu, v + hv, o0), d, c, at(u + hu, v + hv, o0), col, m);
-    DET.quad(at(u - hu, v - hv, o0), at(u + hu, v - hv, o0), bq, a, col, m);
-    DET.quad(at(u - hu, v - hv, o0), a, d, at(u - hu, v + hv, o0), col, m);
-    DET.quad(at(u + hu, v - hv, o0), at(u + hu, v + hv, o0), c, bq, col, m);
+    b.quad(a, bq, c, d, col, m);
+    b.quad(at(u - hu, v + hv, o0), d, c, at(u + hu, v + hv, o0), col, m);
+    b.quad(at(u - hu, v - hv, o0), at(u + hu, v - hv, o0), bq, a, col, m);
+    b.quad(at(u - hu, v - hv, o0), a, d, at(u - hu, v + hv, o0), col, m);
+    b.quad(at(u + hu, v - hv, o0), at(u + hu, v + hv, o0), c, bq, col, m);
   };
   for (let i = 0; i < n; i++) {
     const u = first + i * win;
@@ -222,7 +222,7 @@ function windowsOn(b: TB, x0: number, z0: number, x1: number, z1: number, win: n
     slab(u, v - 0.74, 0.62, 0.035, 0, 0.17, WHITE, K.trim);
     slab(u, v + 0.8, 0.64, 0.09, 0, 0.12, WHITE, K.trim);
     const top = at(u, v + 1.12, 0.06);
-    DET.tri(at(u - 0.6, v + 0.89, 0.06), at(u + 0.6, v + 0.89, 0.06), top, WHITE, [K.trim, 0, 0, 0], [[0, 0], [1.2, 0], [0.6, 0.23]]);
+    b.tri(at(u - 0.6, v + 0.89, 0.06), at(u + 0.6, v + 0.89, 0.06), top, WHITE, [K.trim, 0, 0, 0], [[0, 0], [1.2, 0], [0.6, 0.23]]);
     // the shutters, open, in the house's colour
     if (!one) for (const s of [-1, 1]) slab(u + s * 0.79, v, 0.23, 0.6, 0.02, 0.07, ACCENT[accent % 4], K.boards);
   }
@@ -252,7 +252,7 @@ function footRange(b: TB, hx: number, hz: number) {
 
 // A wooden house: its long side L along local x, depth D along z (front at +z), walls `h` high, a steep gabled roof.
 type HouseOpt = { roof: "shingle" | "thatch" | "tile"; wall: "logs" | "painted" | "grey"; accent: number; porch: boolean; chimney: boolean; horses: boolean; storey?: number };
-export function house(b: TB, x: number, z: number, rot: number, L: number, D: number, h: number, o: HouseOpt) {
+export function house(b: TB, x: number, z: number, rot: number, L: number, D: number, h: number, o: HouseOpt, det: TB = DET, lamps: number[][] = LAMPS) {
   b.at(x, 0, z, rot);
   const hx = L / 2;
   const hz = D / 2;
@@ -272,25 +272,25 @@ export function house(b: TB, x: number, z: number, rot: number, L: number, D: nu
   b.wall(hx, -hz, -hx, -hz, 0, H, wallCol, wk, 2.9, o.accent);
   b.wall(hx, hz, hx, -hz, 0, H, wallCol, wk, D > 6.5 ? 2.6 : 99, o.accent);
   b.wall(-hx, -hz, -hx, hz, 0, H, wallCol, wk, 99, o.accent);
-  DET.at(x, floor, z, rot);
-  windowsOn(DET, -hx, hz, hx, hz, 2.4, o.accent);
-  windowsOn(DET, hx, -hz, -hx, -hz, 2.9, o.accent);
-  windowsOn(DET, hx, hz, hx, -hz, D > 6.5 ? 2.6 : 99, o.accent);
-  windowsOn(DET, -hx, -hz, -hx, hz, 99, o.accent);
+  det.at(x, floor, z, rot);
+  windowsOn(det, -hx, hz, hx, hz, 2.4, o.accent);
+  windowsOn(det, hx, -hz, -hx, -hz, 2.9, o.accent);
+  windowsOn(det, hx, hz, hx, -hz, D > 6.5 ? 2.6 : 99, o.accent);
+  windowsOn(det, -hx, -hz, -hx, hz, 99, o.accent);
   // the ridge board, and under the eaves at each gable a pair of carved brackets
-  DET.box(0, H + D * (o.roof === "thatch" ? 0.8 : 0.7) + 0.06, 0, L + (o.roof === "thatch" ? 1.5 : 1.0), 0.14, 0.22, o.roof === "thatch" ? [0.22, 0.18, 0.1] : DARK, K.boards);
+  det.box(0, H + D * (o.roof === "thatch" ? 0.8 : 0.7) + 0.06, 0, L + (o.roof === "thatch" ? 1.5 : 1.0), 0.14, 0.22, o.roof === "thatch" ? [0.22, 0.18, 0.1] : DARK, K.boards);
   // a door in the front, with its frame, a step and a lamp beside it (kindled as the plane goes by, lit after dusk)
   if (!o.porch) {
     const du = hx * 0.45;
-    DET.box(du, 1.05, hz + 0.05, 1.1, 2.1, 0.08, [0.16, 0.1, 0.06], K.boards);
-    DET.box(du, 2.18, hz + 0.08, 1.35, 0.14, 0.14, WHITE, K.trim);
-    for (const s of [-1, 1]) DET.box(du + s * 0.62, 1.05, hz + 0.08, 0.12, 2.15, 0.14, WHITE, K.trim);
-    DET.box(du, -0.12, hz + 0.45, 1.5, 0.3, 0.8, STONE, K.stone);
+    det.box(du, 1.05, hz + 0.05, 1.1, 2.1, 0.08, [0.16, 0.1, 0.06], K.boards);
+    det.box(du, 2.18, hz + 0.08, 1.35, 0.14, 0.14, WHITE, K.trim);
+    for (const s of [-1, 1]) det.box(du + s * 0.62, 1.05, hz + 0.08, 0.12, 2.15, 0.14, WHITE, K.trim);
+    det.box(du, -0.12, hz + 0.45, 1.5, 0.3, 0.8, STONE, K.stone);
     if (o.accent !== 1) {
-      DET.box(du + 0.95, 2.05, hz + 0.18, 0.22, 0.3, 0.22, [1.0, 0.72, 0.36], K.lamp);
-      DET.box(du + 0.95, 2.25, hz + 0.18, 0.3, 0.08, 0.3, DARK);
-      const p = DET.w([du + 0.95, 2.05, hz + 0.3]);
-      LAMPS.push([...p, 0.45, p[0] + 24]);
+      det.box(du + 0.95, 2.05, hz + 0.18, 0.22, 0.3, 0.22, [1.0, 0.72, 0.36], K.lamp);
+      det.box(du + 0.95, 2.25, hz + 0.18, 0.3, 0.08, 0.3, DARK);
+      const p = det.w([du + 0.95, 2.05, hz + 0.3]);
+      lamps.push([...p, 0.45, p[0] + 24]);
       // (the glass kindles with the plane's progress: its key is in the lamp's own aMat.y)
     }
   }
@@ -415,7 +415,7 @@ function boat(b: TB, x: number, z: number, rot: number) {
 const BRIDGE_X = -258;
 const MILL_X = -132;
 
-function buildTown() {
+function* buildTownSteps() {
   const b = new TB();
   DET = new TB();
   LAMPS = [];
@@ -442,6 +442,7 @@ function buildTown() {
   take(SQUARE.x, SQUARE.z, 19);
   take(CHURCH.x, CHURCH.z, 17);
 
+  yield;
   // ----- the castle on the hill (as Trakai's or Kaunas's): an irregular ring of red-brick wall following the hill's
   // head, towers of different heights round it (round ones with tall cones, a square gate tower), the tall round keep
   // with a turret beside it, a small white chapel with its own spire, pennants on the points, warm slit windows
@@ -523,8 +524,10 @@ function buildTown() {
     smoke.push([...b.w([5, 14.5, 3]), 1]);
   }
 
+  yield;
   // ----- the houses climbing the hill: loosely, as a town grows, each turned to the view down the slope -----
   for (let tries = 0; tries < 1100; tries++) {
+    if (tries % 40 === 39) yield;
     const a = r() * Math.PI * 2;
     const rad = HILL.top + 5 + Math.pow(r(), 0.8) * (HILL.foot - HILL.top - 9);
     // the back of the hill, toward the forest, is left to its trees
@@ -560,6 +563,7 @@ function buildTown() {
   }
   // the gardens in between: fruit trees, birches, bushes
   for (let tries = 0; tries < 520; tries++) {
+    if (tries % 80 === 79) yield;
     const a = r() * Math.PI * 2;
     const rad = HILL.top + 3 + r() * (HILL.foot - HILL.top - 4);
     const ra = Math.abs(((a - hillRoadA(rad) + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * rad;
@@ -572,10 +576,12 @@ function buildTown() {
     gardens.push([gx, gz, u < 0.5 ? "broad" : u < 0.8 ? "birch" : "bush", 0.48 + r() * 0.32]);
   }
 
+  yield;
   // ----- the quays: houses along both banks, a street between them and the water -----
   for (const side of [-1, 1]) {
     let x = -168 - r() * 6;
     while (x > -324) {
+      yield;
       const L = 8 + r() * 5;
       const D = 6 + r() * 1.5;
       const gableOn = r() < 0.45;
@@ -624,6 +630,7 @@ function buildTown() {
     }
   }
 
+  yield;
   // ----- the market square: houses round it, a well with a sweep, stalls, lanterns -----
   {
     const f = frame(SQUARE.x);
@@ -678,6 +685,7 @@ function buildTown() {
     }
   }
 
+  yield;
   // ----- the white wooden church on the south bank: nave, apse, tower with a stepped cap -----
   {
     const rot = Math.atan2(SQUARE.x - CHURCH.x, SQUARE.z - CHURCH.z);
@@ -722,6 +730,7 @@ function buildTown() {
     lamps.push([...b.w([0, 3.2, 16.0]), 0.6, CHURCH.x + 40]);
   }
 
+  yield;
   // ----- the footbridge: an arched wooden deck on trestles, railings, a lantern at each end -----
   {
     const x = BRIDGE_X;
@@ -757,6 +766,7 @@ function buildTown() {
     }
   }
 
+  yield;
   // ----- the mill at the rapids, on the north bank; its wheel stands in the stream (it turns: see Town) -----
   const f = frame(MILL_X);
   const w = riverW(MILL_X);
@@ -766,6 +776,7 @@ function buildTown() {
   const [wx, wz] = bankPt(MILL_X, -1, w - 0.8);
   const mill = { x: wx, y: riverWL(MILL_X) + 1.5, z: wz, rot: Math.atan2(f.ax, f.az) };
 
+  yield;
   // ----- roofed pole shrines: where the town begins, by the square, at the forest's edge, at the far quay -----
   {
     const [ax, az] = bankPt(-168, 1, riverW(-168) + 8);
@@ -776,6 +787,7 @@ function buildTown() {
     shrine(b, bx, bz, 1.0, lamps);
   }
 
+  yield;
   // ----- boats moored along the quays -----
   for (const [x, side] of [
     [-196, 1],
@@ -788,6 +800,7 @@ function buildTown() {
     boat(b, bx, bz, Math.atan2(ff.ax, ff.az) + (r() - 0.5) * 0.2);
   }
 
+  yield;
   // ----- storks: a nest on a tall pole in the meadow by the mill, and on a few chimneys -----
   {
     const [px, pz] = bankPt(-150, 1, riverW(-150) + 16);
@@ -1200,11 +1213,39 @@ function makeGardens(list: [number, number, TreeKind, number][], mobile: boolean
   return { meshes, mat, leaves, farMat, cards };
 }
 
+type Built = ReturnType<typeof buildTownSteps> extends Generator<unknown, infer R, unknown> ? R : never;
+
+// The town is built a few milliseconds at a time (a step of the builder per slice, the slices handed out by the
+// browser's own timer), so making it never holds a frame: behind the loader it is long done before the world is
+// shown, and on a slow phone it simply takes a few more slices.
 export function Town({ mobile = false }: { mobile?: boolean }) {
-  const t = useMemo(() => {
-    const built = timed("town", buildTown);
-    return { ...built, mat: makeTownMaterial(), halos: makeHalos(built.lamps), smoke: makeSmoke(built.smoke), storks: makeStorks(), wheel: makeWheel(), garden: makeGardens(built.gardens, mobile) };
-  }, [mobile]);
+  const [built, setBuilt] = useState<Built | null>(null);
+  useEffect(() => {
+    let dead = false;
+    const it = buildTownSteps();
+    let spent = 0;
+    const slice = () => {
+      if (dead) return;
+      const t0 = performance.now();
+      let r = it.next();
+      while (!r.done && performance.now() - t0 < 5) r = it.next();
+      spent += performance.now() - t0;
+      if (r.done) {
+        const g = ((globalThis as unknown as { __gen?: Record<string, number> }).__gen ??= {});
+        g.town = Math.round(spent * 10) / 10;
+        setBuilt(r.value);
+      } else window.setTimeout(slice, 0);
+    };
+    slice();
+    return () => {
+      dead = true;
+    };
+  }, []);
+  return built ? <TownBuilt built={built} mobile={mobile} /> : null;
+}
+
+function TownBuilt({ built, mobile }: { built: Built; mobile: boolean }) {
+  const t = useMemo(() => ({ ...built, mat: makeTownMaterial(), halos: makeHalos(built.lamps), smoke: makeSmoke(built.smoke), storks: makeStorks(), wheel: makeWheel(), garden: makeGardens(built.gardens, mobile) }), [built, mobile]);
   useEffect(
     () => () => {
       for (const x of [t.geo, t.det, t.mat, t.halos.g, t.halos.m, t.smoke.g, t.smoke.m, t.storks.g, t.storks.m, t.storks.geo, t.wheel, t.garden.mat, t.garden.farMat, t.garden.cards.geometry]) x.dispose();
