@@ -1416,7 +1416,7 @@ function Scene({
     const at = introAt.current;
     const mist = instant || (at !== null && now - at > ARR) ? 0 : cloudMist(cam.position.y);
     // (and in the journey's forest, its fog: so the gate's veil and the path of light go into it with the land)
-    SKY_U.uMist.value = Math.max(mist, voyage.mist, FOREST_K.fog.value * 0.019);
+    SKY_U.uMist.value = Math.max(mist, voyage.mist, FOREST_K.fog.value * 0.006);
     // The lens's near plane. A centimetre at the desk (things there are looked at from a hand's breadth), but with a
     // centimetre the depth a kilometre off is good to no better than six metres: seen from the sky, the mountains'
     // feet, the far woods and the sea all flickered against the land under them. So it moves out with the eye's

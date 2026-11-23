@@ -42,6 +42,7 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     () => () => {
       HOME_U.uAirK.value.x = AIR0;
       HOME_U.uFogGlow.value.w = 0;
+      HOME_U.uFogLayer.value.y = 0.006;
       if (voyage.skyMod === mod) voyage.skyMod = null;
     },
     [],
@@ -115,9 +116,14 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     // moon, thick enough that the trunks fade within a few tens of metres; it lifts before the mountain
     const town = THREE.MathUtils.smoothstep(f, marks.town - 0.1, marks.town) * (1 - THREE.MathUtils.smoothstep(f, marks.forest - 0.04, marks.forest + 0.02));
     if (voyage.cur === "home") {
-      HOME_U.uAirK.value.x = AIR0 + 0.0022 * town + 0.004 * fog;
-      HOME_U.uFogGlow.value.w = 0.78 * fog;
-    } else HOME_U.uFogGlow.value.w = 0;
+      HOME_U.uAirK.value.x = AIR0 + 0.0022 * town + 0.0012 * fog;
+      HOME_U.uFogGlow.value.w = 0.55 * fog;
+      // (the woods' mist: always a little, thick in the old forest at night)
+      HOME_U.uFogLayer.value.y = 0.006 + 0.034 * fog;
+    } else {
+      HOME_U.uFogGlow.value.w = 0;
+      HOME_U.uFogLayer.value.y = 0.006;
+    }
   });
   return (
     <group ref={(g) => { if (g && process.env.NODE_ENV !== "production") Object.assign(window, { __journey: g }); }}>

@@ -181,7 +181,7 @@ export function makeLandMaterial() {
           float px = abs(p.x - pathX(p.y)) / pw;
           float n2 = vnoise(p * 0.9);
           // (northward it goes only as far as where the paths part: the main path turns left to the town there)
-          float along = p.y > 0.0 ? smoothstep(2.0, 14.0, c0p) : 1.0 - smoothstep(9.0, 14.0, -p.y);
+          float along = p.y > 0.0 ? smoothstep(2.0, 14.0, c0p) : 1.0 - smoothstep(1.0, 3.0, -p.y);
           onPath = (1.0 - smoothstep(0.42 + n2 * 0.3, 1.02 + n2 * 0.34, px)) * along;
           float fine = vnoise(p * 9.0) * 0.6 + vnoise(p * 31.0) * 0.4;
           vec3 earth = vec3(0.37, 0.32, 0.235) * (0.9 + 0.2 * fine);

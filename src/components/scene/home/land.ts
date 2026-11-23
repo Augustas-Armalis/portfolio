@@ -234,6 +234,8 @@ export const HOME_U = {
   uAirK: { value: new THREE.Vector4(0.00125, 0.0045, 0.56, 0) },
   // a mist the air itself glows toward (rgb, how much): the journey's forest at night is moonlit fog, not darkness
   uFogGlow: { value: new THREE.Vector4(0.1, 0.13, 0.17, 0) },
+  // mist that lies in the woods only, under the treetops: its top (y, m), its density there (per m)
+  uFogLayer: { value: new THREE.Vector4(26, 0.006, 0, 0) },
 };
 
 // The air of the home world: haze that lies in the low land and thins with
@@ -242,13 +244,20 @@ export const HOME_U = {
 // of it are nothing; a kilometre of it is the sky. And the shade of the
 // clouds, which drift over all of it.
 export const GLSL_HOME_AIR = /* glsl */ `
-uniform sampler2D uForestMap; uniform sampler2D uCrownMap; uniform sampler2D uCloudTex; uniform vec4 uAirK; uniform vec4 uFogGlow;
+uniform sampler2D uForestMap; uniform sampler2D uCrownMap; uniform sampler2D uCloudTex; uniform vec4 uAirK; uniform vec4 uFogGlow; uniform vec4 uFogLayer;
+float forestAt(vec2 p);
 float homeAirAmt(vec3 wpos){
   vec3 dv = wpos - cameraPosition; float dist = length(dv);
   float b = uAirK.y;
   float t = dv.y * b;
   float integ = abs(t) > 0.0005 ? (1.0 - exp(-t)) / t : 1.0;
   float od = dist * (uAirK.x * exp(-max(cameraPosition.y, 0.0) * b) * integ + uAirK.x * 0.06 + uMist);
+  // the woods' own mist: only along the part of the ray that runs under the treetops, and only in a wood
+  float lo = min(cameraPosition.y, wpos.y);
+  float hi = max(cameraPosition.y, wpos.y);
+  float under = hi <= uFogLayer.x ? 1.0 : (lo >= uFogLayer.x ? 0.0 : (uFogLayer.x - lo) / max(hi - lo, 0.001));
+  float wood = max(smoothstep(0.25, 0.7, forestAt(wpos.xz)), smoothstep(0.25, 0.7, forestAt(cameraPosition.xz)) * 0.85);
+  od += dist * under * uFogLayer.y * wood;
   return clamp(1.0 - exp(-od), 0.0, 1.0);
 }
 // (looked down into from above, the air is not the horizon's own blaze but something cooler and quieter)

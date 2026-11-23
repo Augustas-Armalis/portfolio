@@ -482,7 +482,12 @@ function makeStoneMaterial() {
         float spill = exp(-max(length(L.xy - vec2(0.0, 14.0)) - 18.0, 0.0) / 8.0) * smoothstep(-14.0, 0.0, L.z) * (1.0 - inside);
         float ndl = max(dot(n, uKeyDir), 0.0);
         vec3 sky = (uSkyCol * (0.6 + 0.4 * n.y) + uKeyCol * ndl * 0.9 * sunUp * cloudShade(vWorld)) * (1.0 - inside * 0.85);
-        vec3 col = alb * (sky + uLead * (portal * inside + spill * 0.35 * (0.4 + night)));
+        // inside: the portal's warm light spills along the floor and up the walls toward the mouth, and a dim cool
+        // light comes down from cracks in the roof (brighter in patches, on what faces up), so the rock reads as rock
+        float crack = 0.35 + 0.65 * smoothstep(0.62, 0.82, vnoise(vec2(L.x * 0.09, L.z * 0.05) + 3.7));
+        vec3 cool = vec3(0.32, 0.4, 0.55) * 0.55 * crack * (0.45 + 0.55 * max(n.y, 0.0));
+        float spillIn = (0.35 + 0.65 * smoothstep(-2.0, ${CAVE.gateIn.toFixed(1)}, L.z)) * (0.6 + 0.4 * max(n.y, 0.0));
+        vec3 col = alb * (sky + uLead * (portal * 1.6 * inside + spillIn * 0.55 * inside + spill * 0.35 * (0.4 + night)) + cool * inside);
         // the far end of the cave: the light itself, soft
         if (kind > 5.5) col = uLead * 1.6;
         // a sheen on wet rock where it faces the light

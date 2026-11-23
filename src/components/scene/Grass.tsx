@@ -131,7 +131,7 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
       uInnerOn: { value: 0 },
       uWalkOn: { value: 0 },
       // (the old straight road north is bare only as far as the paths part: beyond it the meadow has taken it back)
-      uRoadEnd: { value: -12 },
+      uRoadEnd: { value: -2 },
       ...SKY_U,
       ...HOME_U,
       uWind: { value: 1 },
@@ -581,6 +581,7 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
         ${GLSL_LAND}
         ${GLSL_HOME_AIR}
         ${GLSL_FIELD}
+        ${GLSL_PATHS}
         void main(){
           const float T = ${FLOWER_TILE.toFixed(1)};
           vec2 root = mod(aOffset.xy - uCenter + T * 0.5, T) - T * 0.5 + uCenter;
@@ -593,6 +594,8 @@ export function Flowers({ mobile, wind }: { mobile: boolean; wind: number; fogDe
           float lk = hLakeK(root);
           keep *= smoothstep(1.06, 1.2, lk) * step(${(-0.0).toFixed(1)}, gy + 0.2) * smoothstep(60.0, 110.0, inland(root));
           keep *= 1.0 - smoothstep(0.35, 0.7, forestAt(root));
+          vec2 fpath = homePaths(root);
+          keep *= (1.0 - smoothstep(0.1, 0.4, fpath.x + fpath.y)) * (1.0 - townStreet(root)) * (1.0 - forestTrack(root)) * (1.0 - fieldPlot(root).z) * (1.0 - (1.0 - smoothstep(0.9, 1.4, abs(root.x - pathX(root.y)) / pathW(root.y))) * step(-12.0, root.y) * step(root.y, 60.0));
           // not on the path, not through the desk
           keep *= smoothstep(0.9, 1.3, abs(root.x - pathX(root.y)) / pathW(root.y));
           keep *= 1.0 - (1.0 - step(0.78, abs(root.x))) * (1.0 - step(0.42, abs(root.y)));

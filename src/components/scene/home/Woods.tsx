@@ -8,7 +8,7 @@ import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { voyage } from "../worlds/voyage";
 import { farBlock, makeFarMaterial, makeHomeTreeMaterial } from "./Forest";
-import { FOREST_LINE, HILL, laneD, sst } from "./journey";
+import { FOREST_LINE, HILL, laneD, riverD, riverW, sst } from "./journey";
 import { GLSL_HOME_AIR, HOME_U, PLACES, landH, rng, type HomeTree, type TreeKind } from "./land";
 import { buildTree, makeFarTreeTexture, makeLeafTexture } from "./trees";
 
@@ -73,6 +73,8 @@ function plant(amount: number) {
       if (Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z) < 14) continue;
       if (Math.hypot(x - DEER.x, z - DEER.z) < 9) continue;
       if (OWLS.some((o) => Math.hypot(x - o.x, z - o.z) < 4)) continue;
+      // (none in the river, nor on its banks)
+      if (riverD(x, z) < riverW(x) + 3.5) continue;
       if (u > (d < 26 ? 0.85 : 0.75)) continue;
       // by the lane only pines (their crowns are carried high: the plane flies under them), further in oaks and spruce
       const kind: TreeKind = d < 14 ? "pine" : k < 0.5 ? "pine" : k < 0.74 ? "spruce" : k < 0.97 ? "broad" : "birch";
