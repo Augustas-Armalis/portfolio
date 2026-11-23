@@ -591,18 +591,19 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [-100, 0],
     radius: 1050,
     ceil: 300,
-    entry: { x: -770, z: 660, above: 26, yaw: 0 },
+    entry: { x: -1040, z: 150, above: 30, yaw: -1.39 },
     gate: { x: 0, z: 111, above: 131, yaw: Math.PI },
-    // in over the sea to the sand, round the isle along the shore with the meadow on the right, then inland and
-    // straight up the great flight to the court, over its pool, and out through the portal in the colonnade's far side
+    // in over the sea straight at the isle, the whole mount ahead with its terraces and falling water; then left
+    // along the shore with the meadow on the right, inland, and straight up the great flight to the court, over
+    // its pool, and out through the portal in the colonnade's far side
     path: [
-      [-770, 660, 26],
-      [-764, 520, 22],
-      [-744, 380, 18],
-      [-712, 250, 15],
-      [-672, 130, 14],
-      [-640, 0, 13],
-      [-627, -127, 13],
+      [-1040, 150, 30],
+      [-940, 132, 26],
+      [-850, 104, 21],
+      [-770, 56, 17],
+      [-705, -14, 14],
+      [-655, -95, 13],
+      [-616, -175, 13],
       [-589, -249, 13],
       [-528, -361, 13],
       [-446, -459, 13],
@@ -624,9 +625,11 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     obstacles: [
       { x: 0, z: 0, r: 520, h: 5 },
       { x: 0, z: 0, r: 475, h: 20 },
+      { x: 0, z: 0, r: 446, h: 44 },
       { x: 0, z: 0, r: 430, h: 36 },
       { x: 0, z: 0, r: 385, h: 52 },
       { x: 0, z: 0, r: 340, h: 68 },
+      { x: 0, z: 0, r: 338, h: 82 },
       { x: 0, z: 0, r: 295, h: 84 },
       { x: 0, z: 0, r: 250, h: 100 },
       { x: 0, z: 0, r: 205, h: 114 },
@@ -638,7 +641,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -19, z: 111, r: 4, h: 166 },
       { x: 19, z: 111, r: 4, h: 166 },
     ],
-    canvases: [{ painting: "paradise", x: -622, z: 196, yaw: -1.0 }],
+    canvases: [{ painting: "paradise", x: -668, z: 54, yaw: -1.67 }],
   },
   gate: {
     id: "gate",
