@@ -88,7 +88,9 @@ function inDoor(x: number, z: number) {
   const rz = z - CAVE.z;
   const along = -Math.sin(CAVE.yaw) * rx - Math.cos(CAVE.yaw) * rz; // > 0: into the mountain
   const side = Math.cos(CAVE.yaw) * rx - Math.sin(CAVE.yaw) * rz;
-  return along > -170 && along < 140 && Math.abs(side) < CAVE.half + 10 + Math.max(0, -along) * 0.25;
+  // (and straight on through the mountain behind it: a plane flying fast reads the land far ahead, and must not climb
+  // over the mountain it is about to fly into)
+  return along > -170 && along < 700 && Math.abs(side) < CAVE.half + 10 + Math.max(0, -along) * 0.25;
 }
 
 // the ranges' height at a point (far below everything where there is none)

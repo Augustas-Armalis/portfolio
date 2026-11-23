@@ -8,7 +8,7 @@ import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { voyage } from "../worlds/voyage";
 import { farBlock, makeFarMaterial, makeHomeTreeMaterial } from "./Forest";
-import { FOREST_LINE, HILL, laneD, sst } from "./journey";
+import { FOREST_LINE, HILL, laneD, riverD, riverW, sst } from "./journey";
 import { GLSL_HOME_AIR, HOME_U, PLACES, landH, rng, type HomeTree, type TreeKind } from "./land";
 import { buildTree, makeFarTreeTexture, makeLeafTexture } from "./trees";
 
@@ -58,7 +58,7 @@ type WTree = { x: number; z: number; kind: TreeKind; s: number; rich: boolean; c
 function plant(amount: number) {
   const r = rng(6021);
   const out: WTree[] = [];
-  const cell = 4.1 / Math.sqrt(Math.max(0.5, amount));
+  const cell = 5.4 / Math.sqrt(Math.max(0.5, amount));
   for (let gx = -470; gx < -220; gx += cell)
     for (let gz = -680; gz < -160; gz += cell) {
       const x = gx + r() * cell;
@@ -73,7 +73,9 @@ function plant(amount: number) {
       if (Math.hypot(x - PLACES.tower.x, z - PLACES.tower.z) < 14) continue;
       if (Math.hypot(x - DEER.x, z - DEER.z) < 9) continue;
       if (OWLS.some((o) => Math.hypot(x - o.x, z - o.z) < 4)) continue;
-      if (u > (d < 26 ? 0.9 : 0.86)) continue;
+      // (none in the river, nor on its banks)
+      if (riverD(x, z) < riverW(x) + 3.5) continue;
+      if (u > (d < 26 ? 0.85 : 0.75)) continue;
       // by the lane only pines (their crowns are carried high: the plane flies under them), further in oaks and spruce
       const kind: TreeKind = d < 14 ? "pine" : k < 0.5 ? "pine" : k < 0.74 ? "spruce" : k < 0.97 ? "broad" : "birch";
       const s = kind === "pine" ? 1.6 + v * 0.55 : kind === "broad" ? 1.45 + v * 0.4 : kind === "spruce" ? 1.45 + v * 0.45 : 1.2 + v * 0.25;
@@ -549,10 +551,10 @@ export function Woods({ amount, mobile, effects }: { amount: number; mobile: boo
     // ---- the fox waits at the forest's edge; as the plane comes it trots on ahead down the track, and near the
     // middle of the wood it turns off between the trees
     let want = s.al;
-    if (planeAl > 0.2 && planeAl < 5.6) want = Math.max(s.al, Math.min(5.9, planeAl + 1.3));
+    if (planeAl > 0.2 && planeAl < 5.6) want = Math.max(s.al, Math.min(5.9, planeAl + 0.9));
     if (!inHome) want = 0.9;
     const prev = s.al;
-    s.al = want < s.al ? want : s.al + Math.min(want - s.al, dt * 0.85);
+    s.al = want < s.al ? want : s.al + Math.min(want - s.al, dt * 0.3);
     const moved = Math.abs(s.al - prev) / Math.max(dt, 1e-3);
     const p = trackAt(s.al);
     const off = sst(5.2, 5.9, s.al) * 22;
@@ -569,7 +571,7 @@ export function Woods({ amount, mobile, effects }: { amount: number; mobile: boo
     s.z = z;
     if (Math.hypot(vx, vz) > 0.002) s.yaw = Math.atan2(-vx, -vz);
     const stride = Math.min(1, moved * 6) * 0.55;
-    s.gait += dt * (6 + moved * 30);
+    s.gait += dt * (4 + moved * 22);
     if (fox.current) {
       fox.current.position.set(x, landH(x, z) + 0.02, z);
       fox.current.rotation.y = s.yaw;

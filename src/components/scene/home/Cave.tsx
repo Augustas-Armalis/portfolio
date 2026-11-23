@@ -281,23 +281,7 @@ function buildCave() {
     pts.push([H, foot]);
     return pts;
   };
-  const A0 = CAVE.gateIn;
-  for (let k = 0; k < 4; k++) {
-    const inner = archLine(ARCH.half + k * 1.8, ARCH.apex + k * 2.7, FLOOR - 0.3);
-    const outer = archLine(ARCH.half + (k + 1) * 1.8, ARCH.apex + (k + 1) * 2.7, FLOOR - 0.3);
-    const front = A0 - 2.6 + k * 0.9;
-    const back = A0 + 1.2;
-    const kind = 2 + k * 0.1;
-    for (let i = 0; i < inner.length - 1; i++) {
-      const [u0, y0] = inner[i];
-      const [u1, y1] = inner[i + 1];
-      const [U0, Y0] = outer[i];
-      const [U1, Y1] = outer[i + 1];
-      quad(vert(b, u0, y0, front, kind), vert(b, U0, Y0, front, kind), vert(b, U1, Y1, front, kind), vert(b, u1, y1, front, kind));
-      quad(vert(b, u0, y0, back, kind), vert(b, u0, y0, front, kind), vert(b, u1, y1, front, kind), vert(b, u1, y1, back, kind));
-      quad(vert(b, U0, Y0, front, kind), vert(b, U0, Y0, back, kind), vert(b, U1, Y1, back, kind), vert(b, U1, Y1, front, kind));
-    }
-  }
+  // (no frame round the way on: the cave simply goes deeper, and the next world's own tunnel is seen through it)
   return finish(b);
 }
 
@@ -494,18 +478,27 @@ function makeStoneMaterial() {
         float lam = 0.35 + 0.65 * max(dot(n, toSrc), 0.0);
         // (in the cave the land's coordinates: L.z over 0 is inside; outside only a spill near the mouth)
         float inside = caveIn;
-        float portal = (1.8 / (1.0 + dl * dl / 420.0)) * lam * mix(0.25, 1.0, fromFront);
+        float portal = (2.8 / (1.0 + dl * dl / 520.0)) * lam * mix(0.25, 1.0, fromFront);
         float spill = exp(-max(length(L.xy - vec2(0.0, 14.0)) - 18.0, 0.0) / 8.0) * smoothstep(-14.0, 0.0, L.z) * (1.0 - inside);
         float ndl = max(dot(n, uKeyDir), 0.0);
         vec3 sky = (uSkyCol * (0.6 + 0.4 * n.y) + uKeyCol * ndl * 0.9 * sunUp * cloudShade(vWorld)) * (1.0 - inside * 0.85);
-        vec3 col = alb * (sky + uLead * (portal * inside + spill * 0.35 * (0.4 + night)));
+        // inside: the portal's warm light spills along the floor and up the walls toward the mouth, and a dim cool
+        // light comes down from cracks in the roof (brighter in patches, on what faces up), so the rock reads as rock
+        float crack = 0.35 + 0.65 * smoothstep(0.62, 0.82, vnoise(vec2(L.x * 0.09, L.z * 0.05) + 3.7));
+        vec3 cool = vec3(0.32, 0.4, 0.55) * 0.55 * crack * (0.45 + 0.55 * max(n.y, 0.0));
+        float spillIn = (0.35 + 0.65 * smoothstep(-2.0, ${CAVE.gateIn.toFixed(1)}, L.z)) * (0.6 + 0.4 * max(n.y, 0.0));
+        vec3 col = alb * (sky + uLead * (portal * 1.6 * inside + spillIn * 0.55 * inside + spill * 0.35 * (0.4 + night)) + cool * inside);
         // the far end of the cave: the light itself, soft
         if (kind > 5.5) col = uLead * 1.6;
         // a sheen on wet rock where it faces the light
         vec3 V = normalize(cameraPosition - vWorld);
         col += uLead * pow(max(dot(reflect(-V, n), toSrc), 0.0), 18.0) * 0.25 * inside * fine * (kind < 1.5 || (kind > 3.5 && kind < 4.5) ? 1.0 : 0.3);
         // (inside the cave there is no air of the land)
-        col = homeAir(col, vWorld);
+        // (the cave's inside takes the land's air only while the eye is outside: from the forest it goes into the fog
+        // with the mountain, and once in, it is clear and lit by the way on)
+        vec2 cq = cameraPosition.xz - vec2(${CAVE.x.toFixed(1)}, ${CAVE.z.toFixed(1)});
+        float camIn = smoothstep(-4.0, 8.0, -sin(${CAVE.yaw.toFixed(3)}) * cq.x - cos(${CAVE.yaw.toFixed(3)}) * cq.y);
+        col = mix(homeAir(col, vWorld), col, inside * camIn);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -554,7 +547,7 @@ export function Cave() {
       <group ref={inner}>
       <mesh geometry={m.cave} material={m.mat} />
       <mesh geometry={m.motes.g} material={m.motes.m} renderOrder={6} />
-      <mesh geometry={m.beyond} material={m.beyondMat} renderOrder={5} />
+
       </group>
     </>
   );

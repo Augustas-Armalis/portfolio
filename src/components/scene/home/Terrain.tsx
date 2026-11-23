@@ -7,6 +7,7 @@ import { HOME_GATE_Z } from "../flightPath";
 import { GLSL_NOISE, GLSL_PATH } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { GLSL_DESK_SHADOW } from "../World";
+import { GLSL_PATHS } from "./journey";
 import { CLOUD, GLSL_FIELD, GLSL_HOME_AIR, GLSL_LAND, HOME_U } from "./land";
 
 // The land, the lake and the sea, as one surface. A disc of rings that rides
@@ -93,6 +94,7 @@ export function makeLandMaterial() {
       ${GLSL_LAND}
       ${GLSL_HOME_AIR}
       ${GLSL_FIELD}
+      ${GLSL_PATHS}
 
       // what the water mirrors where there is no mirror texture: the sky, and the clouds standing in it
       vec3 skyMirror(vec3 P, vec3 r){
@@ -178,7 +180,8 @@ export function makeLandMaterial() {
           float pw = pathW(p.y);
           float px = abs(p.x - pathX(p.y)) / pw;
           float n2 = vnoise(p * 0.9);
-          float along = p.y > 0.0 ? smoothstep(2.0, 14.0, c0p) : 1.0 - smoothstep(${(-HOME_GATE_Z + 6).toFixed(1)}, ${(-HOME_GATE_Z + 34).toFixed(1)}, -p.y);
+          // (northward it goes only as far as where the paths part: the main path turns left to the town there)
+          float along = p.y > 0.0 ? smoothstep(2.0, 14.0, c0p) : 1.0 - smoothstep(1.0, 3.0, -p.y);
           onPath = (1.0 - smoothstep(0.42 + n2 * 0.3, 1.02 + n2 * 0.34, px)) * along;
           float fine = vnoise(p * 9.0) * 0.6 + vnoise(p * 31.0) * 0.4;
           vec3 earth = vec3(0.37, 0.32, 0.235) * (0.9 + 0.2 * fine);
@@ -197,7 +200,9 @@ export function makeLandMaterial() {
             float keepC = 1.0 - smoothstep(0.06, 0.2, fw);
             vec3 stone = vec3(0.33, 0.31, 0.28) * (0.75 + 0.45 * hash12(ci));
             vec3 earthS = vec3(0.3, 0.25, 0.18) * (0.85 + 0.3 * vnoise(p * 0.7));
-            vec3 sc = mix(earthS, mix(earthS * 0.85, stone * 0.9, cob), keepC * 0.5);
+            // (each cobble a little dome: lit on top, dark in the joints, so the paving has relief)
+            float dome = 1.0 - smoothstep(0.0, 0.48, length(cf));
+            vec3 sc = mix(earthS * 0.7, stone * (0.75 + 0.45 * dome), cob * keepC * 0.8);
             sc = mix(sc, (earthS + stone) * 0.5, 1.0 - keepC);
             float edge = st * (1.0 - smoothstep(0.35, 0.75, vnoise(p * 1.4) * 0.5 + (1.0 - st)));
             alb = mix(alb, sc, clamp(st * 1.15 - 0.1 + edge * 0.0, 0.0, 1.0));
@@ -214,6 +219,17 @@ export function makeLandMaterial() {
             fc *= mix(1.0, 0.82 + 0.3 * fur, keepF * (fp.x < 0.5 ? 0.5 : 1.0));
             alb = mix(alb, fc, fp.z * 0.85);
             onPath = max(onPath, fp.z * 0.7);
+          }
+          // the paths from the desk: the main one to the town in the footpath's own worn earth, the hidden one to the
+          // grove a narrow dark trace half under the grass
+          vec2 hp = homePaths(p);
+          if (hp.x + hp.y > 0.001) {
+            float fineE = vnoise(p * 9.0) * 0.6 + vnoise(p * 31.0) * 0.4;
+            vec3 earthM = vec3(0.42, 0.37, 0.27) * (0.9 + 0.2 * fineE);
+            alb = mix(alb, earthM, hp.x);
+            vec3 earthS = mix(vec3(0.13, 0.1, 0.07), vec3(0.08, 0.1, 0.05), vnoise(p * 2.1));
+            alb = mix(alb, earthS, hp.y * 0.55);
+            onPath = max(onPath, max(hp.x, hp.y * 0.6));
           }
           // the forest's track: dark earth, needles, moss creeping in from its edges
           float tr = forestTrack(p);

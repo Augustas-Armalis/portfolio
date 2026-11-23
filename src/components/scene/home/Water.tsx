@@ -82,7 +82,11 @@ export function LakeMirror({ quality }: { quality: number }) {
     REFLECT_U.uReflMat.value.copy(BIAS).multiply(mc.projectionMatrix).multiply(mc.matrixWorldInverse);
     const prev = gl.getRenderTarget();
     const auto = gl.shadowMap.autoUpdate;
+    // (and the shadow map asked for this frame is kept for the real draw: drawn from the mirror's eye it would hold
+    // only what stands in the mirror's layer)
+    const due = gl.shadowMap.needsUpdate;
     gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = false;
     try {
       gl.setRenderTarget(rt);
       // (cleared to nothing: where no tree or mountain stands, the water shows its own sky and clouds)
@@ -94,6 +98,7 @@ export function LakeMirror({ quality }: { quality: number }) {
       gl.render(scene, mc);
     } finally {
       gl.shadowMap.autoUpdate = auto;
+      gl.shadowMap.needsUpdate = due;
       gl.setRenderTarget(prev);
     }
     REFLECT_U.uReflOn.value = 1;

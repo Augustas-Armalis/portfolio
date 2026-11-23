@@ -93,7 +93,11 @@ float townStreet(vec2 p){
   float k = 0.0;
   float d = riverD(p);
   float w = riverW(p.x);
-  k = max(k, (1.0 - sst(1.5, 2.5, abs(d - w - 5.4))) * (1.0 - sst(${f(TOWN.r - 6)}, ${f(TOWN.r + 14)}, length(p - vec2(${f(TOWN.x)}, ${f(TOWN.z)})))));
+  // the quays: the north one from the mill west to the town's last houses, where it goes on as the forest's track;
+  // the south one from where the path from the desk comes in, past the square and the bridge, to the town's end
+  float north = step(p.y, riverZ(p.x));
+  float reach = north > 0.5 ? sst(-122.0, -134.0, p.x) * (1.0 - sst(-298.0, -310.0, p.x)) : sst(-176.0, -188.0, p.x) * (1.0 - sst(-294.0, -306.0, p.x));
+  k = max(k, (1.0 - sst(1.5, 2.5, abs(d - w - 5.4))) * reach);
   vec2 sq = p - vec2(${f(SQUARE.x)}, ${f(SQUARE.z)});
   k = max(k, 1.0 - sst(17.0, 20.0, length(sq * vec2(1.0, 1.12))));
   vec2 hq = p - vec2(${f(HILL.x)}, ${f(HILL.z)});
@@ -158,6 +162,14 @@ function segD(x: number, z: number, a: [number, number], b: [number, number]) {
   const t = Math.min(1, Math.max(0, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz)));
   return { d: Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t), t };
 }
+// where the town's north quay ends, at its west end (the forest's track begins there)
+const QN: [number, number] = (() => {
+  const x = -304;
+  const sl = riverSlope(x);
+  const n = Math.sqrt(1 + sl * sl);
+  const off = riverW(x) + 5.4;
+  return [x + (sl / n) * off, riverZ(x) - off / n];
+})();
 // distance from the forest's flight line, and how far along it (0 at the town, 1 at the cave)
 export function laneD(x: number, z: number) {
   let best = 1e9;
@@ -223,8 +235,12 @@ float forestTrack(vec2 p){
 ${segLines}
   if (best > 8.0) return 0.0;
   float off = 1.8 * sin(al * 2.3) + 0.9 * sin(al * 5.1 + 1.0);
-  float ends = sst(0.25, 0.7, al) * (1.0 - sst(8.2, 8.9, al));
-  return (1.0 - sst(1.1, 2.0, abs(sd - off))) * ends;
+  float ends = 1.0 - sst(8.2, 8.9, al);
+  float tr = (1.0 - sst(1.1, 2.0, abs(sd - off))) * ends;
+  // (it begins where the town's north quay ends: a short way joins the two)
+  vec2 ca = vec2(${f(QN[0])}, ${f(QN[1])}); vec2 cb = vec2(${f(FOREST_LINE[0][0])}, ${f(FOREST_LINE[0][1])});
+  vec2 cq = p - ca; vec2 cab = cb - ca; float ct = clamp(dot(cq, cab) / dot(cab, cab), 0.0, 1.0);
+  return max(tr, 1.0 - sst(1.1, 2.0, length(cq - cab * ct)));
 }
 `;
 
@@ -264,10 +280,10 @@ export function routeD(x: number, z: number) {
   return best;
 }
 
-// ---------- the sacred hill (alkakalnis) where the old road ends ----------
+// ---------- the sacred grove (alkas): a low rise deep in a wood north-east of the desk ----------
 // A round green hill at the end of the avenue the desk looks down, a great oak on its crown, an aukuras (a stone
 // altar with its fire kept burning) before the oak, carved wooden posts round them, a ring of stones.
-export const SACRED = { x: 2, z: -318, h: 13, top: 12, foot: 58 };
+export const SACRED = { x: 36, z: -232, h: 4, top: 8, foot: 30 };
 export function sacredH(x: number, z: number) {
   const r = Math.hypot(x - SACRED.x, z - SACRED.z);
   if (r >= SACRED.foot) return 0;
@@ -284,7 +300,7 @@ float sacredH(vec2 p){
 // ---------- the farmland east of the road ----------
 // Strip fields on a slightly skewed grid: rye (gold), flax (blue-green), potatoes (dark), some left to meadow. A
 // farmstead (sodyba) in among them and a post windmill on a knoll (Sacred.tsx builds them).
-export const FARM = { x0: 48, x1: 430, z0: -330, z1: 30, rot: 0.32, cw: 44, cd: 19 };
+export const FARM = { x0: 105, x1: 430, z0: -330, z1: 30, rot: 0.32, cw: 44, cd: 19 };
 export const FARMSTEAD = { x: 150, z: -120 };
 export const MILL = { x: 236, z: -205 };
 // how much a point is farmland (JS, for the trees: they keep off the fields but stand along their edges)
@@ -311,5 +327,88 @@ vec3 fieldPlot(vec2 p){
   // (no field across the road)
   float road = sst(10.0, 22.0, abs(p.x - 1.45 - 0.6 * sin(p.y * 0.043 - 1.1)));
   return vec3(crop, inC.y, head * edge * away * road * step(crop, 2.5));
+}
+`;
+
+// ---------- the paths from the desk ----------
+// The main path, the one anybody sees: from the desk it turns LEFT, along the lake's south shore past the old
+// farmstead, and down the river's south bank into the town's quay street. And a second one that hardly shows: a
+// narrow overgrown track branching off to the RIGHT into the wood, to the sacred grove and its fire.
+const bankZ = (x: number, off: number) => {
+  const sl = 0.328 - 0.000556 * x + 0.27 * Math.cos(x * 0.045 + 1.0);
+  return riverZ(x) + off * Math.sqrt(1 + sl * sl);
+};
+export const MAIN_PATH: [number, number][] = [
+  [1.00, -1.5],
+  [0.67, -4],
+  [0.31, -7],
+  [-2.5, -15],
+  [-8, -21],
+  [-16, -28],
+  [-29, -36],
+  [-46, -38],
+  [-64, -41],
+  [-80, -47],
+  [-93, -57],
+  ...[-104, -116, -128, -140, -152, -164, -176, -188].map((x): [number, number] => [x, bankZ(x, riverW(x) + 5.4)]),
+];
+export const SIDE_PATH: [number, number][] = [
+  [1.1, -12],
+  [2.0, -19],
+  [2.6, -27],
+  [4.5, -44],
+  [9, -68],
+  [15.5, -96],
+  [22, -126],
+  [28, -158],
+  [32.5, -188],
+  [35, -214],
+];
+function polyD(line: [number, number][], x: number, z: number) {
+  let best = 1e9;
+  for (let i = 0; i < line.length - 1; i++) {
+    const [ax, az] = line[i];
+    const [bx, bz] = line[i + 1];
+    const dx = bx - ax;
+    const dz = bz - az;
+    const t = Math.min(1, Math.max(0, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+    best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t));
+  }
+  return best;
+}
+export const mainPathD = (x: number, z: number) => (x > 12 || x < -200 || z > 2 || z < -140 ? 1e9 : polyD(MAIN_PATH, x, z));
+export const sidePathD = (x: number, z: number) => (x > 50 || x < -10 || z > -10 || z < -230 ? 1e9 : polyD(SIDE_PATH, x, z));
+// the sacred grove's wood: thick round the clearing and along the hidden path (0..1, the path itself kept open)
+export function groveWood(x: number, z: number) {
+  const r = Math.hypot(x - SACRED.x, z - SACRED.z);
+  const sd = sidePathD(x, z);
+  const round = (1 - sst(70, 110, r)) * sst(11, 17, r);
+  const along = (1 - sst(18, 34, sd)) * sst(-40, -70, z);
+  return Math.max(round, along) * sst(1.6, 3.2, sd);
+}
+const segCode = (line: [number, number][], name: string) =>
+  line
+    .slice(0, -1)
+    .map(([ax, az], i) => {
+      const [bx, bz] = line[i + 1];
+      return `  { vec2 a = vec2(${f(ax)}, ${f(az)}); vec2 ab = vec2(${f(bx - ax)}, ${f(bz - az)}); vec2 q = p - a; float t = clamp(dot(q, ab) / dot(ab, ab), 0.0, 1.0); ${name} = min(${name}, length(q - ab * t)); }`;
+    })
+    .join("\n");
+export const GLSL_PATHS = /* glsl */ `
+// how much of the main path (x) and of the hidden one (y) lies at a point
+vec2 homePaths(vec2 p){
+  float dm = 1e9; float ds = 1e9;
+  if (p.x < 12.0 && p.x > -200.0 && p.y < 2.0 && p.y > -140.0) {
+${segCode(MAIN_PATH, "dm")}
+  }
+  if (p.x < 50.0 && p.x > -10.0 && p.y < -10.0 && p.y > -230.0) {
+${segCode(SIDE_PATH, "ds")}
+  }
+  // (the main path as wide as the old footpath; the hidden one narrow, half lost under the grass)
+  // (as narrow as the footpath at the desk, opening gradually through the turn into a proper way to the town)
+  float hw = 0.34 + 0.8 * sst(-2.0, -70.0, p.y);
+  float m = 1.0 - sst(hw, hw + 0.25 + 0.35 * sst(-2.0, -40.0, p.y), dm + (vnoise(p * 0.9) - 0.5) * 0.3);
+  float s = (1.0 - sst(0.2, 0.55, ds + (vnoise(p * 1.3) - 0.5) * 0.4)) * sst(0.4, 0.65, vnoise(p * 0.22 + 3.0)) * 0.7;
+  return vec2(m, s);
 }
 `;

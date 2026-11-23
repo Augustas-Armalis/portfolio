@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { HOME_GATE_Z, roadX } from "../flightPath";
 import { pathW, pathX } from "../shared";
-import { fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
+import { groveWood, mainPathD, sidePathD, fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
 
 // The land the desk stands in, written once and read by everything that
 // stands on it. The desk is at the origin and the visitor looks north (-z).
@@ -234,6 +234,8 @@ export const HOME_U = {
   uAirK: { value: new THREE.Vector4(0.00125, 0.0045, 0.56, 0) },
   // a mist the air itself glows toward (rgb, how much): the journey's forest at night is moonlit fog, not darkness
   uFogGlow: { value: new THREE.Vector4(0.1, 0.13, 0.17, 0) },
+  // mist that lies in the woods only, under the treetops: its top (y, m), its density there (per m)
+  uFogLayer: { value: new THREE.Vector4(26, 0.006, 0, 0) },
 };
 
 // The air of the home world: haze that lies in the low land and thins with
@@ -242,13 +244,20 @@ export const HOME_U = {
 // of it are nothing; a kilometre of it is the sky. And the shade of the
 // clouds, which drift over all of it.
 export const GLSL_HOME_AIR = /* glsl */ `
-uniform sampler2D uForestMap; uniform sampler2D uCrownMap; uniform sampler2D uCloudTex; uniform vec4 uAirK; uniform vec4 uFogGlow;
+uniform sampler2D uForestMap; uniform sampler2D uCrownMap; uniform sampler2D uCloudTex; uniform vec4 uAirK; uniform vec4 uFogGlow; uniform vec4 uFogLayer;
+float forestAt(vec2 p);
 float homeAirAmt(vec3 wpos){
   vec3 dv = wpos - cameraPosition; float dist = length(dv);
   float b = uAirK.y;
   float t = dv.y * b;
   float integ = abs(t) > 0.0005 ? (1.0 - exp(-t)) / t : 1.0;
   float od = dist * (uAirK.x * exp(-max(cameraPosition.y, 0.0) * b) * integ + uAirK.x * 0.06 + uMist);
+  // the woods' own mist: only along the part of the ray that runs under the treetops, and only in a wood
+  float lo = min(cameraPosition.y, wpos.y);
+  float hi = max(cameraPosition.y, wpos.y);
+  float under = hi <= uFogLayer.x ? 1.0 : (lo >= uFogLayer.x ? 0.0 : (uFogLayer.x - lo) / max(hi - lo, 0.001));
+  float wood = max(smoothstep(0.25, 0.7, forestAt(wpos.xz)), smoothstep(0.25, 0.7, forestAt(cameraPosition.xz)) * 0.85);
+  od += dist * under * uFogLayer.y * wood;
   return clamp(1.0 - exp(-od), 0.0, 1.0);
 }
 // (looked down into from above, the air is not the horizon's own blaze but something cooler and quieter)
@@ -431,12 +440,13 @@ export function forestD(x: number, z: number) {
   // across a meadow), woods standing either side of it
   if (z > 4) d *= sstep(16, 64, Math.abs(x) + Math.max(0, 60 - z) * 0.2);
   // the road is lined, not overgrown
-  if (z < 10 && z > HOME_GATE_Z - 80) {
+  if (z < 10 && z > -40) {
     const rd = Math.abs(x - roadX(z));
     d *= sstep(6.5, 9.5, rd);
-    // the avenue: a wood standing either side of the road, from a little way out
-    d = Math.max(d, (1 - sstep(26, 70, rd)) * sstep(7.5, 10, rd) * sstep(-30, -70, z) * (0.55 + 0.45 * vnoise(x * 0.05, z * 0.03)));
   }
+  // the sacred grove's wood, thick round its clearing and along the hidden path to it; both paths kept open
+  d = Math.max(d, groveWood(x, z));
+  d *= sstep(2.5, 4.5, mainPathD(x, z)) * sstep(1.3, 2.6, sidePathD(x, z));
   // the old forest of the journey, from the town's edge to the mountain (journey.ts)
   d = Math.max(d, journeyWood(x, z) * (0.82 + 0.18 * mid));
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);

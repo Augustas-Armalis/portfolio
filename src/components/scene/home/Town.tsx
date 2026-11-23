@@ -28,6 +28,7 @@ type M4 = [number, number, number, number];
 // kinds of surface (the shader paints each)
 export const K = { paint: 0, logs: 1, boards: 2, shingle: 3, trim: 4, lamp: 5, stone: 6, brick: 7, tile: 8, thatch: 9 } as const;
 
+const ROCK = new THREE.IcosahedronGeometry(1, 2);
 export class TB {
   // (the vertices go straight into typed arrays that grow in chunks: nothing is allocated per vertex or per quad)
   private cap = 0;
@@ -173,6 +174,20 @@ export class TB {
     this.idx[k + 1] = i + 1;
     this.idx[k + 2] = i + 2;
     this.ni += 3;
+  }
+  // a rounded stone: a lumpy ball, flattened and sunk a little (its lumps from sines, so it is the same every load)
+  rock(cx: number, cy: number, cz: number, r: number, seed: number, col: V3) {
+    const g = ROCK;
+    const p = g.attributes.position;
+    const P = (i: number): V3 => {
+      const x = p.getX(i);
+      const y = p.getY(i);
+      const z = p.getZ(i);
+      const k = 1 + 0.22 * Math.sin(x * 3.1 + seed) * Math.sin(y * 2.7 + seed * 1.7) + 0.14 * Math.sin(z * 4.3 + seed * 2.3 + x * 2.1);
+      return [cx + x * r * k, cy + y * r * 0.6 * k + r * 0.15, cz + z * r * 0.9 * k];
+    };
+    // (the icosphere comes unindexed: every three vertices a face)
+    for (let t = 0; t < p.count; t += 3) this.tri(P(t), P(t + 1), P(t + 2), col, [K.stone, 0, 0, 0], [[0, 0], [r, 0], [0, r]]);
   }
   // a wall from (x0, z0) to (x1, z1), y0 to y1; windows every `win` m (style: 0 house, 1 church, 2 castle slit, 3 one gable window)
   wall(x0: number, z0: number, x1: number, z1: number, y0: number, y1: number, col: V3, kind: number, win = 0, accent = 0, style = 0) {
@@ -448,10 +463,20 @@ export function house(b: TB, x: number, z: number, rot: number, L: number, D: nu
 function lantern(b: TB, x: number, z: number, lamps: number[][], kindle: number) {
   const g = ground(x, z);
   b.at(x, g - 0.2, z, 0);
-  b.cyl(0, 0, 0, 0.09, 0.07, 3.4, 6, DARK);
-  b.box(0, 3.58, 0, 0.36, 0.42, 0.36, [1.0, 0.72, 0.36], K.lamp);
-  b.cyl(0, 3.79, 0, 0.32, 0.02, 0.38, 4, DARK);
-  lamps.push([x, g - 0.2 + 3.58, z, 0.9, kindle]);
+  b.cyl(0, 0, 0, 0.16, 0.13, 0.5, 8, DARK);
+  b.cyl(0, 0.5, 0, 0.08, 0.06, 2.9, 8, DARK);
+  b.cyl(0, 3.35, 0, 0.12, 0.2, 0.08, 8, DARK);
+  b.box(0, 3.62, 0, 0.3, 0.44, 0.3, [1.0, 0.72, 0.36], K.lamp);
+  for (const [cx, cz] of [
+    [-0.16, -0.16],
+    [0.16, -0.16],
+    [0.16, 0.16],
+    [-0.16, 0.16],
+  ])
+    b.box(cx, 3.62, cz, 0.035, 0.48, 0.035, DARK);
+  b.cyl(0, 3.86, 0, 0.27, 0.05, 0.26, 4, DARK);
+  b.cyl(0, 4.1, 0, 0.04, 0.0, 0.16, 6, DARK);
+  lamps.push([x, g - 0.2 + 3.62, z, 0.9, kindle]);
 }
 
 // a roofed pole shrine (koplytstulpis): a carved oak post, on it a little house with a tent roof and an iron sun
@@ -1043,7 +1068,7 @@ export function makeTownMaterial() {
           float bars = clamp((1.0 - smoothstep(0.025, 0.025 + aa, abs(q.x))) + (1.0 - smoothstep(0.025, 0.025 + aa, abs(q.y - hw.y * 0.25))), 0.0, 1.0);
           vec3 V = normalize(cameraPosition - vWorld);
           vec3 glass = skyBase(reflect(-V, n)) * 0.3 + vec3(0.02, 0.025, 0.03);
-          float someone = step(0.35, hash12(vec2(wi + 3.0, floor(vWorld.x * 0.3) + floor(vWorld.z * 0.3) * 17.0)));
+          float someone = step(0.2, hash12(vec2(wi + 3.0, floor(vWorld.x * 0.3) + floor(vWorld.z * 0.3) * 17.0)));
           float on = max(dusk, 0.55 * smoothstep(vWorld.x + 12.0, vWorld.x - 16.0, uFront)) * someone;
           vec3 wc = mix(glass, vec3(1.0, 0.62, 0.28) * 0.5, on);
           wc = mix(wc, vec3(0.8, 0.78, 0.72), bars * fine * (1.0 - on * 0.6));
@@ -1057,6 +1082,8 @@ export function makeTownMaterial() {
         float ndl = max(dot(n, uKeyDir), 0.0);
         float ao = mix(0.5, 1.0, smoothstep(0.0, 1.2, vAO)) * mix(0.72, 1.0, n.y * 0.5 + 0.5);
         vec3 col = alb * (uSkyCol * (0.55 + 0.45 * n.y) * ao + uKeyCol * ndl * 0.95 * cloudShade(vWorld) * sunUp * mix(0.75, 1.0, ao));
+        // (after dusk the moon and the town's own lamps keep the timber, the shingles and the stone legible)
+        col += alb * vec3(0.55, 0.62, 0.8) * 0.18 * dusk * (0.6 + 0.4 * max(dot(n, uKeyDir), 0.0));
         col = mix(col, vec3(1.0, 0.66, 0.32) * (1.0 + glow * 0.8), clamp(glow, 0.0, 1.0) * 0.9);
         col = homeAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
@@ -1098,10 +1125,10 @@ function makeHalos(lamps: number[][]) {
         vK = max(k * 0.4, dusk) * (0.9 + 0.1 * sin(uTime * 5.0 + aAt.x * 3.0));
         float dist = length(aAt.xyz - cameraPosition);
         // (never smaller than a few pixels: further off it dims instead)
-        float grow = max(1.0, dist * 0.005);
-        vK /= grow;
+        // (a small glow of fixed size in the world, dimmed with distance and into the air: never a disc on the screen)
+        vK *= exp(-dist * 0.006) * smoothstep(1.5, 5.0, dist);
         vUv = position.xy;
-        vec3 wp = aAt.xyz + (R * position.x + U * position.y) * aAt.w * grow * (vK > 0.002 ? 1.0 : 0.0);
+        vec3 wp = aAt.xyz + (R * position.x + U * position.y) * aAt.w * 0.55 * (vK > 0.002 ? 1.0 : 0.0);
         gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
       }`,
     fragmentShader: /* glsl */ `
@@ -1110,6 +1137,54 @@ function makeHalos(lamps: number[][]) {
         float r = length(vUv);
         float a = (exp(-r * r * 10.0) * 0.8 + exp(-r * r * 2.6) * 0.25) * (1.0 - smoothstep(0.7, 1.0, r)) * vK;
         gl_FragColor = vec4(vec3(1.0, 0.66, 0.3) * a, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  return { g, m };
+}
+
+// Under each lamp a soft warm pool of its light on the ground (kindled with the lamp; into the air with distance).
+function makePools(lamps: number[][]) {
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute([-1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1], 3));
+  g.setIndex([0, 2, 1, 0, 3, 2]);
+  const at = new Float32Array(lamps.length * 4);
+  const key = new Float32Array(lamps.length);
+  lamps.forEach((l, i) => {
+    at.set([l[0], landH(l[0], l[2]) + 0.12, l[2], Math.min(6, 2 + l[3] * 4)], i * 4);
+    key[i] = l[4];
+  });
+  g.setAttribute("aAt", new THREE.InstancedBufferAttribute(at, 4));
+  g.setAttribute("aKey", new THREE.InstancedBufferAttribute(key, 1));
+  g.instanceCount = lamps.length;
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(TOWN.x, 0, TOWN.z), 260);
+  const m = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    uniforms: { ...SKY_U, ...HOME_U, uFront: { value: 1e4 } },
+    vertexShader: /* glsl */ `
+      attribute vec4 aAt; attribute float aKey; varying vec2 vUv; varying float vK; varying vec3 vWorld;
+      uniform float uNight; uniform vec3 uKeyDir; uniform float uFront;
+      void main(){
+        float dusk = smoothstep(0.1, 0.5, uNight + (1.0 - smoothstep(-0.02, 0.08, uKeyDir.y)));
+        vK = max(smoothstep(aKey, aKey - 22.0, uFront) * 0.25, dusk);
+        vUv = position.xz;
+        vWorld = aAt.xyz + position * aAt.w;
+        gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv; varying float vK; varying vec3 vWorld;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${GLSL_HOME_AIR}
+      void main(){
+        float r = length(vUv);
+        float a = exp(-r * r * 3.2) * (1.0 - smoothstep(0.8, 1.0, r)) * vK * (1.0 - homeAirAmt(vWorld));
+        gl_FragColor = vec4(vec3(1.0, 0.62, 0.3) * a * 0.55, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -1325,10 +1400,10 @@ export function Town({ mobile = false }: { mobile?: boolean }) {
 }
 
 function TownBuilt({ built, mobile }: { built: Built; mobile: boolean }) {
-  const t = useMemo(() => ({ ...built, mat: makeTownMaterial(), halos: makeHalos(built.lamps), smoke: makeSmoke(built.smoke), storks: makeStorks(), wheel: makeWheel(), garden: makeGardens(built.gardens, mobile) }), [built, mobile]);
+  const t = useMemo(() => ({ ...built, mat: makeTownMaterial(), halos: makeHalos(built.lamps), pools: makePools(built.lamps), smoke: makeSmoke(built.smoke), storks: makeStorks(), wheel: makeWheel(), garden: makeGardens(built.gardens, mobile) }), [built, mobile]);
   useEffect(
     () => () => {
-      for (const x of [t.geo, t.det, t.mat, t.halos.g, t.halos.m, t.smoke.g, t.smoke.m, t.storks.g, t.storks.m, t.storks.geo, t.wheel, t.garden.mat, t.garden.farMat, t.garden.cards.geometry]) x.dispose();
+      for (const x of [t.geo, t.det, t.mat, t.halos.g, t.halos.m, t.pools.g, t.pools.m, t.smoke.g, t.smoke.m, t.storks.g, t.storks.m, t.storks.geo, t.wheel, t.garden.mat, t.garden.farMat, t.garden.cards.geometry]) x.dispose();
       // (the trees' geometry and the leaf sheet are the shared library's: trees.ts)
       t.garden.meshes.forEach((m) => m.dispose());
     },
@@ -1358,6 +1433,7 @@ function TownBuilt({ built, mobile }: { built: Built; mobile: boolean }) {
     front.current = flying ? Math.min(front.current, voyage.planePos.x) : 1e4;
     t.mat.uniforms.uFront.value = front.current;
     t.halos.m.uniforms.uFront.value = front.current;
+    t.pools.m.uniforms.uFront.value = front.current;
     if (wheel.current) wheel.current.rotation.x -= Math.min(dt, 0.1) * 0.55;
   });
   return (
@@ -1368,6 +1444,7 @@ function TownBuilt({ built, mobile }: { built: Built; mobile: boolean }) {
         <mesh ref={wheel} geometry={t.wheel} material={t.mat} />
       </group>
       <mesh geometry={t.halos.g} material={t.halos.m} renderOrder={6} frustumCulled={false} />
+      <mesh geometry={t.pools.g} material={t.pools.m} renderOrder={4} />
       <mesh geometry={t.smoke.g} material={t.smoke.m} renderOrder={5} />
       <mesh ref={storks} geometry={t.storks.g} material={t.storks.m} />
       <primitive object={t.garden.cards} />
