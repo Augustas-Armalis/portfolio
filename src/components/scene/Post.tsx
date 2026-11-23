@@ -608,7 +608,8 @@ void main(){
   vec3 h = clamp(past(uv), max(mn, mu - sd), min(mx, mu + sd));
   float speed = length((uv - vUv) / uTexel);
   // (a screen's own picture, marked by alpha 0, is never mixed with its past: it must stay exact)
-  float k = uKeep * mix(1.0, 0.45, smoothstep(0.6, 7.0, speed)) * smoothstep(0.02, 0.3, c.a);
+  // (what rushes past near the lens, tens of pixels a frame, keeps little: there the clamp alone would smear)
+  float k = uKeep * mix(1.0, 0.45, smoothstep(0.6, 7.0, speed)) * (1.0 - 0.6 * smoothstep(20.0, 80.0, speed)) * smoothstep(0.02, 0.3, c.a);
   gl_FragColor = vec4(mix(c.rgb, h, k), c.a);
 }`;
 
@@ -934,12 +935,14 @@ export function Post({ level }: { level: number }) {
     if (p.tail) {
       run(p.m.comp, p.ldr);
       let src = p.ldr;
-      // While the eye itself is travelling fast (the descent out of the sky, a turn of the head, the top of the
-      // throttle) nothing can be seen to flicker and the pass would only cost: it is left out for those frames,
-      // and taken up again from a clean start when the eye slows. (More than about six pixels of turning a frame,
-      // or a metre and a half of travel.)
+      // Only a cut (a jump, a crossing, a frame that took the eye far at once) starts it again from a clean frame.
+      // It used to be let go for anything over six pixels of turning or a metre and a half of travel a frame:
+      // that is every frame of an ordinary flight (28 m/s at 30 fps is about a metre a frame, a world's own pace
+      // doubles it, a bank turns tens of pixels), so in flight, and the more so the slower the machine, the far
+      // field had no steadying at all and every sub-pixel thing in it crawled. The shader reprojects by depth and
+      // keeps less of the past the faster a point crosses the frame, so ordinary motion needs no gate.
       const turned = 2 * Math.acos(Math.min(1, Math.abs(p.past.q.dot(camera.quaternion))));
-      const fast = turned * (h / THREE.MathUtils.degToRad(pc.fov ?? 40)) > 6 || p.past.eye.distanceToSquared(camera.position) > 2.25;
+      const fast = turned * (h / THREE.MathUtils.degToRad(pc.fov ?? 40)) > 120 || p.past.eye.distanceToSquared(camera.position) > 40 * 40;
       p.past.q.copy(camera.quaternion);
       if (fast || postCtl.steady <= 0) {
         p.past.ok = false;
