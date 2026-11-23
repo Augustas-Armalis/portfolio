@@ -911,7 +911,9 @@ export function archGeometry(w: number, h: number, t: number, depth: number, cur
 // painted cluster of leaves, cut soft by the lens's multisampling. Painted here in his manner: a round heaped
 // crown, deep greens, olive in the shade, a gentle warm light on top, never acid.
 // (bloom: the foliage is blossom of this colour, not leaves)
-export function makeLeafyMaterial(leaves: THREE.Texture, o: { lit?: V3; shade?: V3; bloom?: V3 } = {}) {
+// (wood: paint and light the foliage exactly as makeCrownMaterial paints a far wood's crowns, from the same palette,
+// so a tree seen close and the same tree seen far are one green in one light)
+export function makeLeafyMaterial(leaves: THREE.Texture, o: { lit?: V3; shade?: V3; bloom?: V3; wood?: Wood } = {}) {
   return new THREE.ShaderMaterial({
     alphaToCoverage: true,
     uniforms: { ...SKY_U, ...WORLD_U, uLeafTex: { value: leaves } },
@@ -955,6 +957,7 @@ export function makeLeafyMaterial(leaves: THREE.Texture, o: { lit?: V3; shade?: 
         float fol = step(0.75, vFol);
         float ao = 1.0;
         float cov = 1.0;
+        float dabv = 0.5;
         float dist = length(vWorld - cameraPosition);
         if (fol > 0.5) {
           float cell = floor(vLeaf.x + 0.5);
@@ -973,6 +976,7 @@ export function makeLeafyMaterial(leaves: THREE.Texture, o: { lit?: V3; shade?: 
           alb *= mix(vec3(1.0), vec3(1.45, 1.2, 0.62), smoothstep(0.8, 0.98, k) * 0.7);
           alb *= mix(vec3(1.0), vec3(0.7, 0.9, 1.08), smoothstep(0.22, 0.04, k) * 0.7);
           ${o.bloom ? `alb = ${v3(o.bloom)} * (0.66 + 0.5 * t.g / max(t.a, 0.3)); alb = mix(alb, vec3(1.0, 0.93, 0.9), 0.55 * smoothstep(0.55, 1.0, fract(k * 5.3 + vLeaf.x * 0.37 + vUv.x * 0.2)));` : ""}
+          dabv = t.g / max(t.a, 0.3);
           ao = vLeaf.y;
         } else {
           alb *= 0.8 + 0.4 * vnoise(vec2(atan(vLocal.z, vLocal.x) * 4.0, vLocal.y * 1.3));
@@ -989,6 +993,29 @@ export function makeLeafyMaterial(leaves: THREE.Texture, o: { lit?: V3; shade?: 
         vec3 V = normalize(cameraPosition - vWorld);
         float back = pow(clamp(dot(-V, uKeyDir), 0.0, 1.0), 3.0);
         col += alb * vec3(1.1, 0.98, 0.56) * uKeyCol * back * (0.12 + 0.3 * ao) * fol * sunUp * 0.5;
+        ${
+          o.wood
+            ? `if (fol > 0.5) {
+          // the far wood's own paint and light (see makeCrownMaterial), on the leaf clumps
+          float nearK = 1.0 - smoothstep(160.0, 800.0, dist);
+          float dab = clamp(dabv * 0.75, 0.0, 1.0);
+          float up = n.y * 0.5 + 0.5;
+          float sun = dot(n, uKeyDir) + (dab - 0.5) * 0.8 * nearK;
+          float litK = smoothstep(-0.45, 0.85, sun) * sunUp;
+          float k1 = fract(vSeed * 7.31);
+          float k2 = fract(vSeed * 23.17);
+          vec3 mid = mix(${v3(o.wood.a)}, ${v3(o.wood.b)}, k1);
+          mid = mix(mid, mid * vec3(1.9, 1.35, 0.5), smoothstep(0.84, 0.97, k2) * ${(o.wood.gold ?? 1).toFixed(2)});
+          mid = mix(mid, mid * vec3(0.5, 0.74, 1.0), smoothstep(0.24, 0.06, k2) * 0.8);
+          vec3 base = mix(${v3(o.wood.shade)}, mid, smoothstep(0.2, 0.85, up + (dab - 0.5) * 0.4 * nearK));
+          col = base * uSkyCol * (0.34 + 0.5 * up);
+          col += mix(mid, mid * vec3(2.1, 1.55, 0.5) + vec3(0.06, 0.04, 0.0), 0.7) * uKeyCol * litK * 0.5;
+          float backW = pow(max(dot(-V, uKeyDir), 0.0), 2.0) * pow(clamp(1.0 - dot(n, V), 0.0, 1.0), 1.4);
+          col += mid * vec3(2.4, 1.8, 0.5) * uKeyCol * backW * 0.42 * sunUp;
+          col *= mix(0.5, 1.0, ao);
+        }`
+            : ""
+        }
         // the foot sinks into the grass
         col *= mix(0.5, 1.0, smoothstep(0.0, 1.6, vH));
         col = applyAir(col, vWorld);

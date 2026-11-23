@@ -494,13 +494,16 @@ export function plantHome(amount: number): HomeTree[] {
   };
   const push = (x: number, z: number, kind: TreeKind, s: number, lod: 0 | 1 | 2) => {
     if (joinD(x, z) < 5) return;
+    // (and no crown reaches over the way the plane flies, low over the path: it passes under the trees, never
+    // through one)
+    if (x < 20 && x > -480 && z < 10 && z > -700 && Math.min(routeD(x, z), laneD(x, z).d) < CROWN_R[kind] * s + 1.6) return;
     trees.push({ x, y: landH(x, z), z, s, kind, v: Math.floor(r() * 3), rot: r() * 6.283, tint: r(), lod: lod === 0 && hyp(x, z) < 82 ? -1 : lod });
   };
   const near = (x: number, z: number): 0 | 1 => (hyp(x, z) < 115 || (z < 0 && Math.abs(x - roadX(z)) < 24 && z > HOME_GATE_Z - 20) ? 0 : 1);
 
   // 1. framing the view from the desk, placed by hand: tall trees left and right, a birch by the lake
   const hand: [number, number, TreeKind, number][] = [
-    [-27, -33, "birch", 1.05], [-31, -38, "birch", 0.92], [-23, -40, "birch", 1.12], [-36, -30, "broad", 1.0],
+    [-25, -28, "birch", 1.05], [-32, -43, "birch", 0.92], [-23, -40, "birch", 1.12], [-36, -30, "broad", 1.0],
     [27, -36, "pine", 1.15], [33, -44, "pine", 1.3], [22, -47, "pine", 1.05], [38, -31, "spruce", 1.0], [44, -40, "spruce", 1.2],
     [-58, -22, "broad", 1.25], [-66, -31, "broad", 1.05], [-52, -12, "bush", 1.0], [56, -8, "broad", 1.2], [62, -19, "birch", 1.1],
     [-44, 24, "broad", 1.15], [-52, 33, "birch", 1.0], [48, 30, "pine", 1.1], [57, 22, "broad", 1.0], [-30, 46, "bush", 1.1], [34, 52, "birch", 1.05],

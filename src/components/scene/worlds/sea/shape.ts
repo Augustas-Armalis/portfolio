@@ -35,7 +35,7 @@ export const EYES: [number, number, number][] = EYE_XN.map((xn) => {
   return [ISLAND.x + xn * ISLAND.half, 9, ISLAND.z + halfDepth(h) + 6];
 });
 // Between them, at the waterline, a low dark grotto runs into the rock: the way on. (x of its middle, z of the
-// island's face there, half its width, its height, how far it runs in)
+// island's face there, half its width, its height, how far it runs in: a mouth, and it opens)
 const GX = (EYES[0][0] + EYES[1][0]) / 2;
-export const GROTTO = { x: GX, z: ISLAND.z + halfDepth(profJS((GX - ISLAND.x) / ISLAND.half)), half: 24, top: 27, deep: 120 };
+export const GROTTO = { x: GX, z: ISLAND.z + halfDepth(profJS((GX - ISLAND.x) / ISLAND.half)), half: 40, top: 38, deep: 150 };
 

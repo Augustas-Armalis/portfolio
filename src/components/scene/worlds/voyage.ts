@@ -10,6 +10,7 @@ import { funeralLand } from "./funeral/land";
 import { GROTTO } from "./sea/shape";
 import { FINALE_ENTRY, FINALE_GATE, FINALE_OPENING, FINALE_PATH, FINALE_TERRAIN } from "./seafinale/shape";
 import { SUN_CANVAS, SUN_ENTRY, SUN_GATE, SUN_OBSTACLES, SUN_PATH, SUN_SKY, SUN_TERRAIN } from "./sun/shape";
+import { flightPlan } from "./fairy/track";
 
 // Angelų takas, the path of angels. The paper plane's flight is a pilgrimage
 // along a path of light between worlds, and every world is one painting by
@@ -306,7 +307,7 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
     cloudLit: [0.3, 0.42, 0.62],
     cloudShade: [0.03, 0.06, 0.2],
     night: 0.8,
-    exposure: 1.2,
+    exposure: 1.08,
     fx: [0.0, 0.0, 0.0, 0.5],
   },
   // Fairy Tale of the Kings: a night wood, brown-black and teal; the only strong light is the little world
@@ -570,39 +571,12 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     ceil: 660,
     entry: { x: -45, z: 1840, above: 7.5, yaw: -0.155 },
     gate: { x: 646, z: -1335, above: 70, yaw: -0.363 },
-    // in low under the trees of a wood, along a winding track (Fairy.tsx trackX), the castle only glimpsed
-    // through the leaves; up off the track where the wood opens, over the crest of the rise, and the whole plain
-    // and the mountain are there at once. Then down off the rise and low over the fields; then a long climb straight at the castle, the mountain rising to
-    // fill the sky, to pass close under its towers by its right flank and the slim peak beside it; and away over
-    // the plain beyond, down toward the sun
-    path: [
-      [-45, 1840, 7.5],
-      [-31, 1800, 7.5],
-      [-4, 1760, 7.5],
-      [24, 1720, 7.5],
-      [43, 1680, 8],
-      [44, 1640, 10],
-      [28, 1600, 16],
-      [8, 1560, 24],
-      [0, 1500, 38],
-      [3, 1380, 43],
-      [6, 1260, 45],
-      [10, 1130, 52],
-      [16, 1010, 59],
-      [30, 880, 102],
-      [50, 700, 164],
-      [72, 500, 228],
-      [94, 300, 289],
-      [114, 110, 347],
-      [136, -60, 401],
-      [174, -170, 424],
-      [204, -270, 439],
-      [240, -450, 428],
-      [335, -700, 375],
-      [470, -1000, 260],
-      [646, -1335, 70],
-      [659, -1369, 69],
-    ],
+    // in low under the trees of a wood, along a winding track, the castle only glimpsed through the leaves; up over
+    // the crest of the rise, and the whole plain and the mountain are there at once; a long level glide over the
+    // fields, then one long even climb at the castle, to pass close under its towers by its right flank and the slim
+    // peak beside it; and out along the pale road behind it, descending in a long ease to the gate on the hill.
+    // (laid as smooth curves from the ways themselves, worlds/fairy/track.ts flightPlan; set below, once ground exists)
+    path: [],
     // the mountain as a stack of drums, wide at the foot and narrow under the castle (worlds/fairy/mountain.ts MT),
     // then the castle's wards and the peaks about it
     obstacles: [
@@ -627,7 +601,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
         { x: 646 + Math.cos(-0.363) * sd * 34, z: -1335 - Math.sin(-0.363) * sd * 34, r: 9.5, h: 118 },
       ]),
     ],
-    canvases: [{ painting: "fairy-tale", x: -46, z: 1290, yaw: 0.5 }],
+    // (on the right of the way, clear of the pale road that bears away left across the plain)
+    canvases: [{ painting: "fairy-tale", x: 48, z: 1290, yaw: -0.5 }],
   },
   paradise: {
     id: "paradise",
@@ -792,20 +767,26 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // no land at all: the glass of the bay, and the island (worlds/Sea.tsx) lying across it
     terrain: null,
     water: 0,
-    centre: [200, -120],
-    radius: 1340,
+    centre: [200, 180],
+    radius: 1900,
     ceil: 260,
     // (it comes in a kilometre and a half from the island's head: a long while over the glass with the whole of it in view)
     // (the way in is laid toward the island's head, not its middle: on a tall narrow screen the head and its two
     // eyes are then in the frame from the first, the long back running off to the left)
-    entry: { x: 300, z: 900, above: 14, yaw: -0.092 },
-    // between the island's two eyes, at the waterline: a low grotto runs into the rock, and that is the way on
-    // (no arch of light: worlds/Sea.tsx)
-    gate: { x: GROTTO.x, z: GROTTO.z - 30, above: 9, yaw: 0 },
+    entry: { x: 292, z: 1560, above: 14, yaw: -0.07 },
+    // between the island's two eyes, at the waterline: the mouth, and a vault running into the rock; deep in it, where
+    // the vault has narrowed to the width of the Funeral Symphony's cave, the way on (no arch of light: worlds/Sea.tsx)
+    gate: { x: GROTTO.x, z: GROTTO.z - 128, above: 9, yaw: 0 },
     // out over the glass toward the island's head, the whole of it lying broadside to the left; then in under the
     // head as night falls, down the eyes' paths and between them
     path: [
-      [300, 900, 14],
+      [292, 1560, 14],
+      [296, 1440, 13],
+      [301, 1320, 13],
+      [304, 1200, 12],
+      [303, 1080, 12],
+      [300, 960, 12],
+      [306, 830, 12],
       [312, 770, 12],
       [322, 640, 11],
       [328, 510, 10],
@@ -816,10 +797,11 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [300, -110, 9],
       [330, -220, 9],
       [384, -320, 9],
-      [GROTTO.x - 30, GROTTO.z + 75, 9],
-      [GROTTO.x - 5, GROTTO.z + 22, 9],
+      [GROTTO.x - 40, GROTTO.z + 110, 9],
+      [GROTTO.x - 8, GROTTO.z + 36, 9],
       [GROTTO.x, GROTTO.z - 30, 9],
-      [GROTTO.x + 4, GROTTO.z - 68, 9],
+      [GROTTO.x, GROTTO.z - 128, 9],
+      [GROTTO.x, GROTTO.z - 166, 9],
     ],
     // the island (worlds/sea/island.ts), as bells along it: the head stands either side of the grotto
     obstacles: [
@@ -865,7 +847,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     place: "none",
     air: AIR.funeral,
     // (thicker air than before: the ranges stand one behind another, each paler, and the far ones are only a breath)
-    fog: [0.00036, 0.0042],
+    fog: [0.00027, 0.0042],
     // colossal mountains, and the fin of rock the procession's road climbs in three switchbacks to the cave: the
     // land, the road, the path of light beside it and the way in are all worked out together in funeral/land.ts
     terrain: FUNERAL.terrain,
@@ -951,6 +933,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
   },
 };
 
+// Castle Fairy Tale's line of flight is laid from its ways and the ground (worlds/fairy/track.ts)
+WORLDS.fairy.path = flightPlan((x, z) => groundAt(WORLDS.fairy, x, z));
 // a painting's standing wall is a thing to fly round, like any other
 for (const def of Object.values(WORLDS)) for (const c of def.canvases) def.obstacles.push({ x: c.x, z: c.z, r: 12, h: 36 });
 
