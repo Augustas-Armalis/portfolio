@@ -1115,9 +1115,9 @@ function makeHalos(lamps: number[][]) {
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { ...SKY_U, uFront: { value: 1e4 } },
+    uniforms: { ...SKY_U, ...HOME_U, uFront: { value: 1e4 } },
     vertexShader: /* glsl */ `
-      attribute vec4 aAt; attribute float aKey; varying vec2 vUv; varying float vK;
+      attribute vec4 aAt; attribute float aKey; varying vec2 vUv; varying float vK; varying vec3 vAt;
       uniform float uTime; uniform float uNight; uniform vec3 uKeyDir; uniform float uFront;
       void main(){
         vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
@@ -1129,16 +1129,20 @@ function makeHalos(lamps: number[][]) {
         float dist = length(aAt.xyz - cameraPosition);
         // (never smaller than a few pixels: further off it dims instead)
         // (a small glow of fixed size in the world, dimmed with distance and into the air: never a disc on the screen)
-        vK *= exp(-dist * 0.006) * smoothstep(1.5, 5.0, dist);
+        vK *= smoothstep(1.5, 5.0, dist);
+        vAt = aAt.xyz;
         vUv = position.xy;
         vec3 wp = aAt.xyz + (R * position.x + U * position.y) * aAt.w * 0.55 * (vK > 0.002 ? 1.0 : 0.0);
         gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
       }`,
     fragmentShader: /* glsl */ `
-      varying vec2 vUv; varying float vK;
+      varying vec2 vUv; varying float vK; varying vec3 vAt;
+      ${GLSL_SKY}
+      ${GLSL_HOME_AIR}
       void main(){
         float r = length(vUv);
-        float a = (exp(-r * r * 10.0) * 0.8 + exp(-r * r * 2.6) * 0.25) * (1.0 - smoothstep(0.7, 1.0, r)) * vK;
+        // (into the land's own air, as the houses are)
+        float a = (exp(-r * r * 10.0) * 0.8 + exp(-r * r * 2.6) * 0.25) * (1.0 - smoothstep(0.7, 1.0, r)) * vK * (1.0 - homeAirAmt(vAt));
         gl_FragColor = vec4(vec3(1.0, 0.66, 0.3) * a, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

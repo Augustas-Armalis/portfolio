@@ -551,9 +551,9 @@ export function PropLights() {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { ...SKY_U },
+      uniforms: { ...SKY_U, ...HOME_U },
       vertexShader: /* glsl */ `
-        attribute vec4 aAt; varying vec2 vUv; varying float vK;
+        attribute vec4 aAt; varying vec2 vUv; varying float vK; varying vec3 vAt;
         uniform float uTime; uniform float uNight; uniform vec3 uSunDir;
         void main(){
           vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
@@ -562,15 +562,19 @@ export function PropLights() {
           // the lighthouse's lamp comes round every eight seconds
           float sweep = aAt.w > 5.0 ? 0.35 + 0.65 * pow(0.5 + 0.5 * sin(uTime * 0.785), 6.0) : 0.85 + 0.15 * sin(uTime * 7.0 + aAt.x);
           vK = on * sweep;
+          vAt = aAt.xyz;
           vUv = position.xy;
           vec3 wp = aAt.xyz + (R * position.x + U * position.y) * aAt.w * (vK > 0.001 ? 1.0 : 0.0);
           gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
         }`,
       fragmentShader: /* glsl */ `
-        varying vec2 vUv; varying float vK;
+        varying vec2 vUv; varying float vK; varying vec3 vAt;
+        ${GLSL_SKY}
+        ${GLSL_HOME_AIR}
         void main(){
           float r = length(vUv);
-          float a = (exp(-r * r * 9.0) * 0.9 + exp(-r * r * 2.2) * 0.22) * smoothstep(1.0, 0.7, r) * vK;
+          // (into the land's own air with distance, as the lamp's house is)
+          float a = (exp(-r * r * 9.0) * 0.9 + exp(-r * r * 2.2) * 0.22) * smoothstep(1.0, 0.7, r) * vK * (1.0 - homeAirAmt(vAt));
           gl_FragColor = vec4(vec3(1.0, 0.68, 0.32) * a, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>

@@ -4,8 +4,9 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import * as THREE from "three";
 import { POST_U, postCtl } from "../Post";
-import { SKY_U, applySky, clockHours, skyState, type SkyState } from "../sky";
-import { setWorldAir } from "./kit";
+import { GLSL_SKY, SKY_U, applySky, clockHours, skyState, type SkyState } from "../sky";
+import { GLSL_AIR, WORLD_U, setWorldAir } from "./kit";
+import { GLSL_HOME_AIR, HOME_U } from "../home/land";
 import { WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, originOf, voyage, voyageSky, type WorldDef, type WorldId } from "./voyage";
 
 // Gates are windows. As the plane nears a gate the opening shows the next world itself, live: that world (already
@@ -347,11 +348,13 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
-      uniforms: { ...PORTAL_U, ...STILL_U, uSpring: { value: spring } },
+      uniforms: { ...PORTAL_U, ...STILL_U, ...SKY_U, ...(id === "home" ? HOME_U : WORLD_U), uSpring: { value: spring } },
       vertexShader: /* glsl */ `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
       fragmentShader: /* glsl */ `
         uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes; uniform float uPortalGain; uniform float uSpring; varying vec2 vUv;
         uniform sampler2D tStill; uniform mat4 uStillMat; uniform float uStillOn; uniform float uLiveK; varying vec3 vW;
+        ${GLSL_SKY}
+        ${id === "home" ? GLSL_HOME_AIR : GLSL_AIR}
         void main(){
           if (uPortalK <= 0.003) discard;
           // a lancet: straight sides, a pointed round head, soft all the way round
@@ -368,6 +371,8 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
             col = mix(texture2D(tStill, su).rgb, col, uLiveK);
           }
           col *= uPortalGain;
+          // (seen from afar the opening stands in this side's air like the gate round it: no bright cut-out in the haze)
+          ${id === "home" ? "col = homeAir(col, vW);" : "col = applyAir(col, vW);"}
           gl_FragColor = vec4(col, a);
         }`,
     });
