@@ -149,10 +149,20 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
       ${GLSL_HOME_AIR}
       ${GLSL_FIELD}
       ${GLSL_PATHS}
+      // is the blade's foot outside the sides of the view, whatever the ground's height here (taken at both ends of the
+      // heights grass can stand at: the test is linear in height, so what is outside at both is outside between)?
+      bool gOut(vec2 root){
+        mat4 vp = projectionMatrix * viewMatrix;
+        vec4 a = vp * vec4(root.x, -4.0, root.y, 1.0);
+        vec4 b = vp * vec4(root.x, 140.0, root.y, 1.0);
+        float m = projectionMatrix[0][0] * 3.0;
+        return (a.x + a.w < -m && b.x + b.w < -m) || (a.w - a.x < -m && b.w - b.x < -m);
+      }
       void main(){
         float t = position.y; float side = position.x;
         vec2 root = aOffset.xy; float yaw = aOffset.z;
         float lod = 1.0;
+        float aWiden = 1.0;
         #ifdef WRAP
           root = mod(root - uCenter + uTile * 0.5, uTile) - uTile * 0.5 + uCenter;
           float dc = length(root - uCenter);
@@ -181,7 +191,28 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
             #endif
             lod *= mix(1.0, smoothstep(4.5, 8.5, dc), uWalkOn);
           #endif
+          // Whatever the tile and the lane have already made nothing, or that stands outside what this camera sees, never
+          // gets as far as the land's formulas below (the wide tiles are mostly behind or beside the eye): thrown
+          // out of the clip volume before any of the work. Blades far off are thinned by count, the rest widened to
+          // keep the coverage (the field there is only colour: every blade takes the light of the field under it).
+          #ifdef FAR
+            float keepD = mix(1.0, 0.42, smoothstep(70.0, 190.0, dc));
+            if (fract(yaw * 5.123 + aShape.y * 997.0) > keepD) lod = 0.0;
+            aWiden = inversesqrt(keepD);
+          #else
+            #ifndef WALK
+              #ifndef INNER
+                float keepD = mix(1.0, 0.55, smoothstep(26.0, 48.0, dc));
+                if (fract(yaw * 5.123 + aShape.y * 997.0) > keepD) lod = 0.0;
+                aWiden = inversesqrt(keepD);
+              #endif
+            #endif
+          #endif
+        #else
+          // (the near disc's outer blades were made as short as nothing by the fade at its rim)
+          if (aShape.x < 0.004) lod = 0.0;
         #endif
+        if (lod < 0.002 || gOut(root)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
         float gy = landH(root);
         float lk = hLakeK(root);
         // no grass in water or on bare sand; under the trees it is shorter and thinner
@@ -197,11 +228,11 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         float h = aShape.x * max(lod, 0.001) * mix(1.0, 0.6, smoothstep(0.3, 0.8, woods)); float w = aShape.y; float bend = aShape.z; float r = aShape.w;
         #ifdef WRAP
           #ifdef FAR
-            w *= 0.7 + dc * 0.012;
+            w *= (0.7 + dc * 0.012) * aWiden;
             h *= 0.62;
           #else
           #ifndef WALK
-            w *= 1.0 + dc * 0.045;
+            w *= (1.0 + dc * 0.045) * aWiden;
           #endif
           #endif
         #endif

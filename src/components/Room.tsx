@@ -592,9 +592,8 @@ function Scene({
   }, [scene, fog]);
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== "production") Object.assign(window, { __three: scene, __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.(), __worlds: { defs: WORLDS, origin: ORIGIN, WORLDS, ORIGIN, gateOf, groundAt }, __q: { get: getQuality, choice: getQualityChoice, set: setQualityChoice, report: reportFrame } });
-    if (process.env.NODE_ENV === "production") return;
-    // window.__scene: scrub the world deterministically and save stills.
+    Object.assign(window, { __gl: gl, __three: scene, __rig: rig.current, __input: input.current, __cam: cam, __stage: stage, __v: v, __enter: (m: Mode) => enterRef.current?.(m), __exit: () => exitRef.current?.(), __api: apiRef, __plane: planeApi, __voyage: voyage, __md: musicDrift, __sky: SKY_U, __os: useOS, __start: () => startRef.current?.(), __worlds: { defs: WORLDS, origin: ORIGIN, WORLDS, ORIGIN, gateOf, groundAt }, __q: { get: getQuality, choice: getQualityChoice, set: setQualityChoice, report: reportFrame } });
+        // window.__scene: scrub the world deterministically and save stills.
     //   step(seconds, dt)  run the simulation forward in fixed steps (the pane itself only paints ~2 fps)
     //   time(h)            hour of day; fly() / warp(z) / land(); intro(t) seconds into the arrival
     //   view({pos, look, fov, focus}) hold a viewpoint, view(null) to release
