@@ -10,6 +10,7 @@ import { funeralLand } from "./funeral/land";
 import { GROTTO } from "./sea/shape";
 import { FINALE_ENTRY, FINALE_GATE, FINALE_PATH, FINALE_TERRAIN } from "./seafinale/shape";
 import { SUN_CANVAS, SUN_ENTRY, SUN_GATE, SUN_OBSTACLES, SUN_PATH, SUN_SKY, SUN_TERRAIN } from "./sun/shape";
+import { flightPlan } from "./fairy/track";
 
 // Angelų takas, the path of angels. The paper plane's flight is a pilgrimage
 // along a path of light between worlds, and every world is one painting by
@@ -571,39 +572,12 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     ceil: 660,
     entry: { x: -45, z: 1840, above: 7.5, yaw: -0.155 },
     gate: { x: 646, z: -1335, above: 70, yaw: -0.363 },
-    // in low under the trees of a wood, along a winding track (Fairy.tsx trackX), the castle only glimpsed
-    // through the leaves; up off the track where the wood opens, over the crest of the rise, and the whole plain
-    // and the mountain are there at once. Then down off the rise and low over the fields; then a long climb straight at the castle, the mountain rising to
-    // fill the sky, to pass close under its towers by its right flank and the slim peak beside it; and away over
-    // the plain beyond, down toward the sun
-    path: [
-      [-45, 1840, 7.5],
-      [-31, 1800, 7.5],
-      [-4, 1760, 7.5],
-      [24, 1720, 7.5],
-      [43, 1680, 8],
-      [44, 1640, 10],
-      [28, 1600, 16],
-      [8, 1560, 24],
-      [0, 1500, 38],
-      [3, 1380, 43],
-      [6, 1260, 45],
-      [10, 1130, 52],
-      [16, 1010, 59],
-      [30, 880, 102],
-      [50, 700, 164],
-      [72, 500, 228],
-      [94, 300, 289],
-      [114, 110, 347],
-      [136, -60, 401],
-      [174, -170, 424],
-      [204, -270, 439],
-      [240, -450, 428],
-      [335, -700, 375],
-      [470, -1000, 260],
-      [646, -1335, 70],
-      [659, -1369, 69],
-    ],
+    // in low under the trees of a wood, along a winding track, the castle only glimpsed through the leaves; up over
+    // the crest of the rise, and the whole plain and the mountain are there at once; a long level glide over the
+    // fields, then one long even climb at the castle, to pass close under its towers by its right flank and the slim
+    // peak beside it; and out along the pale road behind it, descending in a long ease to the gate on the hill.
+    // (laid as smooth curves from the ways themselves, worlds/fairy/track.ts flightPlan; set below, once ground exists)
+    path: [],
     // the mountain as a stack of drums, wide at the foot and narrow under the castle (worlds/fairy/mountain.ts MT),
     // then the castle's wards and the peaks about it
     obstacles: [
@@ -952,6 +926,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
   },
 };
 
+// Castle Fairy Tale's line of flight is laid from its ways and the ground (worlds/fairy/track.ts)
+WORLDS.fairy.path = flightPlan((x, z) => groundAt(WORLDS.fairy, x, z));
 // a painting's standing wall is a thing to fly round, like any other
 for (const def of Object.values(WORLDS)) for (const c of def.canvases) def.obstacles.push({ x: c.x, z: c.z, r: 12, h: 36 });
 
