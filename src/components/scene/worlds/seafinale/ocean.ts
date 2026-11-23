@@ -602,10 +602,10 @@ export function makeCrashMaterial() {
     depthWrite: false,
     depthTest: false,
     side: THREE.BackSide,
-    uniforms: { ...SKY_U, ...FINALE_U },
+    uniforms: { ...SKY_U, ...FINALE_U, uThin: { value: 0 } },
     vertexShader: /* glsl */ `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
-      uniform float uCrash;
+      uniform float uCrash; uniform float uThin;
       varying vec3 vDir;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -622,6 +622,9 @@ export function makeCrashMaterial() {
         // (soft: the lace only just shows in it, so the white comes down as one body and does not flicker)
         vec3 foam = W_FOAM * (uSkyCol * 0.8 + uKeyCol * 0.45 + 0.25) * (0.93 + 0.07 * l1.x) * (0.94 + 0.1 * fall);
         float a = clamp(front * uCrash * 1.3 + uCrash * uCrash * uCrash, 0.0, 1.0);
+        // (when the way on is a window onto the next world, the foam is only a thin veil: the still sea beyond is
+        // seen through the falling crest)
+        a *= 1.0 - uThin * 0.55;
         gl_FragColor = vec4(foam, a);
         ${END}
       }`,

@@ -7,6 +7,7 @@ import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, WORLD_U, makeTempera, rng, type GroundPalette, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { greatSunMaterial } from "./sun/life";
+import { PORTAL_U } from "./portal";
 import { buildWisps, makeWispMaterial } from "./sea/water";
 import { makeCloudPaint, paintedCloudGeometry, type PCloud } from "./stars/forms";
 import { SKY_U, airState, mixSky, type SkyState } from "../sky";
@@ -325,6 +326,8 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     const eye: V3 = [camera.position.x - ORIGIN.x, camera.position.y - ORIGIN.y, camera.position.z - ORIGIN.z];
     rainRef.current?.position.set(eye[0], eye[1], eye[2]);
     crashRef.current?.position.set(eye[0], eye[1], eye[2]);
+    // (the window onto the next world, when there is one, shows through the crash)
+    b.crashMat.uniforms.uThin.value = PORTAL_U.uPortalK.value;
     // one ship works her way right up the face as the wave stands, hangs under the crest, and is thrown back
     const crestK = sm(p, 0.42, 0.62) * (1 - sm(p, 0.74, 0.9));
     const { up, fwd, right, m } = tmp.current;
@@ -361,7 +364,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
   });
   return (
     <>
-      <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.9, 0.6]} pathGain={0.3} angels={false} marks={false} />
+      <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.9, 0.6]} pathGain={0.3} angels={false} marks={false} gateSize={[32, 42]} />
       {/* (hung beyond the wave, which is further off than the shared sun stands) */}
       <mesh material={b.sunMat} frustumCulled={false} renderOrder={-4}>
         <planeGeometry args={[2, 2]} />
