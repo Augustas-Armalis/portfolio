@@ -4,6 +4,6 @@
 export const MUSIC_CREDIT: Record<"field" | "forest" | "sea", string | null> = {
   field: null, // field.mp3: his own, "Tikra giria"
   forest: null, // forest.mp3: his own, "Vieškelis"
-  sea: "M. K. Čiurlionis, The Sea, VL 317 · Jean Dubé, piano · CC BY 4.0",
+  sea: null, // sea.mp3: his own, "Paplūdimys"
 };
 export const MUSIC_CREDITS = Object.values(MUSIC_CREDIT).filter((c): c is string => !!c);

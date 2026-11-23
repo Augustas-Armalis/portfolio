@@ -59,8 +59,7 @@ public/icons/system/*.svg: from WhiteSur icon theme by vinceliuice, https://gith
 - public/assets/ambience/sea-waves.mp3: "Binaural Beach Waves 4" (CC0, excerpt), https://archive.org/details/soundica-fs-457149-binaural-beach-waves-4-wav
 
 ## Čiurlionis recordings (CC BY 4.0), added 20 Nov
-public/content/music/field.mp3 ("Tikra giria") and public/content/music/forest.mp3 ("Vieškelis") are Augustas Armalis's own music. No YouTube or other streamed music is used anywhere.
-- public/content/music/sea.mp3 (the scene's music from The Offering to the end, until his own): M. K. Čiurlionis, The Sea (Jūra), VL 317, piano. Performed by Jean Dubé. Creative Commons Attribution 4.0, via IMSLP: https://imslp.org/wiki/The_Sea,_Op.28_(%C4%8Ciurlionis,_Mikalojus_Konstantinas)
+public/content/music/field.mp3 ("Tikra giria"), public/content/music/forest.mp3 ("Vieškelis") and public/content/music/sea.mp3 ("Paplūdimys") are Augustas Armalis's own music. No YouTube or other streamed music is used anywhere.
 
 ## Added 20 Nov (OS content round)
 
