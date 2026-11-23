@@ -303,8 +303,9 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       e.seed = (e.seed * 7.31 + 1.7) % 97;
       e.nextBolt = t + 3.5 + ((e.seed * 3.3) % 5.5);
       // (ahead and to the open sea's side, where nothing stands before it; its head up in the deck)
-      const ang = 0.35 + ((e.seed * 0.37) % 1) * 1.0;
-      const dist = 1300 + ((e.seed * 0.61) % 1) * 1300;
+      // (well inside the view, and nearer than the wave, so nothing hides it)
+      const ang = 0.1 + ((e.seed * 0.37) % 1) * 0.5;
+      const dist = 620 + ((e.seed * 0.61) % 1) * 420;
       camera.getWorldDirection(tmp.current.fwd);
       const fl = Math.hypot(tmp.current.fwd.x, tmp.current.fwd.z) || 1;
       const hx = tmp.current.fwd.x / fl;
@@ -313,7 +314,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       const dirz = hz * Math.cos(ang) - hx * Math.sin(ang);
       const u = b.boltMat.uniforms;
       u.uAt.value.set(camera.position.x - ORIGIN.x + dirx * dist, camera.position.y - ORIGIN.y + 420 + ((e.seed * 0.83) % 1) * 260, camera.position.z - ORIGIN.z + dirz * dist);
-      u.uSize.value.set(900, 1500);
+      u.uSize.value.set(620, 1150);
       u.uBolt.value.x = e.seed;
     }
     const age = t - e.boltAt;
