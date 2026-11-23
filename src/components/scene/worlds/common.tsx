@@ -561,6 +561,7 @@ export function loadPaintings() {
 }
 // a canvas that arrives later than the code finds its world by its name
 const WORLD_OF: [RegExp, WorldId][] = [
+  [/^friendship/, "friendship"],
   [/^sun/, "sun"],
   [/^stars|^pyramid/, "stars"],
   [/^rex/, "rex"],
@@ -673,6 +674,7 @@ function makeAuraMaterial(size: [number, number], half: [number, number], tint: 
 // whatever is behind it, while pale type stays above it.
 const HANG: Record<WorldId, { ink: "dark" | "light"; glow: number }> = {
   home: { ink: "light", glow: 0.3 },
+  friendship: { ink: "light", glow: 0.5 },
   sun: { ink: "light", glow: 0.34 },
   stars: { ink: "light", glow: 0.5 },
   rex: { ink: "light", glow: 0.5 },
