@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
@@ -12,7 +12,7 @@ import { ORIGIN, WORLDS, voyage } from "./voyage";
 import { Walkers, useDeepLens } from "./fairy/shared";
 import { FUNERAL_U } from "./funeral/air";
 import { ROAD_W, funeralLand } from "./funeral/land";
-import { CAVE, buildFuneralRock, makeLedgeMaterial, makeRockMaterial } from "./funeral/rock";
+import { CAVE, buildFuneralRock, dropFuneralRock, makeLedgeMaterial, makeRockMaterial, prepareFuneralRock } from "./funeral/rock";
 import { buildSouls } from "./funeral/souls";
 
 // Funeral Symphony VI (Laidotuvių simfonija, 1903). Deep ultramarine pastel: a steep, dark, sculpted mountain,
@@ -223,6 +223,9 @@ function makeAuroraMaterial() {
   });
 }
 
+// (its mountains can be made ahead in slices: worlds/Worlds.tsx)
+export const prepareFuneral = (props: Pick<WorldProps, "mobile">) => prepareFuneralRock(props.mobile);
+
 export default function FuneralWorld({ props }: { props: WorldProps }) {
   // (the near plane at arm's length while this world is flown: far surfaces do not shimmer)
   useDeepLens("funeral");
@@ -395,6 +398,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       shrineMat: makeTempera({ amb: 1.0, key: 0.3, rim: [0.4, 0.26, 0.08], rimPow: 3.2 }),
     };
   }, [props.mobile, props.effects > 0.5]);
+  useEffect(() => () => dropFuneralRock(b.rock), [b]);
   useFrame(({ camera }) => {
     // made ready ahead of time, it waits
     if (voyage.cur !== "funeral") return;
