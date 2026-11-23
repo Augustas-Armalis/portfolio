@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { HOME_GATE_Z, roadX } from "../flightPath";
 import { pathW, pathX } from "../shared";
-import { groveWood, mainPathD, sidePathD, fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyArea, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
+import { FARM, groveWood, mainPathD, sidePathD, fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyArea, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
 
 // The land the desk stands in, written once and read by everything that
 // stands on it. The desk is at the origin and the visitor looks north (-z).
@@ -461,6 +461,8 @@ export function forestD(x: number, z: number) {
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
   // the town's ground and the river's banks are open
   d *= sstep(SACRED.foot - 6, SACRED.foot + 20, hyp(x - SACRED.x, z - SACRED.z));
+  // beyond the farmland to the east a wood runs down toward the coast
+  d = Math.max(d, sstep(400, 470, x) * sstep(-60, 20, -z + 40) * (0.65 + 0.35 * mid) * sstep(130, 190, c));
   // the farmland east of the road is open
   d *= 1 - 0.92 * fieldK(x, z);
   d *= sstep(TOWN.r - 18, TOWN.r + 26, hyp(x - TOWN.x, z - TOWN.z)) * sstep(HILL.foot - 18, HILL.foot + 8, hyp(x - HILL.x, z - HILL.z));
@@ -515,7 +517,8 @@ export function plantHome(amount: number): HomeTree[] {
     const nn = Math.sqrt(1 + sl * sl);
     for (const side of [-1, 1]) {
       const u = r();
-      const off = riverW(x) + 4.5 + r() * 4;
+      // (at the water's edge, below the quay street and its lanterns)
+      const off = riverW(x) + 1.4 + r() * 1.8;
       if (u < 0.3 || Math.abs(x + 128) < 16 || Math.abs(x + 262) < 12 || Math.abs(x + 214) < 7) continue;
       const tx = x - (side * off * sl) / nn;
       const tz = riverZ(x) + (side * off) / nn;
@@ -525,6 +528,26 @@ export function plantHome(amount: number): HomeTree[] {
   for (let i = 0; i < 5; i++) {
     const a = 0.6 + i * 1.25 + r() * 0.3;
     push(CHURCH.x + Math.cos(a) * 25, CHURCH.z + Math.sin(a) * 21, "broad", 1.15 + r() * 0.25, 1);
+  }
+
+  // 1c. hedgerows: lines of trees and bushes along the edges of the fields east of the road (journey.ts FARM)
+  {
+    const c0 = Math.cos(FARM.rot);
+    const s0 = Math.sin(FARM.rot);
+    for (let gx = -40; gx < 40; gx++)
+      for (let gz = -40; gz < 40; gz++) {
+        if (r() > 0.22) continue;
+        // a point along the edge of plot (gx, gz), in the plots' own frame, turned back to the land
+        const along = r();
+        const vert = r() < 0.5;
+        const qx = (gx + (vert ? 0 : along)) * FARM.cw;
+        const qz = (gz + (vert ? along : 0)) * FARM.cd;
+        const x = c0 * qx + s0 * qz;
+        const z = -s0 * qx + c0 * qz;
+        if (fieldK(x, z) < 0.5 || inland(x, z) < 120) continue;
+        const u = r();
+        push(x, z, u < 0.45 ? "broad" : u < 0.75 ? "birch" : "bush", 0.7 + r() * 0.4, Math.hypot(x, z) < 240 ? 1 : 2);
+      }
   }
 
   // 2. whole trees out to 330 m: a jittered grid, kept where the wood is
