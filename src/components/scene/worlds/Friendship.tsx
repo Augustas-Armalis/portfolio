@@ -14,6 +14,7 @@ import { FRIEND_U, caveGeometry, makeCaveMaterial } from "./friendship/cave";
 import { forestSteps, pathX, withOrb, type Forest } from "./friendship/forest";
 import { makeMotesMaterial, makeOrbMaterial, makeStreaksMaterial, motesGeometry, streaksGeometry } from "./friendship/light";
 import { fernGeometry, makeFernMaterial } from "./friendship/ferns";
+import { makeWaterMaterial, waterGeometry } from "./friendship/water";
 import { crownGeometry, makePaintedMaterial, maskTexture, reliefGeometry } from "./friendship/painted";
 import { FRIEND_PATH, HEAD, ORB, TUNNEL, floorAt } from "./friendship/shape";
 
@@ -111,6 +112,22 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       const z = -25 + Math.sin(a) * d * 0.7;
       puffs.push({ p: [x, floorAt(x, z) + 14 + (i % 5) * 7, z], size: 70 + ((i * 53) % 90), a: 0.55 });
     }
+    // banks of mist at three heights across the whole cavern, so every view has a near, a middle and a far layer:
+    // low along the floor, a bank at the trees' middles, and a high one under the lost vault
+    const banks: [number, number, number, number][] = [
+      [m ? 26 : 60, 18, 90, 0.3],
+      [m ? 18 : 44, 120, 150, 0.22],
+      [m ? 12 : 30, 300, 260, 0.16],
+    ];
+    banks.forEach(([n, hy, sz, a], bi) => {
+      for (let i = 0; i < n; i++) {
+        const x = -620 + ((i * 131 + bi * 57) % 1240);
+        const z = -900 + ((i * 263 + bi * 101) % 1500);
+        // (never in front of her face and the orb: the veil has that place)
+        if (Math.abs(x - 40) < 140 && z > -80 && z < 220 && hy > 60) continue;
+        puffs.push({ p: [x, floorAt(x, z) + hy + ((i * 37) % 40), z], size: sz + ((i * 53) % 80), a });
+      }
+    });
     // (the haze in the cavern's mouth, lying low where the tunnel opens)
     for (let i = 0; i < (m ? 10 : 24); i++) {
       const x = -90 + ((i * 41) % 180);
@@ -156,6 +173,8 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       herEdge: makePaintedMaterial(map, mask, 1),
       crown: makePaintedMaterial(map, mask, 2),
       ferns: fernGeometry(forest.ferns, m),
+      water: waterGeometry(pathX, m),
+      waterMat: makeWaterMaterial(),
       fernMat: makeFernMaterial(),
       orb: new THREE.SphereGeometry(ORB.r, m ? 64 : 112, m ? 40 : 72),
       orbMat: makeOrbMaterial(map),
@@ -274,6 +293,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       <mesh geometry={forest.roots} material={b.rootMat} />
       <mesh geometry={forest.shrooms} material={b.shroomMat} />
       <mesh geometry={b.ferns} material={b.fernMat} />
+      <mesh geometry={b.water} material={b.waterMat} renderOrder={1} />
       {/* her: the painting's own figure on its relief, the crown of rays keyed out and added behind */}
       <group ref={her} position={[ORB.x, 0, ORB.z]}>
         <group position={[-ORB.x, 0, -ORB.z]}>

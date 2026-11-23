@@ -46,17 +46,18 @@ const sst = (a: number, b: number, x: number) => {
 // flying away from it).
 // (the way in is the home mountain's own tunnel going on: as narrow and dark as the cave the plane entered there,
 // home/journey.ts MOUTH, for two hundred metres; then it opens, and the cavern is beyond)
-export const CAVE_Z: [number, number] = [-520, 1040];
+export const CAVE_Z: [number, number] = [-1000, 1040];
 export const TUNNEL = { z0: 780, half: 22, top: 34 };
 export function caveAt(z: number) {
   // the cavern, the throat where the tunnel opens into it, the tunnel
   const open = sst(TUNNEL.z0, 520, z);
-  let w = TUNNEL.half + (440 - TUNNEL.half) * open * open;
-  let top = TUNNEL.top + (480 - TUNNEL.top) * open;
+  // (vast: its walls some 700 m off either side, glimpsed through the haze; its vault 800 m up, lost in it)
+  let w = TUNNEL.half + (700 - TUNNEL.half) * open * open;
+  let top = TUNNEL.top + (800 - TUNNEL.top) * open;
   // (the chamber swells a little toward its middle, where she stands)
   w *= 1 + 0.06 * Math.exp(-(((z - 60) / 260) ** 2));
   // the ends close as the inside of a dome
-  const far = Math.max(0, (z - CAVE_Z[0]) / 200);
+  const far = Math.max(0, (z - CAVE_Z[0]) / 320);
   const near = Math.max(0, (CAVE_Z[1] - z) / 40);
   const k = Math.sqrt(Math.min(1, far * (2 - Math.min(far, 1)))) * Math.sqrt(Math.min(1, near * (2 - Math.min(near, 1))));
   w *= Math.max(0.02, k);

@@ -113,6 +113,22 @@ function mossRocks(list: { p: V3; r: number; seed: number; col?: V3 }[], mobile:
   return out;
 }
 
+// A dressed stone gone old: a block with rounded arrises (a superellipsoid), its faces worn hollow and chipped.
+function wornBlock(w: number, h: number, d: number, seed: number, detail = 3) {
+  const g = mergeVertices(new THREE.IcosahedronGeometry(1, detail).deleteAttribute("uv").deleteAttribute("normal"));
+  const p = g.attributes.position;
+  const v = new THREE.Vector3();
+  const e = 0.45;
+  const sp = (x: number) => Math.sign(x) * Math.pow(Math.abs(x), e);
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).normalize();
+    const wear = 1 + 0.1 * (noise2(v.x * 2.5 + seed, v.y * 2.5 + v.z * 2) - 0.5) * 2 + 0.04 * (noise2(v.z * 8 + seed, v.x * 8) - 0.5) * 2;
+    p.setXYZ(i, sp(v.x) * (w / 2) * wear, sp(v.y) * (h / 2) * wear, sp(v.z) * (d / 2) * wear);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 // inside the cave's walls, with a margin
 function inside(x: number, z: number, margin: number) {
   if (z < CAVE_Z[0] + 80 || z > CAVE_Z[1] - 30) return false;
@@ -162,9 +178,9 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
   // ---- the trees: tall pines and spruces, a few broad ones low in the clearing's edge; nearest the way the finest
   const lists: Record<string, Crown[]> = {};
   const add = (kind: string, c: Crown) => (lists[kind] ??= []).push(c);
-  const N = Math.round(560 * few);
+  const N = Math.round(820 * few);
   for (let i = 0, made = 0; i < N * 6 && made < N; i++) {
-    const x = (r() * 2 - 1) * 460;
+    const x = (r() * 2 - 1) * 680;
     const z = CAVE_Z[0] + r() * (CAVE_Z[1] - CAVE_Z[0]);
     if (!inside(x, z, 20) || clear(x, z, pathX)) continue;
     // (thicker near the way, so it is flown through a wood, not over a lawn)
@@ -244,6 +260,26 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     }
   });
   const rockMat = makeTempera({ amb: 1.1, key: 0.35, strata: 0.8, grain: 1.0, ao: 0.6, aoH: 40, rim: [0.04, 0.07, 0.05], rimPow: 3 });
+  // someone lived here once: a ring of standing stones where the way comes out from under the arch, a sign cut in
+  // each that still glows a little; and worn steps going up from the clearing to the rocks she rises from
+  const stoneCol: V3 = [0.06, 0.07, 0.055];
+  for (let i = 0; i < 7; i++) {
+    const a = -1.15 + (i / 6) * 2.3;
+    const z = ARCH.z - 70 - Math.cos(a) * 30;
+    const x = pathX(z) + Math.sin(a) * 62;
+    const h = 14 + r() * 9;
+    const yaw = Math.atan2(pathX(z) - x, 0.0001) + (r() - 0.5) * 0.3;
+    k.add(wornBlock(5 + r() * 2, h, 2.6 + r(), i * 5.3, mobile ? 2 : 3), [x, g(x, z) + h * 0.42, z], stoneCol, { top: moss, rot: [(r() - 0.5) * 0.12, yaw, (r() - 0.5) * 0.1] });
+    glowsArch.push({ p: [x - Math.sin(a) * 2, g(x, z) + h * 0.62, z], size: 5.5, col: [0.35, 0.95, 0.8], k: 0.16 });
+  }
+  for (let i = 0; i < 9; i++) {
+    const t = i / 8;
+    const x = 52 + t * 34;
+    const z = 128 - t * 84;
+    const top = g(52, 128) + 1 + t * 26;
+    const slab = top - g(x, z) + 2;
+    k.add(wornBlock(24 - t * 4, slab, 8, 40 + i, mobile ? 2 : 3), [x, g(x, z) + slab / 2 - 2, z], stoneCol, { top: [0.1, 0.12, 0.08], rot: [0, -0.38 + (r() - 0.5) * 0.08, 0] });
+  }
   const rock = k.build();
   yield* lap();
 
@@ -254,7 +290,7 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     const z = -300 + r() * 1100;
     const x = (r() * 2 - 1) * caveAt(z).w * 0.75;
     const top = caveAt(z).top * (0.86 + r() * 0.1);
-    const len = 80 + r() * 220;
+    const len = 120 + r() * 420;
     const pts: V3[] = [];
     for (let s = 0; s <= 6; s++) {
       const t = s / 6;
@@ -271,9 +307,13 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
   const mk = new Kit();
   const glows: Halo[] = [];
   const NM = Math.round(120 * few);
-  for (let c = 0; c < NM; c++) {
-    const z = -100 + r() * 1000;
-    const x = pathX(z) + (r() * 2 - 1) * (15 + r() * 200);
+  // (and a way of them: clusters along both sides of the path from the arch to her clearing, lighting it)
+  const lane: [number, number][] = [];
+  for (let z = ARCH.z - 30, s = 1; z > 110; z -= 24, s = -s) lane.push([pathX(z) + s * (13 + r() * 6), z]);
+  for (let c = 0; c < NM + lane.length; c++) {
+    const onLane = c >= NM;
+    const z = onLane ? lane[c - NM][1] : -100 + r() * 1000;
+    const x = onLane ? lane[c - NM][0] : pathX(z) + (r() * 2 - 1) * (15 + r() * 200);
     if (!inside(x, z, 10) || Math.abs(x - pathX(z)) < 6) continue;
     const teal = r() < 0.6;
     const col: V3 = teal ? [0.3, 0.9, 0.75] : [1.0, 0.72, 0.3];
@@ -314,10 +354,10 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
   for (let i = 0; i < Math.round(26 * few); i++) {
     const z = -250 + r() * 1100;
     const x = (r() * 2 - 1) * caveAt(z).w * 0.6;
-    beams.push({ foot: [x, g(x, z), z], len: 420, w: 6 + r() * 14, k: 0.5 + r() * 0.6 });
+    beams.push({ foot: [x, g(x, z), z], len: 780, w: 6 + r() * 14, k: 0.5 + r() * 0.6 });
   }
   // and the one that stands behind her, as in the picture's top
-  beams.push({ foot: [60, g(60, -60), -60], len: 420, w: 26, k: 0.7 });
+  beams.push({ foot: [60, g(60, -60), -60], len: 780, w: 26, k: 0.7 });
   void ORB;
   return forestDone({ trees, leafy, stone, rock, rockMat, roots, shrooms, glows: [...glows, ...glowsArch], beams, ferns });
 }

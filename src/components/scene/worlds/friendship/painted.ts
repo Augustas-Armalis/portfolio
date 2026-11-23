@@ -216,7 +216,8 @@ export function makePaintedMaterial(map: THREE.Texture, mask: THREE.Texture, pas
                float key = smoothstep(0.05, 0.2, rl - 0.06);
                float reach = exp(-cr.z / 520.0) * (1.0 - smoothstep(1300.0, 2000.0, rad));
                // broken as a pastel stroke is broken, more so the further it is carried
-               float brk = mix(1.0, smoothstep(0.25, 0.7, vnoise(vec2(ang * 140.0, rad * 0.012))), smoothstep(0.0, 45.0, cr.z));
+               // (broken along their length, never across into specks)
+               float brk = mix(1.0, 0.45 + 0.55 * smoothstep(0.2, 0.7, vnoise(vec2(ang * 90.0, rad * 0.004))), smoothstep(0.0, 45.0, cr.z));
                // (carried past the frame they are quieter than his own strokes, so no line marks where the picture ends)
                brk *= mix(1.0, 0.6, smoothstep(0.0, 90.0, cr.z));
                // (each ray shimmers on its own, slowly, as light along a strand of hair)
@@ -239,7 +240,7 @@ export function makePaintedMaterial(map: THREE.Texture, mask: THREE.Texture, pas
                // the orb warms what is near it a little more than he did, and the air lies over the far parts
                float od = length(vWorld - uOrb);
                col *= 1.15 + 0.5 / (1.0 + pow(od / 55.0, 2.0));
-               col = mix(col, airCol(normalize(vWorld - cameraPosition)), airAmt(vWorld) * 0.45) + orbScatter(vWorld) * 0.5;
+               col = mix(col, airCol(normalize(vWorld - cameraPosition)), airAmt(vWorld) * 0.3) + orbScatter(vWorld) * 0.5;
                gl_FragColor = vec4(col, ${pass === 0 ? "1.0" : "a"});`
         }
         ${END}
