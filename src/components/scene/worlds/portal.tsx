@@ -240,7 +240,8 @@ export function PortalView({ mobile }: { mobile: boolean }) {
       PORTAL_U.uPortalK.value = state.k;
       return;
     }
-    if (d > 70 && state.fresh > 0 && ++state.tick % 2 !== 0) {
+    // (every frame once it is live: a picture drawn every other frame made every other frame long, a judder near gates)
+    if (false && d > 70 && state.fresh > 0 && ++state.tick % 2 !== 0) {
       PORTAL_U.uPortalK.value = state.k;
       return;
     }
