@@ -59,11 +59,11 @@ const CSS = `
 .lg-range::-moz-range-thumb{width:14px;height:14px;border:0;border-radius:50%;background:#fff;box-shadow:0 1px 5px rgb(0 0 0/.35)}
 .lg-range:active::-webkit-slider-thumb{transform:scale(1.25)}
 .lg-range:focus-visible{outline:1.5px solid rgb(255 255 255/.9);outline-offset:3px;border-radius:8px}
-/* H (or the eye) hides every piece of glass over the world; it comes back the same way. (The scene's settings and
-   sound pair, data-keep, always stays.) */
-html[data-ui-hidden] .lg:not([data-keep]){filter:opacity(0)!important;pointer-events:none!important}
-html[data-ui-hidden] .lg:not([data-keep]) *{pointer-events:none!important}
-html[data-ui-hidden] [data-chrome]{opacity:0!important;pointer-events:none!important}
+/* H (or the eye) hides the flight's own glass; it comes back the same way. (The cluster at the top right, the
+   scene's controls, and anything marked data-keep always stays, whatever is added to it.) */
+html[data-ui-hidden] .lg:not([data-keep]):not([data-scene-controls] .lg){filter:opacity(0)!important;pointer-events:none!important}
+html[data-ui-hidden] .lg:not([data-keep]):not([data-scene-controls] .lg) *{pointer-events:none!important}
+html[data-ui-hidden] [data-chrome]:not([data-scene-controls] [data-chrome]){opacity:0!important;pointer-events:none!important}
 [data-chrome]{transition:opacity .5s cubic-bezier(.22,1,.36,1)}
 @media (prefers-reduced-motion:reduce){.lg::before{animation:none}.lg-btn,.lg-btn:active{transition:background-color .2s ease,color .2s ease}}
 @media (prefers-reduced-transparency:reduce){.lg{background:rgb(28 32 36/.94);-webkit-backdrop-filter:none;backdrop-filter:none}}

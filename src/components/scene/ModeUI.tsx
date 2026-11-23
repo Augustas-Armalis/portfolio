@@ -2,14 +2,14 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUp, Download, EyeOff, Grid3x3, LayoutGrid, LocateFixed, Lock, LockOpen, Minus, Moon, Pause, PlaneLanding, Play, Plus, Route, Settings2, SkipBack, SkipForward, Smartphone, Sun, Volume2, VolumeX, X, MousePointer2 } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, EyeOff, Grid3x3, Minus, Moon, Pause, PlaneLanding, Play, Plus, Settings2, SkipBack, SkipForward, Sun, Volume2, VolumeX, X, BookOpen, Move3d } from "lucide-react";
 import { mouseLook } from "./Plane";
-import { gyroAvailable, gyroCentre, gyroStart, gyroStop } from "@/lib/gyro";
+import { gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
 import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
 import { play } from "@/lib/sfx";
 import { setMusicMuted, setMusicVolume, useMusic } from "@/lib/musicDirector";
-import { WORLDS, WORLD_ORDER, markEntered, setFlight, setGuide, travelStep, travelTo, useFlightFlags, useTravel, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
+import { SPEED_STEPS, WORLDS, WORLD_ORDER, markEntered, setFlight, setSpeedStep, travelStep, travelTo, useFlightFlags, useSpeedStep, useTravel, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
 import { photoCtl, postCtl, type Capture } from "./Post";
 
@@ -935,82 +935,6 @@ function Stick({ onStick }: { onStick: (x: number, y: number) => void }) {
   );
 }
 
-// The throttle, for the other thumb: an upright glass slot on the right edge. Up is fast, the foot is a glide
-// that barely moves. It takes the thumb wherever it lands and follows it.
-function Throttle({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const id = useRef<number | null>(null);
-  const cur = useRef(value);
-  cur.current = value;
-  // let go, it settles on the nearest of the four speeds (slow, cruise, fast, very fast)
-  const settle = () => {
-    id.current = null;
-    onChange(SPEED_STEPS[stepOf(cur.current)]);
-  };
-  const PAD = 22;
-  const put = (e: React.PointerEvent) => {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    onChange(Math.min(1, Math.max(0, 1 - (e.clientY - r.top - PAD) / Math.max(1, r.height - PAD * 2))));
-  };
-  return (
-    <Glass
-      lens={false}
-      className="pointer-events-auto relative h-[176px] w-12 touch-none landscape:h-[min(176px,calc(100dvh-150px))]"
-      initial={GLASS_IN}
-      animate={GLASS_ON}
-      exit={GLASS_IN}
-      transition={GLASS_SPRING}
-      role="slider"
-      tabIndex={0}
-      aria-label="Speed"
-      aria-orientation="vertical"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(value * 100)}
-      aria-valuetext={SPEED_NAMES[stepOf(value)]}
-      data-flight="throttle"
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        id.current = e.pointerId;
-        put(e);
-        try {
-          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        } catch {
-          /* a pointer that cannot be captured still steers while it stays over the control */
-        }
-      }}
-      onPointerMove={(e) => {
-        if (id.current === e.pointerId) put(e);
-      }}
-      onPointerUp={settle}
-      onPointerCancel={settle}
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => {
-        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-          e.preventDefault();
-          e.stopPropagation();
-          onChange(SPEED_STEPS[Math.min(SPEED_STEPS.length - 1, Math.max(0, stepOf(value) + (e.key === "ArrowUp" ? 1 : -1)))]);
-        }
-      }}
-    >
-      <span className="pointer-events-none absolute inset-x-0 top-[9px] grid place-items-center text-white/70">
-        <ChevronsUp size={15} strokeWidth={2.2} />
-      </span>
-      <span className="pointer-events-none absolute inset-x-[22.5px] bottom-[22px] top-[26px] rounded-full bg-white/30">
-        <span className="absolute inset-x-0 bottom-0 rounded-full bg-white/95" style={{ height: `${value * 100}%` }} />
-      </span>
-      {/* the four speeds, as notches beside the slot */}
-      <span className="pointer-events-none absolute bottom-[22px] left-[9px] top-[26px]">
-        {SPEED_STEPS.map((v, i) => (
-          <span key={i} className={`absolute h-[2px] w-[6px] translate-y-1/2 rounded-full transition-colors duration-300 ${stepOf(value) === i ? "bg-white" : "bg-white/40"}`} style={{ bottom: `${v * 100}%` }} />
-        ))}
-      </span>
-      <span className="pointer-events-none absolute inset-x-0 bottom-[22px] top-[26px]">
-        <span className="absolute left-1/2 h-[18px] w-8 -translate-x-1/2 translate-y-1/2 rounded-full bg-white/95 shadow-[0_0_0_0.5px_rgb(255_255_255/0.8),0_2px_8px_rgb(0_0_0/0.2)]" style={{ bottom: `${value * 100}%` }} />
-      </span>
-    </Glass>
-  );
-}
-
 // The names shown in the scene's UI are English everywhere (the list itself, and its order, come from voyage.ts;
 // a world this table has not heard of yet shows its own title).
 const WORLD_NAMES: Partial<Record<WorldId, string>> = {
@@ -1072,14 +996,12 @@ function WorldsList({ current, pending, onPick, mobile }: { current: WorldId; pe
   );
 }
 
-// The speed, in four steps: slow, cruise, fast, very fast. Minus and plus step it down and up, a bar can be
-// tapped to go straight to it, and its name stands above it for a moment when it changes. The keys (Shift or E
-// faster, Ctrl or Q slower) move the same throttle smoothly, and the bars follow.
-export const SPEED_STEPS = [0.12, 0.42, 0.72, 1];
-const SPEED_NAMES = ["Slow", "Cruise", "Fast", "Very fast"];
-const stepOf = (thr: number) => SPEED_STEPS.reduce((best, v, i) => (Math.abs(v - thr) < Math.abs(SPEED_STEPS[best] - thr) ? i : best), 0);
-function SpeedSteps({ value, onChange, size }: { value: number; onChange: (v: number) => void; size: number }) {
-  const step = stepOf(value);
+// The speed, in six even steps from a drift to fast (voyage.ts SPEED_STEPS): minus and plus step it down and up, a
+// tick can be tapped to go straight to it, and its name stands above it for a moment when it changes. Space steps
+// it up and Shift down, and the ticks follow.
+const SPEED_NAMES = ["Drift", "Slow", "Easy", "Brisk", "Fast", "Very fast"];
+function SpeedSteps({ size, mobile }: { size: number; mobile: boolean }) {
+  const step = useSpeedStep();
   const [said, setSaid] = useState<number | null>(null);
   const first = useRef(true);
   useEffect(() => {
@@ -1091,22 +1013,22 @@ function SpeedSteps({ value, onChange, size }: { value: number; onChange: (v: nu
     const t = window.setTimeout(() => setSaid(null), 1300);
     return () => window.clearTimeout(t);
   }, [step]);
-  const go = (i: number) => onChange(SPEED_STEPS[Math.min(SPEED_STEPS.length - 1, Math.max(0, i))]);
   const side = `lg-btn pointer-events-auto grid shrink-0 place-items-center text-white/95 disabled:opacity-35`;
+  const w = mobile ? size : size * 0.8;
   return (
     <div className="relative flex shrink-0 items-center" role="group" aria-label="Speed" data-flight="speed">
-      <button type="button" aria-label="Slower (Ctrl or Q)" className={side} style={{ height: size, width: size * 0.8 }} disabled={step === 0} onClick={() => go(step - 1)}>
-        <Minus size={13} strokeWidth={2.4} />
+      <button type="button" aria-label="Slower (Shift)" data-tip={mobile ? undefined : "Slower  Shift"} className={`${side} lg-tip`} style={{ height: size, width: w }} disabled={step === 0} onClick={() => setSpeedStep(step - 1)}>
+        <Minus size={mobile ? 15 : 13} strokeWidth={2.4} />
       </button>
-      <div className="flex items-end gap-[3px] px-0.5" style={{ height: size }} role="radiogroup" aria-label="Speed">
+      <div className="flex items-end gap-[2px] px-0.5" style={{ height: size }} role="radiogroup" aria-label="Speed">
         {SPEED_STEPS.map((_, i) => (
-          <button key={i} type="button" role="radio" aria-checked={i === step} aria-label={SPEED_NAMES[i]} data-speed={i} className="pointer-events-auto flex h-full w-[9px] items-center justify-center" onClick={() => go(i)}>
-            <span className="w-[5px] rounded-full transition-[background-color,height,transform] duration-300 [transition-timing-function:var(--lg-spring)]" style={{ height: 7 + i * 4, backgroundColor: i <= step ? "#fff" : "rgb(255 255 255 / 0.3)", transform: i === step ? "scaleX(1.25)" : undefined }} />
+          <button key={i} type="button" role="radio" aria-checked={i === step} aria-label={SPEED_NAMES[i]} data-speed={i} className="pointer-events-auto flex h-full w-[9px] items-center justify-center" onClick={() => setSpeedStep(i)}>
+            <span className="w-[4px] rounded-full transition-[background-color,height,transform] duration-300 [transition-timing-function:var(--lg-spring)]" style={{ height: 6 + i * 3, backgroundColor: i <= step ? "#fff" : "rgb(255 255 255 / 0.3)", transform: i === step ? "scaleX(1.25)" : undefined }} />
           </button>
         ))}
       </div>
-      <button type="button" aria-label="Faster (Shift or E)" className={side} style={{ height: size, width: size * 0.8 }} disabled={step === SPEED_STEPS.length - 1} onClick={() => go(step + 1)}>
-        <Plus size={13} strokeWidth={2.4} />
+      <button type="button" aria-label="Faster (Space)" data-tip={mobile ? undefined : "Faster  Space"} className={`${side} lg-tip`} style={{ height: size, width: w }} disabled={step === SPEED_STEPS.length - 1} onClick={() => setSpeedStep(step + 1)}>
+        <Plus size={mobile ? 15 : 13} strokeWidth={2.4} />
       </button>
       <AnimatePresence>
         {said !== null && (
@@ -1203,20 +1125,16 @@ function useChrome(on: boolean) {
   return { hidden, idle, hide: () => setHidden(true), wake: () => wakeRef.current() };
 }
 
-// The flight's controls: one small capsule of round glass buttons at the foot of the view and nothing else. Music,
-// the worlds, follow the path, the speed in four steps (on a phone the throttle under the right thumb has the same
-// four), the look, hide, land. No bar across the top
+// The flight's controls: one small capsule of round glass buttons at the foot of the view and nothing else: the
+// worlds, the speed in six steps, free view, hide, land (music, settings and the rest live at the top right). No bar across the top
 // and no standing text: on the first flight of all one quiet line says how to fly, then never again; each world's
-// name stands for a few seconds as plain type. On a phone the same capsule sits between a stick under the left
-// thumb (while you fly it yourself) and a throttle under the right; a drag anywhere else turns the eye.
+// name stands for a few seconds as plain type. On a phone a drag anywhere turns the eye.
 export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => void; mobile: boolean; flying: boolean; onStick: (x: number, y: number) => void }) {
   const world = useWorld();
   const entered = useVoyageTick();
   const flags = useFlightFlags();
   const guide = (flags & 1) > 0;
-  const guided = (flags & 2) > 0;
-  const locked = (flags & 8) > 0;
-  const gyro = (flags & 16) > 0;
+  const free = (flags & 8) > 0;
   const chrome = useChrome(flying);
   // the Worlds list, and [ / ] to step through the worlds with a keyboard
   const [panel, setPanel] = useState<"worlds" | null>(null);
@@ -1257,22 +1175,6 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
     window.addEventListener("pointerdown", close, true);
     return () => window.removeEventListener("pointerdown", close, true);
   }, [panel]);
-  // the throttle is also worked from the keys: the slider follows
-  const [thr, setThr] = useState(voyage.throttle);
-  useEffect(() => {
-    let raf = 0;
-    let last = voyage.throttle;
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
-      if (Math.abs(voyage.throttle - last) > 0.004) setThr((last = voyage.throttle));
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-  const throttle = (v: number) => {
-    voyage.throttle = v;
-    setThr(v);
-  };
   // the world's name: once the cloud has opened on it, for a few seconds
   const [card, setCard] = useState(false);
   useEffect(() => {
@@ -1291,24 +1193,13 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
       setCard(false);
     };
   }, [world, entered, flying]);
-  // the phone as the eye: asked for from this tap (iOS wants that); where there are no sensors the button goes away
-  const [canGyro, setCanGyro] = useState(false);
-  useEffect(() => setCanGyro(gyroAvailable()), []);
-  const toggleGyro = async () => {
-    if (gyro) {
-      gyroStop();
-      setFlight({ gyro: false });
-      return;
-    }
-    if (await gyroStart()) setFlight({ gyro: true });
-    else setCanGyro(false);
-  };
   useEffect(() => () => gyroStop(), []);
-  // Mouse-look, with a mouse only: the pointer is locked to the scene (it disappears and cannot leave the window)
-  // and its movement turns the eye freely, as in a game; the keys still fly the plane. On from the bar's button or
-  // M; off with Esc (the browser's own way out of a locked pointer), M, or by landing. Losing the window lets the
-  // pointer go but keeps the choice: the next press on the scene takes it again.
-  const [look, setLook] = useState(false); // chosen
+  // Free view (the bar's button, or M): the eye stays wherever it is turned instead of easing back behind the plane.
+  // A drag turns it; with a mouse the pointer is also locked to the scene (it disappears and cannot leave the
+  // window) and its movement turns the eye freely, as in a game; the keys still fly the plane. Esc (the browser's
+  // own way out of a locked pointer) only gives the pointer back: free view stays, the view holds, and the next
+  // press on the scene takes the pointer again. The button or M turns it off, and the eye eases back.
+  const [, setLook] = useState(false); // chosen
   const [held, setHeld] = useState(false); // the pointer is locked now
   const [lookTip, setLookTip] = useState(false);
   const lookOn = useRef(false);
@@ -1354,14 +1245,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
       if (on) {
         setLookTip(true);
         tip = window.setTimeout(() => setLookTip(false), 2000);
-      } else {
-        setLookTip(false);
-        // (let go with Esc, the window still in front: the choice is off. Let go because the window was left: it stands)
-        if (document.hasFocus() && document.visibilityState === "visible") {
-          lookOn.current = false;
-          setLook(false);
-        }
-      }
+      } else setLookTip(false);
     };
     const refused = () => {
       mouseLook.on = false;
@@ -1380,7 +1264,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
     };
     const key = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.repeat || (e.target as HTMLElement | null)?.tagName === "INPUT") return;
-      if (e.key.toLowerCase() === "m") setLooking(!lookOn.current);
+      if (e.key.toLowerCase() === "m") setFree(!voyage.lockView);
     };
     document.addEventListener("pointerlockchange", change);
     document.addEventListener("pointerlockerror", refused);
@@ -1403,6 +1287,20 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
       lookOn.current = false;
     };
   }, [fine]); // eslint-disable-line react-hooks/exhaustive-deps
+  const setFree = (on: boolean) => {
+    setFlight({ lockView: on });
+    if (fine) setLooking(on);
+  };
+  // (on a phone, or wherever the pointer cannot be locked, M still holds the view)
+  useEffect(() => {
+    if (fine || !flying || mobile) return;
+    const key = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat || (e.target as HTMLElement | null)?.tagName === "INPUT") return;
+      if (e.key.toLowerCase() === "m") setFlight({ lockView: !voyage.lockView });
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [fine, flying, mobile]);
   // landing gives the pointer back
   useEffect(() => {
     if (!flying && lookOn.current) setLooking(false);
@@ -1435,48 +1333,24 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
     </AnimatePresence>
   );
 
+  const sep = mobile ? null : <span className="mx-0.5 h-4 w-px shrink-0 bg-white/25" />;
   const bar = (
     <Glass layout className={`pointer-events-auto flex items-center p-1 ${mobile ? "" : "gap-0.5"}`} initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={{ ...GLASS_SPRING, delay: 0.06 }} data-flight="bar" {...stop}>
-      <button type="button" aria-pressed={panel === "worlds"} aria-label="Worlds" data-tip={mobile ? undefined : "Worlds  [ ]"} className={`${ib(panel === "worlds")} transition-opacity disabled:opacity-40`} disabled={!flying} onClick={() => setPanel(panel === "worlds" ? null : "worlds")}>
-        <LayoutGrid size={isz} strokeWidth={sw} />
+      <button type="button" aria-pressed={panel === "worlds"} aria-label="Worlds" data-tip={mobile ? undefined : "Worlds  [ ]"} data-flight="worlds-button" className={`${ib(panel === "worlds")} transition-opacity disabled:opacity-40`} disabled={!flying} onClick={() => setPanel(panel === "worlds" ? null : "worlds")}>
+        <BookOpen size={isz} strokeWidth={sw} />
         {/* lit while the plane is on its way to a world picked from the list */}
         <span className={`absolute right-[5px] top-[5px] h-[5px] w-[5px] rounded-full transition-opacity duration-300 ${panel === "worlds" ? "bg-black/60" : "bg-white"} ${pending ? "animate-pulse opacity-90" : "opacity-0"}`} />
       </button>
-      <button type="button" aria-pressed={guide} aria-label="Follow the path" data-tip={guide ? "Following the path" : "Follow the path"} data-flight="auto" className={ib(guide)} onClick={() => setGuide(!guide)}>
-        <Route size={isz} strokeWidth={sw} />
-        {/* lit while the quiet hand has the plane */}
-        <span className={`absolute right-[5px] top-[5px] h-[5px] w-[5px] rounded-full transition-[background-color,opacity] duration-500 ${guide && guided ? "bg-amber-500 opacity-100" : "opacity-0"}`} />
+      {sep}
+      <SpeedSteps size={mobile ? 44 : 32} mobile={mobile} />
+      {sep}
+      <button type="button" aria-pressed={free} aria-label="Free view" data-tip={free ? "Free view on  M" : "Free view  M"} data-flight="free" className={`${ib(free)} transition-opacity disabled:opacity-40`} disabled={!flying} onClick={() => setFree(!free)}>
+        <Move3d size={isz} strokeWidth={sw} />
       </button>
-      {!mobile && (
-        <>
-          <span className="mx-0.5 h-4 w-px shrink-0 bg-white/25" />
-          <SpeedSteps value={thr} onChange={throttle} size={32} />
-          <span className="mx-0.5 h-4 w-px shrink-0 bg-white/25" />
-        </>
-      )}
-      {mobile && canGyro && (
-        <button type="button" aria-pressed={gyro} aria-label="Look by moving your phone" className={ib(gyro)} onClick={toggleGyro}>
-          <Smartphone size={isz} strokeWidth={sw} />
-        </button>
-      )}
-      {gyro ? (
-        <button type="button" aria-label="Recentre the view" className={ib(false)} onClick={() => gyroCentre()}>
-          <LocateFixed size={isz} strokeWidth={sw} />
-        </button>
-      ) : (
-        <button type="button" aria-pressed={locked} aria-label="Keep the view where you turn it" data-tip={locked ? "View held" : "Hold the view"} data-flight="lock" className={ib(locked)} onClick={() => setFlight({ lockView: !locked })}>
-          {locked ? <Lock size={isz} strokeWidth={sw} /> : <LockOpen size={isz} strokeWidth={sw} />}
-        </button>
-      )}
-      {fine && !gyro && (
-        <button type="button" aria-pressed={look} aria-label="Look round with the mouse" data-tip={look ? "Mouse look on  M" : "Mouse look  M"} data-flight="mouselook" className={`${ib(look)} transition-opacity disabled:opacity-40`} disabled={!flying} onClick={() => setLooking(!look)}>
-          <MousePointer2 size={isz} strokeWidth={sw} />
-        </button>
-      )}
       <button type="button" aria-label="Hide the controls" data-tip="Hide  H" data-flight="hide" className={ib(false)} onClick={() => (setPanel(null), chrome.hide())}>
         <EyeOff size={isz} strokeWidth={sw} />
       </button>
-      <span className="mx-0.5 h-4 w-px shrink-0 bg-white/25" />
+      {sep}
       <button type="button" data-mode-exit="" data-flight="land" aria-label="Land (Esc)" data-tip="Land  Esc" className={ib(false)} onClick={(e) => (e.stopPropagation(), onLand())}>
         <PlaneLanding size={isz + 1} strokeWidth={sw} />
       </button>
@@ -1505,9 +1379,6 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
         <div data-chrome="" data-flight-ui="" className={`pointer-events-none absolute z-30 ${foot}`} style={{ left: SAFE.l, ...rest(0.5) }}>
           <AnimatePresence>{flying && !guide && <Stick key="stick" onStick={onStick} />}</AnimatePresence>
         </div>
-        <div data-chrome="" data-flight-ui="" className={`pointer-events-none absolute z-30 ${foot}`} style={{ right: SAFE.r, ...rest(0.5) }}>
-          <Throttle value={thr} onChange={throttle} />
-        </div>
         <div data-chrome="" data-flight-ui="" className="pointer-events-none absolute inset-x-0 z-30 flex justify-center" style={{ bottom: SAFE.b, ...rest(0.3) }}>
           <div className="absolute bottom-[58px] left-1/2 -translate-x-1/2" {...stop}>
             {panels}
@@ -1522,7 +1393,7 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
     <>
       {!held && (
         <OnceHint id="fly" at="top-[34%]">
-          W A S D to fly · drag to look · scroll to zoom · H hides everything
+          W up · S down · A D turn · Space faster · Shift slower · drag to look · H hides
         </OnceHint>
       )}
       <div data-chrome="" data-flight-ui="" className="pointer-events-none absolute inset-x-0 bottom-5 z-30 flex justify-center px-4 [@media(hover:hover)]:hover:!opacity-100" style={rest(0.16)}>

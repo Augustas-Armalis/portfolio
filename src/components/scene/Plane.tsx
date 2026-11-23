@@ -30,7 +30,6 @@ import { KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kin
 export type FlightInput = {
   sx: number;
   sy: number;
-  thr?: number;
   climb?: number;
   wheel?: number;
   moved?: number;
@@ -76,9 +75,9 @@ const smooth01 = (t: number) => {
   const k = clamp01(t);
   return k * k * (3 - 2 * k);
 };
-// `cruise` is the top of the ordinary range; the last stretch of the throttle opens on up to `max`, three times as
-// fast, eased in so the rush builds instead of arriving
-export const SPEED = { min: 3.2, cruise: 28, max: 84 };
+// The six speeds (voyage.ts SPEED_STEPS, 0..1) are evenly spread from `min`, a slow drift, to `max`, fast;
+// `cruise` is where the eye's widening for speed (fovT) eases off.
+export const SPEED = { min: 4, cruise: 28, max: 60 };
 // how far the chase camera stands back (1 = as designed), kept for the rest of the visit
 export const zoomMem = { v: 1, min: 0.55, max: 3.4 };
 // The bank keys (A / D and the arrows), held by the plane itself while it flies with a keyboard.
@@ -100,12 +99,7 @@ const OPT_NONE = {};
 const OPT_HANDS = { hands: true };
 const OPT_LAUNCH = { launching: true };
 const OPT_LAUNCH_HANDS = { launching: true, hands: true };
-export const speedOf = (throttle: number) => {
-  const t = clamp01(throttle);
-  const rush = clamp01((t - 0.7) / 0.3);
-  const e = rush * rush * (3 - 2 * rush);
-  return SPEED.min + (SPEED.cruise - SPEED.min) * Math.pow(t, 1.35) + (SPEED.max - SPEED.cruise) * e * e;
-};
+export const speedOf = (throttle: number) => SPEED.min + (SPEED.max - SPEED.min) * clamp01(throttle);
 
 // A classic dart, folded from one sheet: the keel pinched underneath, wings
 // with a slight dihedral, their tips creased up. Flat-shaded so every fold
@@ -242,7 +236,8 @@ export function Plane({
   useEffect(() => {
     if (!flying) return;
     const set = (e: KeyboardEvent, on: boolean) => {
-      const k = e.key.toLowerCase();
+      // (by the key's place on the keyboard, so any layout, Caps Lock or a held Shift still banks)
+      const k = e.code === "KeyA" ? "a" : e.code === "KeyD" ? "d" : e.key.toLowerCase();
       // (a chord with Cmd, Alt or Ctrl is the browser's; an arrow pressed on a slider is the slider's)
       if (on && (e.metaKey || e.altKey || e.ctrlKey || (k.startsWith("arrow") && (e.target as HTMLElement | null)?.tagName === "INPUT"))) return;
       if (k === "a" || k === "arrowleft") bank.l = on;
@@ -472,8 +467,7 @@ export function Plane({
     // (home is real land: knolls, hills, a lake, the sea and the mountain ranges; see homeGround.ts)
     const ground = (x: number, z: number) => (id === "home" ? homeGround(x, z) : groundAt(def, x, z));
 
-    // throttle: the keys ease it (the wheel and a pinch are the lens's: see chase)
-    voyage.throttle = clamp01(voyage.throttle + (input.thr ?? 0) * 0.42 * dt);
+    // (the throttle is stepped, by Space and Shift or the bar: voyage.ts stepSpeed. The wheel and a pinch are the lens's: see chase)
 
     // the stick, with a soft centre so small corrections are small
     const shape = (v: number) => v * (0.45 + 0.55 * v * v);
@@ -498,10 +492,15 @@ export function Plane({
     let sy = shape(st.sy);
     const climb = st.climbF;
     const touching = Math.abs(inSx) > 0.03 || Math.abs(inSy) > 0.03 || (input.climb ?? 0) !== 0;
+    // A held key (or the stick) always flies the plane, at once: nothing below (the quiet hand, the gate's pull, the
+    // edge of the world, a tree or a tower ahead) may take the turn from it. (He could not turn in the forest: the
+    // quiet hand let go over half a second and the trees each took up to four parts in five of the stick.)
+    const steering = !opts.hands && Math.abs(inSx) > 0.03;
     if (touching && !stale && !opts.hands) st.idle = 0;
     else st.idle += dt;
-    const want = opts.hands || opts.launching || (voyage.guide && (st.idle > 3.2 || (input.auto && !touching && st.idle > 1.4))) ? 1 : 0;
-    voyage.assist = damp(voyage.assist, want, want ? 0.85 : 5.5, dt);
+    const want = opts.hands || (opts.launching && !touching) || (voyage.guide && !touching && (st.idle > 3.2 || (input.auto && st.idle > 1.4))) ? 1 : 0;
+    if (touching && !opts.hands) voyage.assist = 0;
+    else voyage.assist = damp(voyage.assist, want, want ? 0.85 : 5.5, dt);
     noteAssist();
     const a = voyage.assist;
 
@@ -596,7 +595,7 @@ export function Plane({
       if (edge > 0) {
         const outward = (-Math.sin(st.yaw) * ex - Math.cos(st.yaw) * ez) / Math.max(r, 1);
         const err = wrap(Math.atan2(ex, ez) - st.yaw);
-        const k = edge * 0.75 * (outward > -0.2 ? 1 : 0.2);
+        const k = steering ? 0 : edge * 0.75 * (outward > -0.2 ? 1 : 0.2);
         sx = sx * (1 - k) + THREE.MathUtils.clamp(-err * 1.1, -1, 1) * k;
       }
     }
@@ -632,7 +631,7 @@ export function Plane({
       const rad = ob.bell ? ob.r * Math.sqrt(Math.max(0.02, 1 - Math.pow(t, 2.5))) : ob.r;
       const k = smooth01(1 - (d - rad) / reach) * smooth01((top + 8 - st.pos.y) / 10);
       const toward = (Math.sin(st.yaw) * ox + Math.cos(st.yaw) * oz) / Math.max(d, 1); // > 0 when flying at it
-      if (toward > 0) {
+      if (toward > 0 && !steering) {
         // which side of it are we headed for: bank to that side
         const cross = -Math.sin(st.yaw) * oz + Math.cos(st.yaw) * ox;
         sx = sx * (1 - k * 0.8) + (cross > 0 ? 1 : -1) * k * 0.8;
@@ -878,7 +877,7 @@ export function Plane({
       st.gateAlong = NaN;
       voyage.flying = true;
       voyage.assist = 1;
-      voyage.throttle = 0.42;
+      voyage.throttle = 0.2;
       updateNose();
     },
     fly: (dt, input, cam) => {
@@ -888,7 +887,6 @@ export function Plane({
       // in the first moments, and while cloud is over the lens, the plane flies itself
       const hands = st.t < 0.9 || voyage.phase === "closing";
       if (hands) {
-        handsIn.thr = input.thr;
         handsIn.wheel = input.wheel;
         handsIn.moved = input.moved;
       }
