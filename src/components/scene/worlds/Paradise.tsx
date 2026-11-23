@@ -4,9 +4,10 @@ import * as THREE from "three";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, makeWater, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
-import { Procession, RayedSun, RisingFlock, SunShafts, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, useDeepLens, type Beam, type Crown, type Heap } from "./fairy/shared";
-import { COLONNADE, ISLE, POOL_R, RILLS, TERRACES, TOP_R, TOP_Y, Wings, buildColonnade, buildSteps, offFlight, seraph, stoneAt } from "./paradise/isle";
-import { Blooms, Butterflies, CloudDeck, Ship, makeWingMaterial, type Bloom, type Flutter } from "./paradise/life";
+import { Procession, RayedSun, RisingFlock, SunShafts, heapBlobs, heapMesh, leafyMesh, makeHeapMaterial, makeLeafyMaterial, useDeepLens, type Beam, type Crown, type Heap } from "./fairy/shared";
+import { buildTree, makeLeafTexture } from "../home/trees";
+import { COLONNADE, ISLE, POOL_R, RILLS, TERRACES, TOP_R, TOP_Y, Wings, buildColonnade, buildGardens, buildNiches, buildRills, buildSteps, offFlight, seraph, stoneAt } from "./paradise/isle";
+import { Blooms, Butterflies, CloudDeck, Ship, makeGardenMaterial, makeRillMaterial, makeWingMaterial, type Bloom, type Flutter } from "./paradise/life";
 import { makeSea } from "./paradise/sea";
 import { WORLDS, groundAt } from "./voyage";
 
@@ -181,17 +182,13 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       angelAt(x, z, 7.5, Math.atan2(-x, -z), i % 2 ? 1 : 0, { glow: 0.12 });
     }
     buildColonnade(k);
+    buildNiches(k, props.mobile);
     // ---- the garden terraces: dark cypresses and trees in blossom along them, lamps on the parapet, tall angels
     // looking out to sea, and a pylon with a light on it where each ends at the great flight
     const cyp: Crown[] = [];
     const bloss: Crown[] = [];
-    // a tree in blossom: a short dark trunk and a head of three rounded masses, one high and two leaning out
-    const blossom = (x: number, y: number, z: number, sz: number) => {
-      k.add(new THREE.CylinderGeometry(0.4, 0.7, 6, 5), [x, y + 3, z], [0.26, 0.17, 0.13], { top: [0.44, 0.3, 0.2] });
-      const a = r() * 6.28;
-      bloss.push({ p: [x, y + 5.2, z], r: sz * 0.72, h: 0.95, seed: r() });
-      for (const q of [0, 2.4]) bloss.push({ p: [x + Math.cos(a + q) * sz * 0.55, y + 3.6 + r() * 0.8, z + Math.sin(a + q) * sz * 0.55], r: sz * (0.5 + r() * 0.12), h: 0.9, seed: r() });
-    };
+    // a tree in blossom (the shared trees' own broad tree, its leaves turned to blossom): where it stands, how big
+    const blossom = (x: number, y: number, z: number, sz: number) => bloss.push({ p: [x, y - 0.3, z], r: sz, h: 0.95 + r() * 0.2, seed: r() });
     const clearOf = (a: number, by: number) => RILLS.every((q) => Math.abs(Math.atan2(Math.sin(a - q), Math.cos(a - q))) > by);
     TERRACES.forEach((t, ti) => {
       const a0 = -Math.PI / 2 + t.gap;
@@ -201,7 +198,7 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
         const a = a0 + ((i + 0.5) / nC) * (a1 - a0);
         if (!clearOf(a, 9 / t.r1)) continue;
         // cypresses in threes before the hedge, a tree in blossom between each three
-        if (i % 4 !== 3) cyp.push({ p: [Math.cos(a) * (t.r1 + 13.5), t.y1 - 0.3, Math.sin(a) * (t.r1 + 13.5)], r: 2.1 + r() * 0.7, h: 6 + r() * 2.2, seed: r() });
+        if (i % 4 !== 3) cyp.push({ p: [Math.cos(a) * (t.r1 + 13.5), t.y1 - 0.3, Math.sin(a) * (t.r1 + 13.5)], r: 6 + r() * 1.8, h: 1.05 + r() * 0.2, seed: r() });
         else {
           const rr = t.r0 - 15 - r() * 4;
           const sz = 6.2 + r() * 2.2;
@@ -335,14 +332,26 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
       const d = 1500 + r() * 900;
       puffs.push({ p: [Math.cos(a) * d, 18 + r() * 20, Math.sin(a) * d], size: 200 + r() * 200, a: 0.45 });
     }
+    const leaves = makeLeafTexture();
+    const cypressGeo = buildTree("cypress", 0, props.mobile ? 0 : 1);
+    const broadGeo = buildTree("broad", 1, props.mobile ? 0 : 1);
+    const cypM = leafyMesh(cyp, cypressGeo, makeLeafyMaterial(leaves, { lit: [1.3, 1.16, 0.8], shade: [1.25, 1.3, 0.95] }));
+    const blossM = leafyMesh(bloss, broadGeo, makeLeafyMaterial(leaves, { lit: [1.08, 1.0, 0.94], shade: [1.05, 0.92, 0.98], bloom: [0.84, 0.36, 0.48] }));
+    cypressGeo.dispose();
+    broadGeo.dispose();
     return {
       base: props,
       set: k.build(),
       wings: wings.build(),
       wingMat: makeWingMaterial(),
       steps: buildSteps(props.mobile, g),
-      cyp: cypressMesh(cyp, makeCrownMaterial({ a: [0.06, 0.14, 0.08], b: [0.1, 0.19, 0.08], shade: [0.03, 0.07, 0.07], wind: 0.5, gold: 0 })),
-      bloss: crownMesh(bloss, makeCrownMaterial({ a: [0.8, 0.34, 0.46], b: [1.0, 0.7, 0.72], shade: [0.36, 0.14, 0.27], wind: 0.6, gold: 0.1 }), true),
+      cyp: cypM,
+      bloss: blossM,
+      leaves,
+      gardens: buildGardens(props.mobile),
+      gardenMat: makeGardenMaterial(),
+      rills: buildRills(),
+      rillMat: makeRillMaterial(),
       tempera: makeTempera({ amb: 0.84, key: 0.5, dab: 0.8, grain: 0.7, wrap: 0.6, irid: 0.14, rim: [0.5, 0.45, 0.25], rimPow: 3 }),
       stone: makeTempera({ amb: 0.8, key: 0.62, dab: 0.9, wrap: 0.3 }),
       sea: makeSea({ def, sand: SAND, deep: [0.05, 0.1, 0.09], shallow: [0.22, 0.34, 0.2], tint: [0.95, 1.0, 1.02], calm: 0.45 }),
@@ -375,6 +384,8 @@ export default function ParadiseWorld({ props }: { props: WorldProps }) {
         <circleGeometry args={[POOL_R + 0.5, 64]} />
       </mesh>
       <mesh geometry={b.set} material={b.tempera} />
+      <mesh geometry={b.gardens} material={b.gardenMat} />
+      <mesh geometry={b.rills} material={b.rillMat} renderOrder={1} />
       <primitive object={b.cyp} />
       <primitive object={b.bloss} />
       <mesh geometry={b.wings} material={b.wingMat} />
