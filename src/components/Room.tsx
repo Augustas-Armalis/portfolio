@@ -15,6 +15,7 @@ import { music, sampleMusic, stopOwner } from "@/lib/audio";
 import { flightMusicForest, flightMusicStop, flightMusicTo, flightMusicVolume } from "@/lib/flightMusic";
 import { gyroLook, gyroNudge, gyroStop } from "@/lib/gyro";
 import { handoff } from "@/lib/handoff";
+import { isPaused, usePaused } from "@/lib/pause";
 import { drawRatio, dynamicScale, getQuality, getQualityChoice, lensOf, reportFrame, setQualityChoice, useQuality, type Quality } from "@/lib/quality";
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { DeskModel } from "./scene/glb";
@@ -1924,6 +1925,7 @@ export default function Room({
   const [skipIntro] = useState(introOff);
   const q = useQuality();
   const [hidden, setHidden] = useState(false);
+  const paused = usePaused();
   const [quiet, setQuiet] = useState(ambienceMuted);
   useEffect(() => onAmbienceChange(() => setQuiet(ambienceMuted())), []);
   // nothing is drawn while the tab is in the background
@@ -2037,6 +2039,8 @@ export default function Room({
     const kd = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
       if (e.metaKey || e.altKey || e.ctrlKey) return;
+      // (paused: the scene takes no keys, and Esc does not land)
+      if (isPaused()) return;
       if (k === "escape") return exit();
       if (mode === "piano" && KEYMAP[k] !== undefined && !e.repeat) {
         strike(KEYMAP[k]);
@@ -2234,7 +2238,8 @@ export default function Room({
     >
       <Canvas
         key={isMobile ? "m" : "d"}
-        frameloop={live && !hidden ? "always" : "never"}
+        // (paused, hidden or not yet live: no frames; with a frame cap the FramePacer below draws them at its pace)
+        frameloop={live && !hidden && !paused && !q.fps ? "always" : "never"}
         // (the pixel ratio is set each frame by the scene itself: the gear's cap and pixel budget, and the dynamic scale)
         dpr={1}
         shadows={{ type: THREE.PCFSoftShadowMap }}
@@ -2250,6 +2255,7 @@ export default function Room({
           gl.toneMappingExposure = 0.9;
         }}
       >
+        <FramePacer fps={live && !hidden && !paused ? q.fps : 0} />
         <Scene
           mobile={isMobile}
           reduced={reduced}
@@ -2367,7 +2373,8 @@ export default function Room({
         )}
       </AnimatePresence>
 
-      {/* the scene's settings and its sound, side by side in the top right corner, always there */}
+      <PausedVeil />
+      {/* the scene's settings, pause and sound, side by side in the top right corner, always there */}
       <AnimatePresence>
         {revealed && introDone && active && stage !== "boot" && stage !== "approach" && stage !== "done" && (
           <SceneControls
@@ -2392,6 +2399,42 @@ export default function Room({
         )}
       </AnimatePresence>
       <GlassStyles />
+    </div>
+  );
+}
+
+// The frame rate cap: with one set the canvas draws no frames of its own (frameloop "never") and this draws them, at
+// most `fps` a second, on the display's own beat (a frame is drawn on the first beat at or after its time).
+function FramePacer({ fps }: { fps: number }) {
+  const advance = useThree((s) => s.advance);
+  useEffect(() => {
+    if (!fps) return;
+    let raf = 0;
+    let next = 0;
+    const step = 1000 / fps;
+    const tick = (t: number) => {
+      raf = requestAnimationFrame(tick);
+      // (a little early is on time: the beat itself jitters by a millisecond or two)
+      if (t < next - 2) return;
+      next = Math.max(next + step, t - step);
+      advance(t);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [fps, advance]);
+  return null;
+}
+
+// Paused: the picture held, a little dimmed and greyed, under a small label.
+export function PausedVeil() {
+  const paused = usePaused();
+  return (
+    <div
+      aria-hidden={!paused}
+      className="pointer-events-none absolute inset-0 z-30 grid place-items-center transition-[opacity,backdrop-filter] duration-500"
+      style={{ opacity: paused ? 1 : 0, background: "rgb(8 10 14 / 0.28)", backdropFilter: paused ? "saturate(0.55)" : "none" }}
+    >
+      <span className="rounded-full bg-black/30 px-3.5 py-1.5 text-[13px] font-medium tracking-wide text-white/90 backdrop-blur-md">Paused</span>
     </div>
   );
 }

@@ -38,6 +38,8 @@ export const PRESETS: Record<Preset, Quality> = {
 // detail).
 export type Res = "auto" | "720" | "1080" | "1440" | "2160";
 export const RES_LABELS: Record<Res, string> = { auto: "Auto", "720": "720p", "1080": "1080p", "1440": "1440p", "2160": "4K" };
+// (in this order: numeric keys of an object always come first)
+export const RES_CHOICES: Res[] = ["auto", "720", "1080", "1440", "2160"];
 const RES_MP: Record<Exclude<Res, "auto">, number> = { "720": 0.93, "1080": 2.08, "1440": 3.7, "2160": 8.3 };
 export const FPS_CHOICES = [24, 30, 60, 120, 0] as const;
 export type Fps = (typeof FPS_CHOICES)[number];

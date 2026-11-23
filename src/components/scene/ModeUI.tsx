@@ -6,7 +6,8 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Eye
 import { mouseLook } from "./Plane";
 import { gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
-import { QUALITY_LABELS, setQualityChoice, setQualityOverride, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
+import { FPS_CHOICES, FPS_LABELS, PRESET_LABELS, QUALITY_LABELS, RES_CHOICES, RES_LABELS, setFrameCap, setQualityChoice, setQualityLevel, setQualityOverride, setResolution, useQuality, useQualityChoice, useQualitySettings, type Preset, type QualityChoice, type Res } from "@/lib/quality";
+import { togglePause, usePaused } from "@/lib/pause";
 import { play } from "@/lib/sfx";
 import { setMusicMuted, setMusicVolume, useMusic } from "@/lib/musicDirector";
 import { SPEED_STEPS, WORLDS, WORLD_ORDER, markEntered, setFlight, setSpeedStep, travelStep, travelTo, useFlightFlags, useSpeedStep, useTravel, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
@@ -1449,7 +1450,20 @@ export function NavBar({ nav, onBack, mobile = false }: { nav: "orbit" | "explor
 export function SceneControls({ mobile, quiet, onQuiet, nav, onNav }: { mobile: boolean; quiet: boolean; onQuiet: () => void; nav?: "orbit" | "explore"; onNav?: (n: "orbit" | "explore") => void }) {
   const [open, setOpen] = useState(false);
   const choice = useQualityChoice();
+  const qs = useQualitySettings();
+  const paused = usePaused();
   const m = useMusic();
+  // P pauses and resumes (not while typing somewhere)
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "p" && e.key !== "P") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      togglePause();
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, []);
   const root = useRef<HTMLDivElement>(null);
   // a press anywhere else folds it away
   useEffect(() => {
@@ -1478,6 +1492,11 @@ export function SceneControls({ mobile, quiet, onQuiet, nav, onNav }: { mobile: 
           </button>
         </Glass>
         <Glass data-keep="" className="pointer-events-auto" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING}>
+          <button type="button" aria-label={paused ? "Resume" : "Pause"} aria-pressed={paused} data-scene="pause" title={paused ? "Resume (P)" : "Pause (P)"} className={`lg-btn grid place-items-center text-white ${size} ${paused ? "lg-on" : ""}`} onClick={togglePause}>
+            {paused ? <Play size={15} strokeWidth={2} /> : <Pause size={15} strokeWidth={2} />}
+          </button>
+        </Glass>
+        <Glass data-keep="" className="pointer-events-auto" initial={GLASS_IN} animate={GLASS_ON} exit={GLASS_IN} transition={GLASS_SPRING}>
           <button type="button" aria-label={quiet ? "Turn the sound on" : "Mute the sound"} aria-pressed={quiet} data-scene="sound" className={`lg-btn grid place-items-center text-white ${size}`} onClick={onQuiet}>
             {quiet ? <VolumeX size={16} strokeWidth={2} /> : <Volume2 size={16} strokeWidth={2} />}
           </button>
@@ -1488,11 +1507,41 @@ export function SceneControls({ mobile, quiet, onQuiet, nav, onNav }: { mobile: 
           <Glass key="panel" data-keep="" radius={22} lens={false} panel className="pointer-events-auto w-[min(318px,calc(100vw-28px))] origin-top-right" initial={{ ...GLASS_IN, y: -6 }} animate={GLASS_ON} exit={{ ...GLASS_IN, y: -6 }} transition={GLASS_SPRING} data-scene="panel">
             <div className="flex flex-col gap-2.5 p-1.5">
               <div className="flex flex-col gap-1">
-                <span className={label}>Graphics</span>
-                <div className="flex gap-0.5" role="radiogroup" aria-label="Graphics quality">
+                <span className={label}>Graphics{choice === "custom" ? " · Custom" : ""}</span>
+                <div className="flex gap-0.5" role="radiogroup" aria-label="Graphics preset">
                   {(["auto", "low", "medium", "high", "ultra"] as QualityChoice[]).map((c) => (
                     <button key={c} type="button" role="radio" aria-checked={choice === c} className={seg(choice === c)} onClick={() => setQualityChoice(c)}>
                       {QUALITY_LABELS[c]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className={label}>Resolution</span>
+                <div className="flex gap-0.5" role="radiogroup" aria-label="Resolution">
+                  {RES_CHOICES.map((r) => (
+                    <button key={r} type="button" role="radio" aria-checked={qs.res === r} className={seg(qs.res === r)} onClick={() => setResolution(r)}>
+                      {RES_LABELS[r]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className={label}>Frame rate</span>
+                <div className="flex gap-0.5" role="radiogroup" aria-label="Frame rate cap">
+                  {FPS_CHOICES.map((f) => (
+                    <button key={f} type="button" role="radio" aria-checked={qs.fps === f} className={seg(qs.fps === f)} onClick={() => setFrameCap(f)}>
+                      {f === 0 ? "Max" : FPS_LABELS[f]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className={label}>Quality</span>
+                <div className="flex gap-0.5" role="radiogroup" aria-label="Quality">
+                  {(["low", "medium", "high", "ultra"] as Preset[]).map((l) => (
+                    <button key={l} type="button" role="radio" aria-checked={qs.level === l} className={seg(qs.level === l)} onClick={() => setQualityLevel(l)}>
+                      {PRESET_LABELS[l]}
                     </button>
                   ))}
                 </div>

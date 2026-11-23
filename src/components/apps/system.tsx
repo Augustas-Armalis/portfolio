@@ -10,7 +10,7 @@ import { about, apps, desktopItems, allApps, owner, projectApps, timeline, wallp
 import MusicShader from "../scene/MusicShader";
 import { DeskArt, Monogram } from "../shell";
 import { useOS, useWallpaperIndex } from "@/store";
-import { QUALITY_LABELS, setQualityChoice, useQuality, useQualityChoice, type QualityChoice } from "@/lib/quality";
+import { FPS_CHOICES, FPS_LABELS, PRESET_LABELS, QUALITY_LABELS, RES_CHOICES, RES_LABELS, setFrameCap, setQualityChoice, setQualityLevel, setResolution, useQuality, useQualityChoice, useQualitySettings, type Preset, type QualityChoice, type Res } from "@/lib/quality";
 import { Btn, Button, IconTile, List, ListRow, M, SectionHeader, Squircle, sfx, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
 import { Empty, useOpenApp } from "./shared";
 import { useSound } from "./sound";
@@ -509,6 +509,7 @@ export function SettingsApp() {
   // opened from About's More Info: the phone starts on the pane, not the list
   const [startPushed] = useState(sel === "about");
   const choice = useQualityChoice();
+  const qs = useQualitySettings();
   const quality = useQuality();
   const tile = (color: string, icon: React.ReactNode) => (
     <IconTile color={color} size={compact ? 29 : 20}>
@@ -613,7 +614,23 @@ export function SettingsApp() {
             />
           ))}
         </List>
-        <p className={`mt-2 px-1 text-ink-3 ${compact ? "t-foot px-4" : "m-sub"}`}>Applies to the desk and the field around it. Lower settings draw less grass, fewer effects and a softer picture.</p>
+        <p className={`mt-2 px-1 text-ink-3 ${compact ? "t-foot px-4" : "m-sub"}`}>{choice === "custom" ? "Custom: set below. " : ""}A preset sets everything below; changing any of them makes it custom.</p>
+        {(
+          [
+            ["Resolution", RES_CHOICES.map((r) => [r, RES_LABELS[r], qs.res === r, () => setResolution(r)] as const)],
+            ["Frame rate", FPS_CHOICES.map((f) => [String(f), FPS_LABELS[f], qs.fps === f, () => setFrameCap(f)] as const)],
+            ["Quality", (["low", "medium", "high", "ultra"] as Preset[]).map((l) => [l, PRESET_LABELS[l], qs.level === l, () => setQualityLevel(l)] as const)],
+          ] as const
+        ).map(([head, rows]) => (
+          <div key={head}>
+            <SectionHeader mac={!compact}>{head}</SectionHeader>
+            <List mac={!compact}>
+              {rows.map(([k, t, on, go]) => (
+                <ListRow mac={!compact} key={k} onClick={go} title={t} detail={on ? <Sym icon={Check} size={compact ? 18 : 14} className="text-[var(--accent-text)]" weight="bold" /> : undefined} />
+              ))}
+            </List>
+          </div>
+        ))}
       </div>
     );
   const title = { about: "About", appearance: "Appearance", wallpaper: "Wallpaper", sound: "Sound", graphics: "Graphics" }[sel] ?? "";
