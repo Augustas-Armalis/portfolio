@@ -32,10 +32,12 @@ export const REX_PAL: GroundPalette = { a: [0.19, 0.145, 0.1], b: [0.27, 0.2, 0.
 // and the dark sphere that holds it by KS, the shells of the sky by SS (they stand kilometres across: the plane
 // flies in through the first and circles the king inside them).
 // (the king stands 870 m to the points of his crown; the shells of his sky are three and a half kilometres across)
-const KS = 3.4;
-const SS = 4.4;
+// (Q: how much larger he is than he was first built: the king stands 1270 m to the points of his crown)
+export const Q = 1.42;
+const KS = 3.4 * Q;
+const SS = 4.4 * Q;
 // the globe (R), the dark sphere that holds it (B), and the shells of the sky: all struck from one axis
-export const REX = { x: 0, z: -500, r: 58 * KS, bulb: 82 * KS, portal: 62 * KS };
+export const REX = { x: 0, z: -500 * Q, r: 58 * KS, bulb: 82 * KS, portal: 62 * KS };
 const REX_CENTRE: V3 = [REX.x, 0, REX.z];
 const DROP = 197 * SS; // the shells' common centre lies this far under the water
 const SHELLS = [321 * SS, 379 * SS, 405 * SS];
@@ -174,7 +176,7 @@ function makeKingMaterial() {
         col += vec3(0.36, 0.25, 0.14) * pow(1.0 - abs(dot(n, V)), 3.0) * (1.0 - m);
         // he is so tall the air between the eye and his crown turns cool: far is hazier and bluer
         col = applyAir(col, vWorld);
-        col = mix(col, uHorizon * vec3(0.62, 0.66, 0.92) + vec3(0.02, 0.025, 0.05), smoothstep(300.0, 2400.0, length(vWorld - cameraPosition)) * 0.62);
+        col = mix(col, uHorizon * vec3(0.62, 0.66, 0.92) + vec3(0.02, 0.025, 0.05), smoothstep(${(300 * Q).toFixed(1)}, ${(2400 * Q).toFixed(1)}, length(vWorld - cameraPosition)) * 0.62);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -271,10 +273,10 @@ function makeShellMaterial(kind: 0 | 1 | 2) {
         vec3 col = p.rgb * (uSkyCol * 1.25 + vec3(0.2, 0.175, 0.16) + uHorizon * 0.22);
         float dist = length(vWorld - cameraPosition);
         // it thins to nothing where the plane goes through it, and its foot stands in the sea's mist
-        float a = p.a * smoothstep(60.0, 520.0, dist) * smoothstep(-2.0, 30.0, h) * (1.0 - airAmt(vWorld) * 0.55) * exp(-dist * uMist * 1.5) * (1.0 - smoothstep(2500.0, 2950.0, dist));
+        float a = p.a * smoothstep(60.0, 520.0, dist) * smoothstep(-2.0, 30.0, h) * (1.0 - airAmt(vWorld) * 0.55) * exp(-dist * uMist * 1.5) * (1.0 - smoothstep(${(2500 * Q).toFixed(1)}, ${(2950 * Q).toFixed(1)}, dist));
         // atmospheric perspective at this size: the far shells go hazier and bluer, the near ones keep their paint
         vec3 c2 = applyAir(col, vWorld);
-        c2 = mix(c2, uHorizon * vec3(0.6, 0.66, 0.95) + vec3(0.03, 0.035, 0.07), smoothstep(500.0, 2600.0, dist) * 0.6);
+        c2 = mix(c2, uHorizon * vec3(0.6, 0.66, 0.95) + vec3(0.03, 0.035, 0.07), smoothstep(${(500 * Q).toFixed(1)}, ${(2600 * Q).toFixed(1)}, dist) * 0.6);
         gl_FragColor = vec4(c2, a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -354,6 +356,7 @@ function* rexSteps(props: WorldProps) {
     // eight towers round his brow, the two at either hand of his face the tallest, each roofed with a spire
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2 + Math.PI / 2;
+      if (i === 6) continue; // (the one at the front: the way over his brow)
       const big = i % 4 === 0 ? 1.5 : 1;
       const p: V3 = [X + Math.sin(a) * 51 * KS, DECK, Z + Math.cos(a) * 51 * KS];
       k.add(new THREE.CylinderGeometry(3.4 * KS * big, 3.9 * KS * big, 20 * KS * big, 12), [p[0], p[1] + 2 * KS * big, p[2]], DARK, { top: DARK_TOP });
@@ -379,6 +382,8 @@ function* rexSteps(props: WorldProps) {
     const nP = 28;
     for (let i = 0; i < nP; i++) {
       const a = (i / nP) * Math.PI * 2;
+      // (the front of the crown stands open: the way on goes in there)
+      if (Math.min(a, Math.PI * 2 - a) < 0.5) continue;
       const tall = i % 2 === 0;
       k.add(new THREE.ConeGeometry(1.7 * KS, (tall ? 22 : 13) * KS, 4), [X + Math.sin(a) * 23.6 * KS, DECK + (7 + (tall ? 11 : 6.5)) * KS, Z + Math.cos(a) * 23.6 * KS], DARK, { top: [0.9, 0.62, 0.32], glow: 0.12, rot: [0, a + Math.PI / 4, 0], flat: true });
       if (tall) halos.push({ p: [X + Math.sin(a) * 23.6 * KS, DECK + 29.4 * KS, Z + Math.cos(a) * 23.6 * KS], size: 2.2 * KS, col: [1, 0.82, 0.56], k: 0.8 });
@@ -399,7 +404,7 @@ function* rexSteps(props: WorldProps) {
       const a = ((i + 0.5) / nS) * Math.PI * 2;
       const p: V3 = [X + Math.sin(a) * 53.5 * KS, 166.5 * KS, Z + Math.cos(a) * 53.5 * KS];
       k.add(new THREE.ConeGeometry(0.8 * KS, 3.6 * KS, 4), [p[0], p[1] + 1.8 * KS, p[2]], FIRE, { glow: 1.6 });
-      embers.push({ p: [p[0], p[1] + 2.2 * KS, p[2]], size: 3.6 * KS, col: FIRE, k: 0.5, at: 620 });
+      embers.push({ p: [p[0], p[1] + 2.2 * KS, p[2]], size: 3.6 * KS, col: FIRE, k: 0.5, at: 620 * Q });
     }
 
     yield;
@@ -418,7 +423,7 @@ function* rexSteps(props: WorldProps) {
     const nRim = props.mobile ? 70 : 240;
     for (let i = 0; i < nRim; i++) {
       const a = a0 + ((i + 0.5) / nRim) * (Math.PI - 2 * a0);
-      for (const s of [-1, 1]) fire([X + Math.cos(a) * (SHELLS[0] - 1.5 * SS), Math.sin(a) * (SHELLS[0] - 1.5 * SS) - DROP, Z + s * 0.6 * SS], (0.34 + (i % 5 === 0 ? 0.3 : 0)) * SS, a - Math.PI / 2, 1320 - 640 * (1 - Math.abs(a - Math.PI / 2) / (Math.PI / 2 - a0)));
+      for (const s of [-1, 1]) fire([X + Math.cos(a) * (SHELLS[0] - 1.5 * SS), Math.sin(a) * (SHELLS[0] - 1.5 * SS) - DROP, Z + s * 0.6 * SS], (0.34 + (i % 5 === 0 ? 0.3 : 0)) * SS, a - Math.PI / 2, (1320 - 640 * (1 - Math.abs(a - Math.PI / 2) / (Math.PI / 2 - a0))) * Q);
     }
     const footR = Math.sqrt(SHELLS[0] * SHELLS[0] - DROP * DROP);
     const nFoot = props.mobile ? 50 : 190;
@@ -428,7 +433,7 @@ function* rexSteps(props: WorldProps) {
       if (Math.abs(Math.sin(a)) < 0.12 && Math.cos(a) > 0) continue;
       const p: V3 = [X + Math.sin(a) * footR, 0, Z + Math.cos(a) * footR];
       k.add(new THREE.CylinderGeometry(1.1 * SS, 2.0 * SS, 1.0 * SS, 7), [p[0], 0.2 * SS, p[2]], [0.035, 0.03, 0.026], { top: [0.09, 0.07, 0.055] });
-      fire([p[0], 0.7 * SS, p[2]], (0.3 + (i % 4 === 0 ? 0.25 : 0)) * SS, 0, 1620 - 880 * (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) / Math.PI));
+      fire([p[0], 0.7 * SS, p[2]], (0.3 + (i % 4 === 0 ? 0.25 : 0)) * SS, 0, (1620 - 880 * (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) / Math.PI)) * Q);
     }
 
     yield;
@@ -475,14 +480,14 @@ function* rexSteps(props: WorldProps) {
     const sk = new Kit();
     const skyHalos: Halo[] = [];
     const skyGlows: Halo[] = [];
-    sk.add(crescent(170), [1150, 1330, -1780], [1, 0.95, 0.82], { glow: 1.6, rot: [0, -0.5, 0.75] });
-    skyGlows.push({ p: [1150, 1330, -1776], size: 560, col: [0.8, 0.8, 0.9], k: 0.14 });
+    sk.add(crescent(170 * Q), [1150 * Q, 1330 * Q, -1780 * Q], [1, 0.95, 0.82], { glow: 1.6, rot: [0, -0.5, 0.75] });
+    skyGlows.push({ p: [1150 * Q, 1330 * Q, -1776 * Q], size: 560 * Q, col: [0.8, 0.8, 0.9], k: 0.14 });
     yield;
     // stars over the outermost shell, drawn as his: small, many, warm
     for (let i = 0; i < (props.mobile ? 40 : 110); i++) {
       const a = r() * Math.PI * 2;
       const el = 0.35 + r() * 1.0;
-      const d = 2500;
+      const d = 2500 * Q;
       skyHalos.push({ p: [Math.cos(a) * Math.cos(el) * d, Math.sin(el) * d * 0.8, Math.sin(a) * Math.cos(el) * d], size: 6 + r() * 12, col: [1, 0.8, 0.6], k: 0.6 });
     }
 
@@ -497,8 +502,8 @@ function* rexSteps(props: WorldProps) {
     // cloud in rounded banks, one layer above another round him, gold where the low sun finds it, violet beneath
     const clouds: PCloud[] = [];
     const layers: [y: number, r0: number, r1: number, w: number, n: number][] = [
-      [60, 800, 2200, 80, 40],
-      [280, 1000, 2100, 110, 20],
+      [60 * Q, 800 * Q, 2200 * Q, 80 * Q, 40],
+      [280 * Q, 1000 * Q, 2100 * Q, 110 * Q, 20],
     ];
     for (const [y, r0, r1, w, n0] of layers) {
       const n = props.mobile ? Math.round(n0 * 0.5) : Math.round(n0 * (0.7 + 0.5 * props.effects));
@@ -532,23 +537,23 @@ function* rexSteps(props: WorldProps) {
     const puffs: Puff[] = [];
     for (let i = 0; i < (props.mobile ? 16 : 46); i++) {
       const a = r() * Math.PI * 2;
-      const d = 300 + r() * 1500;
-      puffs.push({ p: [X + Math.sin(a) * d, 8 + r() * 30, Z + Math.cos(a) * d], size: 150 + r() * 260, a: 0.5 });
+      const d = (300 + r() * 1500) * Q;
+      puffs.push({ p: [X + Math.sin(a) * d, 8 + r() * 30, Z + Math.cos(a) * d], size: (150 + r() * 260) * Q, a: 0.5 });
     }
     yield;
     // great birds wheeling at every height of him, and pale winged ones round his crown
     const flocks: Flock[] = [
-      { c: [X + 120, 40, Z + 900], r: 160, n: props.mobile ? 8 : 18, size: 1.3, speed: 14 },
-      { c: [X, 190, Z], r: 330, n: props.mobile ? 10 : 30, size: 1.6, speed: 18 },
-      { c: [X, 430, Z], r: 300, n: props.mobile ? 10 : 30, size: 1.6, speed: 18 },
-      { c: [X, 700, Z], r: 280, n: props.mobile ? 8 : 26, size: 1.5, speed: 18 },
-      { c: [X - 200, 560, Z + 380], r: 220, n: props.mobile ? 6 : 16, size: 1.4, speed: 16 },
-      { c: [X + 500, 120, Z - 300], r: 240, n: props.mobile ? 6 : 18, size: 1.4, speed: 15 },
-      { c: [X + 60, 30, Z + 330], r: 120, n: props.mobile ? 6 : 14, size: 1.1, speed: 12 },
+      { c: [X + 120 * Q, 40, Z + 900 * Q], r: 160 * Q, n: props.mobile ? 8 : 18, size: 1.3 * Q, speed: 14 },
+      { c: [X, 190 * Q, Z], r: 330 * Q, n: props.mobile ? 10 : 30, size: 1.6 * Q, speed: 18 },
+      { c: [X, 430 * Q, Z], r: 300 * Q, n: props.mobile ? 10 : 30, size: 1.6 * Q, speed: 18 },
+      { c: [X, 700 * Q, Z], r: 280 * Q, n: props.mobile ? 8 : 26, size: 1.5 * Q, speed: 18 },
+      { c: [X - 200 * Q, 560 * Q, Z + 380 * Q], r: 220 * Q, n: props.mobile ? 6 : 16, size: 1.4 * Q, speed: 16 },
+      { c: [X + 500 * Q, 120 * Q, Z - 300 * Q], r: 240 * Q, n: props.mobile ? 6 : 18, size: 1.4 * Q, speed: 15 },
+      { c: [X + 60 * Q, 30, Z + 330 * Q], r: 120 * Q, n: props.mobile ? 6 : 14, size: 1.1 * Q, speed: 12 },
     ];
     const winged: Flock[] = [
-      { c: [X, DECK + 70, Z], r: 250, n: props.mobile ? 8 : 22, size: 3.2, speed: 16 },
-      { c: [X, DECK + 190, Z], r: 520, n: props.mobile ? 6 : 18, size: 4, speed: 20 },
+      { c: [X, DECK + 70 * Q, Z], r: 250 * Q, n: props.mobile ? 8 : 22, size: 3.2 * Q, speed: 16 },
+      { c: [X, DECK + 190 * Q, Z], r: 520 * Q, n: props.mobile ? 6 : 18, size: 4 * Q, speed: 20 },
     ];
 
     const lights = [new THREE.Vector3(X, 30 * KS, bz)];
@@ -560,10 +565,10 @@ function* rexSteps(props: WorldProps) {
     // the long view of him is framed: dark crags stand out of the water close on either hand of the way in (near,
     // in shade), and he is lit in the middle distance with his shells fading behind
     for (const [x, z, w, h] of [
-      [-52, 1010, 15, 30],
-      [66, 968, 11, 19],
-      [-70, 640, 13, 24],
-      [112, 560, 17, 34],
+      [-52 * Q, 1010 * Q, 15 * Q, 30 * Q],
+      [66 * Q, 968 * Q, 11 * Q, 19 * Q],
+      [-70 * Q, 640 * Q, 13 * Q, 24 * Q],
+      [112 * Q, 560 * Q, 17 * Q, 34 * Q],
     ] as [number, number, number, number][])
       // (each a stand of dark spires leaning together, like the far ones along the water)
       for (const [dx, dz, kh, lean] of [
@@ -590,12 +595,12 @@ function* rexSteps(props: WorldProps) {
       // mist on the water in long level bands: before the globe at his feet, to either hand of the way in, and far
       // out under the first shell, so he stands in air with the water's edge lost
       wisps: buildWisps([
-        { x: REX.x, z: REX.z + 420, w: 1500, d: 420, y: 5, a: 0.5 },
-        { x: REX.x - 600, z: REX.z + 200, w: 1300, d: 420, y: 7, a: 0.4 },
-        { x: REX.x + 600, z: REX.z + 240, w: 1300, d: 420, y: 6, a: 0.4 },
-        { x: -300, z: 700, w: 1200, d: 360, y: 4, a: 0.35 },
-        { x: 380, z: 500, w: 1200, d: 360, y: 5, a: 0.35 },
-        { x: REX.x, z: REX.z - 700, w: 2400, d: 600, y: 8, a: 0.4 },
+        { x: REX.x, z: REX.z + 420 * Q, w: 1500 * Q, d: 420 * Q, y: 5, a: 0.5 },
+        { x: REX.x - 600 * Q, z: REX.z + 200 * Q, w: 1300 * Q, d: 420 * Q, y: 7, a: 0.4 },
+        { x: REX.x + 600 * Q, z: REX.z + 240 * Q, w: 1300 * Q, d: 420 * Q, y: 6, a: 0.4 },
+        { x: -300 * Q, z: 700 * Q, w: 1200 * Q, d: 360 * Q, y: 4, a: 0.35 },
+        { x: 380 * Q, z: 500 * Q, w: 1200 * Q, d: 360 * Q, y: 5, a: 0.35 },
+        { x: REX.x, z: REX.z - 700 * Q, w: 2400 * Q, d: 600 * Q, y: 8, a: 0.4 },
       ]),
       wispMat: makeWispMaterial(),
       nimbi: (() => {
@@ -666,7 +671,7 @@ function* rexSteps(props: WorldProps) {
       skyHalos,
       skyGlows,
       clouds: paintedCloudGeometry(clouds, [0, 100, 400]),
-      cloudMat: makeCloudPaint({ lit: [0.85, 0.62, 0.54], shade: [0.56, 0.44, 0.46], under: [0.3, 0.32, 0.5], rim: 1.1, amb: 1.25, key: 0.5, air: 0.7, fade: [2200, 2950], near: [120, 420] }),
+      cloudMat: makeCloudPaint({ lit: [0.85, 0.62, 0.54], shade: [0.56, 0.44, 0.46], under: [0.3, 0.32, 0.5], rim: 1.1, amb: 1.25, key: 0.5, air: 0.7, fade: [2200 * Q, 2950 * Q], near: [120, 420] }),
       windows,
       windowMat: makePoints({ a: [1, 0.72, 0.36], b: [1, 0.86, 0.6], scale: 420, gain: 1.6, max: 6 }),
       puffs,
@@ -676,7 +681,7 @@ function* rexSteps(props: WorldProps) {
         def,
         lights,
         lightCol: [1.0, 0.82, 0.56],
-        lightLen: 1700,
+        lightLen: 1700 * Q,
         deep: [0.034, 0.028, 0.022],
         calm: 0.3,
         shore: REX_PAL.shore,
@@ -757,7 +762,7 @@ export default function RexWorld({ props }: { props: WorldProps }) {
   return (
     <>
       <GreatSun size={0.6} tint={[1, 0.74, 0.42]} rays={56} gain={0.9} />
-      <WorldBase id="rex" def={def} pal={REX_PAL} props={props} grass={false} pathTint={[1, 0.84, 0.6]} pathGain={1.0} angels={false} gate="veil" />
+      <WorldBase id="rex" def={def} pal={REX_PAL} props={props} grass={false} pathTint={[1, 0.84, 0.6]} pathGain={1.0} angels={false} gate="veil" gateSize={[40, 72]} />
       <mesh material={b.water} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
         <planeGeometry args={[9000, 9000]} />
       </mesh>
@@ -788,7 +793,7 @@ export default function RexWorld({ props }: { props: WorldProps }) {
       <Halos list={b.halos} />
       <Kindling list={b.embers} centre={REX_CENTRE} />
       {/* and a comet of the lower air crosses before him, a while after the plane has come */}
-      <Comet world="rex" id="rex-comet" from={[-1500, 520, 0]} to={[1300, 300, -500]} seconds={34} after={28} again={80} tail={900} width={44} tint={[1, 0.78, 0.5]} />
+      <Comet world="rex" id="rex-comet" from={[-1500 * Q, 520 * Q, 0]} to={[1300 * Q, 300 * Q, -500 * Q]} seconds={38} after={28} again={80} tail={900 * Q} width={44 * Q} tint={[1, 0.78, 0.5]} />
       <Halos list={b.suns} kind={1} />
     </>
   );
