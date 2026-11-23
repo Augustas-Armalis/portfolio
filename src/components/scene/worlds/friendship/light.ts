@@ -218,16 +218,16 @@ export function streaksGeometry(n: number, seed = 11) {
   const b = new Float32Array(n * 4);
   for (let i = 0; i < n; i++) {
     // through the chamber, more toward her and the orb, none in the passage
-    const x = (r() * 2 - 1) * 380;
-    const z = -420 + r() * 900;
-    const y = 30 + r() * 380;
-    a.set([x, y, z, 5 + r() * 18], i * 4);
-    b.set([1.4 + r() * 2.6, r(), r(), r()], i * 4);
+    const x = (r() * 2 - 1) * 1150;
+    const z = -2300 + r() * 2600;
+    const y = 60 + r() * 900;
+    a.set([x, y, z, 24 + r() * 80], i * 4);
+    b.set([3 + r() * 8, r(), r(), r()], i * 4);
   }
   g.setAttribute("aA", new THREE.InstancedBufferAttribute(a, 4));
   g.setAttribute("aB", new THREE.InstancedBufferAttribute(b, 4));
   g.instanceCount = n;
-  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 200, 0), 900);
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 500, -1000), 2600);
   return g;
 }
 export function makeStreaksMaterial() {
