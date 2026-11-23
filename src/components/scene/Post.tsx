@@ -552,12 +552,16 @@ void main(){
       if (x <= 0 && y >= 0) { m[2] += t; s2[2] += tt; }
       if (x >= 0 && y >= 0) { m[3] += t; s2[3] += tt; }
     }
-    vec3 best = c; float minV = 1e9;
+    // (each quarter weighed by how even it is, not the single evenest one chosen: a choice flips from one quarter to
+    // another as the picture moves by a fraction of a pixel, and far trees and clouds sparkled with flipping dabs)
+    vec3 acc = vec3(0.0); float wsum = 0.0;
     for (int k = 0; k < 4; k++) {
       vec3 mean = m[k] / 9.0;
       float v = dot(abs(s2[k] / 9.0 - mean * mean), vec3(0.299, 0.587, 0.114));
-      if (v < minV) { minV = v; best = mean; }
+      float w = 1.0 / (1.0 + pow(v * 2000.0, 2.0));
+      acc += mean * w; wsum += w;
     }
+    vec3 best = acc / wsum;
     float spark = dot(c - best, vec3(0.299, 0.587, 0.114));
     c = mix(c, best, amt * (1.0 - smoothstep(0.03, 0.12, spark)));
   }
@@ -769,7 +773,9 @@ export function Post({ level }: { level: number }) {
     // the lens: focal length from the field of view, then the thin-lens circle at infinity
     // (a phone at the middle level keeps its frame rate: its lens blurs only in the photo mode, as before)
     const lensOn = lv >= 2 || postCtl.photo || !COARSE;
-    const dofOn = lensOn ? postCtl.dof : 0;
+    // (the light lens of Low: no depth of field but the photo mode's, no occlusion, no flight lens)
+    const lite = lv < 1;
+    const dofOn = lensOn && (!lite || postCtl.photo) ? postCtl.dof : 0;
     const focal = postCtl.sensor / 2 / Math.tan(THREE.MathUtils.degToRad(pc.fov ?? 40) / 2); // mm
     const focusMm = Math.max(postCtl.focus * 1000, focal * 1.5);
     let cocK = dofOn > 0.01 ? (0.5 * ((focal * focal) / (Math.max(1, postCtl.aperture) * (focusMm - focal))) * dofOn) / postCtl.sensor : 0;
@@ -777,7 +783,7 @@ export function Post({ level }: { level: number }) {
     let focusM = postCtl.focus;
     let band = postCtl.band;
     const F = postCtl.flight;
-    const fly = lensOn && cocK === 0 && F.k > 0.01 && !postCtl.photo && !out;
+    const fly = !lite && lensOn && cocK === 0 && F.k > 0.01 && !postCtl.photo && !out;
     if (fly) {
       focusM = F.from;
       if (F.subject) focusM = Math.max(focusM, F.subject.distanceTo(camera.position) * 1.25 + 30);
@@ -849,7 +855,7 @@ export function Post({ level }: { level: number }) {
     POST_U.uLinearOut.value = 0;
 
     // the contact shade
-    const aoK = postCtl.ao;
+    const aoK = lite ? 0 : postCtl.ao;
     if (aoK > 0.01) {
       const u = p.m.ao.uniforms;
       u.uTexel.value.set(1 / w, 1 / h);
