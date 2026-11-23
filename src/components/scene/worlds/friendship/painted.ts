@@ -80,7 +80,7 @@ export function maskTexture() {
   const g = c.getContext("2d")!;
   g.fillStyle = "#000";
   g.fillRect(0, 0, c.width, c.height);
-  g.filter = "blur(5px)";
+  g.filter = "blur(9px)";
   g.fillStyle = "#fff";
   g.beginPath();
   OUTLINE.forEach(([x, y], i) => (i ? g.lineTo(x * s, y * s) : g.moveTo(x * s, y * s)));
@@ -125,7 +125,11 @@ vec3 crownRead(vec2 px){
   float rRight = u.x > 0.001 ? (${W.toFixed(1)} - 2.0 - CROWN.x) / u.x : 1e5;
   float rEdge = min(rTop, rRight) - 14.0;
   float past = max(rad - rEdge, 0.0);
-  vec2 q = CROWN + u * min(rad, rEdge);
+  // (past the frame the ray's last stretch of paint is read again and again, mirrored, so his strokes go on as strokes
+  // and no line marks where the picture ends)
+  float m = mod(past, 360.0);
+  float back = m < 180.0 ? m : 360.0 - m;
+  vec2 q = CROWN + u * (past > 0.0 ? rEdge - back : rad);
   return vec3(q, past);
 }
 float capsule(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h); }
@@ -134,23 +138,25 @@ float reliefZ(vec2 px, float lum){
   if (uLayer > 0.5) {
     // the crown leans a little back as it rises from her head, and bows away at its far reach
     float rad = length(px - CROWN);
-    return -6.0 - rad * 0.012 - rad * rad * 0.000006;
+    return -16.0 - rad * 0.014 - rad * rad * 0.000006;
   }
   // the picture plane, bowed: her back and the right edge go away into the dark
   float x = (px.x - 640.0) / 640.0;
-  float z = -2.0 - 6.0 * x * x - 8.0 * clamp(x, 0.0, 1.0);
+  float z = -2.0 - 8.0 * x * x - 12.0 * clamp(x, 0.0, 1.0);
   // the body falls back below the arm
-  z -= 14.0 * clamp((px.y - 1000.0) / 480.0, 0.0, 1.0);
+  z -= 20.0 * clamp((px.y - 1000.0) / 480.0, 0.0, 1.0);
   // the forearm and the hand come forward; the hand most, round the orb
   // (the hand holds the orb from below and in front: it must stand clear of the orb's own surface, which comes
   // nearly thirty metres toward the eye where the fingers lie on it)
   float arm = 1.0 - smoothstep(40.0, 150.0, capsule(px, vec2(470.0, 905.0), vec2(830.0, 1140.0)));
   float along = clamp((830.0 - px.x) / 360.0, 0.0, 1.0);
-  z += arm * mix(3.0, 9.0, along);
-  z += 3.0 * (1.0 - smoothstep(60.0, 170.0, length((px - vec2(360.0, 880.0)) * vec2(1.0, 1.4))));
+  z += arm * mix(5.0, 14.0, along);
+  z += 5.0 * (1.0 - smoothstep(60.0, 170.0, length((px - vec2(360.0, 880.0)) * vec2(1.0, 1.4))));
   // the face forward of the skull, the knot of hair at the back behind it
-  z += 5.0 * (1.0 - smoothstep(20.0, 140.0, capsule(px, vec2(700.0, 470.0), vec2(720.0, 720.0))));
-  z -= 9.0 * (1.0 - smoothstep(40.0, 160.0, length(px - vec2(1240.0, 600.0))));
+  z += 8.0 * (1.0 - smoothstep(20.0, 160.0, capsule(px, vec2(700.0, 470.0), vec2(720.0, 720.0))));
+  // the near shoulder rounds forward under the chin
+  z += 5.0 * (1.0 - smoothstep(40.0, 200.0, length((px - vec2(820.0, 820.0)) * vec2(1.0, 1.2))));
+  z -= 14.0 * (1.0 - smoothstep(40.0, 180.0, length(px - vec2(1240.0, 600.0))));
   // and a little by the paint itself: light strokes stand out
   return z + (lum - 0.25) * 1.6;
 }
@@ -210,16 +216,23 @@ export function makePaintedMaterial(map: THREE.Texture, mask: THREE.Texture, pas
                float key = smoothstep(0.05, 0.2, rl - 0.06);
                float reach = exp(-cr.z / 520.0) * (1.0 - smoothstep(1300.0, 2000.0, rad));
                // broken as a pastel stroke is broken, more so the further it is carried
-               float brk = mix(1.0, smoothstep(0.25, 0.7, vnoise(vec2(ang * 140.0, rad * 0.012))), smoothstep(0.0, 300.0, cr.z));
-               float run = 0.8 + 0.3 * sin(rad * 0.02 - uTime * 0.8);
-               vec3 c = max(rc - vec3(0.05, 0.06, 0.04), 0.0) * key * fan * reach * brk * run * 3.4;
+               // (broken along their length, never across into specks)
+               float brk = mix(1.0, 0.45 + 0.55 * smoothstep(0.2, 0.7, vnoise(vec2(ang * 90.0, rad * 0.004))), smoothstep(0.0, 45.0, cr.z));
+               // (carried past the frame they are quieter than his own strokes, so no line marks where the picture ends)
+               brk *= mix(1.0, 0.6, smoothstep(0.0, 90.0, cr.z));
+               // (each ray shimmers on its own, slowly, as light along a strand of hair)
+               float run = (0.78 + 0.3 * sin(rad * 0.02 - uTime * 0.8)) * (0.7 + 0.6 * vnoise(vec2(ang * 260.0, rad * 0.006 - uTime * 0.45)));
+               vec3 c = max(rc - vec3(0.05, 0.06, 0.04), 0.0) * key * fan * reach * brk * run * 5.2;
                // (the gold of the picture's rays, and their green)
                c = mix(c, vec3(0.55, 0.95, 0.45) * dot(c, vec3(0.33)), 0.35);
                c *= 1.0 - 0.7 * airAmt(vWorld);
                gl_FragColor = vec4(c, 1.0);`
             : `float a = texture2D(tMask, vUv).r;
                // she goes into the dark at the bottom and at the picture's right edge
-               a *= smoothstep(${H.toFixed(1)}, 1260.0, px.y) * smoothstep(${W.toFixed(1)}, 1040.0, px.x);
+               // (well before the photograph's own edge and its frame, along a ragged line, never a straight cut)
+               float rag = (vnoise(vec2(px.y * 0.012, 3.0)) - 0.5) * 140.0 + (vnoise(vec2(px.y * 0.05, 9.0)) - 0.5) * 40.0;
+               float ragB = (vnoise(vec2(px.x * 0.012, 5.0)) - 0.5) * 120.0;
+               a *= smoothstep(${(H - 30).toFixed(1)}, 1180.0, px.y + ragB) * smoothstep(1235.0, 900.0, px.x + rag);
                // over the orb only the dark of her fingers is hers, not the orb's cream between them
                float onOrb = 1.0 - smoothstep(${(PAINT.r - 6).toFixed(1)}, ${(PAINT.r + 8).toFixed(1)}, length(px - vec2(${PAINT.cx.toFixed(1)}, ${PAINT.cy.toFixed(1)})));
                a *= mix(1.0, 1.0 - smoothstep(0.2, 0.42, lum), onOrb);
@@ -227,7 +240,7 @@ export function makePaintedMaterial(map: THREE.Texture, mask: THREE.Texture, pas
                // the orb warms what is near it a little more than he did, and the air lies over the far parts
                float od = length(vWorld - uOrb);
                col *= 1.15 + 0.5 / (1.0 + pow(od / 55.0, 2.0));
-               col = mix(col, airCol(normalize(vWorld - cameraPosition)), airAmt(vWorld) * 0.45) + orbScatter(vWorld) * 0.5;
+               col = mix(col, airCol(normalize(vWorld - cameraPosition)), airAmt(vWorld) * 0.3) + orbScatter(vWorld) * 0.5;
                gl_FragColor = vec4(col, ${pass === 0 ? "1.0" : "a"});`
         }
         ${END}
