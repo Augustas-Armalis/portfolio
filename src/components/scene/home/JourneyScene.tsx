@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { SKY_U, mixSky, skyState, type SkyState } from "../sky";
 import { pathOf, voyage } from "../worlds/voyage";
+import { ForestAngels } from "./Angels";
 import { Cave } from "./Cave";
 import { Farm, Sacred, SeaBoats } from "./Sacred";
 import { FOREST_LINE, TOWN } from "./journey";
@@ -129,6 +130,7 @@ export function Journey({ mobile, trees, effects }: { mobile: boolean; trees: nu
     <group ref={(g) => { if (g && process.env.NODE_ENV !== "production") Object.assign(window, { __journey: g }); }}>
       <Town mobile={mobile} />
       <Woods amount={trees} mobile={mobile} effects={effects} />
+      {effects > 0.25 && <ForestAngels amount={trees} />}
       <Cave />
       <Sacred mobile={mobile} />
       <SeaBoats />

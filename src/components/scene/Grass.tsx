@@ -88,7 +88,9 @@ function scatter(g: THREE.InstancedBufferGeometry, ring: Ring, seed: number) {
     const fade = (ring.fadeIn ? sstep(ring.fadeIn[0], ring.fadeIn[1], r) : 1) * (ring.fadeOut ? 1 - sstep(ring.fadeOut[0], ring.fadeOut[1], r) : 1);
     // the dirt path: blades thin out and shorten toward its centre
     const pz = off[i * 3 + 1];
-    const onPath = Math.min(pz > -2 ? Math.abs(off[i * 3] - pathX(pz)) / pathW(pz) : 1e3, deskPk(off[i * 3], pz));
+    const px0 = off[i * 3];
+    // (the main path, measured only where it can be near: the blades round the desk, not the whole field)
+    const onPath = Math.min(pz > -2 ? Math.abs(px0 - pathX(pz)) / pathW(pz) : 1e3, pz < 2 && pz > -20 && px0 > -14 && px0 < 5 ? deskPk(px0, pz) : 1e3);
     // (the grass thins toward the path by there being fewer blades, each still a whole blade: short dark stubs
     // standing in the sand read as dirt)
     const pathK = sstep(0.5, 1.2, onPath);
@@ -167,8 +169,10 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
           // (and the main path from the desk is that same road running on, measured the same way, so the grass
           // keeps one edge along both: no step where one ends and the other begins)
           float pk = min(root.y > uRoadEnd ? abs(root.x - pathX(root.y)) / pathW(root.y) : 1e3, deskPk(root));
-          // (fewer blades toward it, not shorter ones)
-          lod *= step(aShape.w, smoothstep(0.55, 1.25, pk));
+          // (fewer blades toward it, not shorter ones; and the grass edge follows the painted edge, ragged with the
+          // same noise, so the blades end where the earth does: no band of stubs standing on bare path)
+          pk -= vnoise(root * 0.9) * 0.32;
+          lod *= step(aShape.w, smoothstep(0.62, 0.98, pk));
           // in flight a fine tile rides with the plane and the wide one makes room for it
           #ifdef WALK
             // the fine grass underfoot, wherever one walks to
@@ -189,8 +193,11 @@ export function makeGrassMaterial(_fogDensity: number, wrap = 0, inner = false, 
         float woods = forestAt(root);
         lod *= smoothstep(level + 0.03, level + 0.3, gy) * smoothstep(38.0, 100.0, inland(root) + (vnoise(root * 0.035) - 0.5) * 46.0);
         lod *= smoothstep(0.6, 1.5, streamD(root));
-        // (and none on the lake's sandy rim: pale tufts stood in a row on the sand there)
-        lod *= smoothstep(1.3, 1.75, lk);
+        // (and none on the lake's sandy rim: pale tufts stood in a row on the sand there. The rim is where the ground
+        // paints its sand, the low strip just above the water (Terrain.tsx), so the grass stops where the sand begins,
+        // whole blades up to it and none on it: not a wide band of thinned stubs standing on pale earth)
+        float rimSand = (1.0 - smoothstep(0.02, 0.4, gy - LAKE_Y)) * (1.0 - smoothstep(1.2, 1.32, lk));
+        lod *= smoothstep(1.12, 1.22, lk) * step(rimSand, 0.35);
         lod *= (1.0 - smoothstep(0.15, 0.6, townStreet(root))) * (1.0 - smoothstep(0.2, 0.7, forestTrack(root))) * (1.0 - caveIn(root)) * (1.0 - fieldPlot(root).z);
         vec2 hpath = homePaths(root);
         lod *= 1.0 - 0.65 * hpath.y;

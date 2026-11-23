@@ -49,13 +49,13 @@ function beside(al: number, side: number) {
 }
 
 // the creatures' places
-const DEER = beside(5.25, 17);
-const OWLS = [beside(3.15, -9.5), beside(6.6, 10.5)];
+export const DEER = beside(5.25, 17);
+export const OWLS = [beside(3.15, -9.5), beside(6.6, 10.5)];
 const OWL_H = [5.4, 6.2];
 
 // ---------- planting ----------
 type WTree = { x: number; z: number; kind: TreeKind; s: number; rich: boolean; chunk: number; rot: number; tint: number };
-function plant(amount: number) {
+export function plantWoods(amount: number) {
   const r = rng(6021);
   const out: WTree[] = [];
   const cell = 5.4 / Math.sqrt(Math.max(0.5, amount));
@@ -443,7 +443,7 @@ const OWL_YAW = [towardLane(OWLS[0], 3.15), towardLane(OWLS[1], 6.6)];
 export function Woods({ amount, mobile, effects }: { amount: number; mobile: boolean; effects: number }) {
   const w = useMemo(() => {
     const t0 = performance.now();
-    const trees = plant(amount);
+    const trees = plantWoods(amount);
     const leaves = makeLeafTexture();
     const mat = makeHomeTreeMaterial(leaves);
     const o = new THREE.Object3D();

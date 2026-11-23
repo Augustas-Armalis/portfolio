@@ -314,7 +314,7 @@ export function Worlds(props: WorldProps) {
     <>
       {id === "home" && (
         <group ref={homeRef}>
-          <LightPath id="home" def={WORLDS.home} angels effects={props.effects} from={10} />
+          <LightPath id="home" def={WORLDS.home} angels={false} effects={props.effects} from={10} />
           {/* the home gate is the veil inside the cave's arch (home/journey.ts, home/Cave.tsx draw the stone) */}
           <LightGate id="home" def={WORLDS.home} look="veil" half={CAVE.half} rise={CAVE.rise} gain={0.3} />
           {/* and the next world seen live through it, crossed into at once (portal.tsx) */}

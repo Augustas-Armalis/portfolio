@@ -239,23 +239,23 @@ export function journeyWood(x: number, z: number) {
 // (their height is the road's, see voyage.ts).
 // (low over the main walking path from the desk, round the lake's south shore to where it meets the river's south
 // bank; then out over the river, the town's open way, between the houses of both quays)
-const bankPt = (x: number): [number, number, number] => {
+const bankPt = (x: number, a = 5.0): [number, number, number] => {
   const sl = riverSlope(x);
-  return [x, riverZ(x) + (riverW(x) + 5.4) * Math.sqrt(1 + sl * sl), 5.0];
+  return [x, riverZ(x) + (riverW(x) + 5.4) * Math.sqrt(1 + sl * sl), a];
 };
 export const JOURNEY: [number, number, number][] = [
   [0.31, -7, 0],
   [-2.5, -15, 0],
-  [-8, -21, 4.2],
-  [-16, -28, 5.0],
-  [-29, -36, 5.0],
-  [-46, -38, 5.0],
-  [-64, -41, 5.0],
-  [-80, -47, 5.0],
-  [-93, -57, 5.0],
-  bankPt(-104),
-  bankPt(-116),
-  bankPt(-128),
+  [-8, -21, 2.4],
+  [-16, -28, 2.6],
+  [-29, -36, 2.8],
+  [-46, -38, 2.8],
+  [-64, -41, 3.0],
+  [-80, -47, 3.2],
+  [-93, -57, 3.6],
+  bankPt(-104, 4.0),
+  bankPt(-116, 4.5),
+  bankPt(-128, 5.0),
   [-150, riverZ(-150), 6.0],
   [-172, -114, 6.2],
   [-198, -128, 6.4],
