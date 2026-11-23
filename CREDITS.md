@@ -89,5 +89,5 @@ and shown in the viewer. Only the film posters are stored: public/gallery/mixkit
 
 His own: public/img/p/* (screenshots of his live sites larpo.studio, lunor.design, filzy.site, filzy.site/movie,
 capto.video, armaugustas.github.io/slidepad; Contles photos from contles.com by the Contles team; Open Whip rendered
-from his own OpenWhip code), public/lab/rug/* (from his repository augustas-rug/road-rug), public/content/music/kiss-me.webp
+from his own OpenWhip code), public/lab/rug/icon.webp (from his repository augustas-rug/road-rug), public/lab/rug/rug.mp4 and rug-poster.webp (his post on X, x.com/augustasdesign/status/2110439077384253885), public/content/music/kiss-me.webp
 (the cover of his "kiss me" video on YouTube, hollow kid).
