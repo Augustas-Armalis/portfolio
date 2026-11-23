@@ -985,14 +985,18 @@ export function Plane({
         // home is drawn under the cloud first
         voyage.veil = 1;
         voyage.held += dt;
-        cam.position.copy(home.pos);
+        st.camFrom.copy(home.pos);
+        st.lookFrom.copy(home.look);
+        // Out of the kings' light the eye is still going forward: it is found a little back from and above where it
+        // comes to rest, looking the same way, and as the light thins it glides on in, so the way into the dome and
+        // the way down to the desk are one move.
+        if (voyage.homing) st.camFrom.addScaledVector(st.tmp2.copy(home.look).sub(home.pos).normalize(), -2.4).y += 0.9;
+        cam.position.copy(st.camFrom);
         cam.up.set(0, 1, 0);
         st.look.copy(home.look);
         cam.lookAt(st.look);
-        st.fov = 36;
-        cam.fov = 36;
-        st.camFrom.copy(home.pos);
-        st.lookFrom.copy(home.look);
+        st.fov = voyage.homing ? 44 : 36;
+        cam.fov = st.fov;
         if (voyage.held > 0.6 && voyage.frames >= 4 && !voyage.skyFrom) {
           st.landPhase = 2;
           st.landT = 0;
@@ -1033,7 +1037,8 @@ export function Plane({
         st.pitch = st.roll = 0;
       }
       updateNose();
-      const ck = easeInOutCubic(clamp01(st.landT / Math.min(st.landDur, 3.2)));
+      // (coming out of the kings' light it is already moving: it only slows, over the whole time the light thins)
+      const ck = voyage.homing ? 1 - Math.pow(1 - clamp01(st.landT / 3.6), 3) : easeInOutCubic(clamp01(st.landT / Math.min(st.landDur, 3.2)));
       cam.position.lerpVectors(st.camFrom, home.pos, ck);
       st.look.lerpVectors(st.lookFrom, home.look, ck);
       // (the frame is levelled as it comes home, not at a stroke)
