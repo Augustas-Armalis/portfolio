@@ -11,7 +11,7 @@ import { makeDeck, type Deck } from "@/lib/stream";
 //                                                              once the visitor has clicked.
 //   miske   Čiurlionis, Miške (In the Forest), looping          the hidden forest and the cave (home world), and the
 //                                                              voyage from there up to The Offering (gate)
-//   jura    Čiurlionis, Jūra (The Sea), looping                 Sonata of the Sea: Finale (seafinale) to the end:
+//   jura    Čiurlionis, Jūra (The Sea), looping                 The Offering (gate) to the end:
 //                                                              sea, funeral, kings
 //
 // A piece is never restarted while the plane stays in its range: going from world to world inside it (in any
@@ -70,7 +70,7 @@ export const TRACKS: Record<TrackId, Track> = {
 // The voyage in two halves (worlds/voyage.ts `music` keys). Everything else in the air is Miške, except the home
 // world ("road", at take-off and whenever the plane is back in it), which is the field's unless the plane is in
 // the forest, and "home", the way back out of the kings' light, which is the landing.
-const SEA_RANGE = new Set(["seafinale", "sea", "funeral", "kings"]);
+const SEA_RANGE = new Set(["gate", "seafinale", "sea", "funeral", "kings"]);
 // (when a Čiurlionis stream is refused, the hosted Sea stands in: one movement for each half, each carrying on
 // across its half as the stream would)
 const HOSTED: Record<"miske" | "jura", string> = { miske: "road", jura: "kings" };
