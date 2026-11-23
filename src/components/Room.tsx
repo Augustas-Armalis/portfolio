@@ -15,7 +15,7 @@ import { music, sampleMusic, stopOwner } from "@/lib/audio";
 import { flightMusicStop, flightMusicTo, flightMusicVolume } from "@/lib/flightMusic";
 import { gyroLook, gyroNudge, gyroStop } from "@/lib/gyro";
 import { handoff } from "@/lib/handoff";
-import { getQuality, getQualityChoice, lensOf, reportFrame, setQualityChoice, useQuality, type Quality } from "@/lib/quality";
+import { drawRatio, dynamicScale, getQuality, getQualityChoice, lensOf, reportFrame, setQualityChoice, useQuality, type Quality } from "@/lib/quality";
 import { GLASS_SPRING, Glass, GlassStyles } from "./scene/Glass";
 import { DeskModel } from "./scene/glb";
 import { Flowers, Grass } from "./scene/Grass";
@@ -452,7 +452,7 @@ function Scene({
   bookSide: MutableRefObject<{ side: number; k: number }>;
   q: Quality;
 }) {
-  const { camera, size, gl, scene, advance } = useThree();
+  const { camera, size, gl, scene, advance, setDpr } = useThree();
   // dev only: a fixed time step and a held viewpoint for frame-by-frame stills
   const dev = useRef<{ dt: number | null; view: { pos: [number, number, number]; look: [number, number, number]; fov?: number; focus?: number } | null }>({ dt: null, view: null });
   const cam = camera as THREE.PerspectiveCamera;
@@ -1374,6 +1374,10 @@ function Scene({
     updateSky(now);
     // Auto quality listens to the real frame time while the scene is simply being looked at or flown through
     if (stage.current === "idle" || stage.current === "fly") reportFrame(rawDt, stage.current !== "fly");
+    // the render scale: the gear's pixel budget, and a dynamic fallback while frames run long (lib/quality.ts)
+    if (stage.current === "idle" || stage.current === "fly") dynamicScale(rawDt);
+    const ratio = drawRatio(q, size.width, size.height, mobile);
+    if (Math.abs(ratio - gl.getPixelRatio()) > 0.01) setDpr(ratio);
     const flying = stage.current === "fly";
     const lk = hLakeK(cam.position.x, cam.position.z);
     const wdef = WORLDS[voyage.cur];
@@ -2214,7 +2218,8 @@ export default function Room({
       <Canvas
         key={isMobile ? "m" : "d"}
         frameloop={live && !hidden ? "always" : "never"}
-        dpr={[Math.min(1, q.dpr), Math.min(q.dpr, isMobile ? 1.5 : 2)]}
+        // (the pixel ratio is set each frame by the scene itself: the gear's cap and pixel budget, and the dynamic scale)
+        dpr={1}
         shadows={{ type: THREE.PCFSoftShadowMap }}
         camera={{ fov: RIG[isMobile ? "mobile" : "desktop"].fov, near: 0.01, far: 12000, position: [0, 1.2, 2.2] }}
         gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
