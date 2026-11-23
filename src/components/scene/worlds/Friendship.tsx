@@ -15,7 +15,7 @@ import { forestSteps, pathX, withOrb, type Forest } from "./friendship/forest";
 import { makeMotesMaterial, makeOrbMaterial, makeStreaksMaterial, motesGeometry, streaksGeometry } from "./friendship/light";
 import { fernGeometry, makeFernMaterial } from "./friendship/ferns";
 import { makeWaterMaterial, waterGeometry } from "./friendship/water";
-import { herSteps, makeHerMaterial, makeRaysMaterial, raysGeometry, type Her } from "./friendship/figure";
+import { herSteps, makeHerMaterial, makeRayMotesMaterial, makeRaysMaterial, rayMotesGeometry, raysGeometry, type Her } from "./friendship/figure";
 import { FRIEND_PATH, HEAD, ORB, TUNNEL, floorAt } from "./friendship/shape";
 
 // Friendship (Draugystė, 1906–1907). In the picture a figure in profile, her face lit gold from the orb, a crown of
@@ -184,8 +184,10 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       caveMat: makeCaveMaterial(),
       map,
       herMat: makeHerMaterial(figure.near),
-      rays: raysGeometry(figure.near, m ? 320 : 700),
+      rays: raysGeometry(figure.near, m ? 300 : 640),
       raysMat: makeRaysMaterial(),
+      rayMotes: rayMotesGeometry(figure.near, m ? 300 : 640, m ? 110 : 260),
+      rayMotesMat: makeRayMotesMaterial(),
       ferns: fernGeometry(forest.ferns, m),
       water: waterGeometry(pathX, m),
       waterMat: makeWaterMaterial(),
@@ -268,6 +270,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
     b.motesMat.uniforms.uPx.value = px;
     b.streaksMat.uniforms.uPx.value = px;
     b.raysMat.uniforms.uPx.value = px;
+    b.rayMotesMat.uniforms.uPx.value = px;
     b.dripsMat.uniforms.uPx.value = px;
     b.fliesMat.uniforms.uPx.value = px;
     if (voyage.cur !== "friendship") return;
@@ -315,6 +318,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       <mesh ref={herNear} geometry={figure.near.geo} material={b.herMat} />
       <mesh ref={herFar} geometry={figure.far.geo} material={b.herMat} />
       <mesh geometry={b.rays} material={b.raysMat} renderOrder={3.9} />
+      <mesh geometry={b.rayMotes} material={b.rayMotesMat} renderOrder={7} />
       {/* (drawn after the mist: it is a light, and the veil before her never greys it) */}
       <mesh geometry={b.orb} material={b.orbMat} position={[ORB.x, ORB.y, ORB.z]} renderOrder={3.5} />
       <LightPath id="friendship" def={def} tint={[1, 0.86, 0.56]} gain={0.3} angels={false} marks={false} effects={props.effects} />
