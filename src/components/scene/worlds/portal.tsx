@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import * as THREE from "three";
 import { POST_U, postCtl } from "../Post";
 import { applySky, clockHours, skyState, type SkyState } from "../sky";
@@ -201,9 +201,35 @@ export function PortalView({ mobile }: { mobile: boolean }) {
   return null;
 }
 
+// One window a gate. A gate drawn by LightGate brings its own; WorldBase offers one too (`fallback`), for a world
+// that draws its gate entirely by itself, and that one stands aside wherever the gate's own is mounted.
+const own = new Map<WorldId, number>();
+const ownSubs = new Set<() => void>();
+const ownSub = (f: () => void) => {
+  ownSubs.add(f);
+  return () => {
+    ownSubs.delete(f);
+  };
+};
+const ownBump = (id: WorldId, d: number) => {
+  own.set(id, (own.get(id) ?? 0) + d);
+  ownSubs.forEach((f) => f());
+};
+
 // The opening itself: a soft-edged lancet standing in the gate, which shows the picture where it falls on the
 // screen. Nothing of it is seen until the picture is there (far from the gate, on Low, on a phone: never).
-export function PortalWindow({ id, def, half = 15, rise = 23 }: { id: WorldId; def: WorldDef; half?: number; rise?: number }) {
+export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }: { id: WorldId; def: WorldDef; half?: number; rise?: number; fallback?: boolean }) {
+  const owned = useSyncExternalStore(
+    ownSub,
+    () => own.get(id) ?? 0,
+    () => 0,
+  );
+  useEffect(() => {
+    if (fallback) return;
+    ownBump(id, 1);
+    return () => ownBump(id, -1);
+  }, [fallback, id]);
+  const shown = !(fallback && owned > 0);
   const b = useMemo(() => {
     const gate = gateOf(id);
     if (!gate) return null;
@@ -265,12 +291,12 @@ export function PortalWindow({ id, def, half = 15, rise = 23 }: { id: WorldId; d
     [b],
   );
   useEffect(() => {
-    if (!b) return;
+    if (!b || !shown) return;
     const w = portalRig.windows;
     w.set(id, (w.get(id) ?? 0) + 1);
     return () => void w.set(id, (w.get(id) ?? 1) - 1);
-  }, [b, id]);
-  if (!b) return null;
+  }, [b, id, shown]);
+  if (!b || !shown) return null;
   // (after the gate's own sheet of light, glow and lamps: as the picture comes up they are left as a halo round it
   // and no longer wash it out)
   return <mesh geometry={b.geo} material={b.mat} renderOrder={7} frustumCulled={false} />;
