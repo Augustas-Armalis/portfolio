@@ -111,6 +111,12 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       const z = -25 + Math.sin(a) * d * 0.7;
       puffs.push({ p: [x, floorAt(x, z) + 14 + (i % 5) * 7, z], size: 70 + ((i * 53) % 90), a: 0.55 });
     }
+    // (the haze in the cavern's mouth, lying low where the tunnel opens)
+    for (let i = 0; i < (m ? 10 : 24); i++) {
+      const x = -90 + ((i * 41) % 180);
+      const z = 470 + ((i * 67) % 260);
+      puffs.push({ p: [x, floorAt(x, z) + 8 + (i % 4) * 6, z], size: 50 + ((i * 29) % 50), a: 0.42 });
+    }
     for (let i = 0; i < (m ? 24 : 60); i++) {
       const x = -330 + ((i * 97) % 660);
       const z = -380 + ((i * 211) % 1250);
@@ -159,7 +165,9 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       motes: motesGeometry(
         [
           { c: [ORB.x, ORB.y, ORB.z], r: [80, 70, 80], n: m ? 260 : 650, size: [0.15, 0.45], rise: 3 },
-          { c: [0, 120, 250], r: [380, 120, 620], n: m ? 400 : 1000, size: [0.2, 0.55], rise: 0 },
+          { c: [0, 120, 250], r: [380, 120, 620], n: m ? 500 : 1400, size: [0.2, 0.55], rise: 0 },
+          // (thick in the cavern's mouth, where the tunnel opens)
+          { c: [0, 40, 560], r: [120, 40, 140], n: m ? 150 : 380, size: [0.12, 0.4], rise: 1 },
           { c: [HEAD.x + 30, HEAD.y + 60, -20], r: [90, 70, 40], n: m ? 120 : 300, size: [0.25, 0.7], rise: 2 },
         ],
         5,
@@ -199,9 +207,13 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
     const at = new THREE.Vector3(HEAD.x, HEAD.y, HEAD.z).add(ORIGIN);
     const t = window.setInterval(() => {
       postCtl.flight.subject = voyage.cur === "friendship" ? at : postCtl.flight.subject === at ? null : postCtl.flight.subject;
+      // (and the cave's far softness begins nearer: the wood behind her and the far walls go into a painted blur)
+      if (voyage.cur === "friendship") postCtl.flight.from = 240;
+      else if (postCtl.flight.from === 240) postCtl.flight.from = 420;
     }, 250);
     return () => {
       window.clearInterval(t);
+      if (postCtl.flight.from === 240) postCtl.flight.from = 420;
       if (postCtl.flight.subject === at) postCtl.flight.subject = null;
       if (lit) letLightGo();
     };
@@ -212,7 +224,9 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
   useFrame(({ camera, size }) => {
     if (her.current && voyage.cur === "friendship") {
       const o = FRIEND_U.uOrb.value;
-      const want = THREE.MathUtils.clamp(Math.atan2(camera.position.x - o.x, camera.position.z - o.z) * 0.55, -0.45, 0.45);
+      // (turned toward the eye as seen from her face, not the orb: the painting stays within some 25 degrees of square)
+      const f = HEAD.x + o.x - ORB.x;
+      const want = THREE.MathUtils.clamp(Math.atan2(camera.position.x - f, camera.position.z - o.z) * 0.6, -0.5, 0.5);
       her.current.rotation.y += (want - her.current.rotation.y) * 0.08;
     }
     const px = (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360)) / Math.max(size.height, 1);
@@ -231,7 +245,8 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
     if (veilR.current) veilR.current.position.set(190 * part, 25 * part, 0);
     // the orb opens as the plane comes to it
     const d = camera.position.distanceTo(FRIEND_U.uOrb.value);
-    b.orbMat.uniforms.uOpen.value = 1 - THREE.MathUtils.smoothstep(d, 30, 340);
+    // (the Sun is seen in its heart from the first sight of it; it opens wide as the plane comes)
+    b.orbMat.uniforms.uOpen.value = Math.max(0.6, 1 - THREE.MathUtils.smoothstep(d, 30, 420));
     // (the orb is wider than the gate's own catch: entering it anywhere is going through; through its heart the
     // plane's own gate takes it, through the window, and this is only for the rest of it)
     const o = FRIEND_U.uOrb.value;
@@ -264,10 +279,11 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
         <group position={[-ORB.x, 0, -ORB.z]}>
           <mesh geometry={b.crownSheet} material={b.crown} renderOrder={2} frustumCulled={false} />
           <mesh geometry={b.relief} material={b.herCore} frustumCulled={false} />
-          <mesh geometry={b.relief} material={b.herEdge} renderOrder={3} frustumCulled={false} />
+          <mesh geometry={b.relief} material={b.herEdge} renderOrder={3.8} frustumCulled={false} />
         </group>
       </group>
-      <mesh geometry={b.orb} material={b.orbMat} position={[ORB.x, ORB.y, ORB.z]} />
+      {/* (drawn after the mist: it is a light, and the veil before her never greys it) */}
+      <mesh geometry={b.orb} material={b.orbMat} position={[ORB.x, ORB.y, ORB.z]} renderOrder={3.5} />
       <LightPath id="friendship" def={def} tint={[1, 0.86, 0.56]} gain={0.3} angels={false} marks={false} effects={props.effects} />
       <Gallery def={def} />
       <SunShafts list={forest.beams} tint={[0.8, 0.95, 0.6]} dir={[0.22, 1, -0.18]} />

@@ -23,6 +23,7 @@ const SUN_D = new THREE.Vector3(Math.sin((7 * Math.PI) / 180) * Math.cos((13 * M
 export function makeOrbMaterial(map: THREE.Texture) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
+    transparent: true,
     uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, ...PORTAL_U, uSunD: { value: SUN_D }, uOpen: { value: 0 }, tMap: { value: map } },
     vertexShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vN;
@@ -94,19 +95,23 @@ export function makeOrbMaterial(map: THREE.Texture) {
         paint = mix(vec3(0.95, 0.86, 0.68), paint, smoothstep(0.3, 0.55, dot(paint, vec3(0.3, 0.55, 0.15))));
         float k = 1.05 + 0.35 * (1.0 - smoothstep(0.0, 0.8, r));
         k *= 0.95 + 0.05 * sin(t * 0.55) + 0.02 * sin(t * 1.7 + 1.0);
-        vec3 col = paint * k * uOrbK;
+        // (it is the brightest thing in the cave from the first frame, whatever beat the story is at: warm white at
+        // its heart, gold toward its rim, bright enough to bloom)
+        vec3 col = paint * k * (1.4 + 0.5 * uOrbK);
+        col = mix(col, vec3(1.3, 0.9, 0.46) * (1.2 + 0.4 * uOrbK), smoothstep(0.5, 0.93, r) * 0.45);
         // the fine dark line he drew round it
         col *= 1.0 - 0.72 * smoothstep(0.955, 0.995, r) * (1.0 - inside);
         // the opening: the next world, through the orb's heart
         float open = max(uOpen, inside);
-        float hole = (1.0 - smoothstep(mix(0.5, 1.02, uOpen * uOpen), mix(0.12, 0.8, uOpen * uOpen), r)) * open;
+        // (open in its heart, widening as the plane comes)
+        float hole = (1.0 - smoothstep(mix(0.14, 0.8, uOpen * uOpen), mix(0.46, 1.02, uOpen * uOpen), r)) * open;
         hole = max(hole, inside);
         vec3 dir = -V;
         vec3 beyond = painted(dir);
         if (uPortalK > 0.003) beyond = mix(beyond, texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb, clamp(uPortalK * 1.4, 0.0, 1.0));
         // the lip of the opening, where the orb's light runs round it
         float lip = hole * (1.0 - hole) * 4.0;
-        col = mix(col, beyond, hole) + vec3(1.0, 0.86, 0.6) * lip * 0.9;
+        col = mix(col, beyond * 1.15, hole) + vec3(1.2, 0.9, 0.55) * lip * 1.1;
         gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,
