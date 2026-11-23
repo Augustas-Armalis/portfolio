@@ -14,6 +14,11 @@ import { FUNERAL_U } from "./funeral/air";
 import { ROAD_W, funeralLand } from "./funeral/land";
 import { CAVE, buildFuneralRock, dropFuneralRock, makeLedgeMaterial, makeRockMaterial, prepareFuneralRock } from "./funeral/rock";
 import { buildSouls } from "./funeral/souls";
+import { buildTree, makeTreeMaterial } from "./funeral/tree";
+import { makeRangesMaterial } from "./funeral/far";
+import { buildWatchers } from "./funeral/ledges";
+import { channelGeometry, dockS, funeralBoats, makeChannelMaterial } from "./funeral/water";
+import { makeBoatMaterial } from "./sea/boat";
 
 // Funeral Symphony VI (Laidotuvių simfonija, 1903). Deep ultramarine pastel: a steep, dark, sculpted mountain,
 // every crest edged in green-blue light; and up it, in tight switchbacks along the very edge of the rock, a
@@ -231,11 +236,13 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
   useDeepLens("funeral");
   const shell = useRef<THREE.Mesh>(null);
   const aurora = useRef<THREE.Mesh>(null);
+  const ranges = useRef<THREE.Mesh>(null);
   const b = useDisposable(() => {
     const L = funeralLand();
     const r = rng(1903);
     const rock = buildFuneralRock(props.mobile);
     const souls = buildSouls(props.mobile, props.effects);
+    const fleet = funeralBoats(props.mobile ? 9 : 14, souls.roadTex, souls.roadRd, props.mobile);
     const cyp = L.cyp.map((c, i) => cypress(c.x, c.y, c.z, c.h, 3 + i * 5.7));
 
     const glows: Halo[] = [];
@@ -276,16 +283,10 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
     // the light of the cave at the pass spilling out and down the slope below it
     glows.push({ p: [m.x - mt[0] * 30, my + 26, m.z - mt[1] * 30], size: 230, col: [1, 0.66, 0.3], k: 0.05 });
     glows.push({ p: [m.x - mt[0] * 120, my - 20, m.z - mt[1] * 120], size: 190, col: [1, 0.62, 0.28], k: 0.03 });
-    // a few great pale figures standing high on the cliffs, watching it pass: hardly more than a lighter blue
-    const watchers = new Kit();
-    for (const [x, z, sc, yaw] of [
-      [-150, -540, 17, 0.5],
-      [270, -555, 15, -0.6],
-      [-430, -330, 20, 1.1],
-      [440, -150, 18, -1.3],
-      [-470, 150, 16, 1.5],
-    ] as [number, number, number, number][])
-      angel(watchers, [x, L.ground(x, z) - 1.5, z], sc, yaw, [0.07, 0.13, 0.3], { glow: 0.16, wing: [0.1, 0.2, 0.4], bow: 0.5 });
+    // the watchers: great winged figures on ledges over the road, each framed by an arch; two on spires either side of
+    // the gate over the abyss (worlds/funeral/ledges.ts)
+    const watch = buildWatchers();
+    halos.push(...watch.halos);
     // spirit lights: the road as the shader walks it, for the lights that go up it above the crowd
     const spiritRoad: THREE.Vector3[] = [];
     for (let i = L.iOut + 4; i <= L.iMouth + 6; i += 3) spiritRoad.push(new THREE.Vector3(L.pts[i].x, L.y[i], L.pts[i].z));
@@ -371,6 +372,13 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
     return {
       rock,
       souls,
+      tree: buildTree(props.mobile),
+      treeMat: makeTreeMaterial(),
+      rangesMat: makeRangesMaterial(),
+      channel: channelGeometry(),
+      channelMat: makeChannelMaterial(),
+      boats: fleet.geo,
+      boatMat: makeBoatMaterial(fleet.place),
       cyp,
       rockMat: makeRockMaterial(),
       ledgeMat: makeLedgeMaterial(),
@@ -388,8 +396,8 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       flocks,
       clouds,
       shrines: shrines.build(),
-      watchers: watchers.build(),
-      watcherMat: makeTempera({ amb: 1.3, key: 0.5, rim: [0.1, 0.4, 0.42], rimPow: 2.4, wrap: 0.6 }),
+      watchers: watch.geo,
+      watcherMat: makeTempera({ amb: 1.5, key: 0.6, rim: [0.1, 0.4, 0.42], rimPow: 2.6, wrap: 0.6, grain: 1.0 }),
       spiritRoad,
       auroraMat: makeAuroraMaterial(),
       veil,
@@ -413,13 +421,15 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       FUNERAL_U.uBell.value = s < sMouth + 420 ? s : -1e5;
       const d = (s - sMouth - 60) / 240;
       FUNERAL_U.uCaveK.value = 1 + 1.5 * Math.exp(-d * d);
-      FUNERAL_U.uBorn.value = (L.iOut - 16) * L.STEP;
+      // (the souls come into being at the quay, where the boats put in)
+      FUNERAL_U.uBorn.value = dockS();
     }
     // made ready ahead of time, it waits
     if (voyage.cur !== "funeral") return;
     b.souls.update(camera);
     shell.current?.position.copy(camera.position).sub(ORIGIN);
     aurora.current?.position.copy(camera.position).sub(ORIGIN);
+    ranges.current?.position.copy(camera.position).sub(ORIGIN);
     if (process.env.NODE_ENV !== "production") (window as unknown as { __funeral?: unknown }).__funeral = b.souls.stats;
   });
   return (
@@ -428,12 +438,16 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       <mesh ref={shell} geometry={b.shellGeo} material={b.grainMat} frustumCulled={false} renderOrder={-9} />
       <mesh geometry={b.shellGeo} material={b.auroraMat} position={[0, 0, 0]} frustumCulled={false} renderOrder={-8.5} ref={aurora} />
       <mesh geometry={b.quad} material={b.moonMat} frustumCulled={false} renderOrder={-8} />
+      <mesh geometry={b.shellGeo} material={b.rangesMat} frustumCulled={false} renderOrder={-8.7} ref={ranges} />
       <mesh geometry={b.rock.land} material={b.rockMat} renderOrder={-5} />
+      <mesh geometry={b.tree} material={b.treeMat} />
+      <mesh geometry={b.channel} material={b.channelMat} renderOrder={2} />
+      <mesh geometry={b.boats} material={b.boatMat} frustumCulled={false} renderOrder={3} />
       <mesh geometry={b.rock.ledge} material={b.ledgeMat} />
       <mesh geometry={b.rock.cave} material={b.caveMat} />
       <mesh geometry={b.veilGeo} material={b.veilMat} position={b.veil.p} rotation={[0, b.veil.yaw, 0]} renderOrder={5} />
-      {/* in the cave at the pass, the way on: a soft sheet of light with the wood of the kings faintly in it */}
-      <LightGate id="funeral" def={def} look="veil" half={16} rise={24} gain={0.9} tint={[1, 0.86, 0.56]} />
+      {/* the way on: a tall gate of light standing in the air over the abyss, to the right of the pass, between two watchers; the wood of the kings in it */}
+      <LightGate id="funeral" def={def} look="arch" half={26} rise={40} gain={0.9} tint={[0.8, 0.9, 1]} />
       {b.cyp.map((g, i) => (
         <mesh key={i} geometry={g} material={b.tempera} />
       ))}

@@ -44,11 +44,12 @@ const CTRL: [number, number, number][] = [
   [-235, -240, 268], // the third turn, west
   [-175, -310, 282],
   [-40, -345, 298],
-  [60, -400, 312], // the pass: the two cypresses
-  [100, -490, 318], // the mouth of the cave
-  [106, -600, 316],
-  [84, -720, 312],
-  [40, -830, 308],
+  [60, -400, 312], // the pass: the two cypresses, and the parting of the ways
+  // (the crowd turns left here, toward the great tree and the door in it; the plane goes on, to the right)
+  [-5, -505, 316], // the door in the tree
+  [-45, -620, 314],
+  [-60, -740, 310],
+  [-70, -850, 306],
 ];
 // where along the road (by its control points) things stand
 const AT_PASS = 22;
@@ -56,32 +57,35 @@ const AT_MOUTH = 23;
 
 // the land the road is laid over: the valley, the walls, the far ranges
 const BASE: B[] = [
-  // the shoulder the switchbacks climb
-  [-40, -700, 520, 290],
-  // the north wall, either side of the notch, and the mass behind it
-  [-330, -830, 300, 1080],
-  [480, -780, 280, 860],
-  [70, -1180, 380, 980],
-  [-40, -600, 150, 260],
-  [250, -590, 150, 280],
-  // the tooth across the abyss, and the abyss itself
-  [720, 60, 215, 760],
-  [800, 330, 180, 420],
-  [420, 60, 135, -70],
+  // the shoulder the switchbacks climb, and the great tree standing on it
+  [-40, -700, 560, 300],
+  [-40, -600, 170, 270],
+  // the north wall, west of the tree, and the colossal mass behind it
+  [-420, -900, 390, 1550],
+  [0, -1500, 560, 1700],
+  // the north-east wall: well to the right of the way on, so that between it and the pass there is only air
+  [660, -980, 340, 1300],
+  // the abyss: the valley's edge falls away to the east of the road, a long way down into mist
+  [440, -320, 270, -330],
+  [390, 170, 240, -300],
+  [540, 560, 250, -260],
+  // the tooth across the abyss, and the wall beyond it
+  [880, 40, 270, 1050],
+  [960, 400, 230, 640],
   // the west side
-  [-800, 120, 330, 840],
-  [-640, -330, 250, 620],
-  [-560, 560, 240, 300],
-  // behind the plane as it comes in: low dark hills
+  [-900, 100, 390, 1150],
+  [-740, -380, 310, 860],
+  [-620, 600, 290, 440],
+  // behind the plane as it comes in: low dark hills, and the great mass the cave goes into
   [-200, 900, 260, 90],
   [620, 760, 230, 160],
   // the far ranges
-  [-1500, -600, 420, 1200],
-  [-1250, 700, 400, 760],
-  [1400, -500, 430, 1100],
-  [1350, 600, 380, 700],
-  [-400, -1700, 480, 1300],
-  [700, -1650, 460, 1150],
+  [-1550, -600, 440, 1500],
+  [-1300, 700, 420, 960],
+  [1450, -500, 450, 1400],
+  [1400, 600, 400, 900],
+  [-400, -1750, 500, 1600],
+  [700, -1700, 480, 1450],
   [0, 1650, 500, 520],
   [-900, 1500, 380, 640],
   [1000, 1450, 400, 600],
@@ -92,7 +96,7 @@ const SINES: Terrain["sines"] = [
   [0.019, 0.014, 1.2, 0.9],
   [0.031, -0.023, 3.3, 0.45],
 ];
-const RIM: Terrain["rim"] = [1250, 2100, 380];
+const RIM: Terrain["rim"] = [1250, 2100, 640];
 
 const sstep = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -234,32 +238,51 @@ function build() {
   // seen at once; then down beside the road on its valley side, a little above the hoods; round each turn on the
   // outside, over the drop, looking back at the crowd on the edge; at the pass over their heads and in
   // (the plane arrives a little way inside the mouth: a few seconds of dark with the night's blue ahead, not a long tunnel)
-  const iIn = Math.max(8, iOut - 36);
+  // (a long way in the dark, over the water, with the boats: the cave the souls are brought through)
+  const iIn = Math.max(8, iOut - 66);
   const path: [number, number, number][] = [];
-  for (let i = iIn; i <= iGate + 10; i += 10) {
+  const iFork = iPass - 14;
+  for (let i = iIn; i <= iFork; i += 10) {
     const p = pts[i];
-    const intoCave = sstep(iPass - 30, iPass + 6, i);
     const out = sstep(iOut - 4, iOut + 26, i);
-    const k = (1 - intoCave) * out;
+    const k = out;
     const x = p.x;
     const z = p.z + 13 * k;
     const turn = Math.min(1, Math.abs(p.x) / 230);
-    const lift = 7.5 + 2.5 * turn * turn * k + 3.5 * intoCave + 6.5 * (1 - out) + out * (1 - sstep(iOut + 30, ctlI[5], i)) * 34;
+    const lift = 7.5 + 2.5 * turn * turn * k + 6.5 * (1 - out) + out * (1 - sstep(iOut + 30, ctlI[5], i)) * 34;
     path.push([x, z, Math.max(3.5, ys[i] + lift - ground(x, z))]);
   }
+  // the parting of the ways: the crowd goes left, round the bend and up to the tree; the plane goes straight on, over
+  // the edge, to a gate standing in the air over the abyss
+  const pp = pts[iPass];
+  const pa = pts[iPass - 36];
+  const dl = Math.hypot(pp.x - pa.x, pp.z - pa.z);
+  const d1: [number, number] = [(pp.x - pa.x) / dl, (pp.z - pa.z) / dl];
+  const fy = ys[iFork] + 12;
+  const last = path[path.length - 1];
+  const along = (m: number): [number, number] => [pp.x + d1[0] * m, pp.z + d1[1] * m];
+  for (const m of [-6, 50, 110, 175]) {
+    const [x, z] = along(m);
+    // (levels off, and rises a little as the land falls away under it)
+    path.push([x, z, Math.max(16, fy + 4 + Math.max(0, m) * 0.04 - ground(x, z))]);
+  }
+  void last;
+  const gp = along(235);
+  const gateY = fy + 11;
+  const gate = { x: gp[0], z: gp[1], above: Math.max(16, gateY - ground(gp[0], gp[1])), yaw: Math.atan2(-d1[0], -d1[1]) };
+  const gp2 = along(262);
+  path.push([gp[0], gp[1], gate.above], [gp2[0], gp2[1], gate.above]);
   const entry = { x: path[0][0], z: path[0][1], above: path[0][2], yaw: Math.atan2(-tan[iIn][0], -tan[iIn][1]) };
   // (well up the first climb: nothing hangs in the mouth of the cave the plane comes out of)
   const iC = ctlI[7] + 4;
   const canvas = { x: pts[iC].x - tan[iC][1] * 74, z: pts[iC].z + tan[iC][0] * 74, yaw: Math.atan2(-tan[iC][0], -tan[iC][1]) - 0.5 };
-  const g = pts[iGate];
-  const gate = { x: g.x, z: g.z, above: 11 + ys[iGate] - ground(g.x, g.z), yaw: Math.atan2(-tan[iGate][0], -tan[iGate][1]) };
-
-  const cyp = [-1, 1].map((side) => {
-    const i = iPass - 4 - (side > 0 ? 5 : 0);
-    const d = ROAD_W * 0.5 + 10 + (side > 0 ? 2 : 0);
-    const x = pts[i].x - tan[i][1] * side * d;
-    const z = pts[i].z + tan[i][0] * side * d;
-    return { x, z, y: ground(x, z), h: side > 0 ? 104 : 118 };
+  // (the two cypresses of the picture stand at the parting of the ways, side by side, on the crowd's side)
+  const cyp = [0, 1].map((n) => {
+    const i = iPass + 1 - n * 4;
+    const d = ROAD_W * 0.5 + 12 + n * 17;
+    const x = pts[i].x + tan[i][1] * d;
+    const z = pts[i].z - tan[i][0] * d;
+    return { x, z, y: ground(x, z), h: n ? 104 : 118 };
   });
   const m = pts[iMouth];
   const mn: [number, number] = [-tan[iMouth][1], tan[iMouth][0]];
@@ -272,13 +295,13 @@ function build() {
     { x: pts[iOut].x - tan[iOut][1] * 54, z: pts[iOut].z + tan[iOut][0] * 54, r: 28, h: 120 },
     { x: pts[iOut].x + tan[iOut][1] * 54, z: pts[iOut].z - tan[iOut][0] * 54, r: 28, h: 120 },
     // the great walls: the plane leans away from them early
-    { x: -330, z: -830, r: 300, h: 1080, bell: true },
-    { x: 480, z: -780, r: 270, h: 860, bell: true },
-    { x: 720, z: 60, r: 200, h: 760, bell: true },
-    { x: -800, z: 120, r: 320, h: 840, bell: true },
+    { x: -420, z: -900, r: 330, h: 1250, bell: true },
+    { x: 660, z: -980, r: 290, h: 1050, bell: true },
+    { x: 880, z: 40, r: 230, h: 850, bell: true },
+    { x: -900, z: 120, r: 340, h: 900, bell: true },
   ];
 
-  return { terrain, pts, tan, y: ys, crest, N, STEP, len: (N - 1) * STEP, ground, baseAt, iPass, iMouth, iGate, iEnd, iOut, iIn, path, entry, gate, canvas, cyp, obstacles };
+  return { terrain, pts, tan, y: ys, crest, N, STEP, len: (N - 1) * STEP, ground, baseAt, iPass, iMouth, iGate, iEnd, iOut, iIn, iFork, path, entry, gate, canvas, cyp, obstacles };
 }
 
 let land: ReturnType<typeof build> | null = null;
