@@ -40,6 +40,37 @@ const KEY = "ag-quality";
 // what Auto settled on the last time this machine was here: the next visit begins on it
 const KEY_AUTO = "ag-quality-auto";
 
+// The card's name. Asking for it used to mean making a whole WebGL context and throwing it away, before anything
+// else could begin: on a slowed machine that was over a second of the loader. Now the scene's own context is asked,
+// once it exists (noteGpu, from the lens), and the answer is kept for the next visit; on a first visit the guess is
+// made without it, and the frames behind the loader correct it if it was too high.
+const KEY_GPU = "ag-gpu";
+function gpuName() {
+  try {
+    return window.localStorage.getItem(KEY_GPU) ?? "";
+  } catch {
+    return "";
+  }
+}
+export function noteGpu(gl: WebGLRenderingContext | WebGL2RenderingContext) {
+  try {
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)).toLowerCase() : "";
+    if (!name || name === gpuName()) return;
+    window.localStorage.setItem(KEY_GPU, name);
+    // (a card known to be weak: down at once, behind the loader. Never up in mid-visit: that waits for next time)
+    const s = get();
+    const p = detectPreset();
+    if (s.choice === "auto" && ORDER.indexOf(p) < ORDER.indexOf(s.auto)) {
+      s.auto = p;
+      s.ceiling = p;
+      emit(false);
+    }
+  } catch {
+    /* no name: the guess stands */
+  }
+}
+
 // First guess, before a single frame has been timed.
 export function detectPreset(): Preset {
   if (typeof window === "undefined") return "high";
@@ -47,15 +78,7 @@ export function detectPreset(): Preset {
   const mobile = /Mobi|Android|iPhone|iPad/i.test(nav.userAgent) || window.matchMedia("(max-width: 767px)").matches;
   const mem = nav.deviceMemory ?? 8;
   const cores = nav.hardwareConcurrency ?? 8;
-  let gpu = "";
-  try {
-    const gl = document.createElement("canvas").getContext("webgl");
-    const ext = gl?.getExtension("WEBGL_debug_renderer_info");
-    if (gl && ext) gpu = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)).toLowerCase();
-    gl?.getExtension("WEBGL_lose_context")?.loseContext();
-  } catch {
-    /* no WebGL info: fall through */
-  }
+  const gpu = gpuName();
   const weak = /swiftshader|llvmpipe|software|mali-4|mali-t|adreno \(tm\) [2-5]|powervr|intel(?!.*(iris|arc|xe))/.test(gpu);
   const strong = /apple m\d|apple gpu|rtx|radeon rx|geforce gtx 1[06-9]|arc a\d/.test(gpu);
   if (weak || mem <= 2 || cores <= 2) return "low";

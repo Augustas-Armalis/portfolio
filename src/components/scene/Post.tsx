@@ -3,6 +3,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { noteGpu } from "@/lib/quality";
 import { SKY_U } from "./sky";
 
 // (read once a frame: kept, not made anew)
@@ -718,6 +719,8 @@ export function Post({ level }: { level: number }) {
   // linear float targets need the extension; without it the scene is drawn as before
   const ok = useMemo(() => gl.capabilities.isWebGL2 && (gl.extensions.has("EXT_color_buffer_float") || gl.extensions.has("EXT_color_buffer_half_float")), [gl]);
   const lv = ok ? level : 0;
+  // (the card's name, for the quality gear: asked of this context, never of one made for the purpose)
+  useEffect(() => noteGpu(gl.getContext()), [gl]);
   const p = useMemo(() => (lv > 0 ? build(lv) : null), [lv]);
   useEffect(
     () => () => {
