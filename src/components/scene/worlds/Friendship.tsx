@@ -14,9 +14,7 @@ import { FRIEND_U, caveGeometry, makeCaveMaterial } from "./friendship/cave";
 import { forestSteps, pathX, withOrb, type Forest } from "./friendship/forest";
 import { makeMotesMaterial, makeOrbMaterial, makeStreaksMaterial, motesGeometry, streaksGeometry } from "./friendship/light";
 import { fernGeometry, makeFernMaterial } from "./friendship/ferns";
-import { HER_AT } from "./friendship/her";
-import { herSteps, type HerSkin } from "./friendship/herBuild";
-import { crownGeometry, herGeometry, makeCrownMaterial, makeHerMaterial } from "./friendship/herLook";
+import { crownGeometry, makePaintedMaterial, maskTexture, reliefGeometry } from "./friendship/painted";
 import { FRIEND_PATH, HEAD, ORB, TUNNEL, floorAt } from "./friendship/shape";
 
 // Friendship (Draugystė, 1906–1907). In the picture a figure in profile, her face lit gold from the orb, a crown of
@@ -35,24 +33,16 @@ import { FRIEND_PATH, HEAD, ORB, TUNNEL, floorAt } from "./friendship/shape";
 // the crossing waits for it.)
 
 const def = WORLDS.friendship;
-// (her skin is finer on a desktop at Medium and above; coarser on a phone or at Low)
-const coarseOf = (p: Pick<WorldProps, "mobile" | "effects">) => (p.mobile || p.effects < 0.5 ? 2.2 : 1.5);
-const keyOf = (p: Pick<WorldProps, "mobile" | "effects">) => (p.mobile ? "m" : "d") + coarseOf(p);
-type Made = { key: string; forest: Forest; her: HerSkin[] };
-let made: Made | null = null;
-function* worldSteps(props: Pick<WorldProps, "mobile" | "effects">, budget: number): Generator<void, Made, void> {
-  const forest = yield* forestSteps(props.mobile, budget);
-  const her = yield* herSteps(coarseOf(props), budget);
-  return { key: keyOf(props), forest, her };
-}
-export function prepareFriendship(props: Pick<WorldProps, "mobile" | "effects">, budget = 4) {
+const keyOf = (p: Pick<WorldProps, "mobile">) => (p.mobile ? "m" : "d");
+let made: { key: string; forest: Forest } | null = null;
+export function prepareFriendship(props: Pick<WorldProps, "mobile">, budget = 4) {
   const key = keyOf(props);
   if (made && made.key !== key) dropFriendship();
-  const g = made ? null : worldSteps(props, budget);
+  const g = made ? null : forestSteps(props.mobile, budget);
   return () => {
     if (!g || made) return true;
     const r = g.next();
-    if (r.done) made = r.value;
+    if (r.done) made = { key, forest: r.value };
     return !!r.done;
   };
 }
@@ -83,16 +73,15 @@ function letLightGo() {
 }
 
 export default function FriendshipWorld({ props }: { props: WorldProps }) {
-  const { forest, her } = useMemo(() => {
-    if (made && made.key === keyOf(props)) return made;
+  const forest = useMemo(() => {
+    if (made && made.key === keyOf(props)) return made.forest;
     // (not made ahead: made here, all at once; the crossing's cloud covers it)
-    const g = worldSteps(props, Infinity);
+    const g = forestSteps(props.mobile, Infinity);
     let r = g.next();
     while (!r.done) r = g.next();
-    made = r.value;
+    made = { key: keyOf(props), forest: r.value };
     return r.value;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.mobile, props.effects < 0.5]);
+  }, [props.mobile]);
   useEffect(
     () => () => {
       if (made?.forest === forest) dropFriendship();
@@ -149,16 +138,19 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
     const map = new THREE.TextureLoader().load("/assets/ciurlionis/friendship.jpg");
     map.colorSpace = THREE.SRGBColorSpace;
     map.anisotropy = 8;
+    const mask = maskTexture();
     return {
       cave: caveGeometry(m),
       caveMat: makeCaveMaterial(),
+      relief: reliefGeometry(m ? 120 : 200, m ? 140 : 232),
+      crownSheet: crownGeometry(m ? 40 : 70, m ? 46 : 80),
       map,
-      herSkins: her.map(herGeometry),
-      herMat: makeHerMaterial(),
+      mask,
+      herCore: makePaintedMaterial(map, mask, 0),
+      herEdge: makePaintedMaterial(map, mask, 1),
+      crown: makePaintedMaterial(map, mask, 2),
       ferns: fernGeometry(forest.ferns, m),
       fernMat: makeFernMaterial(),
-      crown: crownGeometry(m ? 260 : 620),
-      crownMat: makeCrownMaterial(),
       orb: new THREE.SphereGeometry(ORB.r, m ? 64 : 112, m ? 40 : 72),
       orbMat: makeOrbMaterial(map),
       stoneMat: withOrb(makeTempera({ amb: 1.2, key: 0.4, grain: 1.0, ao: 0.5, aoH: 8, rim: [0.03, 0.06, 0.04], rimPow: 3 }), 1.2, 120),
@@ -184,7 +176,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       flies,
       fliesMat: makeMotesMaterial([0.85, 1.0, 0.45]),
     };
-  }, [props.mobile, forest, her]);
+  }, [props.mobile, forest]);
   // The story, in beats (worlds/moments.tsx): the dark tunnel and its drips of light; a warm glow far ahead; the
   // cavern opening, a wood inside the mountain lit through cracks high above; fireflies showing the way; the mist
   // parting before her; the orb brightening and opening as the plane rises to it.
@@ -204,7 +196,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
   }, []);
   // (the lens keeps her face clear of the far softness)
   useEffect(() => {
-    const at = new THREE.Vector3(HER_AT.x - 20, HER_AT.y, HER_AT.z).add(ORIGIN);
+    const at = new THREE.Vector3(HEAD.x, HEAD.y, HEAD.z).add(ORIGIN);
     const t = window.setInterval(() => {
       postCtl.flight.subject = voyage.cur === "friendship" ? at : postCtl.flight.subject === at ? null : postCtl.flight.subject;
     }, 250);
@@ -214,11 +206,18 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       if (lit) letLightGo();
     };
   }, []);
+  // She turns a little with the eye, about the orb's upright (so the hand never leaves it): a picture seen from
+  // the side would be squeezed; this keeps it nearly square to whoever looks, the way a painted card stays readable.
+  const her = useRef<THREE.Group>(null);
   useFrame(({ camera, size }) => {
+    if (her.current && voyage.cur === "friendship") {
+      const o = FRIEND_U.uOrb.value;
+      const want = THREE.MathUtils.clamp(Math.atan2(camera.position.x - o.x, camera.position.z - o.z) * 0.55, -0.45, 0.45);
+      her.current.rotation.y += (want - her.current.rotation.y) * 0.08;
+    }
     const px = (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360)) / Math.max(size.height, 1);
     b.motesMat.uniforms.uPx.value = px;
     b.streaksMat.uniforms.uPx.value = px;
-    b.crownMat.uniforms.uPx.value = px;
     b.dripsMat.uniforms.uPx.value = px;
     b.fliesMat.uniforms.uPx.value = px;
     if (voyage.cur !== "friendship") return;
@@ -260,11 +259,14 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       <mesh geometry={forest.roots} material={b.rootMat} />
       <mesh geometry={forest.shrooms} material={b.shroomMat} />
       <mesh geometry={b.ferns} material={b.fernMat} />
-      {/* her: sculpted (friendship/her.ts), painted in the orb's light, her crown of rays streaming from her head */}
-      {b.herSkins.map((g, i) => (
-        <mesh key={i} geometry={g} material={b.herMat} />
-      ))}
-      <mesh geometry={b.crown} material={b.crownMat} renderOrder={2} />
+      {/* her: the painting's own figure on its relief, the crown of rays keyed out and added behind */}
+      <group ref={her} position={[ORB.x, 0, ORB.z]}>
+        <group position={[-ORB.x, 0, -ORB.z]}>
+          <mesh geometry={b.crownSheet} material={b.crown} renderOrder={2} frustumCulled={false} />
+          <mesh geometry={b.relief} material={b.herCore} frustumCulled={false} />
+          <mesh geometry={b.relief} material={b.herEdge} renderOrder={3} frustumCulled={false} />
+        </group>
+      </group>
       <mesh geometry={b.orb} material={b.orbMat} position={[ORB.x, ORB.y, ORB.z]} />
       <LightPath id="friendship" def={def} tint={[1, 0.86, 0.56]} gain={0.3} angels={false} marks={false} effects={props.effects} />
       <Gallery def={def} />
