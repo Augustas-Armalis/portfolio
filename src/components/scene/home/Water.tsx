@@ -79,15 +79,6 @@ export function LakeMirror({ quality }: { quality: number }) {
     mc.projectionMatrixInverse.copy(cam.projectionMatrixInverse);
     mc.updateMatrixWorld();
     mc.layers.set(MIRROR_LAYER);
-    // (drawn at the size the lake has on the screen: a lake a tenth of the frame tall needs a fraction of the mirror's
-    // pixels. Only a corner of the fixed target is drawn and read (no new target, so no long frame when it changes),
-    // in quarter steps so the picture does not swim)
-    const rr = T.sphere.radius / Math.max(1, cam.position.distanceTo(T.sphere.center)) / Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
-    const k = Math.min(1, Math.max(0.375, Math.ceil(rr * 1.6 * 8) / 8));
-    rt.viewport.set(0, 0, Math.round(rt.width * k), Math.round(rt.height * k));
-    rt.scissor.copy(rt.viewport);
-    rt.scissorTest = true;
-    REFLECT_U.uReflK.value = k;
     REFLECT_U.uReflMat.value.copy(BIAS).multiply(mc.projectionMatrix).multiply(mc.matrixWorldInverse);
     const prev = gl.getRenderTarget();
     const auto = gl.shadowMap.autoUpdate;
