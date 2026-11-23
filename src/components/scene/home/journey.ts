@@ -339,8 +339,10 @@ const bankZ = (x: number, off: number) => {
   return riverZ(x) + off * Math.sqrt(1 + sl * sl);
 };
 export const MAIN_PATH: [number, number][] = [
-  [1.45, -5],
-  [0.6, -10],
+  [1.00, -1.5],
+  [0.67, -4],
+  [0.31, -7],
+  [0.9, -10],
   [-2.5, -15],
   [-8, -21],
   [-16, -28],
@@ -404,7 +406,9 @@ ${segCode(MAIN_PATH, "dm")}
 ${segCode(SIDE_PATH, "ds")}
   }
   // (the main path as wide as the old footpath; the hidden one narrow, half lost under the grass)
-  float m = 1.0 - sst(1.25, 1.9, dm + (vnoise(p * 0.9) - 0.5) * 0.35);
+  // (as narrow as the footpath at the desk, opening gradually through the turn into a proper way to the town)
+  float hw = 0.34 + 0.8 * sst(-2.0, -70.0, p.y);
+  float m = 1.0 - sst(hw, hw + 0.25 + 0.35 * sst(-2.0, -40.0, p.y), dm + (vnoise(p * 0.9) - 0.5) * 0.3);
   float s = (1.0 - sst(0.2, 0.55, ds + (vnoise(p * 1.3) - 0.5) * 0.4)) * sst(0.4, 0.65, vnoise(p * 0.22 + 3.0)) * 0.7;
   return vec2(m, s);
 }
