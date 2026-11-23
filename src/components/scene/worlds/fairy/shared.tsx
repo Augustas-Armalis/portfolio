@@ -221,7 +221,9 @@ export function makeHeapMaterial(o: { lit?: V3; shade?: V3; rim?: number; drift?
         vec3 pp = position * (1.0 + uRise * (0.1 * sin(position.y * 4.2 - uTime * 0.7 + instanceMatrix[3].y * 0.05 + ph * 9.0) + 0.05 * sin(position.x * 5.0 + position.y * 7.0 - uTime * 1.1)));
         vec4 lp = instanceMatrix * vec4(pp, 1.0);
         // cloud is never quite still: the whole sky drifts a little, each heap breathing in its place
-        lp.xyz += vec3(sin(uTime * 0.05 + ph) * 6.0 + uTime * 0.6, sin(uTime * 0.07 + ph * 1.7) * 1.5, cos(uTime * 0.045 + ph * 1.3) * 4.0) * uDrift;
+        // (it wanders about its place and comes back: a drift that only ever went one way carried the heaps off across
+        // the world with the hours, until one hung dark over the lens)
+        lp.xyz += vec3(sin(uTime * 0.05 + ph) * 6.0 + sin(uTime * 0.0035 + ph * 0.6) * 150.0, sin(uTime * 0.07 + ph * 1.7) * 1.5, cos(uTime * 0.045 + ph * 1.3) * 4.0) * uDrift;
         // a cloud that parts: its lobes draw away to either side of a line through (uPart.x, uPart.y), by uPart.z metres
         if (uPart.z > 0.0) { vec2 d = instanceMatrix[3].xz - uPart.xy; lp.xz += normalize(d + vec2(1e-3)) * uPart.z * (0.6 + 0.4 * fract(ph * 7.1)); lp.y += uPart.z * 0.12 * (fract(ph * 3.3) - 0.3); }
         vec4 wp = modelMatrix * lp;
