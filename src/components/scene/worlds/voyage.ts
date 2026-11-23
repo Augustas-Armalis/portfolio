@@ -8,7 +8,7 @@ import { airState, arrivalHours, mixSky, skyState, type Air, type SkyState } fro
 import { FRIEND_CANVAS, FRIEND_ENTRY, FRIEND_GATE, FRIEND_OBSTACLES, FRIEND_PATH, FRIEND_TERRAIN } from "./friendship/shape";
 import { funeralLand } from "./funeral/land";
 import { GROTTO } from "./sea/shape";
-import { FINALE_ENTRY, FINALE_GATE, FINALE_PATH, FINALE_TERRAIN } from "./seafinale/shape";
+import { FINALE_ENTRY, FINALE_GATE, FINALE_OPENING, FINALE_PATH, FINALE_TERRAIN } from "./seafinale/shape";
 import { SUN_CANVAS, SUN_ENTRY, SUN_GATE, SUN_OBSTACLES, SUN_PATH, SUN_SKY, SUN_TERRAIN } from "./sun/shape";
 import { flightPlan } from "./fairy/track";
 
@@ -33,6 +33,9 @@ export const WORLD_ORDER: WorldId[] = ["home", "friendship", "sun", "stars", "re
 // Fairy Tale of the Kings: where the two kings stand, and the small lit world they hold between their hands
 export const KINGS = { z: -170, domeY: 70, domeR: 30 };
 export const ORIGIN = new THREE.Vector3(-2500, 0, -2700);
+// How far from a gate's middle still counts as through it, where a world's gate is wider than the ordinary one:
+// [sideways, above the gate's middle] in metres (Plane.tsx; the ordinary gate is 19 and 26)
+export const GATE_REACH: Partial<Record<WorldId, [number, number]>> = { seafinale: [FINALE_OPENING[0] * 0.9, FINALE_OPENING[1]] };
 
 // ---------- the ground ----------
 // One analytic height field per world: a sum of sine waves, round hills (or
@@ -269,21 +272,21 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   // behind the great wave, so the water is lit through
   seafinale: {
     label: "Sonata of the Sea: Finale",
-    zenith: [0.15, 0.1, 0.05],
-    upper: [0.36, 0.26, 0.12],
-    horizon: [0.62, 0.47, 0.22],
-    glow: [1.0, 0.74, 0.32],
-    amb: [0.36, 0.38, 0.27],
-    key: [1.0, 0.84, 0.5],
+    zenith: [0.08, 0.12, 0.13],
+    upper: [0.2, 0.29, 0.29],
+    horizon: [0.5, 0.57, 0.5],
+    glow: [0.95, 0.82, 0.5],
+    amb: [0.3, 0.4, 0.37],
+    key: [0.98, 0.92, 0.66],
     keyI: 1.25,
     sunAz: -4,
     sunEl: 12,
     keyAz: -4,
     keyEl: 17,
-    cloudLit: [1.0, 0.86, 0.56],
-    cloudShade: [0.5, 0.42, 0.3],
+    cloudLit: [0.96, 0.92, 0.74],
+    cloudShade: [0.4, 0.46, 0.42],
     night: 0,
-    exposure: 0.8,
+    exposure: 0.82,
     fx: [0.0, 0.7, 0.0, 0],
   },
   // Funeral Symphony VI: a vast night of ultramarine pastel, the sky the lightest thing in it; a thin moon with
@@ -405,69 +408,44 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     title: "Sonata of the Stars",
     year: "1908",
     music: "stars",
-    place: "none",
+    place: "sea",
     air: AIR.stars,
-    fog: [0.00042, 0.0055],
-    // a sea of long waves; the pyramid stands on a swell of it (worlds/Stars.tsx PYR)
-    terrain: {
-      base: 0,
-      sines: [
-        [0.004, 0.031, 0.3, 8],
-        [0.009, 0.017, 2.2, 6],
-        [-0.014, 0.007, 1.1, 3],
-        [0.005, -0.06, 4.0, 1.6],
-      ],
-      bumps: [[0, -420, 380, 26]],
-      rim: [1200, 1800, 60],
-    },
-    water: null,
-    centre: [0, -150],
-    radius: 1000,
-    ceil: 760,
-    pace: 2.4,
-    entry: { x: 0, z: 760, above: 34, yaw: 0 },
-    // at the pyramid's point, in the pale disc behind the angel (worlds/Stars.tsx)
-    gate: { x: 90, z: -520, above: 850, yaw: 0.0555 },
-    // in over the waves past the two paintings, round the glass globe of the Andante, then up the winding river of
-    // stars to where it runs level across the sky; along it past the angel who walks there, the pyramid rising
-    // through it from below; out and round in a rising turn, and straight in to the angel at the point and the light
+    // (clear air: the pyramids stand kilometres off, their feet in haze and their points in the stars)
+    fog: [0.00012, 0.0032],
+    terrain: null,
+    // a calm night sea: its pyramids, door and sky are worlds/stars/pyramids.ts and worlds/Stars.tsx
+    water: 0,
+    centre: [0, -300],
+    radius: 4300,
+    ceil: 2800,
+    pace: 3.0,
+    entry: { x: 0, z: 3300, above: 30, yaw: 0 },
+    // the door at the foot of the greatest pyramid (stars/pyramids.ts DOOR_Z): the way runs straight into it
+    gate: { x: 0, z: 586, above: 30, yaw: 0 },
+    // in low over the sea, a long way; between the two near pyramids, which stand close beside the way; then straight
+    // on to the door of the greatest
     path: [
-      [0, 760, 34],
-      [6, 670, 20],
-      [-10, 590, 17],
-      [-60, 500, 26],
-      [-130, 420, 38],
-      [-155, 300, 52],
-      [-150, 140, 72],
-      [-230, -40, 110],
-      [-420, -110, 165],
-      [-620, -40, 225],
-      [-810, -80, 290],
-      [-920, -190, 345],
-      [-880, -280, 395],
-      [-720, -292, 428],
-      [-520, -290, 438],
-      [-300, -286, 440],
-      [-90, -262, 444],
-      [60, -240, 452],
-      [220, -200, 484],
-      [360, -90, 544],
-      [380, 80, 612],
-      [270, 205, 676],
-      [130, 200, 728],
-      [118, 0, 786],
-      [105, -250, 832],
-      [90, -520, 850],
-      [88, -562, 850],
+      [0, 3300, 30],
+      [0, 3000, 27],
+      [-110, 2600, 25],
+      [-250, 2200, 27],
+      [-290, 1850, 29],
+      [-220, 1500, 29],
+      [-100, 1180, 28],
+      [0, 930, 28],
+      [0, 760, 30],
+      [0, 640, 30],
+      [0, 586, 30],
+      [0, 556, 30],
     ],
     obstacles: [
-      { x: -330, z: 150, r: 150, h: 220, bell: true },
-      { x: 0, z: -420, r: 34, h: 1000 },
+      { x: -1750, z: 1900, r: 520, h: 1150 },
+      { x: 1850, z: 1500, r: 620, h: 1350 },
     ],
     canvases: [
-      // (well along the way: nothing hangs in the first view of the pyramid)
-      { painting: "stars-allegro", x: -150, z: 330, yaw: 1.1 },
-      { painting: "stars-andante", x: -170, z: 120, yaw: 0.02 },
+      // (hung early on the way in, over the open sea, with nothing between them and the pyramids)
+      { painting: "stars-allegro", x: -240, z: 2900, yaw: 1.2 },
+      { painting: "stars-andante", x: 250, z: 2400, yaw: -1.2 },
     ],
   },
   rex: {
@@ -477,67 +455,88 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     music: "rex",
     place: "sea",
     air: AIR.rex,
-    fog: [0.00019, 0.0028],
+    fog: [0.00014, 0.002],
     terrain: {
       base: -7,
       sines: [
-        [0.021, 0.013, 0.2, 0.8],
-        [-0.014, 0.027, 1.4, 0.6],
+        [0.015, 0.009, 0.2, 0.8],
+        [-0.01, 0.019, 1.4, 0.6],
       ],
       bumps: [
-        [-78, 962, 64, 14.5],
-        [-190, 890, 60, 10.5],
-        [210, 920, 70, 11],
+        [-111, 1366, 91, 14.5],
+        [-270, 1264, 85, 10.5],
+        [298, 1306, 99, 11],
       ],
       rim: [1, 2, 0],
     },
     water: 0,
-    centre: [0, -400],
-    radius: 1750,
-    ceil: 720,
-    pace: 2.8,
-    entry: { x: 0, z: 1150, above: 22, yaw: 0 },
-    // high beyond his crown, where the path leaves through the upper shells
-    gate: { x: -380, z: -1380, above: 740, yaw: 0.611 },
-    // in low over the water for more than a kilometre, the whole of him standing in the haze ahead; past the
-    // painting to the altar and the blade of light; then once round him, rising all the way, past the globe at his
-    // feet, his body and his shoulders, through the shells of his sky one after another; across his face, close
-    // round the crown and its flames, and out behind him through the upper air
+    centre: [0, -710],
+    radius: 2700,
+    ceil: 1500,
+    pace: 3.3,
+    entry: { x: 0, z: 1633, above: 22, yaw: 0 },
+    // at the very top of him: in the crown, between its spires, at the height of its points
+    gate: { x: 0, z: -640, above: 1190, yaw: 0 },
+    // in low over the water for two kilometres, the whole of him standing in the haze ahead; past the painting to the
+    // altar and the blade of light; then twice round him, rising all the way, past the globe at his feet, his body and
+    // his shoulders, through the shells of his sky one after another; and over his brow, in at the front of his crown
     path: [
-      [0, 1150, 22],
-      [5, 1040, 18],
-      [16, 930, 16],
-      [26, 820, 16],
-      [36, 600, 18],
-      [44, 380, 20],
-      [56, 160, 26],
-      [80, -30, 36],
-      [150, -140, 52],
-      [297, -203, 80],
-      [414, -427, 150],
-      [381, -677, 225],
-      [210, -864, 300],
-      [-37, -918, 380],
-      [-270, -822, 455],
-      [-406, -609, 530],
-      [-395, -356, 605],
-      [-241, -156, 680],
-      [-22, -81, 745],
-      [172, -254, 800],
-      [290, -422, 845],
-      [272, -627, 880],
-      [150, -760, 890],
-      [-60, -960, 860],
-      [-240, -1180, 800],
-      [-380, -1380, 740],
-      [-403, -1413, 740],
+      [0, 1633, 22],
+      [8, 1480, 19],
+      [22, 1320, 18],
+      [36, 1160, 18],
+      [50, 850, 20],
+      [62, 540, 24],
+      [85, 230, 32],
+      [120, -30, 44],
+      [165, -190, 54],
+      [344, -281, 107],
+      [479, -432, 152],
+      [551, -622, 196],
+      [549, -828, 238],
+      [473, -1020, 278],
+      [332, -1173, 319],
+      [144, -1265, 358],
+      [-66, -1284, 397],
+      [-270, -1225, 435],
+      [-441, -1096, 473],
+      [-554, -912, 510],
+      [-593, -699, 548],
+      [-553, -484, 584],
+      [-437, -298, 621],
+      [-259, -169, 657],
+      [-47, -112, 693],
+      [172, -135, 729],
+      [368, -236, 765],
+      [514, -400, 800],
+      [591, -606, 836],
+      [589, -826, 871],
+      [507, -1030, 906],
+      [358, -1192, 941],
+      [160, -1288, 975],
+      [-59, -1307, 1010],
+      [-270, -1246, 1044],
+      [-445, -1112, 1078],
+      [-560, -925, 1112],
+      [-600, -709, 1146],
+      [-559, -493, 1180],
+      [-443, -405, 1181],
+      [-318, -357, 1182],
+      [-198, -347, 1183],
+      [-93, -371, 1184],
+      [-35, -425, 1186],
+      [8, -478, 1187],
+      [14, -535, 1188],
+      [4, -590, 1189],
+      [0, -640, 1190],
+      [0, -668, 1190],
     ],
-    // the dark sphere and the king (worlds/Rex.tsx KS)
+    // the dark sphere and the king (worlds/Rex.tsx KS; the king's is as high as the deck of his head, so the way over it is clear)
     obstacles: [
-      { x: 0, z: -500, r: 279, h: 279, bell: true },
-      { x: 0, z: -500, r: 210, h: 884 },
+      { x: 0, z: -710, r: 396, h: 396, bell: true },
+      { x: 0, z: -710, r: 298, h: 1100 },
     ],
-    canvases: [{ painting: "rex", x: -72, z: 962, yaw: 0.72 }],
+    canvases: [{ painting: "rex", x: -102, z: 1366, yaw: 0.72 }],
   },
   fairy: {
     id: "fairy",
@@ -829,9 +828,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     terrain: FINALE_TERRAIN,
     water: null,
     centre: [-500, 350],
-    radius: 3300,
-    ceil: 1950,
-    pace: 3.0,
+    radius: 3900,
+    ceil: 2300,
+    pace: 3.2,
     entry: FINALE_ENTRY,
     // at the wave's far end, in the hanging lace of its crest: out through it, into calm (no arch of light)
     gate: FINALE_GATE,
