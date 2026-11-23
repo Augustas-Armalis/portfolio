@@ -1379,7 +1379,7 @@ function Scene({
     // Auto quality listens to the real frame time while the scene is simply being looked at or flown through
     if (stage.current === "idle" || stage.current === "fly") reportFrame(rawDt, stage.current !== "fly");
     // the render scale: the gear's pixel budget, and a dynamic fallback while frames run long (lib/quality.ts)
-    if (stage.current === "idle" || stage.current === "fly") dynamicScale(rawDt);
+    if (stage.current === "idle" || stage.current === "fly") dynamicScale(rawDt, stage.current === "fly");
     const ratio = drawRatio(q, size.width, size.height, mobile);
     if (Math.abs(ratio - gl.getPixelRatio()) > 0.01) setDpr(ratio);
     const flying = stage.current === "fly";

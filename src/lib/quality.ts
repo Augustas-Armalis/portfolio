@@ -22,14 +22,27 @@ export type Quality = {
   effects: number; // 0..1: mist bands, particles, glow
   far: number; // draw distance multiplier for the flight
   post: number; // the lens: 0 off, 1 bloom and grade, 2 + depth of field, god rays, painterly pass, 3 more taps
+  budget: number; // the most pixels drawn, in millions (the resolution setting, or the gear's own)
+  fps: number; // the frame rate cap, 0 = none
 };
 
 export const PRESETS: Record<Preset, Quality> = {
-  low: { preset: "low", dpr: 1, grass: 0.3, trees: 0.5, shadows: 512, effects: 0.3, far: 0.6, post: 0 },
-  medium: { preset: "medium", dpr: 1.25, grass: 0.6, trees: 0.75, shadows: 1024, effects: 0.6, far: 0.8, post: 1 },
-  high: { preset: "high", dpr: 1.5, grass: 1, trees: 1, shadows: 2048, effects: 1, far: 1, post: 2 },
-  ultra: { preset: "ultra", dpr: 2, grass: 1.5, trees: 1, shadows: 4096, effects: 1, far: 1.25, post: 3 },
+  low: { preset: "low", dpr: 1, grass: 0.3, trees: 0.5, shadows: 512, effects: 0.3, far: 0.6, post: 0, budget: 1.2, fps: 0 },
+  medium: { preset: "medium", dpr: 1.25, grass: 0.6, trees: 0.75, shadows: 1024, effects: 0.6, far: 0.8, post: 1, budget: 2.2, fps: 0 },
+  high: { preset: "high", dpr: 1.5, grass: 1, trees: 1, shadows: 2048, effects: 1, far: 1, post: 2, budget: 3, fps: 0 },
+  ultra: { preset: "ultra", dpr: 2, grass: 1.5, trees: 1, shadows: 4096, effects: 1, far: 1.25, post: 3, budget: 5, fps: 0 },
 };
+// The settings beyond the preset. Choosing a preset sets them to its own; changing any of them makes the choice
+// "custom" (the preset row then shows none lit). Resolution caps the pixels drawn (the render scale under it);
+// the frame rate cap paces the frame loop (Room.tsx FramePacer); Quality is the gear itself (lens, shadows, grass,
+// detail).
+export type Res = "auto" | "720" | "1080" | "1440" | "2160";
+export const RES_LABELS: Record<Res, string> = { auto: "Auto", "720": "720p", "1080": "1080p", "1440": "1440p", "2160": "4K" };
+const RES_MP: Record<Exclude<Res, "auto">, number> = { "720": 0.93, "1080": 2.08, "1440": 3.7, "2160": 8.3 };
+export const FPS_CHOICES = [24, 30, 60, 120, 0] as const;
+export type Fps = (typeof FPS_CHOICES)[number];
+export const FPS_LABELS: Record<Fps, string> = { 24: "24", 30: "30", 60: "60", 120: "120", 0: "Unlimited" };
+export const PRESET_LABELS: Record<Preset, string> = { low: "Low", medium: "Medium", high: "High", ultra: "Ultra" };
 // The lens a gear draws with. Low has no lens of its own, but on a computer it keeps a light one: the scene through
 // the steadying, the glow and the finish, without occlusion, depth of field or rays. Without the steadying every
 // edge, leaf and blade crawled at Low as the eye moved (a still view turned a tenth of a pixel a frame: 10-12 % of
@@ -41,7 +54,7 @@ const ORDER: Preset[] = ["low", "medium", "high", "ultra"];
 export const QUALITY_LABELS: Record<QualityChoice, string> = { auto: "Auto", low: "Low", medium: "Medium", high: "High", ultra: "Ultra" };
 
 export type QualityOverrides = { resolution?: number; grass?: number; effects?: number };
-type State = { choice: QualityChoice; auto: Preset; ceiling: Preset; overrides: QualityOverrides };
+type State = { choice: QualityChoice | "custom"; auto: Preset; ceiling: Preset; overrides: QualityOverrides; res: Res; fps: Fps; level: Preset };
 
 const KEY = "ag-quality";
 // what Auto settled on the last time this machine was here: the next visit begins on it
@@ -118,13 +131,17 @@ function load(): State {
   // than the guess from its hardware); then, behind the loader, from the frames themselves (see `early` below).
   const was = typeof window !== "undefined" ? remembered() : null;
   if (was && ORDER.indexOf(was) < ORDER.indexOf(auto)) auto = was;
-  const s: State = { choice: "auto", auto, ceiling: ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(auto) + 1)], overrides: {} };
+  // (Auto may climb to Ultra: it steps up only while frames stay short, and down as soon as they do not)
+  const s: State = { choice: "auto", auto, ceiling: "ultra", overrides: {}, res: "auto", fps: 0, level: auto };
   try {
     const raw = typeof window !== "undefined" ? window.localStorage.getItem(KEY) : null;
     if (raw) {
       const p = JSON.parse(raw) as Partial<State>;
-      if (p.choice && (p.choice === "auto" || ORDER.includes(p.choice))) s.choice = p.choice;
+      if (p.choice && (p.choice === "auto" || p.choice === "custom" || ORDER.includes(p.choice))) s.choice = p.choice;
       if (p.overrides && typeof p.overrides === "object") s.overrides = p.overrides;
+      if (p.res && p.res in RES_LABELS) s.res = p.res;
+      if (typeof p.fps === "number" && (FPS_CHOICES as readonly number[]).includes(p.fps)) s.fps = p.fps as Fps;
+      if (p.level && ORDER.includes(p.level)) s.level = p.level;
     }
   } catch {
     /* storage blocked or stale: defaults */
@@ -139,10 +156,12 @@ const get = () => (state ??= load());
 
 function compute(): Quality {
   const s = get();
-  const base = PRESETS[s.choice === "auto" ? s.auto : s.choice];
+  const base = PRESETS[s.choice === "auto" ? s.auto : s.choice === "custom" ? s.level : s.choice];
   const o = s.overrides;
   return {
     ...base,
+    budget: s.res === "auto" ? base.budget : RES_MP[s.res],
+    fps: s.fps,
     dpr: o.resolution !== undefined ? 0.75 + o.resolution * 1.25 : base.dpr,
     grass: o.grass !== undefined ? 0.2 + o.grass * 1.3 : base.grass,
     effects: o.effects !== undefined ? o.effects : base.effects,
@@ -152,7 +171,8 @@ function emit(save = true) {
   snapshot = compute();
   if (save) {
     try {
-      window.localStorage.setItem(KEY, JSON.stringify({ choice: get().choice, overrides: get().overrides }));
+      const g = get();
+      window.localStorage.setItem(KEY, JSON.stringify({ choice: g.choice, overrides: g.overrides, res: g.res, fps: g.fps, level: g.level }));
     } catch {
       /* ignore */
     }
@@ -168,12 +188,29 @@ const subscribe = (f: () => void) => {
 
 export const getQuality = () => (snapshot ??= compute());
 export const getQualityChoice = () => get().choice;
+export const getQualitySettings = () => ({ res: get().res, fps: get().fps, level: get().choice === "auto" ? get().auto : get().choice === "custom" ? get().level : (get().choice as Preset) });
 export const getQualityOverrides = () => get().overrides;
 export function setQualityChoice(c: QualityChoice) {
-  get().choice = c;
-  get().overrides = {};
+  const s = get();
+  s.choice = c;
+  s.overrides = {};
+  // (a preset sets everything under it: its own resolution budget, no frame cap, its own quality)
+  s.res = "auto";
+  s.fps = 0;
+  s.level = c === "auto" ? s.auto : c;
   emit();
 }
+// any one setting changed by hand: the choice becomes "custom", keeping the rest as they stand
+function custom(f: (s: State) => void) {
+  const s = get();
+  if (s.choice !== "custom") s.level = s.choice === "auto" ? s.auto : s.choice;
+  s.choice = "custom";
+  f(s);
+  emit();
+}
+export const setResolution = (r: Res) => custom((s) => (s.res = r));
+export const setFrameCap = (f: Fps) => custom((s) => (s.fps = f));
+export const setQualityLevel = (l: Preset) => custom((s) => (s.level = l));
 export function setQualityOverride(k: keyof QualityOverrides, v: number | undefined) {
   get().overrides = { ...get().overrides, [k]: v };
   emit();
@@ -184,7 +221,20 @@ export function useQuality() {
   return useSyncExternalStore(subscribe, getQuality, () => SERVER);
 }
 export function useQualityChoice() {
-  return useSyncExternalStore(subscribe, getQualityChoice, () => "auto" as QualityChoice);
+  return useSyncExternalStore(subscribe, getQualityChoice, () => "auto" as QualityChoice | "custom");
+}
+let setSnap: ReturnType<typeof getQualitySettings> | null = null;
+const SERVER_SET = { res: "auto" as Res, fps: 0 as Fps, level: "high" as Preset };
+export function useQualitySettings() {
+  return useSyncExternalStore(
+    subscribe,
+    () => {
+      const n = getQualitySettings();
+      if (!setSnap || setSnap.res !== n.res || setSnap.fps !== n.fps || setSnap.level !== n.level) setSnap = n;
+      return setSnap;
+    },
+    () => SERVER_SET,
+  );
 }
 
 // ---- live adaptation (Auto only) ----
@@ -233,13 +283,16 @@ export function reportFrame(dt: number, up = true) {
   if (!firstReport) firstReport = t;
   if (t - firstReport < SETTLE_MS) return early(dt, t);
   if (s.choice !== "auto" || dt <= 0 || dt > 0.5) return;
+  // (a frame cap makes frames long on purpose: Auto does not read them while one is set)
+  if (s.fps > 0) return;
   acc += dt;
   frames++;
   if (acc < 1) return;
   const avg = acc / frames;
   acc = 0;
   frames = 0;
-  slowFor = avg > 1 / 38 ? slowFor + 1 : 0;
+  // (Auto holds about sixty frames a second: under 48 for three seconds is a step down)
+  slowFor = avg > 1 / 48 ? slowFor + 1 : 0;
   fastFor = avg < 1 / 57 ? fastFor + 1 : 0;
   const now = performance.now();
   if (now - lastStep < 8000) return;
@@ -263,11 +316,12 @@ export function reportFrame(dt: number, up = true) {
 // steadying keeps edges calm): a 2560 x 1440 window is 3.7 million pixels, which at Medium is a third more work in
 // every pass than the gear is meant for.
 export const PIXEL_BUDGET: Record<Preset, number> = { low: 1.2, medium: 2.2, high: 3, ultra: 5 };
-// Under that, a dynamic scale: a fallback for a moment the gear cannot hold (a heavy view, a busy machine). Over
-// a second of frames slower than 50 a second it steps down by a tenth, to 0.7 at least; over three seconds faster
-// than 80 a second it steps back up. Auto's change of gear stays the answer to a machine that is simply slower.
-const dyn = { k: 1, acc: 0, n: 0, slow: 0, fast: 0 };
-export function dynamicScale(dt: number) {
+// Under that, a dynamic scale: a fallback for a view the gear cannot hold. Changing it resizes every target of the
+// lens (a long frame), so it moves rarely and never in flight: a step down after four seconds of frames slower than
+// 45 a second, a step up after eight seconds faster than 75, at least six seconds between steps, and while the
+// plane is in the air it holds whatever it was (it stepped up and down every second or two before: the stutter).
+const dyn = { k: 1, acc: 0, n: 0, slow: 0, fast: 0, last: 0 };
+export function dynamicScale(dt: number, flying = false) {
   if (dt <= 0 || dt > 0.25) return dyn.k;
   dyn.acc += dt;
   dyn.n++;
@@ -275,14 +329,18 @@ export function dynamicScale(dt: number) {
   const avg = dyn.acc / dyn.n;
   dyn.acc = 0;
   dyn.n = 0;
-  dyn.slow = avg > 1 / 50 ? dyn.slow + 1 : 0;
-  dyn.fast = avg < 1 / 80 ? dyn.fast + 1 : 0;
-  if (dyn.slow >= 1 && dyn.k > 0.7) {
-    dyn.k = Math.max(0.7, dyn.k - 0.1);
+  dyn.slow = avg > 1 / 45 ? dyn.slow + 1 : 0;
+  dyn.fast = avg < 1 / 75 ? dyn.fast + 1 : 0;
+  const now = performance.now();
+  if (flying || now - dyn.last < 6000) return dyn.k;
+  if (dyn.slow >= 4 && dyn.k > 0.7) {
+    dyn.k = Math.max(0.7, dyn.k - 0.15);
     dyn.slow = 0;
-  } else if (dyn.fast >= 3 && dyn.k < 1) {
-    dyn.k = Math.min(1, dyn.k + 0.1);
+    dyn.last = now;
+  } else if (dyn.fast >= 8 && dyn.k < 1) {
+    dyn.k = Math.min(1, dyn.k + 0.15);
     dyn.fast = 0;
+    dyn.last = now;
   }
   return dyn.k;
 }
@@ -291,6 +349,6 @@ export function drawRatio(q: Quality, cssW: number, cssH: number, mobile: boolea
   const native = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
   const base = Math.max(Math.min(1, q.dpr), Math.min(native, q.dpr, mobile ? 1.5 : 2));
   const px = Math.max(1, cssW * cssH * base * base);
-  const budget = Math.min(1, Math.sqrt((PIXEL_BUDGET[q.preset] * 1e6) / px));
+  const budget = Math.min(1, Math.sqrt((q.budget * 1e6) / px));
   return base * budget * dyn.k;
 }
