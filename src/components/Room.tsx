@@ -1437,8 +1437,11 @@ function Scene({
     if (!voyage.flying) {
       const dd = Math.hypot(cam.position.x, cam.position.y - 1, cam.position.z);
       const near = dd < 6 ? 0.01 : Math.min(8, 0.01 + (dd - 6) * 0.01);
-      if (Math.abs(cam.near - near) > near * 0.02) {
+      // (at home the air has swallowed everything past nine kilometres: nothing there is drawn, and the depth keeps its precision)
+      const far = voyage.cur === "home" ? 9000 : 12000;
+      if (Math.abs(cam.near - near) > near * 0.02 || cam.far !== far) {
         cam.near = near;
+        cam.far = far;
         cam.updateProjectionMatrix();
       }
     }

@@ -1450,7 +1450,7 @@ function TownBuilt({ built, mobile }: { built: Built; mobile: boolean }) {
       <group position={[t.mill.x, t.mill.y, t.mill.z]} rotation={[0, t.mill.rot + Math.PI / 2, 0]}>
         <mesh ref={wheel} geometry={t.wheel} material={t.mat} />
       </group>
-      <mesh geometry={t.halos.g} material={t.halos.m} renderOrder={6} frustumCulled={false} />
+      <mesh geometry={t.halos.g} material={t.halos.m} renderOrder={6} />
       <mesh geometry={t.pools.g} material={t.pools.m} renderOrder={4} />
       <mesh geometry={t.smoke.g} material={t.smoke.m} renderOrder={5} />
       <mesh ref={storks} geometry={t.storks.g} material={t.storks.m} />
