@@ -559,6 +559,11 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: -100, z: -246, r: 40, h: 640 },
       { x: -18, z: -334, r: 48, h: 660 },
       { x: 58, z: -320, r: 36, h: 610 },
+      // the gate of the way on (Fairy.tsx): the piers of its arch and the two towers beside them, the opening left free
+      ...[-1, 1].flatMap((sd) => [
+        { x: 646 + Math.cos(-0.363) * sd * 23, z: -1335 - Math.sin(-0.363) * sd * 23, r: 5, h: 104 },
+        { x: 646 + Math.cos(-0.363) * sd * 34, z: -1335 - Math.sin(-0.363) * sd * 34, r: 9.5, h: 118 },
+      ]),
     ],
     canvases: [{ painting: "fairy-tale", x: -46, z: 1290, yaw: 0.5 }],
   },
@@ -625,6 +630,13 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: 0, z: 0, r: 295, h: 84 },
       { x: 0, z: 0, r: 250, h: 100 },
       { x: 0, z: 0, r: 205, h: 114 },
+      // the court's colonnade, column by column (isle.ts COLONNADE: the bays north and south stand open), and the
+      // two piers of the portal in its far side: the plane goes between them, not round the whole ring
+      ...Array.from({ length: 28 }, (_, i) => i)
+        .filter((i) => i !== 20 && i !== 21 && i !== 6 && i !== 7)
+        .map((i) => ({ x: Math.cos(((i + 0.5) / 28) * Math.PI * 2) * 112, z: Math.sin(((i + 0.5) / 28) * Math.PI * 2) * 112, r: 3.4, h: 162 })),
+      { x: -19, z: 111, r: 4, h: 166 },
+      { x: 19, z: 111, r: 4, h: 166 },
     ],
     canvases: [{ painting: "paradise", x: -622, z: 196, yaw: -1.0 }],
   },
@@ -698,6 +710,9 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       { x: 800, z: 450, r: 34, h: 130 },
       { x: 980, z: 880, r: 34, h: 130 },
       { x: 320, z: -40, r: 56, h: 90 },
+      // the two needles the way on stands between, where the plane meets them (they lean together overhead)
+      { x: -41, z: -720, r: 7, h: 140 },
+      { x: 41, z: -720, r: 7, h: 140 },
     ],
     canvases: [{ painting: "offering", x: -44, z: 1300, yaw: 0.42 }],
   },
