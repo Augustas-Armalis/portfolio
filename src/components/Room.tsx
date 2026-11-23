@@ -714,6 +714,20 @@ function Scene({
       } catch {
         /* uploaded on first draw instead */
       }
+      // only the bodies of the things on the desk throw a shadow in the sun's map: a knob, a ring or a screw a
+      // centimetre across is a draw in that pass for a shadow nobody can find
+      try {
+        const sc = new THREE.Vector3();
+        scene.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh || !m.castShadow || !m.geometry) return;
+          if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+          m.getWorldScale(sc);
+          if ((m.geometry.boundingSphere?.radius ?? 1) * Math.max(sc.x, sc.y, sc.z) < 0.016) m.castShadow = false;
+        });
+      } catch {
+        /* as they were */
+      }
       mark("textures");
       await wait(30);
       if (dead) return;
