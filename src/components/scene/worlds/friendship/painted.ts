@@ -212,7 +212,7 @@ export function makePaintedMaterial(map: THREE.Texture, mask: THREE.Texture, pas
                // broken as a pastel stroke is broken, more so the further it is carried
                float brk = mix(1.0, smoothstep(0.25, 0.7, vnoise(vec2(ang * 140.0, rad * 0.012))), smoothstep(0.0, 300.0, cr.z));
                float run = 0.8 + 0.3 * sin(rad * 0.02 - uTime * 0.8);
-               vec3 c = max(rc - vec3(0.05, 0.06, 0.04), 0.0) * key * fan * reach * brk * run * 2.6;
+               vec3 c = max(rc - vec3(0.05, 0.06, 0.04), 0.0) * key * fan * reach * brk * run * 3.4;
                // (the gold of the picture's rays, and their green)
                c = mix(c, vec3(0.55, 0.95, 0.45) * dot(c, vec3(0.33)), 0.35);
                c *= 1.0 - 0.7 * airAmt(vWorld);

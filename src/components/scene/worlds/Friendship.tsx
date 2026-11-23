@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { postCtl } from "../Post";
 import { Gallery, Halos, LightPath, Mist, useDisposable, type WorldProps } from "./common";
@@ -163,7 +163,15 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       if (lit) letLightGo();
     };
   }, []);
+  // She turns a little with the eye, about the orb's upright (so the hand never leaves it): a picture seen from
+  // the side would be squeezed; this keeps it nearly square to whoever looks, the way a painted card stays readable.
+  const her = useRef<THREE.Group>(null);
   useFrame(({ camera, size }) => {
+    if (her.current && voyage.cur === "friendship") {
+      const o = FRIEND_U.uOrb.value;
+      const want = THREE.MathUtils.clamp(Math.atan2(camera.position.x - o.x, camera.position.z - o.z) * 0.55, -0.45, 0.45);
+      her.current.rotation.y += (want - her.current.rotation.y) * 0.08;
+    }
     const px = (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360)) / Math.max(size.height, 1);
     b.motesMat.uniforms.uPx.value = px;
     b.streaksMat.uniforms.uPx.value = px;
@@ -198,9 +206,13 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       <mesh geometry={forest.roots} material={b.rootMat} />
       <mesh geometry={forest.shrooms} material={b.shroomMat} />
       {/* her: the painting's own figure on its relief, the crown of rays keyed out and added behind */}
-      <mesh geometry={b.crownSheet} material={b.crown} renderOrder={2} frustumCulled={false} />
-      <mesh geometry={b.relief} material={b.herCore} frustumCulled={false} />
-      <mesh geometry={b.relief} material={b.herEdge} renderOrder={3} frustumCulled={false} />
+      <group ref={her} position={[ORB.x, 0, ORB.z]}>
+        <group position={[-ORB.x, 0, -ORB.z]}>
+          <mesh geometry={b.crownSheet} material={b.crown} renderOrder={2} frustumCulled={false} />
+          <mesh geometry={b.relief} material={b.herCore} frustumCulled={false} />
+          <mesh geometry={b.relief} material={b.herEdge} renderOrder={3} frustumCulled={false} />
+        </group>
+      </group>
       <mesh geometry={b.orb} material={b.orbMat} position={[ORB.x, ORB.y, ORB.z]} />
       <LightPath id="friendship" def={def} tint={[1, 0.86, 0.56]} gain={0.3} angels={false} marks={false} effects={props.effects} />
       <Gallery def={def} />
