@@ -7,7 +7,7 @@ import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { voyage } from "../worlds/voyage";
 import { farBlock, makeFarMaterial, makeHomeTreeMaterial } from "./Forest";
-import { CHURCH, HILL, SQUARE, TOWN, hillRoadA, riverD, riverSlope, riverW, riverWL, riverZ, sst } from "./journey";
+import { CHURCH, HILL, SQUARE, TOWN, hillRoadA, laneD, riverD, riverSlope, riverW, riverWL, riverZ, routeD, sst } from "./journey";
 import { GLSL_HOME_AIR, HOME_U, landH, rng, timed, type HomeTree, type TreeKind } from "./land";
 import { buildTree, makeFarTreeTexture, makeLeafTexture } from "./trees";
 
@@ -425,7 +425,8 @@ function* buildTownSteps() {
   const nests: V3[] = [];
   const gardens: [number, number, TreeKind, number][] = [];
   const taken: [number, number, number][] = [];
-  const free = (x: number, z: number, rad: number) => taken.every(([tx, tz, tr]) => Math.hypot(x - tx, z - tz) > rad + tr);
+  // (nothing is built within reach of the flight's line: the eye follows the plane close behind it)
+  const free = (x: number, z: number, rad: number) => routeD(x, z) > rad + 9 && laneD(x, z).d > rad + 9 && taken.every(([tx, tz, tr]) => Math.hypot(x - tx, z - tz) > rad + tr);
   const take = (x: number, z: number, rad: number) => taken.push([x, z, rad]);
   // the river's frame at x: along it (downstream, toward -x) and across it (toward the south bank)
   const frame = (x: number) => {
@@ -739,7 +740,7 @@ function* buildTownSteps() {
     const half = riverW(x) + 4.5;
     const rot = Math.atan2(f.nx, f.nz);
     const N = 18;
-    const yAt = (t: number) => wl + 1.35 + 1.6 * Math.sin(Math.PI * t);
+    const yAt = (t: number) => wl + 0.62 + 2.3 * Math.sin(Math.PI * t);
     b.at(x, 0, riverZ(x), rot);
     for (let i = 0; i < N; i++) {
       const t0 = i / N;

@@ -55,16 +55,17 @@ export function riverLand(h: number, x: number, z: number) {
   if (x > RIVER.x0 - 2 || x < RIVER.x1) return h;
   const d = riverD(x, z);
   const tw = Math.hypot(x - TOWN.x, z - TOWN.z);
-  const wv = Math.max(1 - sst(26, 70, d), 1 - sst(TOWN.r, TOWN.r + 55, tw));
+  // (it comes in over twenty metres out of the lake: no step where it begins)
+  const wv = Math.max(1 - sst(26, 70, d), 1 - sst(TOWN.r, TOWN.r + 55, tw)) * sst(RIVER.x0 - 2, RIVER.x0 - 22, x);
   if (wv <= 0) return h + hillH(x, z);
   const w = riverW(x);
   const wl = riverWL(x);
-  const bank = wl + 1.15 * sst(w, w + 3.5, d) + 0.03 * Math.max(0, d - w - 3.5);
+  const bank = wl + 1.0 * sst(w - 0.4, w + 8, d) + 0.03 * Math.max(0, d - w - 8);
   const bed = wl - 1.05 * (1 - (d / w) * (d / w));
   let v = d < w ? bed : bank;
   // (out at the valley's edge it rises with the land; the river's own cut always wins near the water)
   v = h + (v - h) * wv + hillH(x, z);
-  return Math.min(v, d < w + 3.5 ? bank : 1e9);
+  return d < w + 8 ? h + (Math.min(v, bank) - h) * sst(RIVER.x0 - 2, RIVER.x0 - 22, x) : v;
 }
 
 // the same in GLSL (land.ts includes it before its own landH)
@@ -106,15 +107,15 @@ float riverLand(float h, vec2 p){
   if (p.x > ${f(RIVER.x0 - 2)} || p.x < ${f(RIVER.x1)}) return h;
   float d = riverD(p);
   float tw = length(p - vec2(${f(TOWN.x)}, ${f(TOWN.z)}));
-  float wv = max(1.0 - sst(26.0, 70.0, d), 1.0 - sst(${f(TOWN.r)}, ${f(TOWN.r + 55)}, tw));
+  float wv = max(1.0 - sst(26.0, 70.0, d), 1.0 - sst(${f(TOWN.r)}, ${f(TOWN.r + 55)}, tw)) * sst(${f(RIVER.x0 - 2)}, ${f(RIVER.x0 - 22)}, p.x);
   if (wv <= 0.0) return h + hillH(p);
   float w = riverW(p.x);
   float wl = riverWL(p.x);
-  float bank = wl + 1.15 * sst(w, w + 3.5, d) + 0.03 * max(0.0, d - w - 3.5);
+  float bank = wl + 1.0 * sst(w - 0.4, w + 8.0, d) + 0.03 * max(0.0, d - w - 8.0);
   float bed = wl - 1.05 * (1.0 - (d / w) * (d / w));
   float v = d < w ? bed : bank;
   v = h + (v - h) * wv + hillH(p);
-  return min(v, d < w + 3.5 ? bank : 1e9);
+  return d < w + 8.0 ? h + (min(v, bank) - h) * sst(${f(RIVER.x0 - 2)}, ${f(RIVER.x0 - 22)}, p.x) : v;
 }
 // the river's surface over a point (-1e4 where there is none)
 float riverLevel(vec2 p){ return riverD(p) < riverW(p.x) + 0.6 ? riverWL(p.x) : -1e4; }
