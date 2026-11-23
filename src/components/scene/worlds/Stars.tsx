@@ -10,7 +10,7 @@ import { Birds, LightShafts, type Flock, type Shaft } from "./life";
 import { linesGeometry, makeCloudPaint, makeLineMaterial, makeRayDiscMaterial, makeSoftMaterial, paintedCloudGeometry, ribbonGeometry, softGeometry, type PCloud, type Seg, type Soft } from "./stars/forms";
 import { FIG_KINDS, constellation, heroAngel, makeGlobeGlass, makePyramidVeil, makeStarRiver, makeWaveBand, makeWaveSea, riverGeometry, wingFan } from "./stars/parts";
 import { ORIGIN, WORLDS, groundAt, pathOf } from "./voyage";
-import { useDeepLens } from "./fairy/shared";
+import { Kindling, useDeepLens, type Lamp } from "./fairy/shared";
 import { Comet } from "./stars/comet";
 import { buildWisps, makeWispMaterial } from "./sea/water";
 
@@ -279,6 +279,32 @@ function* starsSteps(props: WorldProps) {
       { c: [0, 60, 560], r: 80, n: 7, size: 1.0, speed: 8 },
     ];
 
+    // the first view is framed: two small dark pyramids stand out of the sea close on either hand of the way in,
+    // in shade, and the great lit pyramid is seen between them
+    for (const [x, z, h] of [
+      [-52, 688, 58],
+      [56, 660, 42],
+    ] as [number, number, number][])
+      k.add(new THREE.ConeGeometry(h * 0.5, h, 4), [x, g(x, z) + h / 2 - 3, z], [0.008, 0.02, 0.036], { top: [0.02, 0.05, 0.075], rot: [0, Math.PI / 4, 0] });
+    // the globe of the Andante wakes as the plane comes to it: a light within, then small lamps round its girdle, one after another
+    const globeLamps: Lamp[] = [{ p: [GLOBE.x, gy, GLOBE.z], size: GLOBE.r * 1.5, col: [0.5, 0.95, 0.8], k: 0.22, at: 560 }];
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      globeLamps.push({ p: [GLOBE.x + Math.cos(a) * GLOBE.r * 1.02, gy + Math.sin(a * 2) * 6, GLOBE.z + Math.sin(a) * GLOBE.r * 1.02], size: 7, col: [1, 0.9, 0.6], k: 0.8, at: 500 - i * 9 });
+    }
+    const globeCentre: V3 = [GLOBE.x, gy, GLOBE.z];
+    // (the heavy things of the last part, each in its own step)
+    yield;
+    const setGeo = k.build();
+    yield;
+    const seaGeo = terrainGeometry(def.terrain!, 4200, props.mobile ? 130 : 220);
+    yield;
+    const threadGeo = linesGeometry(threads);
+    const lineGeo = linesGeometry(segs);
+    yield;
+    const orbGeo = softGeometry(orbs, fine ? 2 : 1);
+    const giantGeo = softGeometry(giants, 3);
+    yield;
     return {
       // mist lying on the sea in long level bands: before the pyramid's foot, round the globe, and far out
       wisps: buildWisps([
@@ -291,7 +317,7 @@ function* starsSteps(props: WorldProps) {
         { x: 700, z: -800, w: 1600, d: 500, y: 18, a: 0.4 },
       ]),
       wispMat: makeWispMaterial(),
-      sea: terrainGeometry(def.terrain!, 4200, props.mobile ? 130 : 220),
+      sea: seaGeo,
       seaMat: makeWaveSea([PYR.x, 520, PYR.z]),
       veils: [0.5, 0.76, 1].map((s, i) => ({ geo: cone(s, 40), mat: makePyramidVeil({ h: PYR.h * s, half: PYR.half * s, alpha: [0.34, 0.34, 0.46][i], seed: i * 2.3 + 1, freq: [0.022, 0.017, 0.013][i], edge: i === 2 ? 1 : 0.12 }) })),
       farVeil: cone(1, 16),
@@ -300,7 +326,9 @@ function* starsSteps(props: WorldProps) {
       py0,
       tip,
       AS,
-      set: k.build(),
+      set: setGeo,
+      globeLamps,
+      globeCentre,
       tempera: makeTempera({ amb: 1, key: 0.5, rim: [0.5, 0.42, 0.2], rimPow: 2.5 }),
       wingL: wingFan(-1, AS),
       wingR: wingFan(1, AS),
@@ -312,10 +340,10 @@ function* starsSteps(props: WorldProps) {
       riverDustMat: makePoints({ a: [1.0, 0.92, 0.7], b: [0.7, 0.84, 1.0], scale: 420, gain: 0.9, max: 30, drift: 1.2 }),
       serpent: serpent.geo,
       serpentMat: makeStarRiver({ width: 34, top: 1, base: [0.05, 0.026, 0.014], warm: 0.15, flow: 1.4, alpha: 0.7 }),
-      threads: linesGeometry(threads),
+      threads: threadGeo,
       threadMat: makeLineMaterial({ gain: 1.3, minW: 0.0022, flow: 0.6 }),
-      orbs: softGeometry(orbs, fine ? 2 : 1),
-      giants: softGeometry(giants, 3),
+      orbs: orbGeo,
+      giants: giantGeo,
       orbMat: makeSoftMaterial({ shade: [0.35, 0.4, 0.7], under: [0.4, 0.4, 0.6], rim: 1.4, dab: 0.8, amb: 1.2, key: 0.9 }),
       giantMat: makeSoftMaterial({ shade: [0.3, 0.4, 0.7], under: [0.4, 0.4, 0.6], rim: 1.2, dab: 1, amb: 1.1, key: 0.7, fade: [1500, 3000] }),
       warm: paintedCloudGeometry(warm, [0, 100, 300]),
@@ -330,7 +358,7 @@ function* starsSteps(props: WorldProps) {
       starRing: starRing.geo,
       starRingMat: makeStarRiver({ width: 30, top: 1, base: [0.06, 0.03, 0.015], warm: 0.1, flow: 0.8, alpha: 0.85 }),
       bands,
-      lines: linesGeometry(segs),
+      lines: lineGeo,
       lineMat: makeLineMaterial({ figs: figs.length, gain: 1.6, minW: 0.0018 }),
       figs,
       puffs,
@@ -351,7 +379,9 @@ export function prepareStars(props: WorldProps) {
   const g = madeStars ? null : starsSteps(props);
   return () => {
     if (!g || madeStars) return true;
+    const t0 = performance.now();
     const r = g.next();
+    if (process.env.NODE_ENV !== "production") ((window as unknown as { __steps?: Record<string, number[]> }).__steps ??= {}).stars = [...((window as unknown as { __steps: Record<string, number[]> }).__steps.stars ?? []), Math.round(performance.now() - t0)];
     if (r.done) madeStars = { key, v: r.value };
     return !!r.done;
   };
@@ -454,6 +484,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       {/* a comet crosses the whole sky, slowly, a while after the plane has come; and another much later, higher */}
       <Comet world="stars" id="stars-comet" from={[-1250, 430, -150]} to={[900, 300, -820]} seconds={30} after={24} again={70} tail={620} width={30} />
       <Comet world="stars" id="stars-comet-high" from={[900, 980, 300]} to={[-1100, 760, -600]} seconds={34} after={105} tail={700} width={34} tint={[0.8, 0.9, 1]} />
+      <Kindling list={b.globeLamps} centre={b.globeCentre} />
       <Birds flocks={b.flocks} tint={[2.6, 2.3, 1.5]} lit />
       <points geometry={b.dust} material={b.dustMat} />
       <Halos list={b.glows} kind={2} />
