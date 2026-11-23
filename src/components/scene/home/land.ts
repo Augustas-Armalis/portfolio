@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { HOME_GATE_Z, roadX } from "../flightPath";
 import { pathW, pathX } from "../shared";
-import { routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
+import { fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
 
 // The land the desk stands in, written once and read by everything that
 // stands on it. The desk is at the origin and the visitor looks north (-z).
@@ -173,6 +173,7 @@ ${GLSL_RIVER}
 ${GLSL_TRACK}
 ${GLSL_CAVE}
 ${GLSL_SACRED}
+${GLSL_FIELDS}
 float landFree(vec2 p){
   float r = length(p);
   float f = smoothstep(70.0, 210.0, r);
@@ -436,6 +437,8 @@ export function forestD(x: number, z: number) {
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
   // the town's ground and the river's banks are open
   d *= sstep(SACRED.foot - 6, SACRED.foot + 20, Math.hypot(x - SACRED.x, z - SACRED.z));
+  // the farmland east of the road is open
+  d *= 1 - 0.92 * fieldK(x, z);
   d *= sstep(TOWN.r - 18, TOWN.r + 26, Math.hypot(x - TOWN.x, z - TOWN.z)) * sstep(HILL.foot - 18, HILL.foot + 8, Math.hypot(x - HILL.x, z - HILL.z));
   const rd = riverD(x, z);
   if (rd < 40) d *= sstep(riverW(x) + 2, riverW(x) + 22, rd);

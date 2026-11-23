@@ -6,9 +6,9 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { makeHomeTreeMaterial } from "./Forest";
-import { SACRED } from "./journey";
+import { FARMSTEAD, MILL, SACRED } from "./journey";
 import { GLSL_HOME_AIR, HOME_U, landH, rng, timed } from "./land";
-import { K, TB, makeTownMaterial } from "./Town";
+import { K, TB, house, makeTownMaterial } from "./Town";
 import { buildTree, makeLeafTexture } from "./trees";
 
 // The sacred hill (alkakalnis) where the old road from the desk ends (journey.ts SACRED). On its crown a great oak,
@@ -275,7 +275,8 @@ const SAILS = [
   { x: -260, off: 150, speed: 1.6, sail: [0.86, 0.82, 0.72] as V3 },
   { x: 40, off: 230, speed: -1.1, sail: [0.7, 0.36, 0.2] as V3 },
   { x: 300, off: 120, speed: 1.2, sail: [0.86, 0.82, 0.72] as V3 },
-  { x: -520, off: 320, speed: -0.9, sail: [0.62, 0.55, 0.42] as V3 },
+  { x: -90, off: 85, speed: 0.8, sail: [0.86, 0.82, 0.72] as V3 },
+  { x: 180, off: 70, speed: -0.7, sail: [0.55, 0.2, 0.12] as V3 },
 ];
 function buildBoat(sail: V3) {
   const b = new TB();
@@ -326,6 +327,139 @@ export function SeaBoats() {
       {s.geos.map((g, i) => (
         <mesh key={i} ref={(m) => void (refs[i].current = m)} geometry={g} material={s.mat} />
       ))}
+    </>
+  );
+}
+
+// ---------- the farmstead (sodyba) among the fields, and the post windmill on its rise ----------
+function buildFarm() {
+  const b = new TB();
+  const r = rng(707);
+  const F = FARMSTEAD;
+  // (the houses' window frames and door lamps go to a builder of their own: the town's are not to be written into)
+  const det = new TB();
+  const lamps: number[][] = [];
+  const WOOD: V3 = [0.22, 0.17, 0.12];
+  const THATCH: V3 = [0.3, 0.25, 0.14];
+  // the dwelling house, the barn across the yard, the granary (klėtis) raised on stones with its porch
+  house(b, F.x, F.z, 0.3, 11, 7, 3.0, { roof: "thatch", wall: "logs", accent: 0, porch: true, chimney: true, horses: true }, det, lamps);
+  house(b, F.x + 4, F.z - 22, 0.3 + Math.PI, 16, 9, 4.2, { roof: "thatch", wall: "grey", accent: 1, porch: false, chimney: false, horses: false }, det, lamps);
+  house(b, F.x - 16, F.z - 9, 0.3 + Math.PI / 2, 6, 5, 2.6, { roof: "shingle", wall: "logs", accent: 2, porch: true, chimney: false, horses: true }, det, lamps);
+  // the well with its sweep
+  const wx = F.x + 9;
+  const wz = F.z - 10;
+  const wy = landH(wx, wz) - 0.2;
+  b.at(wx, wy, wz, 0.8);
+  b.cyl(0, 0, 0, 0.8, 0.8, 0.95, 10, [0.32, 0.3, 0.27], K.stone);
+  b.box(2.1, 2.1, 0, 0.2, 4.2, 0.2, WOOD, K.boards);
+  b.quad([2.0, 4.1, 0.05], [-3.4, 6.4, 0.05], [-3.4, 6.3, -0.05], [2.0, 4.0, -0.05], WOOD, [K.boards, 0, 0, 0]);
+  b.box(0.15, 2.8, 0, 0.04, 3.2, 0.04, [0.07, 0.055, 0.045]);
+  // a picket fence round the yard and a stork's nest on a tall pole by the barn
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= 40; i++) {
+    const a = (i / 40) * Math.PI * 2;
+    pts.push([F.x - 3 + Math.cos(a) * 27, F.z - 10 + Math.sin(a) * 21]);
+  }
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (i === 9 || i === 10) continue; // the gate
+    const [x0, z0] = pts[i];
+    const [x1, z1] = pts[i + 1];
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const mx = (x0 + x1) / 2;
+    const mz = (z0 + z1) / 2;
+    b.at(mx, landH(mx, mz) - 0.1, mz, Math.atan2(x1 - x0, z1 - z0) + Math.PI / 2);
+    b.box(0, 0.55, 0, len, 0.1, 0.06, [0.3, 0.24, 0.17], K.boards);
+    b.box(0, 0.95, 0, len, 0.1, 0.06, [0.3, 0.24, 0.17], K.boards);
+    for (let k = 0; k < 4; k++) b.box(-len / 2 + (k + 0.5) * (len / 4), 0.6, 0.04, 0.09, 1.2, 0.04, [0.34, 0.27, 0.19], K.boards);
+  }
+  const px = F.x + 16;
+  const pz = F.z - 24;
+  b.at(px, landH(px, pz) - 0.3, pz, 0);
+  b.cyl(0, 0, 0, 0.14, 0.1, 10, 6, WOOD, K.boards);
+  b.cyl(0, 9.8, 0, 0.75, 0.95, 0.5, 9, [0.24, 0.19, 0.12], K.thatch);
+  b.box(0, 10.6, 0, 0.32, 0.3, 0.62, [0.85, 0.84, 0.8]);
+  b.box(0, 10.72, -0.05, 0.36, 0.14, 0.6, [0.07, 0.055, 0.045]);
+  b.box(0, 11.0, 0.3, 0.09, 0.5, 0.09, [0.85, 0.84, 0.8]);
+  b.box(0, 11.2, 0.55, 0.04, 0.04, 0.32, [0.7, 0.18, 0.08]);
+  // haystacks (kūgiai) out in the meadow, each round a pole
+  for (let i = 0; i < 7; i++) {
+    const hx = F.x + 40 + r() * 70;
+    const hz = F.z + 10 - r() * 60;
+    b.at(hx, landH(hx, hz) - 0.2, hz, r() * 6);
+    b.cyl(0, 0, 0, 2.1, 0.3, 4.2, 12, THATCH, K.thatch);
+    b.box(0, 4.6, 0, 0.08, 1.2, 0.08, WOOD, K.boards);
+  }
+  // the post windmill: a timber body on a trestle, a gabled roof; its sails turn (Farm below)
+  const my = landH(MILL.x, MILL.z);
+  b.at(MILL.x, my - 0.3, MILL.z, 0.9);
+  for (const [x, z] of [
+    [-2.2, -2.2],
+    [2.2, -2.2],
+    [2.2, 2.2],
+    [-2.2, 2.2],
+  ])
+    b.cyl(x * 0.4, 0, z * 0.4, 0.22, 0.18, 3.2, 6, WOOD, K.boards);
+  for (const [x, z] of [
+    [-2.4, 0],
+    [2.4, 0],
+    [0, -2.4],
+    [0, 2.4],
+  ])
+    b.box(x / 2, 0.4, z / 2, Math.abs(x) + 0.3, 0.3, Math.abs(z) + 0.3, [0.32, 0.3, 0.27], K.stone);
+  b.cyl(0, 0, 0, 0.35, 0.32, 4.5, 8, WOOD, K.boards);
+  b.wall(-2.6, 3.2, 2.6, 3.2, 3.8, 11, [0.3, 0.24, 0.17], K.boards, 9, 1);
+  b.wall(2.6, -3.2, -2.6, -3.2, 3.8, 11, [0.3, 0.24, 0.17], K.boards, 0);
+  b.wall(2.6, 3.2, 2.6, -3.2, 3.8, 11, [0.3, 0.24, 0.17], K.boards, 0);
+  b.wall(-2.6, -3.2, -2.6, 3.2, 3.8, 11, [0.3, 0.24, 0.17], K.boards, 0);
+  b.quad([-3.0, 11, 3.5], [0, 13.6, 3.5], [0, 13.6, -3.5], [-3.0, 11, -3.5], [0.2, 0.18, 0.16], [K.shingle, 0, 0, 0]);
+  b.quad([0, 13.6, 3.5], [3.0, 11, 3.5], [3.0, 11, -3.5], [0, 13.6, -3.5], [0.2, 0.18, 0.16], [K.shingle, 0, 0, 0]);
+  b.tri([-2.6, 11, 3.2], [2.6, 11, 3.2], [0, 13.4, 3.2], [0.3, 0.24, 0.17], [K.boards, 0, 0, 0], [[0, 0], [5.2, 0], [2.6, 2.4]]);
+  b.tri([2.6, 11, -3.2], [-2.6, 11, -3.2], [0, 13.4, -3.2], [0.3, 0.24, 0.17], [K.boards, 0, 0, 0], [[0, 0], [5.2, 0], [2.6, 2.4]]);
+  // a ladder and a tail pole down to the ground
+  b.quad([-0.6, 0, -9], [0.6, 0, -9], [0.6, 4.2, -3.2], [-0.6, 4.2, -3.2], WOOD, [K.boards, 0, 0, 0]);
+  return b.geometry();
+}
+// the sails: four lattice arms on a shaft, turned about the mill's own axis
+function buildSails() {
+  const b = new TB();
+  b.at(0, 0, 0, 0);
+  const W: V3 = [0.78, 0.74, 0.66];
+  const WOOD: V3 = [0.24, 0.18, 0.12];
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const P = (u: number, v: number): V3 => [c * u - s * v, s * u + c * v, 0];
+    b.quad(P(0, -0.12), P(9.5, -0.12), P(9.5, 0.12), P(0, 0.12), WOOD, [K.boards, 0, 0, 0]);
+    // the sail cloth over the lattice, on one side of the arm
+    b.quad(P(1.6, 0.15), P(9.2, 0.15), P(9.2, 1.7), P(1.6, 1.5), W, [K.paint, 0, 0, 0]);
+    for (let i = 0; i < 6; i++) b.quad(P(1.6 + i * 1.5, 0.12), P(1.7 + i * 1.5, 0.12), P(1.7 + i * 1.5, 1.75), P(1.6 + i * 1.5, 1.75), WOOD, [K.boards, 0, 0, 0]);
+  }
+  b.cyl(0, -0.3, 0, 0.35, 0.35, 0.6, 8, WOOD, K.boards);
+  return b.geometry();
+}
+export function Farm() {
+  const s = useMemo(() => timed("farm", () => ({ farm: buildFarm(), sails: buildSails(), mat: makeTownMaterial() })), []);
+  useEffect(
+    () => () => {
+      for (const x of [s.farm, s.sails, s.mat]) x.dispose();
+    },
+    [s],
+  );
+  const sails = useMemo(() => ({ current: null as THREE.Mesh | null }), []);
+  useFrame((_, dt) => {
+    s.mat.uniforms.uFront.value = -1e4;
+    if (sails.current) sails.current.rotation.z -= Math.min(dt, 0.1) * 0.35;
+  });
+  const my = landH(MILL.x, MILL.z);
+  return (
+    <>
+      <mesh geometry={s.farm} material={s.mat} />
+      <group position={[MILL.x, my + 10.2, MILL.z]} rotation={[0, 0.9, 0]}>
+        <group position={[0, 0, 3.7]}>
+          <mesh ref={(m) => void (sails.current = m)} geometry={s.sails} material={s.mat} />
+        </group>
+      </group>
     </>
   );
 }
