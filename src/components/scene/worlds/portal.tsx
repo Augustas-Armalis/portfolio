@@ -33,9 +33,15 @@ export const portalRig = { stand: null as THREE.Object3D | null, warm: null as T
 // (uPortalGain: the picture is that world's light, but the frame is still exposed for this one until the plane is
 // through: it is shown at the brightness it will have on the far side)
 export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPortalK: { value: 0 }, uPortalRes: { value: new THREE.Vector2(1, 1) }, uPortalGain: { value: 1 } };
+// From afar the window shows a still: one sharp picture of the next world taken from its entry, made once when that
+// world is warm, and looked up by the direction from the eye through each point of the opening (carried by the same
+// turn), so it turns with the eye as the live picture does and costs nothing a frame. Close in (from 130 m to 90 m)
+// the live picture takes over; the last stretch is drawn live at the frame's full size, every frame, so the frame
+// after the worlds change places is the frame before.
+const STILL_U = { tStill: { value: null as THREE.Texture | null }, uStillMat: { value: new THREE.Matrix4() }, uStillOn: { value: 0 }, uLiveK: { value: 0 } };
 // A gate whose opening in the world is not the size of its sheet of light: [half-width, rise above the way's height].
 const OPENING: Partial<Record<WorldId, [number, number]>> = { sun: [23, 33] };
-const state = { next: null as WorldId | null, k: 0, fresh: 0, tick: 0 };
+const state = { next: null as WorldId | null, k: 0, fresh: 0, tick: 0, still: null as WorldId | null, live: 0 };
 
 const E = new THREE.Vector3();
 const G = new THREE.Vector3();
@@ -99,7 +105,8 @@ export function PortalView({ mobile }: { mobile: boolean }) {
   const scene = useThree((s) => s.scene);
   const rig = useMemo(() => {
     const rt = new THREE.WebGLRenderTarget(8, 8, { type: THREE.HalfFloatType, depthBuffer: true });
-    return { rt, cam: new THREE.PerspectiveCamera(), m: new THREE.Matrix4(), buf: new THREE.Vector2(), gate: new THREE.Vector3(), scale: new THREE.Vector3() };
+    const still = new THREE.WebGLRenderTarget(1440, 900, { type: THREE.HalfFloatType, depthBuffer: true, samples: 4 });
+    return { rt, still, stillCam: new THREE.PerspectiveCamera(56, 1.6, 0.5, 12000), m: new THREE.Matrix4(), r: new THREE.Matrix4(), cam: new THREE.PerspectiveCamera(), buf: new THREE.Vector2(), gate: new THREE.Vector3(), scale: new THREE.Vector3() };
   }, []);
   useEffect(() => {
     portalRig.gl = gl;
@@ -107,6 +114,10 @@ export function PortalView({ mobile }: { mobile: boolean }) {
   useEffect(
     () => () => {
       rig.rt.dispose();
+      rig.still.dispose();
+      STILL_U.tStill.value = null;
+      STILL_U.uStillOn.value = 0;
+      state.still = null;
       PORTAL_U.tPortal.value = null;
       PORTAL_U.uPortalK.value = 0;
       state.next = null;
@@ -115,6 +126,48 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     },
     [rig],
   );
+  // that world shown and this one not, under its own sky and air, for the length of one draw into `target`
+  const drawNext = (cur: WorldId, next: WorldId, cam: THREE.Camera, target: THREE.WebGLRenderTarget) => {
+    const stand = portalRig.stand;
+    const warm = portalRig.warm!;
+    const homeWas: [THREE.Object3D, boolean][] = [];
+    portalRig.home.forEach((o) => homeWas.push([o, o.visible]));
+    const standWas = stand?.visible ?? false;
+    if (stand) stand.visible = false;
+    portalRig.home.forEach((o) => (o.visible = false));
+    warm.visible = true;
+    const skyWas = voyage.lastSky;
+    applySky(skyOf(next));
+    setWorldAir(WORLDS[next].fog);
+    const k0 = PORTAL_U.uPortalK.value;
+    PORTAL_U.uPortalK.value = 0;
+    const lin = POST_U.uLinearOut.value;
+    POST_U.uLinearOut.value = 1;
+    const prev = gl.getRenderTarget();
+    // (no shadow pass for the picture: the room asks for the shadow map by hand each frame, and that asking is kept
+    // for the real draw, or the next world's shadows are drawn here and this one goes a frame without its own)
+    const shadows = gl.shadowMap.autoUpdate;
+    const shadowDue = gl.shadowMap.needsUpdate;
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = false;
+    try {
+      gl.setRenderTarget(target);
+      gl.clear();
+      gl.render(scene, cam);
+    } finally {
+      gl.setRenderTarget(prev);
+      gl.shadowMap.autoUpdate = shadows;
+      gl.shadowMap.needsUpdate = shadowDue;
+      POST_U.uLinearOut.value = lin;
+      PORTAL_U.uPortalK.value = k0;
+      setWorldAir(WORLDS[cur].fog);
+      if (skyWas) applySky(skyWas);
+      warm.visible = false;
+      if (stand) stand.visible = standWas;
+      homeWas.forEach(([o, v]) => (o.visible = v));
+    }
+    return skyWas;
+  };
   // (after the frame's own movement, before the lens draws it: Post's draw is at priority 1)
   useFrame((st, rawDt) => {
     const dt = Math.min(rawDt, 0.1);
@@ -128,6 +181,28 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     if (able) {
       d = rig.gate.copy(gate!.pos).add(originOf(cur)).distanceTo(voyage.planePos);
       want = d < 320 ? 1 - THREE.MathUtils.smoothstep(d, 200, 300) : 0;
+      // the still: once a world, as soon as it stands warm (its entry, its own sky and air)
+      if (state.still !== next) {
+        const e = entryOf(next!);
+        const sc = rig.stillCam;
+        sc.position.copy(e.pos).add(originOf(next!));
+        sc.lookAt(sc.position.x - Math.sin(e.yaw), sc.position.y, sc.position.z - Math.cos(e.yaw));
+        sc.updateMatrixWorld();
+        sc.near = 0.5;
+        sc.far = (st.camera as THREE.PerspectiveCamera).far;
+        sc.updateProjectionMatrix();
+        drawNext(cur, next!, sc, rig.still);
+        state.still = next;
+        STILL_U.tStill.value = rig.still.texture;
+      }
+      // (this world's directions, carried into that one, seen by the still's camera: P * view's turn * the gate's turn)
+      const turn = gateToEntry(cur, next!, rig.m);
+      if (turn !== null) {
+        rig.r.extractRotation(rig.stillCam.matrixWorldInverse).multiply(M1.makeRotationY(turn));
+        STILL_U.uStillMat.value.multiplyMatrices(rig.stillCam.projectionMatrix, rig.r);
+        STILL_U.uStillOn.value = 1;
+      }
+      PORTAL_U.uPortalGain.value = skyOf(next!).exposure / Math.max(voyage.lastSky?.exposure ?? 1, 0.05);
     }
     if (!able || d >= 320) {
       state.k = Math.max(0, state.k - dt * 3);
@@ -135,7 +210,8 @@ export function PortalView({ mobile }: { mobile: boolean }) {
         state.next = null;
         state.fresh = 0;
       }
-      PORTAL_U.uPortalK.value = state.fresh > 0 ? state.k : 0;
+      PORTAL_U.uPortalK.value = state.fresh > 0 || STILL_U.uStillOn.value > 0 ? state.k : 0;
+      if (!able) STILL_U.uStillOn.value = 0;
       return;
     }
     if (state.next !== next) {
@@ -144,16 +220,27 @@ export function PortalView({ mobile }: { mobile: boolean }) {
       state.k = 0;
     }
     state.k += (want - state.k) * (1 - Math.exp(-dt * 4));
-    // the picture: every third frame, every frame over the last seventy metres
-    if (d > 70 && state.fresh > 0 && ++state.tick % 3 !== 0) {
+    // the live picture: only within 130 m (beyond, the still); every second frame, every frame over the last seventy metres
+    const stillOk = STILL_U.uStillOn.value > 0;
+    const liveT = stillOk ? 1 - THREE.MathUtils.smoothstep(d, 90, 130) : 1;
+    if (stillOk && d > 135) {
+      state.fresh = 0;
+      state.live = 0;
+      STILL_U.uLiveK.value = 0;
+      PORTAL_U.uPortalK.value = state.k;
+      return;
+    }
+    if (d > 70 && state.fresh > 0 && ++state.tick % 2 !== 0) {
       PORTAL_U.uPortalK.value = state.k;
       return;
     }
     const cam = st.camera as THREE.PerspectiveCamera;
     const turn = gateToEntry(cur, next!, rig.m);
     if (turn === null) return;
-    const w = Math.max(8, Math.round(target!.width * 0.4));
-    const h = Math.max(8, Math.round(target!.height * 0.4));
+    // (half the frame each way from afar; the frame's own size over the last sixty metres, so the swap is exact)
+    const f = d < 60 ? 1 : 0.5;
+    const w = Math.max(8, Math.round(target!.width * f));
+    const h = Math.max(8, Math.round(target!.height * f));
     if (rig.rt.width !== w || rig.rt.height !== h) rig.rt.setSize(w, h);
     // the same eye, carried from this gate to that entry
     const pc = rig.cam;
@@ -171,43 +258,11 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     pc.matrixAutoUpdate = false;
     pc.matrix.copy(pc.matrixWorld);
     pc.matrixWorldInverse.copy(pc.matrixWorld).invert();
-    // that world shown and this one not, under its own sky and air, for the length of one draw
-    const stand = portalRig.stand;
-    const warm = portalRig.warm!;
-    const homeWas: [THREE.Object3D, boolean][] = [];
-    portalRig.home.forEach((o) => homeWas.push([o, o.visible]));
-    const standWas = stand?.visible ?? false;
-    if (stand) stand.visible = false;
-    portalRig.home.forEach((o) => (o.visible = false));
-    warm.visible = true;
-    const skyWas = voyage.lastSky;
-    applySky(skyOf(next!));
-    setWorldAir(WORLDS[next!].fog);
-    const k0 = PORTAL_U.uPortalK.value;
-    PORTAL_U.uPortalK.value = 0;
-    const lin = POST_U.uLinearOut.value;
-    POST_U.uLinearOut.value = 1;
-    const prev = gl.getRenderTarget();
-    // (no shadow pass for the picture: the room asks for the shadow map by hand each frame, and that asking is kept
-    // for the real draw, or the next world's shadows are drawn here and this one goes a frame without its own)
-    const shadows = gl.shadowMap.autoUpdate;
-    const shadowDue = gl.shadowMap.needsUpdate;
-    gl.shadowMap.autoUpdate = false;
-    gl.shadowMap.needsUpdate = false;
-    gl.setRenderTarget(rig.rt);
-    gl.clear();
-    gl.render(scene, pc);
-    gl.setRenderTarget(prev);
-    gl.shadowMap.autoUpdate = shadows;
-    gl.shadowMap.needsUpdate = shadowDue;
-    POST_U.uLinearOut.value = lin;
-    PORTAL_U.uPortalK.value = k0;
-    setWorldAir(WORLDS[cur].fog);
-    if (skyWas) applySky(skyWas);
-    warm.visible = false;
-    if (stand) stand.visible = standWas;
-    homeWas.forEach(([o, v]) => (o.visible = v));
+    const skyWas = drawNext(cur, next!, pc, rig.rt);
     state.fresh = 1;
+    // (the live picture comes in over the still only once it is there)
+    state.live = liveT;
+    STILL_U.uLiveK.value = liveT;
     PORTAL_U.tPortal.value = rig.rt.texture;
     PORTAL_U.uPortalRes.value.set(target!.width, target!.height);
     PORTAL_U.uPortalGain.value = skyOf(next!).exposure / Math.max(skyWas?.exposure ?? 1, 0.05);
@@ -279,10 +334,11 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
-      uniforms: { ...PORTAL_U, uSpring: { value: spring } },
-      vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      uniforms: { ...PORTAL_U, ...STILL_U, uSpring: { value: spring } },
+      vertexShader: /* glsl */ `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
       fragmentShader: /* glsl */ `
         uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes; uniform float uPortalGain; uniform float uSpring; varying vec2 vUv;
+        uniform sampler2D tStill; uniform mat4 uStillMat; uniform float uStillOn; uniform float uLiveK; varying vec3 vW;
         void main(){
           if (uPortalK <= 0.003) discard;
           // a lancet: straight sides, a pointed round head, soft all the way round
@@ -292,7 +348,13 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
           float edge = max(dx, max(head, 1.0 - smoothstep(0.0, 0.04, vUv.y)));
           float a = (1.0 - smoothstep(0.72, 0.98, edge)) * uPortalK;
           // that world's own light, as it will be seen from inside it: nothing added, nothing laid over it
-          vec3 col = texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb * uPortalGain;
+          vec3 col = uLiveK > 0.0 ? texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb : vec3(0.0);
+          if (uStillOn > 0.5 && uLiveK < 1.0) {
+            vec4 c = uStillMat * vec4(normalize(vW - cameraPosition), 0.0);
+            vec2 su = clamp(c.xy / max(c.w, 1e-4) * 0.5 + 0.5, 0.0, 1.0);
+            col = mix(texture2D(tStill, su).rgb, col, uLiveK);
+          }
+          col *= uPortalGain;
           gl_FragColor = vec4(col, a);
         }`,
     });
