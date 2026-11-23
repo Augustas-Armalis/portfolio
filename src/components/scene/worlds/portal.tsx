@@ -188,13 +188,18 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     const lin = POST_U.uLinearOut.value;
     POST_U.uLinearOut.value = 1;
     const prev = gl.getRenderTarget();
+    // (no shadow pass for the picture: the room asks for the shadow map by hand each frame, and that asking is kept
+    // for the real draw, or the next world's shadows are drawn here and this one goes a frame without its own)
     const shadows = gl.shadowMap.autoUpdate;
+    const shadowDue = gl.shadowMap.needsUpdate;
     gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = false;
     gl.setRenderTarget(rig.rt);
     gl.clear();
     gl.render(scene, pc);
     gl.setRenderTarget(prev);
     gl.shadowMap.autoUpdate = shadows;
+    gl.shadowMap.needsUpdate = shadowDue;
     POST_U.uLinearOut.value = lin;
     PORTAL_U.uPortalK.value = k0;
     setWorldAir(WORLDS[cur].fog);
