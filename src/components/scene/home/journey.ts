@@ -197,16 +197,26 @@ export function journeyWood(x: number, z: number) {
 // ---------- the path of light ----------
 // [x, z, metres above whatever is under it (land or water)]; the first two climb off the desk as the old road did
 // (their height is the road's, see voyage.ts).
+// (low over the main walking path from the desk, round the lake's south shore to where it meets the river's south
+// bank; then out over the river, the town's open way, between the houses of both quays)
+const bankPt = (x: number): [number, number, number] => {
+  const sl = riverSlope(x);
+  return [x, riverZ(x) + (riverW(x) + 5.4) * Math.sqrt(1 + sl * sl), 5.0];
+};
 export const JOURNEY: [number, number, number][] = [
-  [1.5, -14, 0],
-  [1.3, -30, 0],
-  [-3, -50, 5.2],
-  [-16, -70, 6.4],
-  [-38, -84, 6.8],
-  [-62, -84, 6.6],
-  [-90, -80, 6.2],
-  [-118, -86, 6.0],
-  [-146, -98, 6.0],
+  [0.31, -7, 0],
+  [-2.5, -15, 0],
+  [-8, -21, 4.2],
+  [-16, -28, 5.0],
+  [-29, -36, 5.0],
+  [-46, -38, 5.0],
+  [-64, -41, 5.0],
+  [-80, -47, 5.0],
+  [-93, -57, 5.0],
+  bankPt(-104),
+  bankPt(-116),
+  bankPt(-128),
+  [-150, riverZ(-150), 6.0],
   [-172, -114, 6.2],
   [-198, -128, 6.4],
   [-222, -135, 6.6],
@@ -257,7 +267,7 @@ float caveIn(vec2 p){
 
 // how far a point is from the flight's way over the open land (the road, the lake, the river and the town: the
 // forest's stretch has its own trees), for whoever plants whole trees near it instead of painted cards
-const OPEN_WAY = JOURNEY.slice(2, 16);
+const OPEN_WAY = JOURNEY.slice(0, JOURNEY.length - FOREST_LINE.length - 3);
 const OPEN_BOX = (() => {
   const xs = JOURNEY.slice(2, 16).map((p) => p[0]);
   const zs = JOURNEY.slice(2, 16).map((p) => p[1]);
