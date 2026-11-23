@@ -172,7 +172,7 @@ export function makeTreeMaterial() {
         float ridge = smoothstep(0.35, 0.8, fur);
         float split = vnoise(vec2(a * 40.0 + l.y * 0.03, l.y * 0.18));
         float pits = vnoise(l.xz * 0.9 + l.y * 0.7);
-        vec3 alb = mix(vec3(0.009, 0.007, 0.012), vec3(0.04, 0.032, 0.036), ridge) * (0.7 + 0.6 * split) * (0.8 + 0.4 * pits);
+        vec3 alb = mix(vec3(0.012, 0.01, 0.016), vec3(0.075, 0.062, 0.07), ridge) * (0.7 + 0.6 * split) * (0.8 + 0.4 * pits);
         // lichen and moss in the furrows, faintly the night's green-blue
         float moss = smoothstep(0.55, 0.9, vnoise(l.xz * 0.05 + l.y * 0.04)) * smoothstep(0.55, 0.9, n.y + 0.2) ;
         alb = mix(alb, vec3(0.012, 0.045, 0.045), moss * 0.55);
@@ -181,7 +181,7 @@ export function makeTreeMaterial() {
         // the moon's line of green-blue on every ridge that turns toward it
         float fres = pow(1.0 - max(dot(n, V), 0.0), 3.2);
         float toMoon = smoothstep(-0.2, 0.8, dot(n, uKeyDir));
-        col += vec3(0.05, 0.32, 0.3) * fres * toMoon * (0.35 + 0.8 * ridge) * 0.55;
+        col += vec3(0.05, 0.32, 0.3) * fres * toMoon * (0.35 + 0.8 * ridge) * 0.8;
         // the light of the door, and of the crowd going in, on the bark and the roots round it: warm, close
         vec3 dc = vec3(uDoor.x, uDoor.y + 14.0, uDoor.z) - vec3(l.x, l.y, l.z);
         float dd = dot(dc, dc);

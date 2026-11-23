@@ -15,7 +15,7 @@ import { ROAD_W, funeralLand } from "./land";
 // length can be culled, and drawn as carefully as its distance asks: near, a hooded figure of a hundred
 // triangles; further, one of thirty; far off, a single painted card that faces the eye. Some carry a light.
 
-export const CHUNK = 60;
+export const CHUNK = 90;
 const HEIGHT = 2.65;
 const END = /* glsl */ `
   #include <tonemapping_fragment>
@@ -90,7 +90,7 @@ const SHADE_GLSL = /* glsl */ `
     // the lanterns of the crowd: warm, on the side of each fold that faces them, falling off with the cloak's height
     float ld = clamp(dot(n, normalize(ldir + vec3(0.0, 0.35, 0.0))) * 0.55 + 0.45, 0.0, 1.0);
     float lit = lk * ld * ld * (0.55 + 0.6 * smoothstep(0.1, 0.8, k));
-    col += vec3(1.0, 0.6, 0.26) * (alb * 7.0 + vec3(0.012, 0.008, 0.007)) * lit * glowK() * 1.7;
+    col += vec3(1.0, 0.56, 0.22) * (alb * 4.0 + vec3(0.006, 0.004, 0.003)) * lit * glowK() * 1.5;
     // moon rim, thin and cold; and a warm thread where a lantern is behind the figure
     vec3 L = normalize(vec3(uKeyDir.x, 0.12, uKeyDir.z));
     float fres = pow(1.0 - abs(dot(n, V)), 3.2);

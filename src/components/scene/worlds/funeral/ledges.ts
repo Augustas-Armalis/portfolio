@@ -37,7 +37,18 @@ export function buildWatchers() {
     const fx = Math.sin(yaw);
     const fz = Math.cos(yaw);
     // the shelf: a block sunk into the slope, flat on top, its front a little ragged
-    k.box(s * 1.5, 90, s * 1.15, [x + fx * s * 0.2, top - 45, z + fz * s * 0.2], stone, { rot: [0, yaw, 0], top: stoneTop });
+    {
+      const g = new THREE.CylinderGeometry(s * 0.82, s * 0.16, 90, 9, 8, true);
+      const p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const a = Math.atan2(p.getZ(i), p.getX(i));
+        const y = p.getY(i);
+        const r = 1 + (noise2(a * 2 + x * 0.01, y * 0.05) - 0.5) * 0.45 + (noise2(a * 6, y * 0.2 + 3) - 0.5) * 0.15;
+        p.setX(i, p.getX(i) * r);
+        p.setZ(i, p.getZ(i) * r * 0.8);
+      }
+      k.add(g, [x + fx * s * 0.2, top - 45, z + fz * s * 0.2], stone, { top: stoneTop, rot: [0, yaw, 0] });
+    }
     k.box(s * 1.6, 1.6, s * 1.25, [x + fx * s * 0.2, top - 0.8, z + fz * s * 0.2], stoneTop, { rot: [0, yaw, 0] });
     // the niche: an arch of stone standing behind the figure, two legs and a round head
     const R = s * 0.62;
