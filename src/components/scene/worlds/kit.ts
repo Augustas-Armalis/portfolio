@@ -516,16 +516,19 @@ export function haloGeometry(list: Halo[]) {
 }
 // kind 0: a halo with a hot core. kind 1: a sun as he drew them: a pale disc, a ring, straight rays. kind 2: a wide soft glow, no core.
 // kind 3: the sun of the Fairy Tale: a small pale disc in a wide fan of fine dotted rays.
-export function makeHaloMaterial(kind: 0 | 1 | 2 | 3 = 0) {
+// `far`: [from, to] metres over which these lights go out with distance. Left out, they are seen as far as the
+// air lets them be (a town's lamps across a valley). The way's own lanterns give it: a row of them up a climbing
+// path must not stand in the sky as a dotted line.
+export function makeHaloMaterial(kind: 0 | 1 | 2 | 3 = 0, far?: [number, number]) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { ...SKY_U, ...WORLD_U },
+    uniforms: { ...SKY_U, ...WORLD_U, uFar: { value: new THREE.Vector2(far?.[0] ?? 1e8, far?.[1] ?? 2e8) } },
     vertexShader: /* glsl */ `
       attribute vec4 aPos; attribute vec4 aCol;
       varying vec2 vUv; varying vec4 vCol; varying float vFade; varying float vSeed;
-      uniform float uTime; uniform float uMist;
+      uniform float uTime; uniform float uMist; uniform vec2 uFar;
       void main(){
         vec4 mv = modelViewMatrix * vec4(aPos.xyz, 1.0);
         float d = -mv.z;
@@ -534,7 +537,7 @@ export function makeHaloMaterial(kind: 0 | 1 | 2 | 3 = 0) {
         mv.xy += position.xy * aPos.w * breathe;
         vUv = position.xy; vCol = aCol;
         // never a white-out when the plane flies through one
-        vFade = smoothstep(2.0 + aPos.w * 0.2, 12.0 + aPos.w * 1.1, d) * exp(-d * uMist * 1.5);
+        vFade = smoothstep(2.0 + aPos.w * 0.2, 12.0 + aPos.w * 1.1, d) * exp(-d * uMist * 1.5) * (1.0 - smoothstep(uFar.x, uFar.y, d));
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */ `
