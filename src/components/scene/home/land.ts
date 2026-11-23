@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { HOME_GATE_Z, roadX } from "../flightPath";
 import { pathW, pathX } from "../shared";
-import { fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
+import { groveWood, mainPathD, sidePathD, fieldK, GLSL_FIELDS, routeD, sacredH, SACRED, GLSL_SACRED, CHURCH, GLSL_CAVE, GLSL_RIVER, GLSL_TRACK, HILL, TOWN, journeyWood, laneD, riverD, riverLand, riverSlope, riverW, riverZ } from "./journey";
 
 // The land the desk stands in, written once and read by everything that
 // stands on it. The desk is at the origin and the visitor looks north (-z).
@@ -431,12 +431,13 @@ export function forestD(x: number, z: number) {
   // across a meadow), woods standing either side of it
   if (z > 4) d *= sstep(16, 64, Math.abs(x) + Math.max(0, 60 - z) * 0.2);
   // the road is lined, not overgrown
-  if (z < 10 && z > HOME_GATE_Z - 80) {
+  if (z < 10 && z > -40) {
     const rd = Math.abs(x - roadX(z));
     d *= sstep(6.5, 9.5, rd);
-    // the avenue: a wood standing either side of the road, from a little way out
-    d = Math.max(d, (1 - sstep(26, 70, rd)) * sstep(7.5, 10, rd) * sstep(-30, -70, z) * (0.55 + 0.45 * vnoise(x * 0.05, z * 0.03)));
   }
+  // the sacred grove's wood, thick round its clearing and along the hidden path to it; both paths kept open
+  d = Math.max(d, groveWood(x, z));
+  d *= sstep(2.5, 4.5, mainPathD(x, z)) * sstep(1.3, 2.6, sidePathD(x, z));
   // the old forest of the journey, from the town's edge to the mountain (journey.ts)
   d = Math.max(d, journeyWood(x, z) * (0.82 + 0.18 * mid));
   d *= sstep(100, 170, c) * sstep(1.22, 1.9, lk + mid * 0.5);
