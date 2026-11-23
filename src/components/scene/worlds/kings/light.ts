@@ -25,9 +25,8 @@ const occ = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector
 export const DOME_U = {
   uDome: { value: new THREE.Vector3(ORIGIN.x, ORIGIN.y + BY, ORIGIN.z + KINGS.z) },
   uR: { value: R },
-  // (as the painting has them: tall flat figures close on either side of the little world, their heads high over it)
-  uOccC: { value: [occ(-2.75, 0.3, -0.3), occ(-1.75, 3.2, 0), occ(3.2, 0.6, -0.3), occ(1.85, 3.7, 0)] },
-  uOccR: { value: [new THREE.Vector3(1.55 * R, 3.4 * R, 0.6 * R), new THREE.Vector3(0.85 * R, 0.85 * R, 0.5 * R), new THREE.Vector3(1.8 * R, 3.8 * R, 0.6 * R), new THREE.Vector3(0.95 * R, 0.85 * R, 0.5 * R)] },
+  uOccC: { value: [occ(-3.55, -0.4, 0), occ(-2.3, 2.5, 0), occ(3.75, 0.2, 0), occ(2.2, 2.95, 0)] },
+  uOccR: { value: [new THREE.Vector3(1.5 * R, 2.7 * R, 1.7 * R), new THREE.Vector3(0.85 * R, 0.8 * R, 0.8 * R), new THREE.Vector3(1.55 * R, 3.1 * R, 1.75 * R), new THREE.Vector3(0.9 * R, 0.8 * R, 0.85 * R)] },
   // x: how thick the mist is (per metre at its thickest), y: how much of the light hangs in it, z: how strongly the shafts are cut, w: how light the mist itself is
   uFogK: { value: new THREE.Vector4(0.0048, 1.3, 1, 1) },
   // what happens as the plane comes on (set each frame by the world): x: the little world's light (1, and brighter as
