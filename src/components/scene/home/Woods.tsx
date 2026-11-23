@@ -388,7 +388,7 @@ function makeMist(count: number) {
   const at = new Float32Array(count * 4);
   for (let i = 0; i < count; i++) {
     const p = beside(0.2 + r() * (NSEG - 0.5), (r() - 0.5) * 70);
-    at.set([p.x, p.y + 2.2 + r() * 2.5, p.z, 9 + r() * 9], i * 4);
+    at.set([p.x, p.y + 1.2 + r() * 1.6, p.z, 9 + r() * 9], i * 4);
   }
   g.setAttribute("aAt", new THREE.InstancedBufferAttribute(at, 4));
   g.instanceCount = count;
@@ -405,7 +405,7 @@ function makeMist(count: number) {
         vec3 c = aAt.xyz + vec3(sin(uTime * 0.05 + aAt.w) * 3.0, 0.0, cos(uTime * 0.04 + aAt.w * 1.3) * 3.0);
         float dist = length(c - cameraPosition);
         // (a sheet is never met up close: it thins as the eye comes near)
-        vA = uFogK * 0.45 * smoothstep(8.0, 24.0, dist) * (1.0 - smoothstep(160.0, 240.0, dist));
+        vA = uFogK * 0.32 * smoothstep(8.0, 24.0, dist) * (1.0 - smoothstep(160.0, 240.0, dist));
         vUv = position.xy;
         // upright, turned to the eye about the vertical only, so they lie along the ground
         vec3 Rh = normalize(vec3(R.x, 0.0, R.z) + 1e-5);
@@ -524,7 +524,7 @@ export function Woods({ amount, mobile, effects }: { amount: number; mobile: boo
   );
 
   const fox = useRef<THREE.Mesh>(null);
-  const st = useRef({ al: 0.9, gait: 0, x: 0, z: 0, yaw: 0, init: false, frames: 0 });
+  const st = useRef({ al: 1.15, gait: 0, x: 0, z: 0, yaw: 0, init: false, frames: 0 });
   useFrame(({ camera }, dtRaw) => {
     const dt = Math.min(dtRaw, 0.1);
     const s = st.current;
@@ -552,7 +552,7 @@ export function Woods({ amount, mobile, effects }: { amount: number; mobile: boo
     // middle of the wood it turns off between the trees
     let want = s.al;
     if (planeAl > 0.2 && planeAl < 5.6) want = Math.max(s.al, Math.min(5.9, planeAl + 0.9));
-    if (!inHome) want = 0.9;
+    if (!inHome) want = 1.15;
     const prev = s.al;
     s.al = want < s.al ? want : s.al + Math.min(want - s.al, dt * 0.3);
     const moved = Math.abs(s.al - prev) / Math.max(dt, 1e-3);
