@@ -144,7 +144,7 @@ export default function System() {
                   { k: "Role", v: "Founder" },
                   { k: "When", v: "2026 – now" },
                   { k: "Built with", v: "Next.js, Cloudflare" },
-                  { k: "Website", v: "larpo.studio" },
+                  { k: "Website", v: "webstern.co" },
                 ]}
               />
             </div>

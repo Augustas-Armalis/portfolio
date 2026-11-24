@@ -29,7 +29,7 @@ export const owner = {
   role: "Design engineer and founder",
   city: "Kaunas, Lithuania",
   x: { label: "@augustasdesign", href: "https://x.com/augustasdesign" },
-  studio: { label: "larpo.studio", href: "https://larpo.studio" },
+  studio: { label: "webstern.co", href: "https://webstern.co/" },
 };
 
 export type Wallpaper = { src: string; by: string; href: string; dark: boolean; name?: string; phone?: string };
@@ -122,7 +122,7 @@ export const apps: Record<AppId, { title: string; size: Size }> = {
   shots: { title: "Shots", size: { w: 1000, h: 660 } },
   taste: { title: "Taste", size: { w: 700, h: 430 } },
   kit: { title: "Kit", size: { w: 480, h: 400 } },
-  larpo: { title: "Larpo", size: { w: 900, h: 720 } },
+  larpo: { title: "Webstern", size: { w: 900, h: 720 } },
   lunor: { title: "Lunor", size: { w: 900, h: 720 } },
   capto: { title: "Capto", size: { w: 900, h: 720 } },
   contles: { title: "Contles", size: { w: 900, h: 720 } },
@@ -226,28 +226,30 @@ export const taste = {
 
 // ---------- Projects: one page each ----------
 
+// His studio. The app keeps its old id ("larpo"): the studio was Larpo until it became Webstern (larpo.studio now
+// goes to webstern.co).
 const larpo: Project = {
   id: "larpo",
-  name: "Larpo",
-  what: "A full-stack website and product design studio for SaaS and AI teams.",
+  name: "Webstern",
+  what: "A full-stack web partner for SaaS and AI teams.",
   story: [
-    "Larpo is my design studio, and it was my first business. We design and build websites, product interfaces and brands for SaaS and AI teams. Strategy, design, motion and code sit in one team, so a launch takes weeks, not months.",
-    "I started it in 2024 under other names of my own. It has earned over six figures since, keeps growing, and is now run by a team of four. This year it became Larpo, its fourth brand, and each one got sharper as the work did.",
-    "Teams come to us for one thing and stay for the rest: Acquisity came for product design and left with a rebrand, a website and a front end, and still works with us.",
+    "Webstern is my studio, and my first business. We design and build brands, websites and products for SaaS and AI teams, in custom code, shipped in weeks, not months.",
+    "I started it in 2024 under other names of my own. It was Larpo until this year; now it's Webstern. It has earned over six figures and is run by a team of four.",
+    "Kaching, Acquisity, Poof and God of Prompt are among the teams we've built for. Acquisity came for product design, left with a rebrand, a website and a front end, and still works with us.",
   ],
   role: "Founder, head of design",
   years: "2024 – now",
   status: "Taking projects",
   stack: "Figma, React, Next.js, Motion, Three.js",
-  image: "/img/p/larpo-1.webp",
-  images: ["/img/p/larpo-2.webp"],
+  image: "/img/p/webstern-1.webp",
+  images: ["/img/p/webstern-2.webp"],
   numbers: [
     { label: "Revenue", value: "6 figures" },
     { label: "Team", value: "4" },
-    { label: "Brand", value: "4th" },
+    { label: "Case studies", value: "4" },
   ],
-  link: { label: "larpo.studio", href: "https://larpo.studio" },
-  get: { label: "Visit", href: "https://larpo.studio" },
+  link: { label: "webstern.co", href: "https://webstern.co/" },
+  get: { label: "Visit", href: "https://webstern.co/" },
   embeddable: true,
 };
 
@@ -542,7 +544,7 @@ export const novel = {
 
 export const spec: { label: string; value: string }[] = [
   { label: "Based in", value: "Kaunas, Lithuania" },
-  { label: "Studio", value: "Larpo" },
+  { label: "Studio", value: "Webstern" },
   { label: "Design", value: "Acquisity" },
   { label: "Piano", value: "12+ years" },
   { label: "Photography", value: "8 years" },
@@ -553,13 +555,13 @@ export const spec: { label: string; value: string }[] = [
 // photography is his own wording, by his choice.
 export const about = {
   name: "Augustas Armalis",
-  intro: "I'm a design engineer and founder. I design websites and products and build them in code, I run Larpo, a design studio, and I write music. I'm also a photographer and filmmaker.",
+  intro: "I'm a design engineer and founder. I design websites and products and build them in code, I run Webstern, a design studio, and I write music. I'm also a photographer and filmmaker.",
   story: "I started in art and drawing. Drawing turned into design, design turned into business, and now I'm finding my way back to music. The camera has been with me the whole way: I've been a photographer since fifth grade, and it grew into cinematography, shooting and editing films of my own.",
   goals: "To build something really big and really good, and to work out how to live a happy, wonderful life.",
   facts: [
     { label: "Based in", value: "Kaunas, Lithuania" },
     { label: "Does", value: "Product design, websites, front end" },
-    { label: "Studio", value: "Larpo" },
+    { label: "Studio", value: "Webstern" },
     { label: "Design lead", value: "Acquisity" },
     { label: "Piano", value: "12+ years" },
     { label: "Photography", value: "8 years, photo and film" },
@@ -582,7 +584,7 @@ export const resume = {
   title: "Design engineer and founder",
   city: "Kaunas, Lithuania",
   links: [
-    { label: "larpo.studio", href: "https://larpo.studio" },
+    { label: "webstern.co", href: "https://webstern.co/" },
     { label: "x.com/augustasdesign", href: "https://x.com/augustasdesign" },
     { label: "linkedin.com/in/armaugustas", href: "https://www.linkedin.com/in/armaugustas" },
   ],
@@ -592,7 +594,7 @@ export const resume = {
     {
       title: "Experience",
       rows: [
-        { when: "2024 – now", title: "Founder, head of design", org: "Larpo Studio", body: "A full-stack website and product design studio for SaaS and AI teams. My first business, started in 2024 under earlier names: over six figures earned, a team of four, rebranded as Larpo this year.", app: "larpo" },
+        { when: "2024 – now", title: "Founder, head of design", org: "Webstern", body: "A full-stack web partner for SaaS and AI teams: brand, websites and product, in custom code. My first business, started in 2024 and called Larpo until this year: over six figures earned, a team of four.", app: "larpo" },
         { when: "2025 – now", title: "Lead product designer", org: "Acquisity", body: "Over a year leading product design for Acquisity's AI acquisition platform: product, rebrand, website and front end." },
         { when: "2025 – 2026", title: "CEO, product and design", org: "Contles", body: "A creator-marketing platform, built from zero without investment. First at the ISM entrepreneurship club, then Kickstart Lab and Startup Fair, and a place on Rykliai, Lithuania's Shark Tank.", app: "contles" },
       ] as ResumeRow[],
@@ -620,13 +622,13 @@ export const resume = {
 export type Milestone = { when: string; title: string; body: string; app?: AppId; key?: boolean };
 export const timeline: Milestone[] = [
   { when: "2018", title: "The first camera", body: "Photographs from fifth grade on. Later films, a drone for the shots from above, and learning to edit.", app: "gallery" },
-  { when: "2024", title: "My own studio", body: "Websites and products for clients, under the names that later became Larpo.", app: "larpo" },
+  { when: "2024", title: "My own studio", body: "Websites and products for clients, under the names that later became Webstern.", app: "larpo" },
   { when: "Jun 2025", title: "Acquisity", body: "Product design for an AI acquisition platform. Now leading it." },
   { when: "Oct 2025", title: "Lunor", body: "My designs, shared. People bought and used loads of them.", app: "lunor" },
   { when: "Dec 2025", title: "Contles begins", body: "Brands and creators in one place. First at the ISM club, then Kickstart Lab, Startup Fair and Rykliai, Lithuania's Shark Tank.", app: "contles", key: true },
   { when: "2026", title: "Capto and Filzy", body: "An evening project that became a product, and a better way to send files.", app: "capto" },
   { when: "Aug 2026", title: "The novel, and a first release", body: "Žiemos naktys šviesesnės is finished. Nocturne for Absent Things comes out on Spotify.", app: "novel", key: true },
-  { when: "Aug 2026", title: "Larpo, fourth brand", body: "The studio's new site goes live. A team of four.", app: "larpo", key: true },
+  { when: "Aug 2026", title: "Larpo, the fourth brand", body: "The studio's new site goes live, with a team of four. Today it's Webstern.", app: "larpo", key: true },
   { when: "Oct 2026", title: "Rug and Afterlight", body: "A rug for your desktop, and a second release.", app: "rug" },
   { when: "Nov 2026", title: "Kiss You", body: "A first song, made with a singer.", app: "records", key: true },
 ];
@@ -639,7 +641,7 @@ export const notes: Note[] = [
     title: "Now",
     date: "November 2026",
     blocks: [
-      { p: "Larpo is the main thing: websites, product and brand for SaaS and AI teams, from zero to launch." },
+      { p: "Webstern is the main thing: brand, websites and product for SaaS and AI teams, from zero to launch." },
       { p: "Leading product design at Acquisity." },
       { h: "On the side" },
       { list: ["Making songs with a singer. Kiss You is the first.", "Rebuilding Lunor. It's going to be huge.", "Cortex, a brain for design. Soon."] },
