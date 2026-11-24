@@ -550,9 +550,11 @@ export function Plane({
           ty = gt.pos.y - 2;
         } else st.gateBack = false;
         // (it has been round this gate a long while and is still not through: it is simply let through)
-        if (off < 450) st.gateWait += dt * a;
+        // (it counts for less while the plane is eased down to a glide to wait for the gate's window: a gate with a long
+        // bend before it, flown at a third of the pace, was "let through" under cloud 100 m short of the window)
+        if (off < 450) st.gateWait += dt * a * (1 - 0.6 * st.holdK);
         else if (off > 700) st.gateWait = 0;
-        if (st.gateWait > 40) {
+        if (st.gateWait > 60) {
           st.gateWait = 0;
           st.gateBack = false;
           voyage.next = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1] ?? null;
