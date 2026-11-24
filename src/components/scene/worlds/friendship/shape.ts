@@ -59,10 +59,26 @@ export const CAVE_Z: [number, number] = [-2900, 1040];
 export const TUNNEL = { z0: 780, half: 22, top: 34 };
 export const HALL = { z1: 330, half: 195, top: 215 };
 export const CAVERN = { half: 1500, top: 1700 };
+// The tunnel is a passage the water made, not a pipe: it bends a little one way and then the other, it is wide in
+// places and close in others, and its roof comes low and then goes up into the dark. (Nothing of this at its mouth,
+// which is as it was.) `tunnelX` is where its middle runs; the way through it runs there too.
+const tunnelU = (z: number) => (z - TUNNEL.z0) / (CAVE_Z[1] - TUNNEL.z0);
+export function tunnelX(z: number) {
+  const u = tunnelU(z);
+  if (u <= 0 || u >= 1) return 0;
+  return 8.5 * Math.sin(u * Math.PI * 2) * sst(0, 0.14, u) * (1 - sst(0.86, 1, u));
+}
 export function caveAt(z: number) {
   const a = sst(TUNNEL.z0, 560, z);
   let w = TUNNEL.half + (HALL.half - TUNNEL.half) * a * a;
   let top = TUNNEL.top + (HALL.top - TUNNEL.top) * a;
+  const u = tunnelU(z);
+  if (u > 0) {
+    const env = sst(0, 0.12, u);
+    w *= 1 + env * (0.34 * Math.sin(u * 8.2 + 0.5) + 0.14 * Math.sin(u * 19.5 + 2));
+    const hi = 0.5 + 0.5 * Math.sin(u * 5.6 + 3.6);
+    top = top * (1 - env) + env * (25 + 32 * Math.pow(hi, 1.3) + 2.5 * Math.sin(u * 17 + 1));
+  }
   // (the throat: the hall's far end opens out and up all at once)
   const h = sst(HALL.z1 + 40, -330, z);
   w += (CAVERN.half - HALL.half) * h * h;
@@ -90,9 +106,7 @@ const over = (pts: [number, number, number][]) => pts.map(([x, z, y]): [number, 
 // forest's tops, a long way down the cavern a little to the left of her, so that she is seen whole and from far,
 // and grows; then rising, straight at the orb, to its heart.
 export const FRIEND_PATH: [number, number, number][] = over([
-  [0, 975, 13],
-  [0, 900, 13],
-  [1, 820, 14],
+  ...[975, 945, 915, 885, 855, 825, 800].map((z): [number, number, number] => [tunnelX(z), z, 13 + (975 - z) * 0.008]),
   [-2, 740, 16],
   [-12, 650, 20],
   [-4, 560, 26],
@@ -132,7 +146,7 @@ export function clear(x: number, z: number, pathX: (z: number) => number) {
   for (const p of PILLARS) if ((x - p[0]) ** 2 + (z - p[1]) ** 2 < (p[2] * 2.1) ** 2) atPillar = true;
   return inHer || inLane || atPillar;
 }
-export const FRIEND_ENTRY = { x: 0, z: 975, above: FRIEND_PATH[0][2], yaw: 0 };
+export const FRIEND_ENTRY = { x: tunnelX(975), z: 975, above: FRIEND_PATH[0][2], yaw: 0 };
 export const FRIEND_GATE = { x: ORB.x, z: ORB.z, above: ORB.y - floorAt(ORB.x, ORB.z), yaw: 0 };
 export const FRIEND_CANVAS = { x: -40, z: 600, yaw: 0.6 };
 
