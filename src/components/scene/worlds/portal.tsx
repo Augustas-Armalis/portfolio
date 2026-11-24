@@ -8,7 +8,7 @@ import { GLSL_SKY, SKY_U, applySky, clockHours, skyState, type SkyState } from "
 import { GLSL_AIR, WORLD_U, setWorldAir } from "./kit";
 import { GLSL_HOME_AIR, HOME_U } from "../home/land";
 import { FINALE_OPENING } from "./seafinale/shape";
-import { WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, originOf, voyage, voyageSky, type WorldDef, type WorldId } from "./voyage";
+import { GATE_REACH, WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, originOf, voyage, voyageSky, type WorldDef, type WorldId } from "./voyage";
 
 // Gates are windows. As the plane nears a gate the opening shows the next world itself, live: that world (already
 // made and warm, hidden at the same place) is drawn into a small target from an eye that stands to its entry
@@ -218,17 +218,25 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     const able = !mobile && postCtl.level >= 1 && !!target && (portalRig.windows.get(cur) ?? 0) > 0 && voyage.flying && voyage.phase === "open" && !!gate && !!next && next !== "home" && voyage.ready === next && portalRig.warmId === next && !!portalRig.warm;
     if (able) {
       d = rig.gate.copy(gate!.pos).add(originOf(cur)).distanceTo(voyage.planePos);
+      const gp = gate!.pos;
+      const o = originOf(cur);
+      const rx = voyage.planePos.x - o.x - gp.x;
+      const rz = voyage.planePos.z - o.z - gp.z;
+      const along = -Math.sin(gate!.yaw) * rx - Math.cos(gate!.yaw) * rz;
+      let side = Math.abs(Math.cos(gate!.yaw) * rx - Math.sin(gate!.yaw) * rz);
+      // (a gate as wide as the Finale's curl is gone through hundreds of metres from its middle: there the distance is
+      // taken to the opening, not to its centre, or the plane is never near enough for the live window and goes under cloud)
+      const reach = GATE_REACH[cur] ?? openingReach(cur);
+      if (reach && reach[0] > 100) {
+        const aside = Math.max(0, side - reach[0]);
+        d = Math.hypot(along, aside, Math.max(0, voyage.planePos.y - gp.y - reach[1]));
+        side = aside;
+      }
       // (from far away too: the still stands in the opening from about 1.5 km, faded in by distance, never popping)
       want = d < 1600 ? 1 - THREE.MathUtils.smoothstep(d, 900, 1550) : 0;
       PORTAL_U.uPortalFar.value = THREE.MathUtils.smoothstep(d, 100, 500);
       // only from the approach side, within a cone of the gate's way: from behind it or far to one side it is no window
       {
-        const gp = gate!.pos;
-        const o = originOf(cur);
-        const rx = voyage.planePos.x - o.x - gp.x;
-        const rz = voyage.planePos.z - o.z - gp.z;
-        const along = -Math.sin(gate!.yaw) * rx - Math.cos(gate!.yaw) * rz;
-        const side = Math.abs(Math.cos(gate!.yaw) * rx - Math.sin(gate!.yaw) * rz);
         const ang = Math.atan2(side, -along);
         if (d > 80) want *= (1 - THREE.MathUtils.smoothstep(ang, 1.0, 1.4)) * (along < 30 ? 1 : 0);
       }
