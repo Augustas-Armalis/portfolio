@@ -551,12 +551,12 @@ export const spec: { label: string; value: string }[] = [
   { label: "X", value: "@augustasdesign" },
 ];
 
-// The longer About ("More Info"). Facts only; nothing private (no age, school, email). "Since fifth grade" for
+// The longer About ("More Info"). Facts only; nothing private (no age, no school; the email is on Contact only). "Since fifth grade" for
 // photography is his own wording, by his choice.
 export const about = {
   name: "Augustas Armalis",
-  intro: "I'm a design engineer and founder. I design websites and products and build them in code, I run Webstern, a design studio, and I write music. I'm also a photographer and filmmaker.",
-  story: "I started in art and drawing. Drawing turned into design, design turned into business, and now I'm finding my way back to music. The camera has been with me the whole way: I've been a photographer since fifth grade, and it grew into cinematography, shooting and editing films of my own.",
+  intro: "I design websites and products and build them in code. I run Webstern, a studio for SaaS and AI teams, and I also write music, take photographs and make films.",
+  story: "I started in art and drawing. Drawing turned into design, design into a business, and now I'm finding my way back to music. The camera has been there the whole way: photographs since fifth grade, then films I shoot and edit myself.",
   goals: "To build something really big and really good, and to work out how to live a happy, wonderful life.",
   facts: [
     { label: "Based in", value: "Kaunas, Lithuania" },
@@ -621,9 +621,9 @@ export const resume = {
 // The timeline, oldest first. `when` is shown as written.
 export type Milestone = { when: string; title: string; body: string; app?: AppId; key?: boolean };
 export const timeline: Milestone[] = [
-  { when: "2018", title: "The first camera", body: "Photographs from fifth grade on. Later films, a drone for the shots from above, and learning to edit.", app: "gallery" },
+  { when: "2018", title: "The first camera", body: "Photographs from fifth grade on. Later films, a drone and the edit.", app: "gallery" },
   { when: "2024", title: "My own studio", body: "Websites and products for clients, under the names that later became Webstern.", app: "larpo" },
-  { when: "Jun 2025", title: "Acquisity", body: "Product design for an AI acquisition platform. Now leading it." },
+  { when: "Jun 2025", title: "Acquisity", body: "Product design for an AI acquisition platform. Now I lead it." },
   { when: "Oct 2025", title: "Lunor", body: "My designs, shared. People bought and used loads of them.", app: "lunor" },
   { when: "Dec 2025", title: "Contles begins", body: "Brands and creators in one place. First at the ISM club, then Kickstart Lab, Startup Fair and Rykliai, Lithuania's Shark Tank.", app: "contles", key: true },
   { when: "2026", title: "Capto and Filzy", body: "An evening project that became a product, and a better way to send files.", app: "capto" },
