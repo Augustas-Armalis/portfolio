@@ -97,8 +97,8 @@ function canLens() {
 // Displacement map for a rounded rectangle: neutral in the middle, and along
 // the bezel each pixel points back toward the inside, more steeply the closer
 // it sits to the edge, like the rim of a thick lens.
-// (made once per size and kept: encoded off this thread as a blob, never by toDataURL, whose PNG encoding held a flight
-// frame for a second when a panel opened)
+// (made once per size and kept, and written as an uncompressed bitmap by hand: no image encoder runs. PNG encoding, by
+// toDataURL or even convertToBlob, held a flight frame for over a second when a panel opened)
 const LENS_MAPS = new Map<string, Promise<string>>();
 function lensMap(w: number, h: number, r: number, bezel: number): Promise<string> {
   const key = `${w}x${h}r${r.toFixed(1)}b${bezel.toFixed(1)}`;
@@ -108,6 +108,34 @@ function lensMap(w: number, h: number, r: number, bezel: number): Promise<string
     LENS_MAPS.set(key, p);
   }
   return p;
+}
+// a 24-bit BMP of the map (bottom-up rows of B, G, R, each row padded to four bytes)
+function bmpURL(img: ImageData) {
+  const { width: w, height: h, data } = img;
+  const row = (w * 3 + 3) & ~3;
+  const size = 54 + row * h;
+  const buf = new ArrayBuffer(size);
+  const v = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  v.setUint16(0, 0x4d42, true);
+  v.setUint32(2, size, true);
+  v.setUint32(10, 54, true);
+  v.setUint32(14, 40, true);
+  v.setInt32(18, w, true);
+  v.setInt32(22, h, true);
+  v.setUint16(26, 1, true);
+  v.setUint16(28, 24, true);
+  v.setUint32(34, row * h, true);
+  for (let y = 0; y < h; y++) {
+    let o = 54 + (h - 1 - y) * row;
+    let i = y * w * 4;
+    for (let x = 0; x < w; x++, i += 4, o += 3) {
+      u8[o] = data[i + 2];
+      u8[o + 1] = data[i + 1];
+      u8[o + 2] = data[i];
+    }
+  }
+  return URL.createObjectURL(new Blob([buf], { type: "image/bmp" }));
 }
 async function makeLensMap(w: number, h: number, r: number, bezel: number) {
   const img = new ImageData(w, h);
@@ -143,16 +171,7 @@ async function makeLensMap(w: number, h: number, r: number, bezel: number) {
       img.data[i + 3] = 255;
     }
   }
-  if (typeof OffscreenCanvas !== "undefined") {
-    const oc = new OffscreenCanvas(w, h);
-    oc.getContext("2d")!.putImageData(img, 0, 0);
-    return URL.createObjectURL(await oc.convertToBlob({ type: "image/png" }));
-  }
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  c.getContext("2d")!.putImageData(img, 0, 0);
-  return c.toDataURL("image/png");
+  return bmpURL(img);
 }
 
 // (`panel` is accepted and ignored: there is one glass, the same for a pill, a bar, a popover and the player)
