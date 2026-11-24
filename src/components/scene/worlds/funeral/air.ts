@@ -10,7 +10,7 @@ import { ORIGIN } from "../voyage";
 export const FUNERAL_U = {
   uFO: { value: new THREE.Vector3().copy(ORIGIN) },
   // x: how thick the valley mist is, y: the height it lies under, z: how fast it thins above that
-  uValley: { value: new THREE.Vector3(1.15, 40, 90) },
+  uValley: { value: new THREE.Vector3(1.25, 44, 100) },
   // metres along the road at which the souls come into being (inside the cave they walk out of)
   uBorn: { value: 0 },
   // the bell-light that passes up the procession: where its middle is (metres along the road; far below 0: none)

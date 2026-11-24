@@ -15,7 +15,7 @@ import { ROAD_W, funeralLand } from "./land";
 // length can be culled, and drawn as carefully as its distance asks: near, a hooded figure of a hundred
 // triangles; further, one of thirty; far off, a single painted card that faces the eye. Some carry a light.
 
-export const CHUNK = 120;
+export const CHUNK = 60;
 const HEIGHT = 2.65;
 const END = /* glsl */ `
   #include <tonemapping_fragment>
@@ -63,7 +63,7 @@ const MID_PROFILE: [number, number][] = [
   [0.0, 1.0],
 ];
 
-export const ROAD_GLSL = /* glsl */ `
+const ROAD_GLSL = /* glsl */ `
   uniform sampler2D uRoad; uniform vec4 uRd; uniform float uWalk; uniform vec3 uFO; uniform float uBorn; uniform float uBell;
   // (a soul comes into being inside the cave the road comes out of, rising out of the dark over a few steps)
   float born(float s){ return smoothstep(uBorn, uBorn + 12.0, s); }
@@ -78,25 +78,25 @@ export const ROAD_GLSL = /* glsl */ `
   }`;
 const SHADE_GLSL = /* glsl */ `
   uniform vec3 uRim;
-  // Near-black cloth, hardly lit: the night's own blue only on what turns up toward the sky, a thin cold line along
-  // the hood and shoulder that faces the moon, and, warm and soft, the light of the lanterns that are carried nearby
-  // (ldir: the way to the nearest of them, lk: how much of their light reaches this one). Nothing is flat: the cloth
-  // falls in folds, and the lantern's gold lies only on the folds that face it.
-  vec3 soulShade(vec3 n, vec3 V, float k, float seed, vec3 ldir, float lk){
-    float fold = vnoise(vec2(atan(n.x, n.z) * 3.0 + seed * 40.0, k * 9.0 + seed * 7.0)) * 0.6 + vnoise(vec2(atan(n.x, n.z) * 7.0, k * 21.0 + 3.0)) * 0.4;
-    vec3 alb = mix(vec3(0.009, 0.009, 0.02), vec3(0.02, 0.019, 0.04), fract(seed * 5.3)) * (0.5 + 0.5 * k) * (0.65 + 0.7 * fold);
+  // deep indigo cloth; and the key of the whole picture: gold where the light finds the hoods, a line of it round
+  // every head and shoulder that turns from the eye toward the light
+  vec3 soulShade(vec3 n, vec3 V, float k, float seed){
+    // (near-black cloth: the cloak falls in folds, and is lit only along its edges and by the lanterns)
+    float fold = vnoise(vec2(atan(n.x, n.z) * 3.0 + seed * 40.0, k * 9.0 + seed * 7.0)) * 0.6 + 0.4;
+    vec3 alb = mix(vec3(0.003, 0.004, 0.02), vec3(0.007, 0.009, 0.04), fract(seed * 5.3)) * (0.4 + 0.6 * k) * (0.6 + 0.8 * fold);
     float lam = clamp(dot(n, uKeyDir) * 0.5 + 0.5, 0.0, 1.0);
-    vec3 col = alb * (uSkyCol * 0.9 * (0.55 + 0.45 * n.y) + uKeyCol * lam * lam * 0.16);
-    // the lanterns of the crowd: warm, on the side of each fold that faces them, falling off with the cloak's height
-    float ld = clamp(dot(n, normalize(ldir + vec3(0.0, 0.35, 0.0))) * 0.55 + 0.45, 0.0, 1.0);
-    float lit = lk * ld * ld * (0.55 + 0.6 * smoothstep(0.1, 0.8, k));
-    col += vec3(1.0, 0.56, 0.22) * (alb * 4.0 + vec3(0.006, 0.004, 0.003)) * lit * glowK() * 1.5;
-    // moon rim, thin and cold; and a warm thread where a lantern is behind the figure
+    vec3 col = alb * (uSkyCol * 1.0 + uKeyCol * lam * 0.14);
+    // the light comes low from one side: a crescent of gold down that side of each hood and shoulder; in the
+    // press of the crowd it does not reach far down the cloaks
     vec3 L = normalize(vec3(uKeyDir.x, 0.12, uKeyDir.z));
-    float fres = pow(1.0 - abs(dot(n, V)), 3.2);
-    col += uRim * fres * smoothstep(0.0, 0.8, dot(n, L)) * smoothstep(0.4, 0.85, k) * 0.2 * glowK();
-    col += vec3(0.04, 0.15, 0.22) * fres * smoothstep(0.1, 0.9, n.y) * smoothstep(0.55, 0.95, k) * 0.35;
-    col += vec3(1.0, 0.62, 0.3) * fres * lk * 0.2 * smoothstep(0.3, 0.9, k) * glowK();
+    float side = smoothstep(0.72, 1.0, dot(n, L));
+    float up = smoothstep(0.42, 0.82, k);
+    // (most of it is rim: a line of gold round whatever edge of the figure is toward the light)
+    float fres = pow(1.0 - abs(dot(n, V)), 3.6) * smoothstep(0.0, 0.8, dot(n, L));
+    float crown = smoothstep(0.35, 0.95, n.y) * smoothstep(0.86, 0.97, k) * smoothstep(-0.4, 0.4, dot(n, L));
+    col += uRim * (fres * up * 0.7 + side * up * 0.02 + crown * 0.04) * glowK() * 1.0;
+    // a cold breath of the sky on the top of the hood, as he drew them
+    col += vec3(0.03, 0.12, 0.2) * smoothstep(0.4, 1.0, n.y) * smoothstep(0.8, 0.95, k) * 0.2;
     return col;
   }`;
 
@@ -104,9 +104,9 @@ function makeSoulMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: n
   return new THREE.ShaderMaterial({
     uniforms: { ...SKY_U, ...WORLD_U, ...FUNERAL_U, uRoad: { value: roadTex }, uRd: { value: rd }, uWalk: { value: walk }, uRim: { value: new THREE.Color(1.0, 0.62, 0.16) } },
     vertexShader: /* glsl */ `
-      attribute vec4 aI; attribute vec4 aJ;
+      attribute vec4 aI;
       uniform float uTime;
-      varying vec3 vWorld; varying vec3 vN; varying vec3 vR; varying vec2 vUv; varying float vSeed; varying vec3 vLd; varying float vLk;
+      varying vec3 vWorld; varying vec3 vN; varying vec3 vR; varying vec2 vUv; varying float vSeed;
       ${ROAD_GLSL}
       void main(){
         float walked = uTime * uWalk;
@@ -114,9 +114,6 @@ function makeSoulMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: n
         vec2 tn; vec3 c = roadAt(uRd.z + along, tn);
         vec3 fwd = vec3(tn.x, 0.0, tn.y); vec3 right = vec3(-tn.y, 0.0, tn.x);
         float seed = aI.z;
-        // the lantern light that reaches this soul, and from where (in the road's own frame, flickering as one)
-        vLd = fwd * aJ.x + right * aJ.y;
-        vLk = aJ.z * (0.86 + 0.14 * sin(uTime * 2.1 + seed * 31.0) * sin(uTime * 0.9 + seed * 7.0));
         vec3 base = c + right * (aI.y + sin(uTime * 0.09 + seed * 50.0) * 0.14) + uFO;
         float H = ${HEIGHT.toFixed(1)} * aI.w * born(uRd.z + along);
         float girth = 0.9 + 0.24 * fract(seed * 3.7);
@@ -150,7 +147,7 @@ function makeSoulMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: n
         gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
       }`,
     fragmentShader: /* glsl */ `
-      varying vec3 vWorld; varying vec3 vN; varying vec3 vR; varying vec2 vUv; varying float vSeed; varying vec3 vLd; varying float vLk;
+      varying vec3 vWorld; varying vec3 vN; varying vec3 vR; varying vec2 vUv; varying float vSeed;
       ${GLSL_NOISE}
       ${GLSL_SKY}
       ${GLSL_AIR}
@@ -168,9 +165,9 @@ function makeSoulMaterial(roadTex: THREE.DataTexture, rd: THREE.Vector4, walk: n
                vec3 n = normalize(vR * x + vN * sqrt(max(0.0, 1.0 - x * x)) + vec3(0.0, smoothstep(0.86, 1.0, k) * 1.4, 0.0));`
             : `vec3 n = normalize(vN);`
         }
-        vec3 col = soulShade(n, V, k, vSeed, vLd, vLk);
+        vec3 col = soulShade(n, V, k, vSeed);
         ${card ? `// far off the crowd is a river of dabs, gold and blue: some hoods simply hold the light
-        col += uRim * step(0.8, fract(vSeed * 9.7)) * smoothstep(0.5, 0.9, k) * smoothstep(160.0, 520.0, length(vWorld - cameraPosition)) * 0.1 * glowK();` : ""}
+        col += uRim * step(0.62, fract(vSeed * 9.7)) * smoothstep(0.5, 0.9, k) * smoothstep(160.0, 520.0, length(vWorld - cameraPosition)) * 0.3 * glowK();` : ""}
         col = funeralAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         ${END}
@@ -313,41 +310,16 @@ export function buildSouls(mobile: boolean, effects: number) {
       const lat = ((b + 0.5) / cols) * 2 - 1;
       const seed = r();
       inst.set([s % CHUNK, lat * (HALF - 0.9) + (r() - 0.5) * 0.7, seed, 0.84 + r() * 0.3], n * 4);
-      if (r() < 0.085) lamps.push(s % CHUNK, lat * (HALF - 0.9), seed);
+      if (r() < 0.055) lamps.push(s % CHUNK, lat * (HALF - 0.9), seed);
       n++;
     }
-  // the light each soul has from the lanterns about it: (along, across) toward the nearest and (summed) how much
-  const lit = new Float32Array(per * 4);
-  for (let i = 0; i < per; i++) {
-    const sa = inst[i * 4];
-    const sl = inst[i * 4 + 1];
-    let wa = 0;
-    let wl = 0;
-    let wk = 0;
-    for (let j = 0; j < lamps.length; j += 3) {
-      const da = ((lamps[j] - sa + 1.5 * CHUNK) % CHUNK) - 0.5 * CHUNK;
-      const dl = lamps[j + 1] - sl;
-      const d2 = da * da + dl * dl;
-      if (d2 > 90) continue;
-      // (the bearer holds it a little ahead of the breast)
-      const w = 1 / (1 + d2 / 7);
-      const dd = Math.sqrt(d2) + 0.001;
-      wa += (d2 < 0.2 ? 1 : da / dd) * w;
-      wl += (d2 < 0.2 ? 0 : dl / dd) * w;
-      wk += w;
-    }
-    const m = Math.hypot(wa, wl) + 1e-4;
-    lit.set([wa / m, wl / m, Math.min(1.3, wk * 1.05), 0], i * 4);
-  }
   const aI = new THREE.InstancedBufferAttribute(inst, 4);
-  const aJ = new THREE.InstancedBufferAttribute(lit, 4);
   const withInst = (g: THREE.BufferGeometry) => {
     const ig = new THREE.InstancedBufferGeometry();
     ig.setAttribute("position", g.attributes.position);
     if (g.attributes.normal) ig.setAttribute("normal", g.attributes.normal);
     if (g.index) ig.setIndex(g.index);
     ig.setAttribute("aI", aI);
-    ig.setAttribute("aJ", aJ);
     ig.instanceCount = per;
     return ig;
   };
@@ -470,5 +442,5 @@ export function buildSouls(mobile: boolean, effects: number) {
     stats.drawn = stats.near + stats.mid + stats.far;
   };
 
-  return { group, lampMesh, bierMesh, update, stats, souls: per * count, per, count, geos: [...src, ...lod, lampGeo, bierSrc, bierGeo], mats: [...mats, lampMat, bierMat], roadTex, roadRd: new THREE.Vector4(L.N, L.STEP, 0, CHUNK) };
+  return { group, lampMesh, bierMesh, update, stats, souls: per * count, per, count, geos: [...src, ...lod, lampGeo, bierSrc, bierGeo], mats: [...mats, lampMat, bierMat], roadTex };
 }
