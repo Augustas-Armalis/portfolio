@@ -152,9 +152,7 @@ export const FAIRY_PAL: GroundPalette = {
           vec3 bare = mix(soil, litter, smoothstep(0.3, 0.6, vnoise(p * 0.5 + 6.0)));
           float moss = smoothstep(0.56, 0.74, vnoise(p * 0.31 + 9.0)) * thin;
           bare = mix(bare, vec3(0.1, 0.19, 0.045) * (0.75 + 0.5 * vnoise(p * 3.1)), moss * 0.85);
-          float rv = abs(vnoise(p * 0.27 + 4.0) - 0.5);
-          float root = (1.0 - smoothstep(0.004, 0.022, rv)) * smoothstep(0.45, 0.7, vnoise(p * 0.045 + 1.0)) * near;
-          bare = mix(bare, vec3(0.12, 0.1, 0.065) * (0.8 + 0.5 * smoothstep(0.012, 0.0, rv)), root * 0.85);
+          // (no thin pale root-lines: an isoline of lattice noise is a hairline that zigzags across the floor)
           vec3 fl = mix(meadow0 * 0.86, bare * light, thin * 0.9);
           fl *= mix(0.6, 1.0, dap);
           fl += vec3(0.11, 0.1, 0.035) * light * dap;
