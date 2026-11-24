@@ -877,7 +877,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
         <Pennants tips={b.tips} />
         <Kindling list={b.windows} centre={[0, 520, 60]} />
         <Procession road={b.road} n={props.mobile ? 30 : 90} speed={1.3} scale={2.6} robe={[0.5, 0.36, 0.3]} wing={[0.36, 0.26, 0.3]} glow={0.04} seed={5} />
-        <mesh geometry={b.castleAngels.glow} material={b.castleAngels.glowMat} renderOrder={2} frustumCulled={false} />
+        <mesh geometry={b.castleAngels.glow} material={b.castleAngels.glowMat} renderOrder={2} />
         <mesh geometry={b.castleAngels.geo} material={b.castleAngels.mat} renderOrder={3} />
         <Halos list={b.castleGlows} kind={2} />
         <Halos list={b.castleHalos} />
@@ -890,7 +890,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       <primitive object={b.cypress} />
       <mesh geometry={b.set} material={b.stone} />
       <Halos list={b.lamps} />
-      <mesh geometry={b.roadAngels.glow} material={b.roadAngels.glowMat} renderOrder={2} frustumCulled={false} />
+      <mesh geometry={b.roadAngels.glow} material={b.roadAngels.glowMat} renderOrder={2} />
       <mesh geometry={b.roadAngels.geo} material={b.roadAngels.mat} renderOrder={3} />
       <Walkers road={b.way} n={props.mobile ? 20 : 46} speed={1.4} size={0.9} seed={8} />
       <Walkers road={b.wayOut} n={props.mobile ? 14 : 34} speed={1.4} size={0.9} seed={14} />
