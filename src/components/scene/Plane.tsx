@@ -423,7 +423,7 @@ export function Plane({
   // (into a world of another size the plane arrives already at that world's pace: the same flying, so the eye
   // behind it has nothing to settle)
   const repace = (id: WorldId) => {
-    const p = id === "kings" ? 1 : (WORLDS[id].pace ?? 1);
+    const p = WORLDS[id].pace ?? 1;
     const k = p / st.paceW;
     st.speed *= k;
     st.speedT *= k;
@@ -568,7 +568,7 @@ export function Plane({
         const rz = lz - gt.pos.z;
         const along = hgx * rx + hgz * rz;
         const side = Math.abs(-hgz * rx + hgx * rz);
-        const R = Math.max(40, st.speed / 0.45); // the circle it turns in at this pace
+        const R = Math.max(40, st.speed / (0.45 * Math.sqrt(st.paceW))); // the circle it turns in at this pace
         const D = Math.max(170, R * 3.2);
         const off = Math.hypot(rx, rz);
         // (it lines up on the gate's own axis from a good way off, as soon as the gate is ahead of it and near enough to be
@@ -618,7 +618,7 @@ export function Plane({
       sy = sy * (1 - a) + ay * a;
       const want3 = Math.atan2(aimY - st.pos.y, aimD + 6);
       extraPitch = a * (THREE.MathUtils.clamp(want3 * 1.65, -0.95, 0.95) - THREE.MathUtils.clamp(want3 * 1.65, -0.55, 0.55));
-      // The speed the way allows: no bend may be flown faster than the plane can turn it (about 0.5 rad/s at full bank,
+      // The speed the way allows: no bend may be flown faster than the plane can turn it (about 0.5 rad/s at full bank, taken at three quarters of that: the plane is a beat late into a bend and a beat late out of it,
       // whatever the speed), looked at far enough ahead to slow in time, and the last of the way, where the gate or
       // the light is, is come to at about two fifths of the top pace. Where it matters, never under 16 m/s.
       if (!def.loop) {
@@ -643,7 +643,7 @@ export function Plane({
             lim = Math.min(lim, Math.sqrt(vq * vq + 2 * 26 * k * 24));
             const kap = Math.abs(wrap(h1 - h0)) / 24;
             // (a hairpin tighter than the plane can turn is flown as slowly as that costs, and no slower than a glide)
-            const vb = 0.5 / Math.max(kap, 1e-4);
+            const vb = (0.38 * Math.sqrt(st.paceW)) / Math.max(kap, 1e-4);
             lim = Math.min(lim, Math.sqrt(vb * vb + 2 * 26 * k * 24));
           }
           h0 = h1;
@@ -730,7 +730,9 @@ export function Plane({
         const cross = -Math.sin(st.yaw) * oz + Math.cos(st.yaw) * ox;
         sx = sx * (1 - k * 0.8) + (cross > 0 ? 1 : -1) * k * 0.8;
       }
-      const f = k * k * (2 + st.speed * 0.7);
+      // (the slide off a tall thing grows with the pace but is held to a share of it: at two hundred metres a second a shove
+      // of seven tenths of the speed sideways threw the view across and back)
+      const f = Math.min(k * k * (2 + st.speed * 0.7), 6 + st.speed * 0.3);
       pushX += (ox / Math.max(d, 1)) * f;
       pushZ += (oz / Math.max(d, 1)) * f;
     }
@@ -810,7 +812,10 @@ export function Plane({
     // The bank is the turn (slow flight turns a little tighter). The bank is already a spring, so the rate of turn
     // has no corner in it and the heading swings in and out of a turn; a second spring on top of it only made
     // the plane wait half a second before it answered and carry on turning long after the key was let go.
-    st.yawR = st.roll * TURN_PER_BANK * (0.62 + 1.5 / Math.max(st.speed, 3));
+    // (In a world flown faster the plane turns quicker for the same bank, by the square root of the pace: a plane at two
+    // hundred metres a second turning at the rate of one at sixty is a lorry. The circle it turns in still grows with
+    // the pace, but only as its square root, so a great world is neither a wide sweep nor a whip.)
+    st.yawR = st.roll * TURN_PER_BANK * (0.62 + 1.5 / Math.max(st.speed, 3)) * Math.sqrt(st.paceW);
     st.yaw -= st.yawR * dt;
     // speed follows the throttle; diving gathers a little, climbing spends a little
     // the kings' wood is gone through slowly
@@ -821,7 +826,7 @@ export function Plane({
     // (the kings' wood is gone through slowly at the slow steps and at the speed of every other world at the top one:
     // the six steps are the same six everywhere, scaled to the size of the world they are flown in)
     const kp = id === "kings" ? kingsPace(lz - KINGS.z) : 1;
-    const wp = id === "kings" ? 1 : (def.pace ?? 1);
+    const wp = def.pace ?? 1;
     const pace = wp * (id === "kings" ? kp + (1 - kp) * Math.pow(voyage.throttle, 1.5) : 1) * (1 - 0.55 * st.cruise * a) * (st.gateBack ? 0.65 : 1) * (1 - 0.7 * st.holdK);
     // (the pace held to what the bends and the last of the way allow, while the quiet hand has the plane)
     const vWant = speedOf(voyage.throttle) * pace;
