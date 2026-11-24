@@ -44,6 +44,55 @@ export function LakeMirror({ quality }: { quality: number }) {
   );
   const tick = useRef(0);
   const warmed = useRef(0);
+  // Whether any of the lake's water is actually on screen. The frustum alone said yes from the desk, where the lake
+  // lies hidden behind the meadow's brow and the grass: the whole mirror (400 thousand triangles at 768 x 432) was
+  // drawn every frame the eye moved, for nothing, and an orbit at the desk ran at a fraction of the frame rate. So
+  // a flat stand-in of the lake's outline is drawn last, writing nothing, inside an occlusion query; while it has
+  // passed no sample for a while the mirror is not drawn. (The answer comes a frame or two late: it is held for a
+  // few frames each way, so the mirror never flickers on and off.)
+  const occ = useMemo(() => {
+    const N = 48;
+    const pos: number[] = [HLAKE.x, HLAKE.y + 0.04, HLAKE.z];
+    for (let i = 0; i <= N; i++) {
+      const a = (i / N) * Math.PI * 2;
+      const r = 1.05 * (1 + 0.15 * Math.sin(a * 3 + 0.7) + 0.08 * Math.sin(a * 5 + 2.1) + 0.05 * Math.sin(a * 9 + 4.0));
+      pos.push(HLAKE.x + Math.cos(a) * HLAKE.rx * r, HLAKE.y + 0.04, HLAKE.z + Math.sin(a) * HLAKE.rz * r);
+    }
+    const idx: number[] = [];
+    for (let i = 1; i <= N; i++) idx.push(0, i, i + 1);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeBoundingSphere();
+    const mat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide, transparent: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 });
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.renderOrder = 1e7;
+    mesh.castShadow = mesh.receiveShadow = false;
+    const st = { mesh, q: null as WebGLQuery | null, busy: false, open: false, seenAt: -1e9, frame: 0 };
+    const ctx = gl.getContext() as WebGL2RenderingContext;
+    mesh.onBeforeRender = (_r, _s, c) => {
+      if (c !== camera || st.busy || typeof ctx.beginQuery !== "function") return;
+      st.q ??= ctx.createQuery();
+      if (!st.q) return;
+      ctx.beginQuery(ctx.ANY_SAMPLES_PASSED_CONSERVATIVE, st.q);
+      st.open = true;
+    };
+    mesh.onAfterRender = () => {
+      if (!st.open) return;
+      ctx.endQuery(ctx.ANY_SAMPLES_PASSED_CONSERVATIVE);
+      st.open = false;
+      st.busy = true;
+    };
+    return st;
+  }, [gl, camera]);
+  useEffect(
+    () => () => {
+      occ.mesh.geometry.dispose();
+      (occ.mesh.material as THREE.Material).dispose();
+      if (occ.q) (gl.getContext() as WebGL2RenderingContext).deleteQuery(occ.q);
+    },
+    [occ, gl],
+  );
   useEffect(() => {
     REFLECT_U.uReflTex.value = rt.texture;
     return () => {
@@ -61,6 +110,15 @@ export function LakeMirror({ quality }: { quality: number }) {
       T.frustum.setFromProjectionMatrix(T.m.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
       see = T.frustum.intersectsSphere(T.sphere);
     }
+    // the stand-in's answer, when it has come: any of the water drawn at all
+    const ctx = gl.getContext() as WebGL2RenderingContext;
+    occ.frame++;
+    if (occ.busy && occ.q && ctx.getQueryParameter(occ.q, ctx.QUERY_RESULT_AVAILABLE)) {
+      if (ctx.getQueryParameter(occ.q, ctx.QUERY_RESULT)) occ.seenAt = occ.frame;
+      occ.busy = false;
+    }
+    // (after the first frames, which warm the mirror behind the loader whatever is seen)
+    if (see && occ.frame > 30 && occ.frame - occ.seenAt > 8) see = false;
     // (drawn for the first frames whatever: its target and state are made behind the loader)
     if (!see && warmed.current++ > 6) {
       REFLECT_U.uReflOn.value = 0;
@@ -112,7 +170,7 @@ export function LakeMirror({ quality }: { quality: number }) {
     }
     REFLECT_U.uReflOn.value = 1;
   });
-  return null;
+  return <primitive object={occ.mesh} />;
 }
 
 // Reeds and sedge standing in the lake's shallows and along its rim, in
