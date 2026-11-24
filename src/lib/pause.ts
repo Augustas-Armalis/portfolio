@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import { setMuffled } from "@/lib/audio";
 
 // The scene's pause: the frame loop stops (plane, eye, world time, moments and particles all hold where they are),
-// the picture dims under a small label, and the music plays on muffled. P or the button toggles it; a hidden tab
+// the picture dims under a small label, and all sound pauses with it (it carries on from where it stood). P or the button toggles it; a hidden tab
 // pauses it too (and is let go when the tab comes back, unless it was paused by hand).
 let paused = false;
 let byHand = false;
