@@ -1,4 +1,5 @@
 import ownMedia from "./media.json";
+import workMedia from "./work.json";
 // Everything visible on the site lives in this one file.
 // Real names and facts only; where something isn't known yet, leave it out.
 // Never put private details (email, phone, address) here.
@@ -178,6 +179,25 @@ export type Project = {
   repo?: string;
   // a line under the facts, e.g. a credit
   footnote?: string;
+};
+
+// His studio's latest work, from webstern.co: each case study's own pictures (captured from the site and made with
+// `npm run media -- <folder> --set=work` into public/gallery/work, listed in src/work.json), in the site's order. The
+// line under each is the site's own tags for the project.
+export const webstern = {
+  name: "Webstern",
+  href: "https://webstern.co/work/",
+  projects: [
+    { id: "kaching", title: "Kaching", tags: "Full website, design, branding, motion, development, custom, Shopify plugin", href: "https://webstern.co/case-studies/kaching/" },
+    { id: "acquisity", title: "Acquisity", tags: "Product design, website, landing, branding, custom, AI SaaS", href: "https://webstern.co/case-studies/acquisity/" },
+    { id: "poof", title: "Poof", tags: "Landing page, product design, branding, motion, custom, fintech", href: "https://webstern.co/case-studies/poof/" },
+    { id: "god-of-prompt", title: "God of Prompt", tags: "Landing page, website, branding, custom, AI", href: "https://webstern.co/case-studies/god-of-prompt/" },
+  ].map((p) => ({
+    ...p,
+    items: workMedia.photos
+      .filter((w) => w.album === p.id)
+      .map((w): Media => ({ id: w.id, kind: "photo", title: w.title, src: w.srcs.viewer, thumb: w.srcs.grid, zoom: w.srcs.zoom, placeholder: w.placeholder, w: w.w, h: w.h, credit: { by: p.title, href: p.href, site: "Webstern" } })),
+  })),
 };
 
 export const shots = {

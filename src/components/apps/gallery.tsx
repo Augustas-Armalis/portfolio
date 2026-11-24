@@ -11,16 +11,16 @@
 
 import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useTransform, type AnimationPlaybackControls } from "motion/react";
 import { flushSync } from "react-dom";
-import { ArrowUpRight, ChevronLeft, ChevronRight, Drone, Film, Image as ImageIcon, Images, Minus, Play, Plus, X } from "lucide-react";
+import { ArrowUpRight, Briefcase, ChevronLeft, ChevronRight, Drone, Film, Image as ImageIcon, Images, Minus, Play, Plus, X } from "lucide-react";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { gallery, shots, type Album, type Media } from "@/content";
+import { gallery, shots, webstern, type Album, type Media } from "@/content";
 import { useOS } from "@/store";
 import { Sym } from "../symbols";
 import { Btn, List, ListRow, M, PhoneNav, reducedMotion, SectionHeader, Segmented, SplitFrame, Toolbar, useChrome, usePhoneBack } from "../ui";
 import { XMark } from "./shared";
 
 // a design shot is a picture too, from his X account; it keeps its 16:10 shape in the grid
-type Item = Media & { shot?: boolean };
+type Item = Media & { shot?: boolean; work?: boolean };
 const shotItems: Item[] = shots.items.map((s) => ({
   id: `shot-${s.src.replace(/^.*shot-|\.webp$/g, "")}`,
   kind: "photo",
@@ -33,7 +33,7 @@ const shotItems: Item[] = shots.items.map((s) => ({
 const byId = new Map(gallery.media.map((m) => [m.id, m]));
 const itemsOf = (a: Album) => a.items.map((id) => byId.get(id)).filter((m): m is Media => !!m);
 // a set to look through: the Library, one of the albums, or everything of one kind
-type Collection = { id: string; title: string; sub: string; items: Item[]; wide?: boolean; icon?: typeof Film };
+type Collection = { id: string; title: string; sub: string; items: Item[]; wide?: boolean; icon?: typeof Film; link?: string };
 const own = gallery.media.filter((m) => m.own);
 const LIBRARY: Collection = { id: "library", title: "Library", sub: "", items: own.length ? own : gallery.media, icon: Images };
 const SHOTS: Collection = { id: "shots", title: "Design shots", sub: "Interface work, posted on X", items: shotItems, wide: true };
@@ -48,7 +48,11 @@ const typeSets: Collection[] = [
   { id: "drone", title: "Drone", sub: "From the air", icon: Drone, items: gallery.media.filter((m) => m.drone) },
   { id: "photos", title: "Photos", sub: "Every photograph", icon: ImageIcon, items: gallery.media.filter((m) => m.kind === "photo") },
 ];
-const ALL = [LIBRARY, ...albumSets, ...typeSets];
+// his studio's work: a set for each project (its case study's own pictures), and all of them together, first
+const workSets: Collection[] = webstern.projects.map((p) => ({ id: `w-${p.id}`, title: p.title, sub: p.tags, items: p.items.map((m) => ({ ...m, work: true })), wide: true, link: p.href }));
+const WORK: Collection = { id: "webstern", title: webstern.name, sub: "The latest from my studio", items: workSets.flatMap((w) => w.items), wide: true, icon: Briefcase, link: webstern.href };
+const isWork = (id: string) => id === WORK.id || id.startsWith("w-");
+const ALL = [LIBRARY, WORK, ...workSets, ...albumSets, ...typeSets];
 const setById = (id: string) => ALL.find((s) => s.id === id) ?? LIBRARY;
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -61,7 +65,7 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 const countOf = (items: Item[]) => {
   const v = items.filter((m) => m.kind === "video").length;
   const p = items.length - v;
-  return [p && plural(p, items.every((m) => m.shot) ? "shot" : "photo"), v && plural(v, "film")].filter(Boolean).join(", ");
+  return [p && plural(p, items.every((m) => m.shot) ? "shot" : items.every((m) => m.work) ? "screen" : "photo"), v && plural(v, "film")].filter(Boolean).join(", ");
 };
 // the Library: everything newest first, by the day each was taken
 const LIBRARY_RUN = [...LIBRARY.items].sort((a, b) => ((a.date ?? "") < (b.date ?? "") ? 1 : (a.date ?? "") > (b.date ?? "") ? -1 : 0));
@@ -88,6 +92,8 @@ function Tile({ m, onOpen, wide, feature }: { m: Item; onOpen: (el: HTMLElement)
       style={m.placeholder ? { backgroundImage: `url(${m.placeholder})` } : undefined}
     >
       {m.kind === "video" ? <TilePreview m={m} /> : <TileImage src={m.thumb} />}
+      {/* a screen of white interface would run into the next one: a hairline keeps each its own */}
+      {wide && <span aria-hidden className="pointer-events-none absolute inset-0 shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.12)]" />}
       {m.kind === "video" && (
         <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-end gap-1 bg-gradient-to-t from-black/50 to-transparent px-2 pb-1.5 pt-5 text-[11px] font-semibold tabular-nums text-white">
           {feature && <span className="mr-auto truncate pr-2 text-left text-[13px] font-semibold">{m.title}</span>}
@@ -101,6 +107,24 @@ function Tile({ m, onOpen, wide, feature }: { m: Item; onOpen: (el: HTMLElement)
         </span>
       )}
     </button>
+  );
+}
+
+// the last tile of his work: the rest of it, on webstern.co (a new tab)
+function MoreTile({ wide }: { wide?: boolean }) {
+  return (
+    <a
+      href={webstern.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`group flex min-h-[44px] flex-col items-center justify-center gap-1.5 bg-[var(--fill-2)] p-3 text-center outline-none hov:hover:bg-[var(--fill-3,var(--fill-2))] focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${wide ? "aspect-[16/10]" : "aspect-square"}`}
+    >
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg)] text-[var(--accent-text)] shadow-[0_1px_3px_rgb(0_0_0/0.12)] transition-transform duration-200 hov:group-hover:scale-105">
+        <Sym icon={ArrowUpRight} size={18} weight="semibold" />
+      </span>
+      <span className="text-[13px] font-semibold text-ink">View more work</span>
+      <span className="text-[11px] text-ink-3">webstern.co</span>
+    </a>
   );
 }
 
@@ -131,7 +155,7 @@ function TilePreview({ m }: { m: Item }) {
 }
 
 // The grid, edge to edge with hairline gaps: the phone in columns, the Mac in tiles of at least a size
-function Grid({ items, open, wide, cols, size }: { items: Item[]; open: (i: number, el: HTMLElement) => void; wide?: boolean; cols?: number; size?: number }) {
+function Grid({ items, open, wide, cols, size, more }: { items: Item[]; open: (i: number, el: HTMLElement) => void; wide?: boolean; cols?: number; size?: number; more?: boolean }) {
   const many = cols ? cols >= 3 : true;
   return (
     <div
@@ -142,6 +166,7 @@ function Grid({ items, open, wide, cols, size }: { items: Item[]; open: (i: numb
         // his own film is a large tile where there is room for one
         <Tile key={m.id} m={m} wide={wide} feature={!wide && many && m.own && m.kind === "video"} onOpen={(el) => open(i, el)} />
       ))}
+      {more && <MoreTile wide={wide} />}
     </div>
   );
 }
@@ -500,6 +525,12 @@ function Viewer({ list, index, setIndex, close: put, label, originOf }: { list: 
         {m.own ? (
           // his own: the day it was taken
           <span className="tabular-nums text-white/70">{dayOf(m.date)}</span>
+        ) : m.work ? (
+          // his studio's: the project's case study
+          <a href={m.credit.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-white/75 hover:text-white">
+            {m.credit.by} case study on webstern.co
+            <Sym icon={ArrowUpRight} size={11} weight="medium" />
+          </a>
         ) : m.shot ? (
           // a design shot: where it was posted
           <a href={m.credit.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-white/75 hover:text-white">
@@ -548,13 +579,13 @@ function usePinchSteps(step: (dir: 1 | -1, x: number, y: number) => void) {
 type View = { list: Item[]; index: number; label: string };
 type From = { k: number; x: string; y: string } | null;
 
-export function Photos({ start = "library" }: { start?: "library" | "shots" }) {
+export function Photos({ start = "library" }: { start?: "library" | "webstern" }) {
   const { compact } = useChrome();
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   // the phone: Library or Albums, and an album opened over Albums. The Mac: what the sidebar has chosen.
-  const [tab, setTab] = useState<"library" | "albums">(start === "shots" ? "albums" : "library");
-  const [opened, setOpened] = useState<string | null>(start === "shots" ? "shots" : null);
+  const [tab, setTab] = useState<"library" | "albums">(start === "library" ? "library" : "albums");
+  const [opened, setOpened] = useState<string | null>(start === "library" ? null : start);
   const [picked, setPicked] = useState<string>(start);
   const [side, setSide] = useState(false);
   const [view, setView] = useState<View | null>(null);
@@ -653,6 +684,21 @@ export function Photos({ start = "library" }: { start?: "library" | "shots" }) {
     </div>
   );
 
+  // his work's links: the project's case study, and the rest of the work on webstern.co (new tabs, like every link
+  // out of the OS)
+  const workLinks = (set: Collection, sz: "sm" | "lg") => (
+    <>
+      {set.id !== WORK.id && set.link && (
+        <Btn size={sz} href={set.link} label={`Open the ${set.title} case study`} icon={<Sym icon={ArrowUpRight} size={sz === "lg" ? 16 : 12} weight="semibold" />}>
+          Case study
+        </Btn>
+      )}
+      <Btn size={sz} variant={set.id === WORK.id ? "prominent" : "bordered"} href={webstern.href} label="View more work on webstern.co" icon={<Sym icon={ArrowUpRight} size={sz === "lg" ? 16 : 12} weight="semibold" />}>
+        View more work
+      </Btn>
+    </>
+  );
+
   // An album, or a media type: what is in it, then the grid
   const album = (set: Collection) => (
     <div className="pb-8">
@@ -660,19 +706,57 @@ export function Photos({ start = "library" }: { start?: "library" | "shots" }) {
         <p className={`min-w-0 flex-1 tabular-nums text-ink-3 ${compact ? "t-foot" : "m-sub"}`}>{/* the Mac's toolbar already counts them */}
           {[set.sub, compact && countOf(set.items), spanOf(set.items)].filter(Boolean).join(" · ")}</p>
         {set.id === "shots" && compact && (
-          <Btn size="sm" href={shots.href} label={`Open ${shots.handle} on X`} icon={<XMark size={12} />}>
+          <Btn size="lg" href={shots.href} label={`Open ${shots.handle} on X`} icon={<XMark size={14} />}>
             {shots.handle}
           </Btn>
         )}
       </div>
-      <Grid items={set.items} wide={set.wide} cols={cols} size={size} open={openAt(set, set.items)} />
+      {/* on the phone his work's links get a row of their own, at a finger's size */}
+      {compact && isWork(set.id) && <div className={`${pad} flex flex-wrap gap-2 pb-3`}>{workLinks(set, "lg")}</div>}
+      {set.id === WORK.id ? (
+        // all of it: project by project, each under its name and the site's own tags
+        workSets.map((w, k) => (
+          <section key={w.id} className="[contain-intrinsic-size:auto_600px] [content-visibility:auto]">
+            <div className={`${pad} flex items-baseline gap-2 pb-2 ${k ? "pt-6" : "pt-1"}`}>
+              <button type="button" onClick={() => (compact ? setOpened(w.id) : setPicked(w.id))} className={`press text-left font-bold tracking-[-0.01em] text-ink ${compact ? "text-[20px]" : "text-[17px]"}`}>
+                {w.title}
+              </button>
+              <span className={`min-w-0 flex-1 truncate text-ink-3 ${compact ? "text-[13px]" : "text-[12px]"}`}>{w.sub}</span>
+              <a href={w.link} target="_blank" rel="noopener noreferrer" className={`inline-flex shrink-0 items-center gap-0.5 text-[var(--accent-text)] ${compact ? "min-h-[44px] text-[15px]" : "text-[12px]"}`}>
+                Case study
+                <Sym icon={ArrowUpRight} size={compact ? 14 : 11} weight="medium" />
+              </a>
+            </div>
+            <Grid items={w.items} wide cols={cols} size={size} open={openAt(w, w.items)} more={k === workSets.length - 1} />
+          </section>
+        ))
+      ) : (
+        <Grid items={set.items} wide={set.wide} cols={cols} size={size} open={openAt(set, set.items)} more={isWork(set.id)} />
+      )}
     </div>
   );
 
   // The phone's Albums: his albums as covers, then the media types as a list
   const albums = (
     <div className={`${pad} pb-8 pt-3`}>
-      <h2 className="t-title3 pb-2 text-ink">My Albums</h2>
+      <div className="flex items-center justify-between pb-2">
+        <h2 className="t-title3 text-ink">{webstern.name}</h2>
+        <button type="button" onClick={() => setOpened(WORK.id)} className="press flex min-h-[44px] items-center text-[17px] tracking-[-0.02em] text-[var(--accent-text)]">
+          See all
+        </button>
+      </div>
+      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {workSets.map((w) => (
+          <button key={w.id} type="button" onClick={() => setOpened(w.id)} className="press group w-[72%] shrink-0 snap-start text-left outline-none">
+            <span className="sq-card relative block aspect-[16/10] overflow-hidden rounded-[14px] bg-[var(--fill-2)] bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.08)]" style={w.items[0]?.placeholder ? { backgroundImage: `url(${w.items[0].placeholder})` } : undefined} data-sq="">
+              {w.items[0] && <TileImage src={w.items[0].thumb} />}
+            </span>
+            <span className="mt-2 block truncate text-[15px] font-semibold text-ink">{w.title}</span>
+            <span className="block truncate text-[13px] text-ink-3">{w.sub}</span>
+          </button>
+        ))}
+      </div>
+      <h2 className="t-title3 pb-2 pt-7 text-ink">My Albums</h2>
       <div className="grid grid-cols-2 gap-x-4 gap-y-5">
         {albumSets.map((a) => {
           const cover = a.items[0];
@@ -794,6 +878,9 @@ export function Photos({ start = "library" }: { start?: "library" | "shots" }) {
         className="split-side flex w-[210px] shrink-0 flex-col overflow-auto border-r border-black/[0.06] bg-[#F4F4F6] px-2.5 pb-3 pt-[52px]"
       >
         {sideRow(LIBRARY)}
+        {sideHead(webstern.name)}
+        {sideRow(WORK)}
+        {workSets.map(sideRow)}
         {sideHead("Albums")}
         {albumSets.map(sideRow)}
         {sideHead("Media Types")}
@@ -805,6 +892,7 @@ export function Photos({ start = "library" }: { start?: "library" | "shots" }) {
             <Btn variant="plain" size="sm" iconOnly label="Smaller" disabled={steps.mac === 0} onClick={() => change(-1)} icon={<Sym icon={Minus} size={14} weight="semibold" />} />
             <Btn variant="plain" size="sm" iconOnly label="Larger" disabled={steps.mac === MAC_SIZES.length - 1} onClick={() => change(1)} icon={<Sym icon={Plus} size={14} weight="semibold" />} />
           </div>
+          {isWork(set.id) && workLinks(set, "sm")}
           {set.id === "shots" && (
             <Btn size="sm" href={shots.href} label={`Open ${shots.handle} on X`} icon={<XMark size={12} />}>
               {shots.handle}
@@ -877,5 +965,5 @@ export function Gallery() {
   return <Photos start="library" />;
 }
 export function Shots() {
-  return <Photos start="shots" />;
+  return <Photos start="webstern" />;
 }
