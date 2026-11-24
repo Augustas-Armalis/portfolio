@@ -280,7 +280,8 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
   }
   // (in the tunnel, too: a few columns where a stalactite has come down to the floor, close to the walls, and
   // blocks fallen from the roof lying at the walls' feet; the middle of the passage is clear)
-  [1012, 962, 920, 868, 826].forEach((z, n) => {
+  // (the owner finds the thin standing columns read as goblets or bones: none in the tunnel)
+  ([] as number[]).forEach((z, n) => {
     const c = caveAt(z);
     if (c.w < 17) return;
     const sd = n % 2 ? 1 : -1;
