@@ -752,6 +752,42 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
         k.add(new THREE.SphereGeometry(s, 12, 9), DP(x, 2.0 + s * 0.85, z), rose ? [0.46, 0.17, 0.12] : [0.5, 0.27, 0.11], { glow: GL * 0.36, scale: [1, 0.9, 1], top: rose ? [0.86, 0.42, 0.28] : [0.9, 0.6, 0.26] });
       }
     }
+  // The white fountain of a tree, where he put it in the middle of the town (behind the desk, the tallest thing in the
+  // glass): a slim leaning trunk, and a crown that goes up white and falls back down in streams, tier on tier, like water
+  // from a basin: cream-white with its own light, so it is the one bright form in that country besides the display.
+  {
+    const TX = 0.4;
+    const TZ = -7.5;
+    k.add(new THREE.CylinderGeometry(0.34, 0.8, 9.5, 9), DP(TX, 4.7, TZ), [0.36, 0.2, 0.12], { glow: GL * 0.34, rot: [0.03, 0, -0.04] });
+    k.add(new THREE.CylinderGeometry(0.9, 1.5, 0.7, 14), DP(TX, 0.35, TZ), [0.34, 0.19, 0.11], { glow: GL * 0.3 });
+    const cream: V3 = [0.9, 0.78, 0.6];
+    const white: V3 = [0.97, 0.9, 0.78];
+    // the crown's head: a bright heart high up
+    k.add(new THREE.SphereGeometry(2.5, 14, 10), DP(TX, 17.6, TZ), white, { glow: GL * 0.7, scale: [1, 1.1, 1], top: [1, 0.99, 0.95] });
+    k.add(new THREE.SphereGeometry(1.7, 12, 9), DP(TX, 20.4, TZ), white, { glow: GL * 0.8, top: [1, 0.99, 0.95] });
+    // tiers that spread and fall: each ring wider and lower than the one above, a spray of puffs on its rim and a stream hanging from each
+    const tiers = [
+      { y: 15.6, r: 3.8, n: 7, s: 1.5, drop: 4.2 },
+      { y: 12.4, r: 6.1, n: 9, s: 1.65, drop: 5.2 },
+      { y: 8.8, r: 8.2, n: 11, s: 1.55, drop: 5.6 },
+    ];
+    tiers.forEach((t, ti) => {
+      for (let i = 0; i < t.n; i++) {
+        const a = (i / t.n) * Math.PI * 2 + ti * 0.55;
+        const x = TX + Math.cos(a) * t.r;
+        const z = TZ + Math.sin(a) * t.r;
+        k.add(new THREE.SphereGeometry(t.s, 11, 8), DP(x, t.y, z), i % 2 ? cream : white, { glow: GL * (0.62 - ti * 0.06), scale: [1, 0.78, 1], top: [1, 0.99, 0.94] });
+        // (the stream: a long cone hanging point-down from it, leaning a little outward)
+        const len = t.drop * (0.8 + 0.4 * ((i * 7 + ti * 3) % 5) / 4);
+        k.add(new THREE.SphereGeometry(1, 9, 7), DP(x + Math.cos(a) * 0.5, t.y - len / 2 - t.s * 0.3, z + Math.sin(a) * 0.5), cream, { glow: GL * 0.5, scale: [t.s * 0.5, len / 2, t.s * 0.5], top: [1, 0.98, 0.92], rot: [Math.sin(a) * 0.1, 0, -Math.cos(a) * 0.1] });
+      }
+      // the tier's inner fill, so the crown reads as one mass from afar
+      k.add(new THREE.SphereGeometry(t.r * 0.62, 12, 8), DP(TX, t.y - 0.4, TZ), cream, { glow: GL * 0.45, scale: [1, 0.55, 1] });
+    });
+    // the basin at its foot: a pale ring of water, where the streams fall
+    k.add(new THREE.CylinderGeometry(9.6, 9.6, 0.22, 40), DP(TX, 0.15, TZ), [0.78, 0.84, 0.9], { glow: GL * 0.7 });
+    k.add(new THREE.TorusGeometry(9.7, 0.22, 6, 56), DP(TX, 0.3, TZ), [1, 0.9, 0.74], { glow: GL * 0.7, rot: [Math.PI / 2, 0, 0] });
+  }
   k.box(0.9, 13, 0.9, DP(15, 6.5, -15), [0.26, 0.12, 0.1], { glow: GL * 0.3 });
   k.add(new THREE.ConeGeometry(0.9, 3.0, 4), DP(15, 14.4, -15), [0.26, 0.12, 0.1], { glow: GL * 0.3, rot: [0, Math.PI / 4, 0] });
 
