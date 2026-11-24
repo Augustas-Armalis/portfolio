@@ -97,12 +97,20 @@ function canLens() {
 // Displacement map for a rounded rectangle: neutral in the middle, and along
 // the bezel each pixel points back toward the inside, more steeply the closer
 // it sits to the edge, like the rim of a thick lens.
-function lensMap(w: number, h: number, r: number, bezel: number) {
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  const g = c.getContext("2d")!;
-  const img = g.createImageData(w, h);
+// (made once per size and kept: encoded off this thread as a blob, never by toDataURL, whose PNG encoding held a flight
+// frame for a second when a panel opened)
+const LENS_MAPS = new Map<string, Promise<string>>();
+function lensMap(w: number, h: number, r: number, bezel: number): Promise<string> {
+  const key = `${w}x${h}r${r.toFixed(1)}b${bezel.toFixed(1)}`;
+  let p = LENS_MAPS.get(key);
+  if (!p) {
+    p = makeLensMap(w, h, r, bezel);
+    LENS_MAPS.set(key, p);
+  }
+  return p;
+}
+async function makeLensMap(w: number, h: number, r: number, bezel: number) {
+  const img = new ImageData(w, h);
   const hx = w / 2;
   const hy = h / 2;
   for (let y = 0; y < h; y++) {
@@ -135,7 +143,15 @@ function lensMap(w: number, h: number, r: number, bezel: number) {
       img.data[i + 3] = 255;
     }
   }
-  g.putImageData(img, 0, 0);
+  if (typeof OffscreenCanvas !== "undefined") {
+    const oc = new OffscreenCanvas(w, h);
+    oc.getContext("2d")!.putImageData(img, 0, 0);
+    return URL.createObjectURL(await oc.convertToBlob({ type: "image/png" }));
+  }
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  c.getContext("2d")!.putImageData(img, 0, 0);
   return c.toDataURL("image/png");
 }
 
@@ -152,6 +168,7 @@ export function Glass({ radius = 999, lens = true, panel: _one, className = "", 
     if (!el || !lens || !canLens()) return;
     let lw = 0;
     let lh = 0;
+    let alive = true;
     const build = () => {
       const w = Math.round(el.offsetWidth);
       const h = Math.round(el.offsetHeight);
@@ -160,12 +177,17 @@ export function Glass({ radius = 999, lens = true, panel: _one, className = "", 
       lh = h;
       const r = Math.min(radius, w / 2, h / 2);
       const bezel = Math.max(5, Math.min(18, h * 0.36));
-      setMap({ url: lensMap(w, h, r, bezel), w, h, scale: bezel * 2.4 });
+      lensMap(w, h, r, bezel).then((url) => {
+        if (alive && lw === w && lh === h) setMap({ url, w, h, scale: bezel * 2.4 });
+      });
     };
     build();
     const ro = new ResizeObserver(build);
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      alive = false;
+      ro.disconnect();
+    };
   }, [lens, radius]);
   const bf = map ? `url(#${id}) blur(1.1px) saturate(1.7) brightness(1.06)` : undefined;
   return (
