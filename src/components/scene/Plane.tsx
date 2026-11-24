@@ -8,7 +8,7 @@ import { ambienceListener } from "@/lib/ambience";
 import { postCtl } from "./Post";
 import { bakeHomeSolids, homeGround } from "./homeGround";
 import { useTrails } from "./PlaneTrails";
-import { carryY, gateToEntry, portalReady, portalSwap } from "./worlds/portal";
+import { carryY, gateToEntry, openingReach, portalCapable, portalReady, portalSwap } from "./worlds/portal";
 import { arriveGolden } from "./sky";
 import { GATE_REACH, KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
@@ -185,6 +185,8 @@ export function Plane({
       gateSide: -1,
       gateBack: false, // the hand has missed the gate and is flying back out to come at it again
       gateWait: 0, // seconds the hand has spent at the end of the way without getting through
+      holdK: 0, // 0..1 the next world is not yet warm behind the gate: the plane eases to a glide as it nears it
+      holdT: 0, // seconds it has been held at the gate's plane
       camYaw: 0,
       camPitch: 0,
       // free look: where the eye is turned from straight behind the plane, and where it is turning to
@@ -420,6 +422,8 @@ export function Plane({
     st.gateBack = false;
     st.gateWait = 0;
     st.gateAlong = NaN;
+    st.holdK = 0;
+    st.holdT = 0;
     st.snap = true;
     trails.reset();
     updateNose();
@@ -574,7 +578,7 @@ export function Plane({
         const err = wrap(Math.atan2(rx, rz) - st.yaw);
         if (Math.abs(err) < 1.25) {
           // (only while the controls are left alone: a hand on them is never argued with)
-          const k = touching ? 0 : smooth01((150 + along) / 80) * smooth01((80 - Math.abs(side)) / 45) * 0.6 * (1 - a);
+          const k = touching || !voyage.guide ? 0 : smooth01((150 + along) / 80) * smooth01((80 - Math.abs(side)) / 45) * 0.6 * (1 - a);
           sx = sx * (1 - k) + THREE.MathUtils.clamp(-err * 1.5, -1, 1) * k;
           const ay = THREE.MathUtils.clamp((Math.atan2(gate.pos.y - st.pos.y, Math.hypot(rx, rz) + 6) / 0.5) * 1.5, -1, 1);
           sy = sy * (1 - k) + ay * k;
@@ -692,7 +696,7 @@ export function Plane({
     st.cruise = damp(st.cruise, voyage.cruise ? 1 : 0, 1.4, dt);
     // (a world built several times the size of the others is flown that much faster: WorldDef.pace; the top speed is held near the ordinary one)
     // (coming round for another go at a gate, it takes its time: a tighter circle)
-    const pace = (id === "kings" ? kingsPace(lz - KINGS.z) : (def.pace ?? 1)) * (1 - 0.55 * st.cruise * a) * (st.gateBack ? 0.65 : 1);
+    const pace = (id === "kings" ? kingsPace(lz - KINGS.z) : (def.pace ?? 1)) * (1 - 0.55 * st.cruise * a) * (st.gateBack ? 0.65 : 1) * (1 - 0.7 * st.holdK);
     const vT = opts.launching ? Math.min(speedOf(voyage.throttle), 2 + st.t * 3.6) : Math.min(speedOf(voyage.throttle) * pace, SPEED.max * Math.max(1, (def.pace ?? 1) * 0.5)) - Math.sin(st.pitch) * 9 * pace;
     // (eased twice over: the pace a moment ago leads the pace now, so a change of speed has no corner in it)
     st.speedT = damp(st.speedT, Math.max(SPEED.min * 0.8, vT), opts.launching ? 3 : 1.6, dt);
@@ -743,11 +747,24 @@ export function Plane({
         const rz = st.pos.z - o.z - gate.pos.z;
         const along = -Math.sin(gate.yaw) * rx - Math.cos(gate.yaw) * rz;
         const side = Math.abs(Math.cos(gate.yaw) * rx - Math.sin(gate.yaw) * rz);
-        const reach = GATE_REACH[id];
+        const reach = GATE_REACH[id] ?? openingReach(id);
         const inside = side < (reach?.[0] ?? 19) && ry < (reach?.[1] ?? 26);
         const crossed = Number.isFinite(st.gateAlong) && st.gateAlong < 0 !== along < 0 && Math.abs(along - st.gateAlong) < 40;
         const through = inside && (crossed || Math.abs(along) < 3.5);
         if (process.env.NODE_ENV !== "production" && crossed && !inside && side < 60) console.warn(`[voyage] ${id}: passed the gate's plane outside it (${side.toFixed(1)} m aside, ${ry.toFixed(1)} m above its middle)`);
+        // The window is not ready yet (the next world is still being made ready behind the gate): the plane eases down
+        // to a glide as it comes up to the gate and waits for it there, never going under cloud while a window can be had
+        const nx = WORLD_ORDER[WORLD_ORDER.indexOf(id) + 1];
+        const waiting = !!nx && !voyage.homing && portalCapable(id) && !portalReady(nx) && st.holdT < 25;
+        st.holdK = waiting && along < 4 && side < 160 ? smooth01((320 + along) / 260) : damp(st.holdK, 0, 4, dt);
+        if (waiting && inside && along > -3 && along < 40 && st.holdK > 0.5) {
+          const fx = -Math.sin(gate.yaw);
+          const fz = -Math.cos(gate.yaw);
+          st.pos.x -= fx * (along + 3);
+          st.pos.z -= fz * (along + 3);
+          st.holdT += dt;
+          st.gateAlong = -3;
+        } else {
         st.gateAlong = along;
         if (through) {
           // (for the gate's ripple only: where in its opening the plane went through)
@@ -757,6 +774,7 @@ export function Plane({
           if (voyage.next && portalReady(voyage.next)) through_(id, voyage.next);
           else if (voyage.next) voyage.phase = "closing";
           else if (process.env.NODE_ENV !== "production") console.error(`[voyage] ${id}: through the gate, but no world follows`);
+        }
         }
       }
     } else if (voyage.phase === "closing") {
@@ -832,6 +850,8 @@ export function Plane({
     st.gateBack = false;
     st.gateWait = 0;
     st.gateAlong = NaN;
+    st.holdK = 0;
+    st.holdT = 0;
     st.idle = Math.max(st.idle, 0);
     updateNose();
     st.windowed = true;

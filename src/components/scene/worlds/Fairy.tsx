@@ -126,6 +126,8 @@ export const FAIRY_PAL: GroundPalette = {
         // the pale road
         float sd = waySD(p);
         float way = (1.0 - smoothstep(3.2, 5.0, abs(sd))) * (1.0 - smoothstep(1430.0, 1450.0, p.y));
+        // (the way out runs on past the gate and dies away in the haze of the plain, with no end to see)
+        way *= mix(1.0, 1.0 - smoothstep(230.0, 370.0, dot(p - vec2(${f4(646)}, ${f4(-1335)}), vec2(${f4(0.3553)}, ${f4(-0.9348)}))), step(p.y, -1335.0));
         col = mix(col, vec3(0.74, 0.66, 0.5) * light, way * 0.9);
         // the arrival wood. Its floor is not the far woods' dark: grass where the light comes down, thinning under
         // the trees to soil, leaf litter and single fallen leaves, cushions of moss, roots running across; over all
@@ -219,6 +221,49 @@ const GRASS_MASK = /* glsl */ `
     }
   }
   return max(meadow, max(woodGrass, crest)) * (1.0 - ruts) * (1.0 - road);`;
+
+// ---------- the light in the way-out arch, seen from far ----------
+// The window onto Paradise (portal.tsx) only comes alive within 320 m of the gate; from farther off the arch would stand
+// empty. This is a soft sheet of Paradise's gold hung in its opening, strong from afar and given up to the window as
+// the plane comes near.
+function GateGlow() {
+  const b = useDisposable(() => {
+    const gt = gateOf("fairy")!;
+    const gy = groundAt(def, gt.pos.x, gt.pos.z) - 2;
+    const h = gt.pos.y - gy + 27;
+    const half = 18;
+    const spring = Math.max(h * 0.35, h - half * 1.6);
+    const sh = new THREE.Shape();
+    sh.moveTo(-half, 0);
+    sh.lineTo(-half, spring);
+    sh.quadraticCurveTo(-half, h * 0.95, 0, h);
+    sh.quadraticCurveTo(half, h * 0.95, half, spring);
+    sh.lineTo(half, 0);
+    const g = new THREE.ShapeGeometry(sh, 16);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      uniforms: { ...SKY_U, uH: { value: h } },
+      vertexShader: /* glsl */ `varying vec2 vP; varying vec3 vW; void main(){ vP = position.xy; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      fragmentShader: /* glsl */ `
+        uniform float uH; varying vec2 vP; varying vec3 vW;
+        void main(){
+          float d = length(cameraPosition - vW);
+          float far = smoothstep(150.0, 320.0, d);
+          float t = clamp(vP.y / uH, 0.0, 1.0);
+          float edge = 1.0 - smoothstep(0.55, 1.0, abs(vP.x) / 18.0);
+          vec3 col = mix(vec3(1.0, 0.82, 0.5), vec3(1.0, 0.95, 0.86), t) * (0.55 + 0.45 * t);
+          gl_FragColor = vec4(col * far * (0.5 + 0.5 * edge) * 0.8, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    return { g, mat, gt, gy };
+  }, []);
+  return <mesh geometry={b.g} material={b.mat} position={[b.gt.pos.x, b.gy, b.gt.pos.z]} rotation={[0, b.gt.yaw, 0]} renderOrder={4} frustumCulled={false} />;
+}
 
 // ---------- pennants on the highest spires ----------
 function Pennants({ tips }: { tips: V3[] }) {
@@ -782,6 +827,7 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     <>
       <WorldBase id="fairy" def={def} pal={FAIRY_PAL} props={b.base} tip={[0.44, 0.5, 0.16]} pathTint={[1, 0.92, 0.7]} mask={GRASS_MASK} tall={1.3} groundSize={14000} angels={false} gate="veil" gateSize={[18, 27]} />
       <RayedSun />
+      <GateGlow />
       {/* the mountain, measured from its own foot */}
       <group position={[MT.x, b.y0, MT.z]}>
         <mesh geometry={b.soil} material={b.tempera} />

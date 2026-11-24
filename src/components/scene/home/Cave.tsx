@@ -516,8 +516,16 @@ function makeStoneMaterial() {
         float camIn = smoothstep(-4.0, 8.0, -sin(${CAVE.yaw.toFixed(3)}) * cq.x - cos(${CAVE.yaw.toFixed(3)}) * cq.y);
         // out in the land: lit as the ranges are lit, and in their haze (the feet of the mountain in the low haze,
         // as theirs), so the cliff, the mountain over it and the ranges behind read as one
-        float ndlR = clamp(dot(n, uKeyDir) * 0.75 + 0.25, 0.0, 1.0);
-        vec3 outCol = alb * (uSkyCol * (0.55 + 0.45 * n.y) + uKeyCol * ndlR * ndlR * 1.25 * sunUp * mix(1.0, cloudShade(vWorld), 0.7)) + alb * uLead * spill * 0.22 * (0.4 + night);
+        // (a sheer face is broken up the way the ranges' slopes are: ribs and gullies in the normal, strata and
+        // streaks in the colour, and it takes the sun at a slant, so it never reads as one flat pale slab)
+        vec3 nR = n;
+        float rib = fbm(vec2((vWorld.x + vWorld.z) * 0.09, vWorld.y * 0.012));
+        float rib2 = fbm(vec2((vWorld.x - vWorld.z) * 0.21, vWorld.y * 0.03) + 5.1);
+        nR = normalize(nR + vec3(rib - 0.5, 0.0, rib2 - 0.5) * 1.4 * (1.0 - abs(n.y)));
+        vec3 albR = alb * mix(0.45, 1.05, smoothstep(0.25, 0.75, rib)) * mix(0.8, 1.1, rib2);
+        float steepR = 1.0 - abs(n.y);
+        float ndlR = clamp(dot(nR, uKeyDir) * 0.75 + 0.25, 0.0, 1.0);
+        vec3 outCol = albR * (uSkyCol * (0.55 + 0.45 * nR.y) + uKeyCol * ndlR * ndlR * 1.25 * mix(1.0, 0.5, steepR) * sunUp * mix(1.0, cloudShade(vWorld), 0.7)) + albR * uLead * spill * 0.22 * (0.4 + night);
         vec3 dR = normalize(vWorld - cameraPosition);
         float top = ${f2(MAIN_RANGE.height)};
         float lowR = (1.0 - smoothstep(0.0, top * 0.5, vWorld.y)) * 0.3;

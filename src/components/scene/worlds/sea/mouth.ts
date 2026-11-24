@@ -19,21 +19,21 @@ export function inflowGeometry() {
   g.translate(GROTTO.x, 0.12, GROTTO.z + INFLOW.d / 2 - 20);
   return g;
 }
-export function makeInflowMaterial() {
+export function makeInflowMaterial(night: THREE.IUniform) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { ...SKY_U, ...WORLD_U, uOpen: ISLAND_U.uOpen },
+    uniforms: { ...SKY_U, ...WORLD_U, uOpen: ISLAND_U.uOpen, uNightK: night },
     vertexShader: /* glsl */ `varying vec3 vWorld; varying vec3 vL; void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vL = position; gl_Position = projectionMatrix * viewMatrix * wp; }`,
     fragmentShader: /* glsl */ `
-      uniform float uOpen;
+      uniform float uOpen; uniform float uNightK;
       varying vec3 vWorld; varying vec3 vL;
       ${GLSL_NOISE}
       ${GLSL_SKY}
       ${GLSL_AIR}
       void main(){
-        if (uOpen < 0.02) discard;
+        if (uOpen < 0.02 || uNightK < 0.3) discard;
         vec2 p = vL.xz - vec2(${GROTTO.x.toFixed(1)}, ${(GROTTO.z + 6).toFixed(1)});
         float r = length(p);
         float ang = atan(p.x, p.y);
@@ -50,7 +50,7 @@ export function makeInflowMaterial() {
         // it gathers toward the mouth and thins away from it
         float near = exp(-r / 380.0) * smoothstep(20.0, 90.0, r);
         float side = smoothstep(1.55, 0.35, abs(ang));
-        float k = line * dash * near * side * smoothstep(0.1, 0.8, uOpen);
+        float k = line * dash * near * side * smoothstep(0.1, 0.8, uOpen) * smoothstep(0.3, 0.55, uNightK);
         // a slow turning of the water just in front of the mouth
         float swirl = exp(-pow((r - 70.0) / 38.0, 2.0)) * (0.5 + 0.5 * sin(ang * 5.0 - uTime * 0.55 + r * 0.04)) * 0.12 * uOpen;
         vec3 col = (vec3(1.0, 0.8, 0.5) * 0.5 + uHorizon * 0.4) * (k * 0.4 + swirl) * (1.0 - 0.5 * uNight);

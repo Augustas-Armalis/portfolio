@@ -23,7 +23,7 @@ import SeaWorld from "./Sea";
 import SeaFinaleWorld from "./SeaFinale";
 import StarsWorld, { prepareStars } from "./Stars";
 import SunWorld from "./Sun";
-import { ORIGIN, WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, pathOf, useWorld, voyage, type WorldId } from "./voyage";
+import { ORIGIN, WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, originOf, pathOf, useWorld, voyage, type WorldId } from "./voyage";
 
 // dev: the map, for framing stills from the console
 if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") Object.assign(window, { __worlds: { WORLDS, ORIGIN, groundAt, gateOf, pathOf, entryOf } });
@@ -119,12 +119,15 @@ const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNod
 type Drawn = THREE.Mesh | THREE.Points | THREE.Line;
 // (step 0, for a world with something heavy in it: that is made first, a few milliseconds a frame)
 const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { friendship: (props) => prepareFriendship(props), kings: (props) => prepareKings(props), stars: (props) => prepareStars(props), funeral: (props) => prepareFuneral(props), rex: (props) => prepareRex(props) };
+const tag = { v: "" };
 function useWarmWorld(cur: WorldId, props: WorldProps) {
   const { gl, camera, scene } = useThree();
   const [warm, setWarm] = useState<WorldId | null>(null);
   const group = useRef<THREE.Group | null>(null);
-  const job = useRef({ id: null as WorldId | null, since: 0, list: null as Drawn[] | null, compiled: 0, drawn: 0, wait: 0, t0: 0, prep: null as (() => boolean) | null, prepFor: null as WorldId | null, closing: null as WorldId | null });
-  const tiny = useMemo(() => new THREE.WebGLRenderTarget(1, 1), []);
+  const job = useRef({ id: null as WorldId | null, since: 0, list: null as Drawn[] | null, compiled: 0, pending: 0, t1: 0, drawn: 0, wait: 0, t0: 0, prep: null as (() => boolean) | null, prepFor: null as WorldId | null, closing: null as WorldId | null });
+  // (one half-float pixel, no samples: the lens's own target is multisampled, and every switch back from it would resolve the
+  // whole frame; the shaders made are the same, the target's type is what they are keyed on)
+  const tiny = useMemo(() => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: true }), []);
   useEffect(() => () => tiny.dispose(), [tiny]);
   // an object whose shader uses the scene's lights cannot be lit when drawn alone: those are only compiled
   const lit = (o: Drawn) => (Array.isArray(o.material) ? o.material : [o.material]).some((m) => (m as THREE.ShaderMaterial).lights === true || (m as THREE.MeshStandardMaterial).isMeshStandardMaterial);
@@ -139,7 +142,7 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
     }
     gl.setRenderTarget(prev);
   };
-  useFrame(() => {
+  const warmStep = () => {
     const j = job.current;
     const now = performance.now();
     if (!voyage.flying) {
@@ -178,7 +181,7 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
       if (j.since === 0) j.since = now;
       // (from home it begins as soon as the plane is clear of the desk: the first gate must always find its world
       // ready, and the first crossing be through the window)
-      if (now - j.since < (cur === "home" ? 1200 : 2500)) return;
+      if (now - j.since < (cur === "home" ? 500 : 800)) return;
       // (development: window.__noWarm = true flies the old way, every world made under the cloud, for comparing)
       if (process.env.NODE_ENV !== "production" && (window as unknown as { __noWarm?: boolean }).__noWarm) return;
       if (PREPARE[next] && j.prepFor !== next) {
@@ -187,10 +190,12 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
         j.t0 = now;
       }
       if (j.prep) {
+        tag.v = "prep " + next;
         if (j.prep()) j.prep = null;
         return;
       }
-      Object.assign(j, { id: next, list: null, compiled: 0, drawn: 0, wait: 0, t0: j.prepFor === next ? j.t0 : now });
+      Object.assign(j, { id: next, list: null, compiled: 0, pending: 0, drawn: 0, wait: 0, t0: j.prepFor === next ? j.t0 : now });
+      tag.v = "mount " + next;
       startTransition(() => setWarm(next));
       return;
     }
@@ -199,6 +204,7 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
     if (!j.list) {
       // mounted (the transition has committed): give late pieces a few frames, then take stock
       if (++j.wait < 6) return;
+      tag.v = "list";
       const list: Drawn[] = [];
       g.traverse((o) => {
         const d = o as Drawn;
@@ -208,22 +214,39 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
       j.wait = 0;
       return;
     }
-    const rt = postCtl.sceneTarget ?? null;
+    // (a little a frame, about four milliseconds; but the nearer the gate and the world still not warm, the more: the
+    // window must be there by the time the plane is, and a slice of a few frames is better than cloud)
+    const gt = gateOf(cur);
+    const dGate = gt ? gt.pos.clone().add(originOf(cur)).distanceTo(voyage.planePos) : 1e9;
+    const slice = dGate < 600 ? 12 : dGate < 1200 ? 7 : 4;
     if (j.compiled < j.list.length) {
-      // shaders: a few objects a frame, inside a small budget
+      // shaders: a few objects a frame, each handed to the driver to compile off this thread (compileAsync)
       const t = performance.now();
-      into(rt, () => {
-        while (j.compiled < j.list!.length && performance.now() - t < 3) gl.compile(j.list![j.compiled++], camera, scene);
+      tag.v = "compile";
+      into(tiny, () => {
+        while (j.compiled < j.list!.length && performance.now() - t < slice) {
+          j.pending++;
+          const done = () => void j.pending--;
+          try {
+            gl.compileAsync(j.list![j.compiled++], camera, scene).then(done, done);
+          } catch {
+            done();
+          }
+        }
       });
+      j.wait = 0;
+      j.t1 = performance.now();
       return;
     }
-    // give the driver a moment to finish compiling before anything is drawn with those shaders
-    if (++j.wait < 24) return;
+    // the driver finishes compiling in its own time: draw nothing with those shaders until it has (or three seconds)
+    if (j.pending > 0 && performance.now() - j.t1 < 3000) return;
+    if (++j.wait < 3) return;
     if (j.drawn < j.list.length) {
       // (as many a frame as fit in three milliseconds, not one a frame: a world of four hundred things took four
       // hundred frames, and a brisk flight from home could reach the gate first. One slow thing ends the frame's share.)
       const t = performance.now();
-      while (j.drawn < j.list.length && performance.now() - t < 3) {
+      tag.v = "draw";
+      while (j.drawn < j.list.length && performance.now() - t < slice) {
         const o = j.list[j.drawn++];
         if (lit(o) || !o.parent) continue;
         // one pixel is enough to upload its buffers and textures
@@ -231,15 +254,9 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
         const ac = gl.autoClear;
         o.frustumCulled = false;
         gl.autoClear = false;
-        if (rt) {
-          const st = rt.scissorTest;
-          const sc = rt.scissor.clone();
-          rt.scissorTest = true;
-          rt.scissor.set(0, 0, 1, 1);
-          into(rt, () => gl.render(o, camera));
-          rt.scissorTest = st;
-          rt.scissor.copy(sc);
-        } else into(tiny, () => gl.render(o, camera));
+        const td = performance.now();
+        into(tiny, () => gl.render(o, camera));
+        if (process.env.NODE_ENV !== "production" && performance.now() - td > 30) ((window as unknown as { __slow?: unknown[] }).__slow ??= []).push([o.name || o.type, (o.geometry as THREE.BufferGeometry).attributes?.position?.count, Math.round(performance.now() - td), Array.isArray(o.material) ? "multi" : (o.material as THREE.Material).type]);
         gl.autoClear = ac;
         o.frustumCulled = fc;
       }
@@ -247,6 +264,13 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
     }
     voyage.ready = next;
     if (process.env.NODE_ENV !== "production") console.info(`[voyage] ${next} is warm: ${j.list.length} objects made, compiled and uploaded in ${Math.round(performance.now() - j.t0)} ms while flying ${cur}`);
+  };
+  useFrame(() => {
+    const t = performance.now();
+    tag.v = "";
+    warmStep();
+    const ms = performance.now() - t;
+    if (process.env.NODE_ENV !== "production" && ms > 12) ((window as unknown as { __wlog?: unknown[] }).__wlog ??= []).push([Math.round(t), tag.v, Math.round(ms)]);
   });
   // a new world to fly: the clock for warming the one after it starts again
   // (arriving anywhere but in the world that was waiting, as a jump in development does, lets that one go)

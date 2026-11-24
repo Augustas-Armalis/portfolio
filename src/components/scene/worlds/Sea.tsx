@@ -59,13 +59,15 @@ const NIGHT = airState({
   fx: [0.0, 0.0, 0.0, 0.9],
 });
 const dusk = { k: 0, keyK: -1, sky: null as SkyState | null };
+// how far night has fallen, for what comes out of the water with it: the boats, and the water's drawing-in toward the mouth
+const NIGHT_K = { value: 0 };
 
 // Where a boat is, over the glass: out of the haze at the sides, a long curve in toward the island's mouth, square to
 // it at the last, and in under the rock (it dissolves into the dark there, or, if the mouth is not yet open, a little
 // before the face). One crossing takes B.x seconds; the fleet is staggered through them.
 const BOAT_PLACE: BoatPlace = {
   glsl: /* glsl */ `
-    uniform vec2 uMouth; uniform vec3 uBO; uniform float uOpen;
+    uniform vec2 uMouth; uniform vec3 uBO; uniform float uOpen; uniform float uNightK;
     vec3 boatPlace(vec4 A, vec4 B, out vec2 hd, out float fade){
       float u = fract(uTime / B.x + A.z);
       vec2 P0 = A.xy; vec2 M = uMouth;
@@ -76,9 +78,13 @@ const BOAT_PLACE: BoatPlace = {
       if (u > 0.86) { p = M + vec2(0.0, -1.0) * (u - 0.86) / 0.14 * 90.0; d = vec2(0.0, -1.0); }
       hd = normalize(d);
       fade = smoothstep(0.0, 0.06, u) * (1.0 - smoothstep(0.93, 0.995, u)) * (1.0 - smoothstep(0.6, 0.84, u) * (1.0 - smoothstep(0.1, 0.9, uOpen)));
-      return vec3(p.x + uBO.x, uBO.y, p.y + uBO.z);
+      // (none by day: each rises out of the water, in its own turn, as the night comes on, its lantern kindling with it)
+      float thr = 0.2 + 0.55 * fract(A.w * 13.7 + A.z * 3.1);
+      float rise = smoothstep(thr, thr + 0.14, uNightK);
+      fade *= rise;
+      return vec3(p.x + uBO.x, uBO.y - (1.0 - rise) * 3.0, p.y + uBO.z);
     }`,
-  uniforms: { uMouth: { value: new THREE.Vector2(GROTTO.x, GROTTO.z + 3) }, uBO: { value: ORIGIN }, uOpen: ISLAND_U.uOpen, ...WORLD_U },
+  uniforms: { uMouth: { value: new THREE.Vector2(GROTTO.x, GROTTO.z + 3) }, uBO: { value: ORIGIN }, uOpen: ISLAND_U.uOpen, uNightK: NIGHT_K, ...WORLD_U },
   airGlsl: GLSL_AIR,
   airCall: "applyAir(col, vWorld)",
   airK: "(1.0 - airAmt(vWorld) * 0.85)",
@@ -182,7 +188,7 @@ export default function SeaWorld({ props }: { props: WorldProps }) {
       boatMat: makeBoatMaterial(BOAT_PLACE),
       boatMirror: makeBoatMaterial(BOAT_PLACE, true),
       inflow: inflowGeometry(),
-      inflowMat: makeInflowMaterial(),
+      inflowMat: makeInflowMaterial(NIGHT_K),
       spirits,
       spiritMat: makePoints({ a: [0.5, 0.95, 0.8], b: [1, 0.9, 0.6], scale: 150, drift: 3.4, gain: 0, max: 9 }),
       pod: dolphinsGeometry(pod),
@@ -243,6 +249,7 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
     return () => {
       if (voyage.skyMod === skyMod) voyage.skyMod = null;
       dusk.k = 0;
+      NIGHT_K.value = 0;
       dusk.sky = null;
       dusk.keyK = -1;
       ISLAND_U.uEyeK.value.set(0, 0);
@@ -263,6 +270,7 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
       // the mouth shut, no lights on the water, the two eyes small and steady; nothing changes at the crossing)
       e.on = false;
       dusk.k = 0;
+      NIGHT_K.value = 0;
       ISLAND_U.uOpen.value = 0;
       ISLAND_U.uMagic.value = 0;
       const ca0 = b.core.getAttribute("aCol") as THREE.InstancedBufferAttribute;
@@ -301,6 +309,7 @@ void main(){ if (vY < 0.0) discard; vec3 col = applyAir(vec3(0.03, 0.06, 0.04) *
     // evening into a deep green dusk as the island comes near; the air clears as the light goes
     // (night first: it has fallen well before the plane is close; then the magic; then the mouth opens)
     dusk.k = Math.min(1, Math.max(0, (1330 - d) / 560));
+    NIGHT_K.value = dusk.k;
     const sm = THREE.MathUtils.smoothstep;
     e.magic = Math.max(e.magic, sm(760 - d, 0, 300));
     // (the mouth begins to part a long way out and has taken its full gape by the time the plane is under the head)

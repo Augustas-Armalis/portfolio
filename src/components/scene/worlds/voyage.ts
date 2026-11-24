@@ -307,7 +307,7 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
     cloudLit: [0.3, 0.42, 0.62],
     cloudShade: [0.03, 0.06, 0.2],
     night: 0.8,
-    exposure: 1.08,
+    exposure: 1.2,
     fx: [0.0, 0.0, 0.0, 0.5],
   },
   // Fairy Tale of the Kings: a night wood, brown-black and teal; the only strong light is the little world
@@ -858,7 +858,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     place: "none",
     air: AIR.funeral,
     // (thicker air than before: the ranges stand one behind another, each paler, and the far ones are only a breath)
-    fog: [0.00027, 0.0042],
+    fog: [0.00036, 0.0042],
     // colossal mountains, and the fin of rock the procession's road climbs in three switchbacks to the cave: the
     // land, the road, the path of light beside it and the way in are all worked out together in funeral/land.ts
     terrain: FUNERAL.terrain,
