@@ -1109,7 +1109,8 @@ export function Plane({
       if (st.landPhase === 0) {
         // on, into the cloud
         glide(dt, NO_INPUT, OPT_HANDS);
-        voyage.veil = Math.min(1, voyage.veil + dt / 1.0);
+        // (out of the kings' light it fills the frame more slowly: the last of it is a long swell, not a snap)
+        voyage.veil = Math.min(1, voyage.veil + dt / (voyage.homing ? 2.4 : 1.0));
         airOf(0);
         lookStep(dt, null);
         chase(dt, cam);
@@ -1126,7 +1127,7 @@ export function Plane({
           st.b3.copy(rest).setY(rest.y + 0.017);
           st.b1.copy(st.b0).lerp(st.b3, 0.4).setY(st.b0.y - 0.25);
           st.b2.set(rest.x + Math.sin(spot.rot) * 0.95, rest.y + 0.017 + 0.3, rest.z + Math.cos(spot.rot) * 0.95);
-          st.landDur = 3.2;
+          st.landDur = voyage.homing ? 4.8 : 3.2;
           st.pos.copy(st.b0);
           st.lastYaw = spot.rot;
           st.speed = 0;
@@ -1149,7 +1150,7 @@ export function Plane({
         cam.lookAt(st.look);
         st.fov = voyage.homing ? 44 : 36;
         cam.fov = st.fov;
-        if (voyage.held > 0.6 && voyage.frames >= 4 && !voyage.skyFrom) {
+        if (voyage.held > (voyage.homing ? 0.25 : 0.6) && voyage.frames >= 4 && !voyage.skyFrom) {
           st.landPhase = 2;
           st.landT = 0;
         }
@@ -1190,7 +1191,7 @@ export function Plane({
       }
       updateNose();
       // (coming out of the kings' light it is already moving: it only slows, over the whole time the light thins)
-      const ck = voyage.homing ? 1 - Math.pow(1 - clamp01(st.landT / 3.6), 3) : easeInOutCubic(clamp01(st.landT / Math.min(st.landDur, 3.2)));
+      const ck = voyage.homing ? 1 - Math.pow(1 - clamp01(st.landT / 4.8), 3) : easeInOutCubic(clamp01(st.landT / Math.min(st.landDur, 3.2)));
       cam.position.lerpVectors(st.camFrom, home.pos, ck);
       st.look.lerpVectors(st.lookFrom, home.look, ck);
       // (the frame is levelled as it comes home, not at a stroke)
@@ -1205,7 +1206,9 @@ export function Plane({
       st.fov += (36 - st.fov) * Math.min(1, dt * 3);
       cam.fov = st.fov;
       // (the light of the kings' little world thins more slowly than cloud)
-      if (st.landMode === "cloud") voyage.veil = Math.max(0, voyage.veil - dt / (voyage.homing ? 2.6 : 1.7));
+      // (out of the kings' light the light does not drain at a steady rate: it lets go slowly, thins through the middle of the
+      // time and settles last, over the whole of the glide down to the desk)
+      if (st.landMode === "cloud") voyage.veil = voyage.homing ? Math.min(voyage.veil, 1 - smooth01(st.landT / 4.6)) : Math.max(0, voyage.veil - dt / 1.7);
       airOf(0);
       sync(dt, cam, 0);
       const done = u >= 1 && voyage.veil <= 0;
