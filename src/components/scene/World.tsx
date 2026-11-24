@@ -7,6 +7,7 @@ import { HOME_GATE_Z } from "./flightPath";
 import { DESK, GLSL_LAKE, GLSL_NOISE, GLSL_PATH, LAKE, MONITOR, lakeK, pathX } from "./shared";
 import { GLSL_SKY, SKY_U } from "./sky";
 import { GLSL_HOME_AIR, HOME_U, cloudTex } from "./home/land";
+import { voyage } from "./worlds/voyage";
 
 // ---------- sky ----------
 
@@ -107,20 +108,31 @@ export function makeSkyMaterial(env = false) {
             col += vec3(0.4, 0.48, 0.7) * (pow(max(md, 0.0), 400.0) * 0.7 + pow(max(md, 0.0), 40.0) * 0.1 + pow(max(md, 0.0), 6.0) * 0.035) * uNight * (1.0 + uPulse * 0.5) * uSkyFx.z;
           }
           // two cloud layers: high wispy, lower soft
+          // (the noise is only worked out where a layer can show: below the horizon, near the zenith, or with the layers
+          // turned off, each costs nothing)
           vec2 uv = d.xz / (h + 0.09);
-          float n1 = clouds(uv * vec2(0.55, 1.1), uTime);
-          float n2 = fbm(uv * vec2(0.25, 0.5) * 0.7 - vec2(uTime * 0.003, 0.0) + 31.0);
           float fadeH = smoothstep(0.02, 0.22, h) * (1.0 - smoothstep(0.6, 0.98, h));
-          float cov1 = smoothstep(0.58, 0.82, n1) * fadeH * 0.6 * uSkyFx.x * (1.0 - 0.94 * uCumulus);
-          float cov2 = smoothstep(0.55, 0.78, n2) * fadeH * uSkyFx.x * (1.0 - 0.96 * uCumulus);
-          float lit = clamp((n2 - fbm(uv * vec2(0.25, 0.5) * 0.7 - vec2(uTime * 0.003, 0.0) + 31.0 + uSunDir.xz * 0.1)) * 4.0 + 0.5, 0.0, 1.0);
-          vec3 cc = mix(uCloudShade, uCloudLit, lit);
-          cc += uGlow * pow(max(sd, 0.0), 8.0) * 1.4 * sunVis;
-          col = mix(col, mix(uCloudShade, uCloudLit, 0.7), cov1 * 0.55);
-          col = mix(col, cc, cov2 * 0.75);
+          float cov1 = 0.0, cov2 = 0.0;
+          if (fadeH * uSkyFx.x > 0.0) {
+            float n1 = clouds(uv * vec2(0.55, 1.1), uTime);
+            float n2 = fbm(uv * vec2(0.25, 0.5) * 0.7 - vec2(uTime * 0.003, 0.0) + 31.0);
+            cov1 = smoothstep(0.58, 0.82, n1) * fadeH * 0.6 * uSkyFx.x * (1.0 - 0.94 * uCumulus);
+            cov2 = smoothstep(0.55, 0.78, n2) * fadeH * uSkyFx.x * (1.0 - 0.96 * uCumulus);
+            col = mix(col, mix(uCloudShade, uCloudLit, 0.7), cov1 * 0.55);
+            if (cov2 > 0.0) {
+              float lit = clamp((n2 - fbm(uv * vec2(0.25, 0.5) * 0.7 - vec2(uTime * 0.003, 0.0) + 31.0 + uSunDir.xz * 0.1)) * 4.0 + 0.5, 0.0, 1.0);
+              vec3 cc = mix(uCloudShade, uCloudLit, lit);
+              cc += uGlow * pow(max(sd, 0.0), 8.0) * 1.4 * sunVis;
+              col = mix(col, cc, cov2 * 0.75);
+            }
+          }
           // long quiet bars of cloud stacked above the horizon, as he painted them
-          float bars = smoothstep(0.52, 0.7, fbm(vec2(atan(d.z, d.x) * 2.2 + uTime * 0.002, h * 26.0 + 2.0))) * smoothstep(0.015, 0.06, h) * (1.0 - smoothstep(0.14, 0.3, h)) * uSkyFx.y * (1.0 - 0.8 * uCumulus);
-          col = mix(col, mix(uCloudShade, uCloudLit, 0.55) + uGlow * pow(max(sd, 0.0), 6.0) * 0.8 * sunVis, bars * 0.5);
+          float barK = smoothstep(0.015, 0.06, h) * (1.0 - smoothstep(0.14, 0.3, h)) * uSkyFx.y * (1.0 - 0.8 * uCumulus);
+          float bars = 0.0;
+          if (barK > 0.0) {
+            bars = smoothstep(0.52, 0.7, fbm(vec2(atan(d.z, d.x) * 2.2 + uTime * 0.002, h * 26.0 + 2.0))) * barK;
+            col = mix(col, mix(uCloudShade, uCloudLit, 0.55) + uGlow * pow(max(sd, 0.0), 6.0) * 0.8 * sunVis, bars * 0.5);
+          }
           float cover = max(max(cov1, cov2), bars * 0.6);
 
           col += uGlow * uPulse * 0.1 * (1.0 - smoothstep(0.0, 0.5, h));
@@ -163,7 +175,15 @@ export function Sky() {
   const mat = useMemo(() => makeSkyMaterial(false), []);
   const ref = useRef<THREE.Mesh>(null);
   // the dome travels with the eye: the worlds of the flight lie far from the desk
-  useFrame(({ camera }) => ref.current?.position.copy(camera.position));
+  // (at home it is drawn after everything solid: it lies on the far plane and writes no depth, so wherever the land,
+  // the hills, the trees or the desk stand in front of it its costly pixels are never shaded. A painted world draws
+  // its far ground first and without depth, over the sky, so there it stays first.)
+  useFrame(({ camera }) => {
+    const m = ref.current;
+    if (!m) return;
+    m.position.copy(camera.position);
+    m.renderOrder = voyage.cur === "home" ? 100000 : -10;
+  });
   return (
     // (drawn last of the opaque things, on the far plane: the sky's long shader then runs only on the pixels nothing else covers, where first it ran on every pixel of the frame and was painted over)
     <mesh ref={ref} material={mat} renderOrder={1000} frustumCulled={false}>

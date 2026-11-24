@@ -158,25 +158,33 @@ export function makeLandMaterial() {
           vec2 gq = vec2(dot(p, gdir), dot(p, vec2(-gdir.y, gdir.x)));
           float brush = vnoise(vec2(gq.x * 0.08, gq.y * 0.85)) * 0.6 + vnoise(vec2(gq.x * 0.28, gq.y * 2.4) + 7.0) * 0.4;
           float k = 1.0 + (brush - 0.5) * 0.3 * (1.0 - smoothstep(0.25, 1.1, fw));
-          vec2 tc = p * 1.7; vec2 ti = floor(tc); vec2 tf = fract(tc) - 0.5; float th = hash12(ti);
-          vec2 off = (vec2(hash12(ti + 3.1), hash12(ti + 7.7)) - 0.5) * 0.6;
-          float tuft = (1.0 - smoothstep(0.06, 0.34, length((tf - off) * vec2(2.6, 0.9)))) * step(0.42, th);
-          k *= 1.0 + tuft * (1.0 - smoothstep(0.08, 0.3, fw)) * (th > 0.7 ? 0.26 : -0.2) * smoothstep(10.0, 30.0, dist);
+          // (only where a tuft can show: nearer than its fade, further than its fade-in)
+          if (fw < 0.3 && dist > 10.0) {
+            vec2 tc = p * 1.7; vec2 ti = floor(tc); vec2 tf = fract(tc) - 0.5; float th = hash12(ti);
+            vec2 off = (vec2(hash12(ti + 3.1), hash12(ti + 7.7)) - 0.5) * 0.6;
+            float tuft = (1.0 - smoothstep(0.06, 0.34, length((tf - off) * vec2(2.6, 0.9)))) * step(0.42, th);
+            k *= 1.0 + tuft * (1.0 - smoothstep(0.08, 0.3, fw)) * (th > 0.7 ? 0.26 : -0.2) * smoothstep(10.0, 30.0, dist);
+          }
           alb *= k;
         }
         // wildflowers: specks where the real ones leave off, and far away only the colour of their drifts
         float fd = flowerDrift(p);
         {
-          vec2 g = p * 2.7; vec2 id = floor(g); vec2 f = fract(g) - 0.5;
-          float hh = hash12(id);
-          vec2 off = (vec2(hash12(id + 3.1), hash12(id + 7.7)) - 0.5) * 0.62;
-          float dotK = 1.0 - smoothstep(0.07, 0.19, length(f - off));
-          float on = step(1.0 - 0.3 * fd - 0.01, hh);
-          vec3 hue = flowerHue(p + (hash12(id + 1.7) - 0.5) * 30.0);
-          float speck = dotK * on * smoothstep(9.0, 20.0, dist) * (1.0 - smoothstep(0.1, 0.34, fw * 2.7));
-          alb = mix(alb, hue * 0.8, speck * 0.9);
-          vec3 fh = flowerHue(p);
-          alb = mix(alb, alb * 0.6 + fh * fh * vec3(0.2, 0.18, 0.12), fd * 0.36 * smoothstep(24.0, 120.0, dist));
+          // (each part only where it can show)
+          if (dist > 9.0 && fw * 2.7 < 0.34) {
+            vec2 g = p * 2.7; vec2 id = floor(g); vec2 f = fract(g) - 0.5;
+            float hh = hash12(id);
+            vec2 off = (vec2(hash12(id + 3.1), hash12(id + 7.7)) - 0.5) * 0.62;
+            float dotK = 1.0 - smoothstep(0.07, 0.19, length(f - off));
+            float on = step(1.0 - 0.3 * fd - 0.01, hh);
+            vec3 hue = flowerHue(p + (hash12(id + 1.7) - 0.5) * 30.0);
+            float speck = dotK * on * smoothstep(9.0, 20.0, dist) * (1.0 - smoothstep(0.1, 0.34, fw * 2.7));
+            alb = mix(alb, hue * 0.8, speck * 0.9);
+          }
+          if (dist > 24.0) {
+            vec3 fh = flowerHue(p);
+            alb = mix(alb, alb * 0.6 + fh * fh * vec3(0.2, 0.18, 0.12), fd * 0.36 * smoothstep(24.0, 120.0, dist));
+          }
         }
         // under the trees: leaf litter and moss, and far off the canopy itself
         float woods = forestAt(p);
@@ -260,8 +268,10 @@ export function makeLandMaterial() {
         }
         // the soil between the blades, only where the eye is close enough to see between them
         {
-          float near = (1.0 - smoothstep(2.5, 15.0, dist)) * (1.0 - onPath);
-          alb = mix(alb, texture2D(uSoilTex, p * 0.45).rgb * 0.36, near * 0.8);
+          if (dist < 15.0) {
+            float near = (1.0 - smoothstep(2.5, 15.0, dist)) * (1.0 - onPath);
+            alb = mix(alb, texture2D(uSoilTex, p * 0.45).rgb * 0.36, near * 0.8);
+          }
         }
         // the brook: a ribbon of bright water over pebbles, dark wet earth either side
         float brook = 0.0;
@@ -285,12 +295,14 @@ export function makeLandMaterial() {
         {
           float grassK = (1.0 - sandK) * (1.0 - onPath) * (1.0 - smoothstep(0.3, 0.8, woods));
           // (strokes fixed in the land, lying with the wind: each scale fades before it is finer than a pixel)
+          if (grassK > 0.0) {
           const vec2 vd = vec2(0.864, 0.503);
           vec2 sq = vec2(dot(p, vec2(-vd.y, vd.x)), dot(p, vd));
           float streak = (vnoise(sq * vec2(0.9, 0.16)) - 0.5) * 0.26 * (1.0 - smoothstep(0.35, 1.3, fw));
           float streak2 = (vnoise(sq * vec2(2.6, 0.45) + 9.0) - 0.5) * 0.16 * (1.0 - smoothstep(0.12, 0.5, fw));
           float streak3 = (vnoise(sq * vec2(0.22, 0.05) + 3.0) - 0.5) * 0.2 * (1.0 - smoothstep(1.5, 6.0, fw));
           alb = mix(alb, fieldFar(alb, dist) * (1.0 + (streak + streak2 + streak3) * smoothstep(10.0, 40.0, dist)), grassK);
+          }
         }
         float sh = deskShadow(vWorld) * treeShade(vWorld) * cloudShade(vWorld);
         float ao = deskAO(vWorld) * (1.0 - 0.34 * smoothstep(0.0, 0.07, vCav)) * (1.0 + 0.08 * smoothstep(0.0, 0.06, -vCav));

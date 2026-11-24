@@ -211,10 +211,11 @@ export function HomeMountains({ mobile }: { mobile: boolean }) {
       }),
     [layers],
   );
+  // (drawn after the land, nearest range first: what the land and the nearer ranges hide is never shaded)
   return (
     <>
       {layers.map((l, i) => (
-        <mesh key={i} geometry={l.geo} material={l.mat} renderOrder={-8 + i} frustumCulled={false} onUpdate={(m) => m.layers.enable(MIRROR_LAYER)} />
+        <mesh key={i} geometry={l.geo} material={l.mat} renderOrder={-4.5 + i * 0.1} frustumCulled={false} onUpdate={(m) => m.layers.enable(MIRROR_LAYER)} />
       ))}
     </>
   );
