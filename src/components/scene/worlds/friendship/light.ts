@@ -34,7 +34,7 @@ export function makeOrbMaterial(map: THREE.Texture) {
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uSunD; uniform float uOpen; uniform sampler2D tMap;
-      uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes;
+      uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes; uniform float uPortalGain;
       varying vec3 vWorld; varying vec3 vN;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -107,11 +107,13 @@ export function makeOrbMaterial(map: THREE.Texture) {
         float hole = (1.0 - smoothstep(mix(0.14, 0.8, uOpen * uOpen), mix(0.46, 1.02, uOpen * uOpen), r)) * open;
         hole = max(hole, inside);
         vec3 dir = -V;
-        vec3 beyond = painted(dir);
-        if (uPortalK > 0.003) beyond = mix(beyond, texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb, clamp(uPortalK * 1.4, 0.0, 1.0));
+        vec3 beyond = painted(dir) * 1.15;
+        if (uPortalK > 0.003) beyond = mix(beyond, texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb * uPortalGain, clamp(uPortalK * 1.4, 0.0, 1.0));
         // the lip of the opening, where the orb's light runs round it
         float lip = hole * (1.0 - hole) * 4.0;
-        col = mix(col, beyond * 1.15, hole) + vec3(1.2, 0.9, 0.55) * lip * 1.1;
+        // (the picture is the Sun at the exposure it will have: its gain, as the gates' windows give it, and no more: it was
+        // taken at 1.15 with no gain, which showed the Sun about twice as bright as it is the frame the worlds change places)
+        col = mix(col, beyond, hole) + vec3(1.2, 0.9, 0.55) * lip * 1.1;
         gl_FragColor = vec4(col, 1.0);
         ${END}
       }`,
