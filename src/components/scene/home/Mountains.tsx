@@ -167,6 +167,19 @@ export function makeRangeMaterial(rg: Range, tri = 0) {
         if (pw.x > 0.002) { vec2 q = vWorld.zy * fq; float a = fbm(q); g0 += a * pw.x; pert += vec3(0.0, a - fbm(q + vec2(0.0, 0.35)), a - fbm(q + vec2(0.35, 0.0))) * pw.x; }
         if (pw.z > 0.002) { vec2 q = vWorld.xy * fq; float a = fbm(q); g0 += a * pw.z; pert += vec3(a - fbm(q + vec2(0.35, 0.0)), a - fbm(q + vec2(0.0, 0.35)), 0.0) * pw.z; }
         n = normalize(n + pert * 2.2 * (1.0 - n.y * 0.5));
+        // (a mountain stood beside, not seen across the land: fine grain close up, fading out with distance)
+        float dcam = length(cameraPosition - vWorld);
+        float nearK = uTri * (1.0 - smoothstep(50.0, 260.0, dcam));
+        float fineG = 0.5;
+        if (nearK > 0.002) {
+          vec2 c1 = vec2(vWorld.x + vWorld.z, vWorld.y);
+          float d1 = fbm(c1 * 0.7);
+          float d2 = fbm(c1 * 2.3 + 7.0);
+          float d3 = fbm(vec2(vWorld.x - vWorld.z, vWorld.y) * 1.4 + 3.0);
+          float d4 = fbm(c1 * 6.0 + 2.0);
+          n = normalize(n + vec3(d1 - 0.5 + (d4 - 0.5) * 0.5, (d2 - 0.5) * 0.6, d3 - 0.5) * 1.2 * nearK * (1.0 - abs(n.y) * 0.5));
+          fineG = mix(d2, d4, 0.4);
+        }
         float hN = clamp(vWorld.y / uTop, 0.0, 1.0);
         float steep = 1.0 - n.y;
         float strata = vnoise(vec2(vWorld.y * (9.0 / uTop) + g0 * 2.0, vWorld.x * 0.004));
@@ -175,6 +188,8 @@ export function makeRangeMaterial(rg: Range, tri = 0) {
         vec3 rock = mix(vec3(0.075, 0.07, 0.085), vec3(0.2, 0.165, 0.135), strata);
         vec3 alb = mix(forest, meadow, smoothstep(0.1, 0.22, hN + (g0 - 0.5) * 0.12));
         alb = mix(alb, rock, smoothstep(0.24, 0.46, hN + steep * 0.45 + (g0 - 0.5) * 0.2));
+        // (meadow and wood take only gentle ground: on a sheer face moss is a thin dark stain, not lime-green lawn)
+        alb = mix(alb, rock * 0.85, uTri * smoothstep(0.12, 0.45, steep) * 0.85);
         // snow: above a ragged line, on anything not too steep; a thin dusting lower in the gullies
         float line = hN + (g0 - 0.5) * 0.3;
         // (on a mountain of sheer faces snow clings higher up the steep, as it does on the ranges' heads)
@@ -184,10 +199,11 @@ export function makeRangeMaterial(rg: Range, tri = 0) {
         float ndl = clamp(dot(n, uKeyDir) * 0.75 + 0.25, 0.0, 1.0);
         // (a cloud's shadow falls on what faces up; on a cliff it would only be blotches, so there it fades)
         float cs = mix(1.0, cloudShade(vWorld), 0.7 * (1.0 - uTri));
+        alb *= mix(1.0, 0.62 + 0.76 * fineG, nearK * 0.85);
         vec3 col = alb * (uSkyCol * (0.55 + 0.45 * n.y) + uKeyCol * ndl * ndl * 1.25 * sunUp * cs);
         // their feet stand in the low haze; their heads clear of it
         vec3 d = normalize(vWorld - cameraPosition);
-        float low = (1.0 - smoothstep(0.0, uTop * 0.5, vWorld.y)) * 0.3;
+        float low = (1.0 - smoothstep(0.0, uTop * 0.5, vWorld.y)) * 0.3 * mix(1.0, smoothstep(60.0, 600.0, dcam), uTri);
         // (the low mist that lies in woods is drawn from a map of where the woods are: on the foot of a tall mountain
         // that map would show through as patches, so for it the air is read from well above the trees)
         float amt = max(homeAirAmt(vec3(vWorld.x, vWorld.y + 60.0 * uTri, vWorld.z)) * mix(0.62, 0.9, smoothstep(0.5, 0.0, vWorld.y / uTop)), clamp(uHaze + low, 0.0, 0.96));

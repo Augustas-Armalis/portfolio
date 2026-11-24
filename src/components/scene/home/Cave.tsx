@@ -563,13 +563,28 @@ function makeStoneMaterial() {
         float rib = fbm(vec2((vWorld.x + vWorld.z) * 0.09, vWorld.y * 0.012));
         float rib2 = fbm(vec2((vWorld.x - vWorld.z) * 0.21, vWorld.y * 0.03) + 5.1);
         nR = normalize(nR + vec3(rib - 0.5, 0.0, rib2 - 0.5) * 1.4 * (1.0 - abs(n.y)));
-        vec3 albR = alb * mix(0.45, 1.05, smoothstep(0.25, 0.75, rib)) * mix(0.8, 1.1, rib2);
+        // (close up the rock has fine grain: cracks and pits a few centimetres to a metre across, fading out with distance
+        // so from afar it never shimmers; the broad ribs above are too coarse to carry a wall seen from twenty metres)
+        float dcam = length(cameraPosition - vWorld);
+        float nearK = 1.0 - smoothstep(50.0, 260.0, dcam);
+        float d2 = 0.5;
+        if (nearK > 0.002) {
+          vec2 c1 = vec2(vWorld.x + vWorld.z, vWorld.y);
+          float d1 = fbm(c1 * 0.7);
+          d2 = fbm(c1 * 2.3 + 7.0);
+          float d3 = fbm(vec2(vWorld.x - vWorld.z, vWorld.y) * 1.4 + 3.0);
+          float d4 = fbm(c1 * 6.0 + 2.0);
+          nR = normalize(nR + vec3(d1 - 0.5 + (d4 - 0.5) * 0.5, (d2 - 0.5) * 0.6, d3 - 0.5) * 1.2 * nearK * (1.0 - abs(n.y) * 0.5));
+          d2 = mix(d2, d4, 0.4);
+        }
+        vec3 albR = alb * mix(0.45, 1.05, smoothstep(0.25, 0.75, rib)) * mix(0.8, 1.1, rib2) * mix(1.0, 0.62 + 0.76 * d2, nearK * 0.85);
         float steepR = 1.0 - abs(n.y);
         float ndlR = clamp(dot(nR, uKeyDir) * 0.75 + 0.25, 0.0, 1.0);
         vec3 outCol = albR * (uSkyCol * (0.55 + 0.45 * nR.y) + uKeyCol * ndlR * ndlR * 1.25 * mix(1.0, 0.5, steepR) * sunUp * mix(1.0, cloudShade(vWorld), 0.7)) + albR * uLead * spill * 0.22 * (0.4 + night);
         vec3 dR = normalize(vWorld - cameraPosition);
         float top = ${f2(MAIN_RANGE.height)};
-        float lowR = (1.0 - smoothstep(0.0, top * 0.5, vWorld.y)) * 0.3;
+        // (the low haze at a mountain's foot is the air between it and the eye: none of it on the rock one stands beside)
+        float lowR = (1.0 - smoothstep(0.0, top * 0.5, vWorld.y)) * 0.3 * smoothstep(60.0, 600.0, dcam);
         float amtR = max(homeAirAmt(vWorld) * mix(0.62, 0.9, smoothstep(0.5, 0.0, vWorld.y / top)), clamp(lowR, 0.0, 0.96));
         outCol = mix(outCol, homeAirCol(dR), amtR);
         col = mix(outCol, col, inside);
