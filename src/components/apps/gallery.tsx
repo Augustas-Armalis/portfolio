@@ -4,13 +4,14 @@
 // the trips and the best of them as covers; any picture or film opens out of its tile into a viewer that steps
 // through the set (arrows, keys or a swipe) and plays films with a proper player.
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue, useTransform, type AnimationPlaybackControls } from "motion/react";
+import { flushSync } from "react-dom";
 import { ArrowUpRight, ChevronLeft, ChevronRight, Play, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { gallery, type Album, type Media } from "@/content";
 import { useOS } from "@/store";
 import { Sym } from "../symbols";
-import { Btn, M, Segmented, Toolbar, useChrome } from "../ui";
+import { Btn, M, Segmented, Toolbar, useChrome, usePhoneBack } from "../ui";
 
 const byId = new Map(gallery.media.map((m) => [m.id, m]));
 const itemsOf = (a: Album) => a.items.map((id) => byId.get(id)).filter((m): m is Media => !!m);
@@ -26,15 +27,8 @@ function Tile({ m, onOpen }: { m: Media; onOpen: () => void }) {
       aria-label={m.kind === "video" ? `${m.title}, film, ${clock(m.duration ?? 0)}` : m.title}
       className="group relative block aspect-square overflow-hidden bg-[var(--fill-2)] outline-none focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
     >
-      <motion.img
-        layoutId={`media-${m.id}`}
-        src={m.thumb}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        draggable={false}
-        className="h-full w-full object-cover transition-[filter] duration-200 hov:group-hover:brightness-[1.06]"
-      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={m.thumb} alt="" loading="lazy" decoding="async" draggable={false} className="h-full w-full object-cover transition-[filter] duration-200 hov:group-hover:brightness-[1.06]" />
       {m.kind === "video" && (
         <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-end gap-1 bg-gradient-to-t from-black/50 to-transparent px-2 pb-1.5 pt-5 text-[11px] font-semibold tabular-nums text-white">
           <Sym icon={Play} size={10} fill />
@@ -55,28 +49,131 @@ function Grid({ items, open, compact }: { items: Media[]; open: (i: number) => v
   );
 }
 
+// One picture or film in the viewer. Only the one in view plays: its neighbours wait as their posters.
+function Slide({ m, current, loaded, onLoad }: { m: Media; current: boolean; loaded: boolean; onLoad: () => void }) {
+  if (m.kind === "video" && current)
+    return <video src={m.src} poster={m.poster} controls autoPlay playsInline className="max-h-full max-w-full rounded-[10px] bg-black object-contain" />;
+  const src = m.kind === "video" ? m.poster : m.src;
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {!loaded && m.kind === "photo" && <img src={lowRes(m)} alt="" aria-hidden className="absolute max-h-full max-w-full object-contain blur-xl" />}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={current ? m.title : ""} draggable={false} onLoad={onLoad} className={`relative max-h-full max-w-full select-none object-contain transition-opacity duration-300 ${loaded || m.kind === "video" ? "opacity-100" : "opacity-0"}`} />
+    </>
+  );
+}
+
+const GAP = 16;
+// The viewer: the picture in view with its neighbours either side, on one strip that follows the finger. Let go
+// past a quarter of the width (or with a flick) and the next one slides in; a pull down puts it away. The strip
+// can be caught again while it is still moving.
 function Viewer({ list, index, setIndex, close }: { list: Media[]; index: number; setIndex: (i: number) => void; close: () => void }) {
   const { compact } = useChrome();
   const m = list[index];
   const many = list.length > 1;
-  const step = (d: number) => setIndex((index + d + list.length) % list.length);
-  const [loaded, setLoaded] = useState(false);
-  useEffect(() => setLoaded(false), [m.id]);
+  const wrap = (i: number) => (i + list.length) % list.length;
+  const stage = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const anim = useRef<AnimationPlaybackControls | null>(null);
+  const pending = useRef(0);
+  const [loaded, setLoaded] = useState<Record<string, true>>({});
+  const bg = useTransform(y, [0, 320], [1, 0]);
+  const shrink = useTransform(y, [0, 500], [1, 0.82]);
+  const width = () => (stage.current?.clientWidth ?? window.innerWidth) + GAP;
+  const land = () => {
+    const d = pending.current;
+    pending.current = 0;
+    if (!d) return;
+    flushSync(() => setIndex(wrap(index + d)));
+    x.set(x.get() + d * width());
+  };
+  // which slide is the latest: a landing scheduled by an older one that was caught mid-way does nothing
+  const tok = useRef(0);
+  const go = (d: number, velocity = 0) => {
+    anim.current?.stop();
+    land();
+    const t = ++tok.current;
+    if (!many || !d) {
+      anim.current = animate(x, 0, { ...M.fling, velocity });
+      return;
+    }
+    pending.current = d;
+    // landed a frame later: the animation writes its last value after onComplete, which would undo the reset
+    anim.current = animate(x, -d * width(), { type: "spring", bounce: 0, duration: 0.34, velocity, onComplete: () => requestAnimationFrame(() => tok.current === t && land()) });
+  };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
-      if (many && e.key === "ArrowRight") step(1);
-      if (many && e.key === "ArrowLeft") step(-1);
+      if (many && e.key === "ArrowRight") go(1);
+      if (many && e.key === "ArrowLeft") go(-1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+  // a swipe in from the left edge of the phone puts it away too
+  usePhoneBack(true, close);
   // on the phone the viewer is black to the top edge: the status bar turns white over it
   useEffect(() => {
     if (!compact) return;
     useOS.getState().setHeroDark(true);
     return () => useOS.getState().setHeroDark(false);
   }, [compact]);
+
+  const g = useRef<{ id: number; x0: number; y0: number; bx: number; axis: "x" | "y" | null; hist: { x: number; y: number; t: number }[] } | null>(null);
+  const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (g.current || (e.pointerType === "mouse" && !compact)) return;
+    // the film's own controls keep their touches
+    const t = e.target as HTMLElement;
+    if (t.tagName === "VIDEO" && e.clientY > t.getBoundingClientRect().bottom - 64) return;
+    anim.current?.stop();
+    tok.current++;
+    land();
+    g.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, bx: x.get(), axis: null, hist: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }] };
+  };
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const s = g.current;
+    if (!s || s.id !== e.pointerId) return;
+    const dx = e.clientX - s.x0;
+    const dy = e.clientY - s.y0;
+    if (!s.axis) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+      s.axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // the stage fills the screen: the finger stays over it anyway
+      }
+    }
+    s.hist.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+    if (s.hist.length > 5) s.hist.shift();
+    // past the first or last there is nothing more: it gives, but only a little
+    if (s.axis === "x") x.set(s.bx + (many ? dx : dx * 0.3));
+    else y.set(dy > 0 ? dy : dy * 0.2);
+  };
+  const onUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const s = g.current;
+    if (!s || s.id !== e.pointerId) return;
+    g.current = null;
+    if (!s.axis) return;
+    const a = s.hist[0];
+    const b = s.hist[s.hist.length - 1];
+    const dt = Math.max(1, b.t - a.t);
+    const cancel = e.type === "pointercancel";
+    if (s.axis === "x") {
+      const vx = cancel ? 0 : ((b.x - a.x) / dt) * 1000;
+      const off = x.get();
+      const w = width();
+      go(off < -w * 0.25 || vx < -450 ? 1 : off > w * 0.25 || vx > 450 ? -1 : 0, vx);
+    } else {
+      const vy = cancel ? 0 : ((b.y - a.y) / dt) * 1000;
+      if (!cancel && (y.get() > 120 || vy > 700)) close();
+      else animate(y, 0, { ...M.fling, velocity: vy });
+    }
+  };
+
+  const slots = many ? [-1, 0, 1] : [0];
   return (
     <motion.div
       key="viewer"
@@ -86,70 +183,43 @@ function Viewer({ list, index, setIndex, close }: { list: Media[]; index: number
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: M.out }}
       transition={M.fade}
-      className={`${compact ? "fixed z-[2400] bg-black" : "absolute z-30 bg-black/95"} inset-0 flex flex-col text-white`}
+      className={`${compact ? "fixed z-[2400]" : "absolute z-30"} inset-0 flex flex-col text-white`}
     >
-      <div className={`flex shrink-0 items-center gap-3 px-4 ${compact ? "pt-[calc(var(--phone-top)+4px)]" : "pt-3"}`}>
+      <motion.div aria-hidden className={`absolute inset-0 ${compact ? "bg-black" : "bg-black/95"}`} style={{ opacity: bg }} />
+      <motion.div style={{ opacity: bg }} className={`relative flex shrink-0 items-center gap-3 px-4 ${compact ? "pt-[calc(var(--phone-top)+4px)]" : "pt-3"}`}>
         <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={close} icon={<Sym icon={X} size={17} weight="semibold" />} className="!h-10 !w-10" />
         <div className="min-w-0 flex-1 text-center">
           <div className="truncate text-[15px] font-semibold">{m.title}</div>
           {many && <div className="text-[12px] text-white/50">{`${index + 1} of ${list.length}`}</div>}
         </div>
         <span className="w-10" />
-      </div>
-      <motion.div
-        className="relative flex min-h-0 flex-1 touch-pan-y items-center justify-center px-2 py-3"
-        drag={compact}
-        dragDirectionLock
-        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-        dragElastic={0.5}
-        onDragEnd={(_, info) => {
-          if (info.offset.y > 110) return close();
-          if (!many) return;
-          if (info.offset.x < -70) step(1);
-          if (info.offset.x > 70) step(-1);
-        }}
-      >
-        {m.kind === "video" ? (
-          <motion.video
-            layoutId={`media-${m.id}`}
-            key={m.id}
-            src={m.src}
-            poster={m.poster}
-            controls
-            autoPlay
-            playsInline
-            className="max-h-full max-w-full rounded-[10px] bg-black object-contain"
-          />
-        ) : (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {!loaded && <img src={lowRes(m)} alt="" aria-hidden className="absolute max-h-[calc(100%-24px)] max-w-[calc(100%-16px)] object-contain blur-xl" />}
-            <motion.img
-              layoutId={`media-${m.id}`}
-              key={m.id}
-              src={m.src}
-              alt={m.title}
-              draggable={false}
-              onLoad={() => setLoaded(true)}
-              className={`relative max-h-full max-w-full select-none object-contain transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
-            />
-          </>
-        )}
+      </motion.div>
+      <div ref={stage} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} className="relative min-h-0 flex-1 touch-none overflow-hidden" data-viewer-stage="">
+        <motion.div className="absolute inset-0" style={{ x, y, scale: shrink }}>
+          {slots.map((d) => {
+            const it = list[wrap(index + d)];
+            return (
+              <div key={it.id + (many && list.length < 3 && d ? `:${d}` : "")} className="absolute inset-0 flex items-center justify-center px-2 py-3" style={{ transform: `translateX(calc(${d * 100}% + ${d * GAP}px))` }} aria-hidden={d !== 0}>
+                <Slide m={it} current={d === 0} loaded={!!loaded[it.id]} onLoad={() => setLoaded((l) => (l[it.id] ? l : { ...l, [it.id]: true }))} />
+              </div>
+            );
+          })}
+        </motion.div>
         {many && !compact && (
           <>
-            <Btn variant="glass-dark" capsule iconOnly size="md" label="Previous" onClick={() => step(-1)} icon={<Sym icon={ChevronLeft} size={20} weight="semibold" />} className="!absolute left-4 top-1/2 !h-11 !w-11 -translate-y-1/2" />
-            <Btn variant="glass-dark" capsule iconOnly size="md" label="Next" onClick={() => step(1)} icon={<Sym icon={ChevronRight} size={20} weight="semibold" />} className="!absolute right-4 top-1/2 !h-11 !w-11 -translate-y-1/2" />
+            <Btn variant="glass-dark" capsule iconOnly size="md" label="Previous" onClick={() => go(-1)} icon={<Sym icon={ChevronLeft} size={20} weight="semibold" />} className="!absolute left-4 top-1/2 !h-11 !w-11 -translate-y-1/2" />
+            <Btn variant="glass-dark" capsule iconOnly size="md" label="Next" onClick={() => go(1)} icon={<Sym icon={ChevronRight} size={20} weight="semibold" />} className="!absolute right-4 top-1/2 !h-11 !w-11 -translate-y-1/2" />
           </>
         )}
-      </motion.div>
-      <div className={`shrink-0 px-4 text-center text-[12px] text-white/50 ${compact ? "pb-[calc(var(--phone-bottom)+8px)]" : "pb-3"}`}>
+      </div>
+      <motion.div style={{ opacity: bg }} className={`relative shrink-0 px-4 text-center text-[12px] text-white/50 ${compact ? "pb-[calc(var(--phone-bottom)+8px)]" : "pb-3"}`}>
         {m.kind === "video" ? "Film" : "Photo"} by{" "}
         <a href={m.credit.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-white/75 hover:text-white">
           {m.credit.by}
           {m.credit.by !== m.credit.site && ` on ${m.credit.site}`}
           <Sym icon={ArrowUpRight} size={11} weight="medium" />
         </a>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
@@ -162,6 +232,8 @@ export function Gallery() {
   // the Library is every trip in order; Best of and Films are albums of what's already there
   const trips = useMemo(() => gallery.albums.filter((a) => a.id !== "best" && a.id !== "films"), []);
   const pad = compact ? "px-4" : "px-5";
+  // an album is a screen of its own: the edge swipe goes back to the albums
+  usePhoneBack(!!album, () => setAlbum(null));
 
   const library = (
     <div className="pb-8">
