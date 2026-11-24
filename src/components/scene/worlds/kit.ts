@@ -555,6 +555,8 @@ export function makeHaloMaterial(kind: 0 | 1 | 2 | 3 = 0, far?: [number, number]
         // never a white-out when the plane flies through one
         vFade = smoothstep(2.0 + aPos.w * 0.2, 12.0 + aPos.w * 1.1, d) * exp(-d * uMist * 1.5) * (1.0 - smoothstep(uFar.x, uFar.y, d));
         gl_Position = projectionMatrix * mv;
+        // (one that has faded out, too near or too far, is not drawn at all)
+        if (vFade <= 0.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
       }`,
     fragmentShader: /* glsl */ `
       uniform float uTime; uniform float uPulse; uniform float uNight;
@@ -746,6 +748,8 @@ export function makePuffMaterial() {
         vWorld = (modelMatrix * vec4(c, 1.0)).xyz;
         vA = aCol.a * smoothstep(aPos.w * 0.5, aPos.w * 1.6, d);
         gl_Position = projectionMatrix * mv;
+        // (a puff the eye is inside of is not there at all: it would fill the frame with nothing but its cost)
+        if (vA <= 0.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
       }`,
     fragmentShader: /* glsl */ `
       varying vec2 vUv; varying float vA; varying vec3 vWorld; varying float vSeed;
@@ -754,6 +758,8 @@ export function makePuffMaterial() {
       ${GLSL_AIR}
       void main(){
         float r = length(vUv);
+        // (past 1.25 it is clear whatever the noise)
+        if (r > 1.25) discard;
         float n = vnoise(vUv * 2.2 + vSeed * 40.0 + uTime * 0.01);
         float a = smoothstep(1.0, 0.1, r + (n - 0.5) * 0.5) * vA * 0.42;
         vec3 d = normalize(vWorld - cameraPosition);
