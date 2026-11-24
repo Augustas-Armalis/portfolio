@@ -106,6 +106,8 @@ export const postCtl = {
   // `from` the distance in metres at which the far softness begins (it is full only at eight times that), `subject`
   // a point a world wants kept clear of it.
   flight: { k: 0, from: 420, subject: null as THREE.Vector3 | null },
+  // names of passes to leave out ('post:ao', 'post:rays', ...), for profiling: a skipped pass leaves its target as it was
+  skip: new Set<string>(),
   // where the scene itself is drawn (null: straight to the screen), for whoever warms shaders ahead of time
   sceneTarget: null as THREE.WebGLRenderTarget | null,
 };
@@ -815,6 +817,7 @@ export function Post({ level }: { level: number }) {
       p.ao2.setSize(w >> 1, h >> 1);
     }
     const run = (mat: THREE.ShaderMaterial, target: THREE.WebGLRenderTarget | null) => {
+      if (postCtl.skip.size && postCtl.skip.has(mat.name)) return;
       p.quad.material = mat;
       gl.setRenderTarget(target);
       gl.render(p.quad, p.cam);
