@@ -335,7 +335,7 @@ export function dynamicScale(dt: number, flying = false) {
   dyn.fast = avg < 1 / 75 ? dyn.fast + 1 : 0;
   const now = performance.now();
   if (flying || now - dyn.last < 6000) return dyn.k;
-  if (dyn.slow >= 4 && dyn.k > 9) {
+  if (dyn.slow >= 4 && dyn.k > 0.7) {
     dyn.k = Math.max(0.7, dyn.k - 0.15);
     dyn.slow = 0;
     dyn.last = now;
