@@ -36,6 +36,8 @@ import { fallsGeometry, makeFallsMaterial } from "./friendship/falls";
 // the crossing waits for it.)
 
 const def = WORLDS.friendship;
+// the light's strands for a gear's effects (1 at High and up)
+const rayCount = (effects: number) => Math.round(720 * Math.min(1, 0.35 + 0.65 * effects));
 const keyOf = (p: Pick<WorldProps, "mobile">) => (p.mobile ? "m" : "d");
 // her two forms: as she is seen close, and in coarse clay for the long way in
 type Figure = { near: Her; far: Her };
@@ -242,9 +244,10 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       })(),
       map,
       herMat: makeHerMaterial(figure.near, map),
-      rays: raysGeometry(figure.near, m ? 320 : 720),
+      // (fewer strands on the lower gears: High and up keep all 720; Medium about three quarters, Low a little over half)
+      rays: raysGeometry(figure.near, m ? 320 : rayCount(props.effects)),
       raysMat: makeRaysMaterial(),
-      rayMotes: rayMotesGeometry(figure.near, m ? 320 : 720, m ? 130 : 340),
+      rayMotes: rayMotesGeometry(figure.near, m ? 320 : rayCount(props.effects), m ? 130 : Math.round((340 * rayCount(props.effects)) / 720)),
       falls: fallsGeometry(forest.falls),
       fallsMat: makeFallsMaterial(),
       glory: new THREE.PlaneGeometry(2, 2),
@@ -282,7 +285,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       flies,
       fliesMat: makeMotesMaterial([0.85, 1.0, 0.45]),
     };
-  }, [props.mobile, forest, figure]);
+  }, [props.mobile, props.effects, forest, figure]);
   // The story, in beats (worlds/moments.tsx): the dark tunnel and its drips of light; a warm glow far ahead; the
   // cavern opening, a wood inside the mountain lit through cracks high above; fireflies showing the way; the mist
   // parting before her; the orb brightening and opening as the plane rises to it.
