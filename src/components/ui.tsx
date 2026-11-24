@@ -9,6 +9,7 @@ import { apps, type AppId } from "@/content";
 import { useOS } from "@/store";
 import { EDGES, EDGE_CURSOR, EDGE_ZONE, clampMove, pointerGesture, resizeRect, type Edge } from "./windowFrame";
 import { isSoundEnabled, play as playSfx, setSoundEnabled } from "@/lib/sfx";
+import { usePaused } from "@/lib/pause";
 
 // Shared Apple-style primitives. Light first, cool greys, 1px rings,
 // radius ladder 6 (chips) / 8 (rows, controls) / 12 (cards, windows) / 16+ (surfaces).
@@ -50,6 +51,28 @@ export function usePhoneBack(active: boolean, back: () => void) {
     if (!reg || !active) return;
     return reg.add(() => fn.current());
   }, [reg, active]);
+}
+
+// An interval for the OS's own clocks and slideshows that only ticks while someone can see it: not in a hidden
+// tab, not while the scene is paused (P), and not with `ms` null (the owner's own reason, e.g. covered). `atOnce`
+// ticks as soon as it starts again, so a clock is right the moment it is back in view.
+export function useLiveInterval(fn: () => void, ms: number | null, atOnce = false) {
+  const paused = usePaused();
+  const f = useRef(fn);
+  f.current = fn;
+  const [shown, setShown] = useState(true);
+  useEffect(() => {
+    const v = () => setShown(document.visibilityState === "visible");
+    v();
+    document.addEventListener("visibilitychange", v);
+    return () => document.removeEventListener("visibilitychange", v);
+  }, []);
+  useEffect(() => {
+    if (ms === null || paused || !shown) return;
+    if (atOnce) f.current();
+    const iv = window.setInterval(() => f.current(), ms);
+    return () => window.clearInterval(iv);
+  }, [ms, paused, shown, atOnce]);
 }
 
 // Runs `fn` with every animation it starts landing at once, then `after` once those have started: a swipe back has

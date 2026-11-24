@@ -12,7 +12,7 @@ import { Bars, PowerOverlay } from "./shell";
 import { IconFace } from "./icons";
 import { BookOpen, Check, ChevronLeft, Folder as FolderSym, Images, Music, Pause, Play, Power, Send, Wifi, X } from "lucide-react";
 import { Sym } from "./symbols";
-import { Chrome, EASE_OUT, glass, instantly, M, PhoneBack, PhoneNav, reducedMotion, SPRING_GLASS, sfx, useEdgeSwipe, useGlassScope, type PhoneDetail } from "./ui";
+import { Chrome, EASE_OUT, glass, instantly, M, PhoneBack, PhoneNav, reducedMotion, SPRING_GLASS, sfx, useEdgeSwipe, useGlassScope, useLiveInterval, type PhoneDetail } from "./ui";
 import { useClock, useDate } from "./useClock";
 
 // iPhone-style OS: lock screen that lifts away, a home screen of icons, and apps
@@ -399,12 +399,8 @@ function useHomeInterval(fn: () => void, ms: number, atOnce = false) {
   const covered = useContext(HomeCovered);
   const f = useRef(fn);
   f.current = fn;
-  useEffect(() => {
-    if (covered) return;
-    if (atOnce) f.current();
-    const iv = window.setInterval(() => document.visibilityState === "visible" && f.current(), ms);
-    return () => window.clearInterval(iv);
-  }, [covered, ms, atOnce]);
+  // and only while the tab is shown and the scene is not paused
+  useLiveInterval(() => f.current(), covered ? null : ms, atOnce);
 }
 
 // A tap on anything that opens grows the app out of that thing's own rectangle.
