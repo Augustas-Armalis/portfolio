@@ -103,17 +103,8 @@ export const onFace = (s: number, f: number): [number, number] => {
 // and along that tube, level and straight, to its far end, where the way on is carved into the water: a pointed
 // doorway standing in the wave's end, its sides in the water and the curl over its head. The last half
 // kilometre is one straight line, through the middle of the doorway and on.
-const FACE: [number, number, number][] = (
-  [
-    [20, 1.9, 16],
-    [-50, 1.6, 16],
-    [-130, 1.32, 16],
-    [-220, 1.1, 16],
-    [-310, 0.98, 16],
-  ] as [number, number, number][]
-).map(([s, f, a]) => [s * WK, f, a]);
 // the doorway: at the far end of the tube (where the roof of the curl is still high over it), at the height the way flies in the tube
-export const EXIT = { s: -640 * WK, f: 1.25, y: 345 };
+export const EXIT = { s: -640 * WK, f: 1.25, y: 400 };
 // the doorway, as a pointed arch: half its width, how far its point stands over the way, how far its sides go down
 // (under the water: it is carved into the wave, its feet in the sea and in the face)
 export const FINALE_OPENING: [half: number, rise: number, reach: number] = [230, 440, 300];
@@ -128,27 +119,63 @@ function buildPath() {
     [266, 1100, 18],
     [236, 900, 17],
     [200, 710, 17],
-    [160, 530, 17],
-    [118, 370, 17],
-    [84, 230, 17],
   ];
-  for (const [s, f, a] of FACE) path.push([...onFace(s, f), a]);
+  // The turn and the climb: one long easy curve. From the quiet sea the way bends left along the wave in a single
+  // arc (its heading eased from start to end, so no bend is sharper than the one before), comes onto the line of
+  // the tube a long way short of the doorway, and goes straight through it. The arc's length is found so that it
+  // joins that line exactly. The way rises in one smooth swell, never steeper than a climb the plane can hold at its
+  // fastest (about sixteen degrees), to a little over the doorway's height, and settles down to it.
   const g = onFace(EXIT.s, EXIT.f);
-  // the tube's own direction at the doorway (along the crest toward its end)
   const a0 = onFace(EXIT.s + 40, EXIT.f);
   const a1 = onFace(EXIT.s - 40, EXIT.f);
   const tl = Math.hypot(a1[0] - a0[0], a1[1] - a0[1]);
   const dx = (a1[0] - a0[0]) / tl;
   const dz = (a1[1] - a0[1]) / tl;
-  // from the end of the climb the way settles down to the doorway's height without a bend: the last kilometre is a
-  // line straight through its middle (heights as metres over the water drawn there)
-  for (const back of [900, 640, 400, 190]) {
-    const x = g[0] - dx * back;
-    const z = g[1] - dz * back;
-    const t = Math.min(1, back / 950);
-    const e = t * t * (3 - 2 * t);
-    path.push([x, z, Math.max(18, EXIT.y + 230 * e - terrainY(x, z))]);
+  const sm = (t: number) => {
+    const u = Math.min(1, Math.max(0, t));
+    return u * u * (3 - 2 * u);
+  };
+  const P0 = [200, 710];
+  const H0 = Math.atan2(-0.17, -0.985);
+  const H1 = Math.atan2(dx, dz);
+  // the arc's point after l metres of an arc L long
+  const arc = (L: number, l = L, n = 240) => {
+    let x = P0[0];
+    let z = P0[1];
+    for (let i = 0; i < n; i++) {
+      const h = H0 + (H1 - H0) * sm(((i + 0.5) / n) * (l / L));
+      x += (Math.sin(h) * l) / n;
+      z += (Math.cos(h) * l) / n;
+    }
+    return [x, z];
+  };
+  // (the arc's end stands off the doorway's line by this much, sideways: found by bisection on the length)
+  const off = (L: number) => {
+    const [x, z] = arc(L);
+    return (x - g[0]) * dz - (z - g[1]) * dx;
+  };
+  let lo = 1200;
+  let hi = 2600;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (off(lo) * off(mid) <= 0) hi = mid;
+    else lo = mid;
   }
+  const LA = (lo + hi) / 2;
+  const [ex, ez] = arc(LA);
+  const rest = Math.hypot(g[0] - ex, g[1] - ez);
+  const total = LA + rest;
+  const Y0 = 36;
+  const YPK = 500;
+  const yAt = (l: number) => (l < LA + 120 ? Y0 + (YPK - Y0) * (0.4 * sm(l / (LA + 120)) + 0.6 * (1 - (1 - Math.min(1, l / (LA + 120))) ** 2.6)) : YPK - (YPK - EXIT.y) * sm((l - LA - 120) / (total - LA - 120)));
+  const put = (x: number, z: number, l: number) => path.push([x, z, Math.max(l > 500 ? 64 : 24, yAt(l) - terrainY(x, z))]);
+  for (let l = 175; l < LA - 60; l += 175) {
+    const [x, z] = arc(LA, l);
+    put(x, z, l);
+  }
+  // (the arc's end, and on along the line to the doorway)
+  put(ex, ez, LA);
+  for (const back of [0.66, 0.33]) put(g[0] - (g[0] - ex) * back, g[1] - (g[1] - ez) * back, LA + rest * (1 - back));
   path.push([g[0], g[1], EXIT.y - terrainY(g[0], g[1])]);
   path.push([g[0] + dx * 200, g[1] + dz * 200, EXIT.y - terrainY(g[0] + dx * 200, g[1] + dz * 200)]);
   const yaw = Math.atan2(-dx, -dz);
