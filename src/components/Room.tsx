@@ -1279,7 +1279,10 @@ function Scene({
     musicClock.current = now;
     sampleMusic(dtS);
     const md = musicDrift.current;
-    md.t = Math.max(0, md.t + (music.playing ? dtS : -dtS * 5));
+    // (only the music at the desk leans the field's sky: the flight's music, minutes of it, is not the desk's time-lapse. It
+    // used to build the lean up all the way round, so the field was found at night on the way home and took half a minute
+    // to come back to the day; in the air the lean is let go at the same quick rate as when the music stops)
+    md.t = Math.max(0, md.t + (music.playing && !voyage.flying && !voyage.landing ? dtS : -dtS * 5));
     md.t = Math.min(md.t, 90);
     const lean = 1 - Math.exp(-md.t / 22);
     SKY_U.uPulse.value = music.level * 0.7 + music.bass * 0.5;

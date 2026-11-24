@@ -28,10 +28,10 @@ export function clockHours(): number {
 }
 
 // Coming home out of the kings' little world, the field is found at golden hour whatever the hour really
-// is: the light the dome was full of. It is held a few breaths, then the day drifts back to the visitor's
-// own time over a minute, the short way round the clock. (Choosing an hour by hand ends it.)
+// is: the light the dome was full of. It is held a breath, then the day eases back to the visitor's
+// own time in a few seconds, the short way round the clock. (Choosing an hour by hand ends it.)
 export const GOLDEN_HOUR = 19.1;
-const ARRIVAL = { hold: 12, drift: 60 };
+const ARRIVAL = { hold: 1, drift: 3 };
 let arrivedAt: number | null = null;
 export function arriveGolden() {
   arrivedAt = nowS();
