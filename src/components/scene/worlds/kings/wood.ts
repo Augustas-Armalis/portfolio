@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { noise2, rng, type Halo, type V3 } from "../kit";
 import { KINGS, KINGS_WATER, WORLDS, groundAt } from "../voyage";
 import { BY, GLSL_END, GLSL_KINGS, KINGS_UNIFORMS, R } from "./light";
-import { inGlade } from "./procession";
+import { DOOR, DOOR_TREE, doorPoint, inGlade } from "./procession";
 
 // The wood. Old trunks thick as towers, fluted and buttressed at the foot, that lean and turn as they rise
 // and break into heavy boughs; the boughs arch over and fork and close a vault over the aisle and the kings.
@@ -225,7 +225,7 @@ class Build {
 // how wide the way is kept clear at a given z (the aisle, the clearing by the water, the glade before the kings)
 export const aisleClear = (z: number) => 44 + 146 * THREE.MathUtils.smoothstep(350 - (z - KINGS.z), 0, 280) + 30 * Math.exp(-(((z - KINGS.z - 520) / 70) ** 2));
 
-export type Trunk = { x: number; z: number; R: number; H: number; fork?: number; aim?: number; far?: boolean };
+export type Trunk = { x: number; z: number; R: number; H: number; fork?: number; aim?: number; far?: boolean; door?: boolean };
 export type Walk = { a: V3; b: V3 };
 export type WoodChunk = { geo: THREE.BufferGeometry; essential: number };
 // towns: where each huddle of houses stands and how far it runs (the souls go up into them: Kings.tsx)
@@ -277,6 +277,8 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     trunks.push({ x, z, R: rad, H, ...o2 });
     return true;
   };
+  // the giant with the door in its foot, a little off the way the plane flies, at the end of the souls' road (doorway() below)
+  trunks.push({ x: DOOR_TREE.x, z: DOOR_TREE.z, R: DOOR_TREE.R, H: 320, fork: 0.58, door: true });
   // close behind the kings and beside them, as in the picture: these are the ones the light falls on
   for (const [x, z, rad] of [
     [-76, -112, 14],
@@ -452,13 +454,116 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     return q;
   };
   const forkOf: (V3 | null)[] = [];
+  // The door in the foot of the giant: a porch of dark planks six metres deep under a pointed-round arch, a carved frame
+  // round its mouth, two leaves swung open against the sides, a faint warm light at the back where the souls go in.
+  // (u across the door, y up, d out from the back wall, which is the trunk's face; the face is a plain straight bole)
+  const doorway = () => {
+    const { w, h, depth } = DOOR;
+    const hw = w / 2;
+    const ar = hw; // the arch's radius: a half circle on the rectangle
+    const T = 1.7; // the frame's width
+    const base = gy(doorPoint(depth * 0.5)[0], doorPoint(depth * 0.5)[1]) - 0.4;
+    const P = (u: number, y: number, d: number): V3 => {
+      const [x, z] = doorPoint(d, u);
+      return [x, base + y, z];
+    };
+    const WOOD: V3 = [0.075, 0.046, 0.028];
+    const WOOD2: V3 = [0.1, 0.062, 0.036];
+    const FRAME: V3 = [0.2, 0.12, 0.07];
+    const CARVE: V3 = [0.36, 0.22, 0.12];
+    const IRON: V3 = [0.02, 0.02, 0.024];
+    const N = lo ? 8 : 14;
+    // the arch as angles from the left jamb over the top to the right
+    const arc = (rad: number, i: number): [number, number] => {
+      const a = Math.PI - (i / N) * Math.PI;
+      return [Math.cos(a) * rad, h + Math.sin(a) * rad];
+    };
+    const q = (a: V3, bb: V3, c: V3, d: V3, col: V3, kind = PLANK) => b.quad(a, bb, c, d, col, kind, [0, 0, 1, 1]);
+    // the back wall, a faint warm light in it, brightest low (where the road comes in) and dying up the arch
+    const glow = (y0: number, y1: number, k: number): V3 => [0.22 * k, 0.092 * k, 0.026 * k];
+    for (let i = 0; i < 8; i++) q(P(-hw, (h * i) / 8, 0.2), P(hw, (h * i) / 8, 0.2), P(hw, (h * (i + 1)) / 8, 0.2), P(-hw, (h * (i + 1)) / 8, 0.2), glow(0, 0, 1 - 0.1 * i * 0.9), LAMP);
+    for (let i = 0; i < N; i++) {
+      const a0 = arc(ar, i);
+      const a1 = arc(ar, i + 1);
+      q(P(0, h, 0.2), P(a0[0], a0[1], 0.2), P(a1[0], a1[1], 0.2), P(0, h, 0.2), glow(0, 0, 0.22), LAMP);
+    }
+    // the side walls, the floor and the vault of the porch
+    for (const s2 of [-1, 1]) q(P(s2 * hw, 0, 0.2), P(s2 * hw, 0, depth), P(s2 * hw, h, depth), P(s2 * hw, h, 0.2), WOOD);
+    q(P(-hw, 0.15, 0.2), P(hw, 0.15, 0.2), P(hw, 0.15, depth + 3), P(-hw, 0.15, depth + 3), [0.1, 0.07, 0.045]);
+    for (let i = 0; i < N; i++) {
+      const a0 = arc(ar, i);
+      const a1 = arc(ar, i + 1);
+      q(P(a0[0], a0[1], 0.2), P(a0[0], a0[1], depth), P(a1[0], a1[1], depth), P(a1[0], a1[1], 0.2), i % 2 ? WOOD : WOOD2);
+    }
+    // the frame: two jambs and an arch of planking round the mouth, standing proud, and a carved band on its face
+    for (const s2 of [-1, 1]) {
+      const u0 = s2 * hw;
+      const u1 = s2 * (hw + T);
+      q(P(u0, 0, depth), P(u1, 0, depth), P(u1, h, depth), P(u0, h, depth), FRAME);
+      q(P(u1, 0, 0.2), P(u1, 0, depth), P(u1, h, depth), P(u1, h, 0.2), WOOD);
+      q(P(u0 + s2 * 0.2, 0, depth + 0.12), P(u0 + s2 * 0.6, 0, depth + 0.12), P(u0 + s2 * 0.6, h, depth + 0.12), P(u0 + s2 * 0.2, h, depth + 0.12), CARVE);
+    }
+    for (let i = 0; i < N; i++) {
+      const a0 = arc(ar, i);
+      const a1 = arc(ar, i + 1);
+      const o0 = arc(ar + T, i);
+      const o1 = arc(ar + T, i + 1);
+      q(P(a0[0], a0[1], depth), P(o0[0], o0[1], depth), P(o1[0], o1[1], depth), P(a1[0], a1[1], depth), i % 2 ? FRAME : [0.13, 0.08, 0.046]);
+      q(P(o0[0], o0[1], 0.2), P(o0[0], o0[1], depth), P(o1[0], o1[1], depth), P(o1[0], o1[1], 0.2), WOOD);
+      const c0 = arc(ar + 0.2, i);
+      const c1 = arc(ar + 0.2, i + 1);
+      const c2 = arc(ar + 0.65, i);
+      const c3 = arc(ar + 0.65, i + 1);
+      q(P(c0[0], c0[1], depth + 0.12), P(c2[0], c2[1], depth + 0.12), P(c3[0], c3[1], depth + 0.12), P(c1[0], c1[1], depth + 0.12), CARVE);
+    }
+    // the keystone, and a lintel of two great beams over the jambs' feet
+    q(P(-1.1, h + ar + 0.1, depth + 0.2), P(1.1, h + ar + 0.1, depth + 0.2), P(0.8, h + ar + T + 1.0, depth + 0.2), P(-0.8, h + ar + T + 1.0, depth + 0.2), CARVE);
+    // the doorstep: worn stone, a little wider than the mouth, going out into the road
+    q(P(-hw - 1.2, 0.3, depth - 0.3), P(hw + 1.2, 0.3, depth - 0.3), P(hw + 1.2, 0.3, depth + 4.5), P(-hw - 1.2, 0.3, depth + 4.5), [0.09, 0.085, 0.075]);
+    q(P(-hw - 1.2, 0.0, depth + 4.5), P(hw + 1.2, 0.0, depth + 4.5), P(hw + 1.2, 0.3, depth + 4.5), P(-hw - 1.2, 0.3, depth + 4.5), [0.07, 0.065, 0.06]);
+    // the two leaves, swung open outward against the sides of the yard: each of planks with straps of iron across
+    const leaf = (s2: number) => {
+      const hinge = P(s2 * (hw + 0.15), 0, depth + 0.5);
+      const dirU = s2 * 0.62;
+      const dirD = 0.78;
+      const L = hw - 0.1;
+      const planks = 5;
+      for (let i = 0; i < planks; i++) {
+        const t0 = (i / planks) * L;
+        const t1 = ((i + 1) / planks) * L - 0.06;
+        const A = P(s2 * (hw + 0.15) + dirU * t0, 0.1, depth + 0.5 + dirD * t0);
+        const B = P(s2 * (hw + 0.15) + dirU * t1, 0.1, depth + 0.5 + dirD * t1);
+        q(A, B, [B[0], B[1] + h - 0.3, B[2]], [A[0], A[1] + h - 0.3, A[2]], i % 2 ? [0.15, 0.09, 0.052] : [0.115, 0.07, 0.04]);
+        // (and its back: the door is as thick as a plank)
+        q(A, B, [B[0], B[1] + h - 0.3, B[2]], [A[0], A[1] + h - 0.3, A[2]], WOOD);
+      }
+      for (const yy of [1.6, h * 0.5, h - 1.8]) {
+        const nu = dirD * 0.14;
+        const nd = -dirU * 0.14;
+        const u0 = s2 * (hw + 0.15) + nu;
+        const d0 = depth + 0.5 + nd;
+        q(P(u0, yy - 0.25, d0), P(u0 + dirU * L, yy - 0.25, d0 + dirD * L), P(u0 + dirU * L, yy + 0.25, d0 + dirD * L), P(u0, yy + 0.25, d0), IRON);
+      }
+      void hinge;
+    };
+    leaf(-1);
+    leaf(1);
+    // light: a soft warm halo in the mouth, and a lantern hung on each jamb
+    lamps.push({ p: P(0, 3.2, 1.5), size: 11, col: [1, 0.6, 0.26], k: 0.34 });
+    lamps.push({ p: P(0, 6.5, 3.5), size: 8, col: [1, 0.64, 0.3], k: 0.2 });
+    for (const s2 of [-1, 1]) {
+      const L = P(s2 * (hw + T + 0.3), h - 0.6, depth + 1.2);
+      b.lump(L, [0.45, 0.62, 0.45], [1, 0.62, 0.26], LAMP);
+      lamps.push({ p: L, size: 3.6, col: [1, 0.68, 0.34], k: 0.95 });
+    }
+  };
   const tree = (t: Trunk) => {
     const g0 = gy(t.x, t.z);
     const fork = t.fork ?? 0.44 + r() * 0.14;
     const Hf = t.H * fork;
     const leanA = r() * 6.28;
-    const lean = 0.03 + r() * 0.08;
-    const sway = (0.55 + r() * 0.6) * t.R * 1.7;
+    const lean = t.door ? 0 : 0.03 + r() * 0.08;
+    const sway = t.door ? 0 : (0.55 + r() * 0.6) * t.R * 1.7;
     const ph = r() * 6.28;
     const at = (k: number): V3 => [t.x + Math.cos(leanA) * lean * Hf * k + Math.sin(k * 4.4 + ph) * sway * Math.min(1, k * 2), g0 - 8 + (Hf + 8) * k, t.z + Math.sin(leanA) * lean * Hf * k + Math.cos(k * 3.7 + ph) * sway * 0.8 * Math.min(1, k * 2)];
     if (t.far) {
@@ -477,14 +582,14 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     // the foot spreads into buttresses; the bole swells and narrows, and swells again under the fork
     const burl = (k: number) => 1 + 0.09 * Math.sin(k * 13 + ph) + 0.05 * Math.sin(k * 29 + ph * 2);
     const ks = [0, 0.05, 0.14, 0.3, 0.48, 0.66, 0.85, 1];
-    const rs = [2.5, 1.55, 1.12, 1.0, 0.95, 0.92, 1.0, 0.9];
+    const rs = t.door ? [DOOR_TREE.foot, DOOR_TREE.foot, 1.5, 1.0, 0.95, 0.92, 1.0, 0.9] : [2.5, 1.55, 1.12, 1.0, 0.95, 0.92, 1.0, 0.9];
     b.tube(
       ks.map(at),
       rs.map((x, i) => x * t.R * (i > 1 ? burl(ks[i]) : 1)),
       BARK_C,
       BARK_TOP,
       BARK,
-      { sides: SIDES, seg: lo ? 18 : 24, twist: 2.4, ph, flute: (k) => 0.3 * Math.pow(1 - k, 3) + 0.1 },
+      { sides: SIDES, seg: lo ? 18 : 24, twist: t.door ? 0 : 2.4, ph, flute: t.door ? () => 0 : (k) => 0.3 * Math.pow(1 - k, 3) + 0.1 },
     );
     // roots: out over the ground from between the buttresses, and under
     const nR = lo ? 3 : 5 + Math.floor(r() * 3);
@@ -493,6 +598,8 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
       const a = (j / nR) * 6.28 + r() * 0.8;
       const len = t.R * (2.6 + r() * 4.4);
       const wig = (r() - 0.5) * 1.2;
+      // (none across the door's yard)
+      if (t.door && Math.abs(Math.atan2(Math.sin(a - DOOR_TREE.face), Math.cos(a - DOOR_TREE.face))) < 0.9) continue;
       const q = (u: number, up: number): V3 => {
         const aa = a + wig * u;
         const x = t.x + Math.cos(aa) * (t.R * 1.1 + len * u);
@@ -503,7 +610,8 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     }
     b.detail = false;
     // and the earth is banked up round the foot under moss, so no bole meets the ground in a bare line
-    b.lump([t.x, g0 + t.R * 0.05, t.z], [t.R * (3.0 + r() * 0.8), t.R * (0.5 + r() * 0.2), t.R * (3.0 + r() * 0.8)], [0.062, 0.052, 0.038], BARK, 2, 0.14, ph * 7, true);
+    if (!t.door) b.lump([t.x, g0 + t.R * 0.05, t.z], [t.R * (3.0 + r() * 0.8), t.R * (0.5 + r() * 0.2), t.R * (3.0 + r() * 0.8)], [0.062, 0.052, 0.038], BARK, 2, 0.14, ph * 7, true);
+    else doorway();
     const p0 = at(1);
     forkOf.push(p0);
     const nB = 2 + (r() < 0.65 ? 1 : 0);
