@@ -281,9 +281,12 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number, far = 
     yield* hands.meshSteps(0.62 * v, paints, undefined, budget),
   ];
   if (process.env.NODE_ENV !== "production") console.info(`[kings] ${pale ? "pale" : "dark"} king${far ? " (far)" : ""}, triangles: body and hair ${Math.round(parts[0].index!.count / 3)}, head ${Math.round(parts[1].index!.count / 3)}, hands ${Math.round(parts[2].index!.count / 3)}`);
+  // (a breath between the clay and the merge, and between the merge and the crown: each is tens of milliseconds)
+  yield;
   const geo = mergeGeometries(parts)!;
   parts.forEach((p) => p.dispose());
   geo.computeBoundingSphere();
+  yield;
 
   // ---- the crown ----
   // A broad ring worn low, right down on the brow, and tipped forward with the head. The pale king's is red gold: a
@@ -326,6 +329,7 @@ export function* kingSteps(side: -1 | 1, coarse: boolean, budget: number, far = 
   }
   // pearls set along the band between the teeth
   for (let i = 0; i < nP; i++) cp.push(prim(new THREE.SphereGeometry((pale ? 0.022 : 0.016) * R, 8, 6), at(((i + 0.5) / nP) * Math.PI * 2, r1 + 0.012 * R, bh), goldTop, 2));
+  yield;
   const crown = mergeGeometries(cp)!;
   cp.forEach((p) => p.dispose());
   crown.computeBoundingSphere();

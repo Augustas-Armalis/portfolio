@@ -204,6 +204,11 @@ export class Clay {
         for (let k = k0; k <= k1; k++) {
           const z = o[2] + k * voxel;
           for (let j = j0; j <= j1; j++) {
+            // (the budget is looked at every row: one large form over the whole block was a 60 ms step)
+            if (performance.now() - began > budget) {
+              yield;
+              began = performance.now();
+            }
             const y = o[1] + j * voxel;
             let q = i0 + j * nx + k * nxy;
             for (let i = i0; i <= i1; i++, q++) {
@@ -224,6 +229,10 @@ export class Clay {
         }
         const z = o[2] + k * voxel;
         for (let j = 0; j < ny; j++) {
+          if (performance.now() - began > budget) {
+            yield;
+            began = performance.now();
+          }
           const y = o[1] + j * voxel;
           let q = j * nx + k * nxy;
           for (let i = 0; i < nx; i++, q++) {
@@ -285,6 +294,10 @@ export class Clay {
         began = performance.now();
       }
       for (let j = 0; j < ny - 1; j++) {
+        if (performance.now() - began > budget) {
+          yield;
+          began = performance.now();
+        }
         let q = j * nx + k * nxy;
         for (let i = 0; i < nx - 1; i++, q++) {
           let ci = 0;
