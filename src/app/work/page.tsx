@@ -4,7 +4,7 @@ import { novel, owner, projectGroups, projects, tracks, apps } from "@/content";
 export const metadata = {
   title: "Work",
   description:
-    "Projects by Augustas Armalis: Larpo studio, Contles, Lunor, Filzy, Capto, AFilm, the Lab, music and a novel.",
+    "Projects by Augustas Armalis: the Webstern studio, Contles, Lunor, Filzy, Capto, AFilm, the Lab, music and a novel.",
   alternates: { canonical: "/work/" },
 };
 

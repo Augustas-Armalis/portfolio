@@ -1,4 +1,5 @@
 import ownMedia from "./media.json";
+import workMedia from "./work.json";
 // Everything visible on the site lives in this one file.
 // Real names and facts only; where something isn't known yet, leave it out.
 // Never put private details (email, phone, address) here.
@@ -28,7 +29,7 @@ export const owner = {
   role: "Design engineer and founder",
   city: "Kaunas, Lithuania",
   x: { label: "@augustasdesign", href: "https://x.com/augustasdesign" },
-  studio: { label: "larpo.studio", href: "https://larpo.studio" },
+  studio: { label: "webstern.co", href: "https://webstern.co/" },
 };
 
 export type Wallpaper = { src: string; by: string; href: string; dark: boolean; name?: string; phone?: string };
@@ -121,7 +122,7 @@ export const apps: Record<AppId, { title: string; size: Size }> = {
   shots: { title: "Shots", size: { w: 1000, h: 660 } },
   taste: { title: "Taste", size: { w: 700, h: 430 } },
   kit: { title: "Kit", size: { w: 480, h: 400 } },
-  larpo: { title: "Larpo", size: { w: 900, h: 720 } },
+  larpo: { title: "Webstern", size: { w: 900, h: 720 } },
   lunor: { title: "Lunor", size: { w: 900, h: 720 } },
   capto: { title: "Capto", size: { w: 900, h: 720 } },
   contles: { title: "Contles", size: { w: 900, h: 720 } },
@@ -180,6 +181,25 @@ export type Project = {
   footnote?: string;
 };
 
+// His studio's latest work, from webstern.co: each case study's own pictures (captured from the site and made with
+// `npm run media -- <folder> --set=work` into public/gallery/work, listed in src/work.json), in the site's order. The
+// line under each is the site's own tags for the project.
+export const webstern = {
+  name: "Webstern",
+  href: "https://webstern.co/work/",
+  projects: [
+    { id: "kaching", title: "Kaching", tags: "Full website, design, branding, motion, development, custom, Shopify plugin", href: "https://webstern.co/case-studies/kaching/" },
+    { id: "acquisity", title: "Acquisity", tags: "Product design, website, landing, branding, custom, AI SaaS", href: "https://webstern.co/case-studies/acquisity/" },
+    { id: "poof", title: "Poof", tags: "Landing page, product design, branding, motion, custom, fintech", href: "https://webstern.co/case-studies/poof/" },
+    { id: "god-of-prompt", title: "God of Prompt", tags: "Landing page, website, branding, custom, AI", href: "https://webstern.co/case-studies/god-of-prompt/" },
+  ].map((p) => ({
+    ...p,
+    items: workMedia.photos
+      .filter((w) => w.album === p.id)
+      .map((w): Media => ({ id: w.id, kind: "photo", title: w.title, src: w.srcs.viewer, thumb: w.srcs.grid, zoom: w.srcs.zoom, placeholder: w.placeholder, w: w.w, h: w.h, credit: { by: p.title, href: p.href, site: "Webstern" } })),
+  })),
+};
+
 export const shots = {
   handle: "@augustasdesign",
   href: "https://x.com/augustasdesign",
@@ -206,28 +226,30 @@ export const taste = {
 
 // ---------- Projects: one page each ----------
 
+// His studio. The app keeps its old id ("larpo"): the studio was Larpo until it became Webstern (larpo.studio now
+// goes to webstern.co).
 const larpo: Project = {
   id: "larpo",
-  name: "Larpo",
-  what: "A full-stack website and product design studio for SaaS and AI teams.",
+  name: "Webstern",
+  what: "A full-stack web partner for SaaS and AI teams.",
   story: [
-    "Larpo is my design studio, and it was my first business. We design and build websites, product interfaces and brands for SaaS and AI teams. Strategy, design, motion and code sit in one team, so a launch takes weeks, not months.",
-    "I started it in 2024 under other names of my own. It has earned over six figures since, keeps growing, and is now run by a team of four. This year it became Larpo, its fourth brand, and each one got sharper as the work did.",
-    "Teams come to us for one thing and stay for the rest: Acquisity came for product design and left with a rebrand, a website and a front end, and still works with us.",
+    "Webstern is my studio, and my first business. We design and build brands, websites and products for SaaS and AI teams, in custom code, shipped in weeks, not months.",
+    "I started it in 2024 under other names of my own. It was Larpo until this year; now it's Webstern. It has earned over six figures and is run by a team of four.",
+    "Kaching, Acquisity, Poof and God of Prompt are among the teams we've built for. Acquisity came for product design, left with a rebrand, a website and a front end, and still works with us.",
   ],
   role: "Founder, head of design",
   years: "2024 – now",
   status: "Taking projects",
   stack: "Figma, React, Next.js, Motion, Three.js",
-  image: "/img/p/larpo-1.webp",
-  images: ["/img/p/larpo-2.webp"],
+  image: "/img/p/webstern-1.webp",
+  images: ["/img/p/webstern-2.webp"],
   numbers: [
     { label: "Revenue", value: "6 figures" },
     { label: "Team", value: "4" },
-    { label: "Brand", value: "4th" },
+    { label: "Case studies", value: "4" },
   ],
-  link: { label: "larpo.studio", href: "https://larpo.studio" },
-  get: { label: "Visit", href: "https://larpo.studio" },
+  link: { label: "webstern.co", href: "https://webstern.co/" },
+  get: { label: "Visit", href: "https://webstern.co/" },
   embeddable: true,
 };
 
@@ -522,24 +544,24 @@ export const novel = {
 
 export const spec: { label: string; value: string }[] = [
   { label: "Based in", value: "Kaunas, Lithuania" },
-  { label: "Studio", value: "Larpo" },
+  { label: "Studio", value: "Webstern" },
   { label: "Design", value: "Acquisity" },
   { label: "Piano", value: "12+ years" },
   { label: "Photography", value: "8 years" },
   { label: "X", value: "@augustasdesign" },
 ];
 
-// The longer About ("More Info"). Facts only; nothing private (no age, school, email). "Since fifth grade" for
+// The longer About ("More Info"). Facts only; nothing private (no age, no school; the email is on Contact only). "Since fifth grade" for
 // photography is his own wording, by his choice.
 export const about = {
   name: "Augustas Armalis",
-  intro: "I'm a design engineer and founder. I design websites and products and build them in code, I run Larpo, a design studio, and I write music. I'm also a photographer and filmmaker.",
-  story: "I started in art and drawing. Drawing turned into design, design turned into business, and now I'm finding my way back to music. The camera has been with me the whole way: I've been a photographer since fifth grade, and it grew into cinematography, shooting and editing films of my own.",
+  intro: "I design websites and products and build them in code. I run Webstern, a studio for SaaS and AI teams, and I also write music, take photographs and make films.",
+  story: "I started in art and drawing. Drawing turned into design, design into a business, and now I'm finding my way back to music. The camera has been there the whole way: photographs since fifth grade, then films I shoot and edit myself.",
   goals: "To build something really big and really good, and to work out how to live a happy, wonderful life.",
   facts: [
     { label: "Based in", value: "Kaunas, Lithuania" },
     { label: "Does", value: "Product design, websites, front end" },
-    { label: "Studio", value: "Larpo" },
+    { label: "Studio", value: "Webstern" },
     { label: "Design lead", value: "Acquisity" },
     { label: "Piano", value: "12+ years" },
     { label: "Photography", value: "8 years, photo and film" },
@@ -562,7 +584,7 @@ export const resume = {
   title: "Design engineer and founder",
   city: "Kaunas, Lithuania",
   links: [
-    { label: "larpo.studio", href: "https://larpo.studio" },
+    { label: "webstern.co", href: "https://webstern.co/" },
     { label: "x.com/augustasdesign", href: "https://x.com/augustasdesign" },
     { label: "linkedin.com/in/armaugustas", href: "https://www.linkedin.com/in/armaugustas" },
   ],
@@ -572,7 +594,7 @@ export const resume = {
     {
       title: "Experience",
       rows: [
-        { when: "2024 – now", title: "Founder, head of design", org: "Larpo Studio", body: "A full-stack website and product design studio for SaaS and AI teams. My first business, started in 2024 under earlier names: over six figures earned, a team of four, rebranded as Larpo this year.", app: "larpo" },
+        { when: "2024 – now", title: "Founder, head of design", org: "Webstern", body: "A full-stack web partner for SaaS and AI teams: brand, websites and product, in custom code. My first business, started in 2024 and called Larpo until this year: over six figures earned, a team of four.", app: "larpo" },
         { when: "2025 – now", title: "Lead product designer", org: "Acquisity", body: "Over a year leading product design for Acquisity's AI acquisition platform: product, rebrand, website and front end." },
         { when: "2025 – 2026", title: "CEO, product and design", org: "Contles", body: "A creator-marketing platform, built from zero without investment. First at the ISM entrepreneurship club, then Kickstart Lab and Startup Fair, and a place on Rykliai, Lithuania's Shark Tank.", app: "contles" },
       ] as ResumeRow[],
@@ -599,14 +621,14 @@ export const resume = {
 // The timeline, oldest first. `when` is shown as written.
 export type Milestone = { when: string; title: string; body: string; app?: AppId; key?: boolean };
 export const timeline: Milestone[] = [
-  { when: "2018", title: "The first camera", body: "Photographs from fifth grade on. Later films, a drone for the shots from above, and learning to edit.", app: "gallery" },
-  { when: "2024", title: "My own studio", body: "Websites and products for clients, under the names that later became Larpo.", app: "larpo" },
-  { when: "Jun 2025", title: "Acquisity", body: "Product design for an AI acquisition platform. Now leading it." },
+  { when: "2018", title: "The first camera", body: "Photographs from fifth grade on. Later films, a drone and the edit.", app: "gallery" },
+  { when: "2024", title: "My own studio", body: "Websites and products for clients, under the names that later became Webstern.", app: "larpo" },
+  { when: "Jun 2025", title: "Acquisity", body: "Product design for an AI acquisition platform. Now I lead it." },
   { when: "Oct 2025", title: "Lunor", body: "My designs, shared. People bought and used loads of them.", app: "lunor" },
   { when: "Dec 2025", title: "Contles begins", body: "Brands and creators in one place. First at the ISM club, then Kickstart Lab, Startup Fair and Rykliai, Lithuania's Shark Tank.", app: "contles", key: true },
   { when: "2026", title: "Capto and Filzy", body: "An evening project that became a product, and a better way to send files.", app: "capto" },
   { when: "Aug 2026", title: "The novel, and a first release", body: "Žiemos naktys šviesesnės is finished. Nocturne for Absent Things comes out on Spotify.", app: "novel", key: true },
-  { when: "Aug 2026", title: "Larpo, fourth brand", body: "The studio's new site goes live. A team of four.", app: "larpo", key: true },
+  { when: "Aug 2026", title: "Larpo, the fourth brand", body: "The studio's new site goes live, with a team of four. Today it's Webstern.", app: "larpo", key: true },
   { when: "Oct 2026", title: "Rug and Afterlight", body: "A rug for your desktop, and a second release.", app: "rug" },
   { when: "Nov 2026", title: "Kiss You", body: "A first song, made with a singer.", app: "records", key: true },
 ];
@@ -619,7 +641,7 @@ export const notes: Note[] = [
     title: "Now",
     date: "November 2026",
     blocks: [
-      { p: "Larpo is the main thing: websites, product and brand for SaaS and AI teams, from zero to launch." },
+      { p: "Webstern is the main thing: brand, websites and product for SaaS and AI teams, from zero to launch." },
       { p: "Leading product design at Acquisity." },
       { h: "On the side" },
       { list: ["Making songs with a singer. Kiss You is the first.", "Rebuilding Lunor. It's going to be huge.", "Cortex, a brain for design. Soon."] },
@@ -787,31 +809,30 @@ export const gallery = {
 
 // ---------- Contact ----------
 
-// The one email address. null until it's decided: the UI shows a placeholder.
-export const CONTACT_EMAIL: string | null = null;
+// The one email address: mail goes straight to it.
+export const CONTACT_EMAIL: string | null = "augustasarmalis@gmail.com";
 
-// Every channel. href null means "not filled in yet": the UI still shows the row,
-// pointing at "#" so it looks finished, and the real link drops in here later.
+// Every channel, in the order he gave them: email, X, Instagram, then his studio's site (the main thing), then the
+// rest. href null would mean "not filled in yet" (the row points at "#").
 export type Channel = {
-  id: "email" | "x" | "linkedin" | "larpo" | "instagram" | "instagramStudio" | "github" | "spotify" | "youtube";
+  id: "email" | "x" | "instagram" | "website" | "linkedin" | "github" | "spotify" | "youtube";
   label: string;
   value: string;
   href: string | null;
 };
 export const CONTACTS: Record<Channel["id"], Channel> = {
-  x: { id: "x", label: "X", value: "@augustasdesign", href: "https://x.com/augustasdesign" },
-  linkedin: { id: "linkedin", label: "LinkedIn", value: "armaugustas", href: "https://www.linkedin.com/in/armaugustas" },
-  larpo: { id: "larpo", label: "Larpo", value: "larpo.studio", href: "https://larpo.studio" },
-  instagramStudio: { id: "instagramStudio", label: "Instagram", value: "@larpo.studio", href: "https://instagram.com/larpo.studio" },
-  // placeholders until he confirms them (value is display only, href stays null)
   email: { id: "email", label: "Email", value: CONTACT_EMAIL ?? "Email", href: CONTACT_EMAIL ? `mailto:${CONTACT_EMAIL}` : null },
-  instagram: { id: "instagram", label: "Instagram", value: "Personal", href: null },
+  x: { id: "x", label: "X", value: "@augustasdesign", href: "https://x.com/augustasdesign" },
+  instagram: { id: "instagram", label: "Instagram", value: "@augustas_armalis", href: "https://www.instagram.com/augustas_armalis" },
+  website: { id: "website", label: "Website", value: "webstern.co", href: "https://webstern.co/" },
+  linkedin: { id: "linkedin", label: "LinkedIn", value: "armaugustas", href: "https://www.linkedin.com/in/armaugustas" },
   github: { id: "github", label: "GitHub", value: "Augustas-Armalis", href: "https://github.com/Augustas-Armalis" },
   spotify: { id: "spotify", label: "Spotify", value: "Augustas Armalis", href: "https://open.spotify.com/artist/1caZzY2xlQW23Xe1DWtw6H" },
   youtube: { id: "youtube", label: "YouTube", value: "hollow kid", href: "https://www.youtube.com/@hollowkidsongs" },
 };
 export const contactList: Channel[] = Object.values(CONTACTS);
-export const bookCall = { label: "Book a call", href: "https://cal.com/larpo/15min", sub: "15 min on Cal.com" };
+// a call: booked on the studio's own site
+export const bookCall = { label: "Book a call", href: "https://webstern.co/intro/#book", sub: "On webstern.co" };
 
 // ---------- Desktop items (right-hand column, like files on a Mac desktop) ----------
 

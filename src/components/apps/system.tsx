@@ -3,10 +3,10 @@
 // Trash, About, Terminal, Catch and System Settings.
 
 import { motion } from "motion/react";
-import { Check, Gauge, Info, Power, Send, Trash2, Undo2, UserRound, Wallpaper, Contrast } from "lucide-react";
+import { ArrowUpRight, Check, Gauge, Info, Power, Send, Trash2, Undo2, UserRound, Wallpaper, Contrast } from "lucide-react";
 import { Sym } from "../symbols";
 import { useEffect, useRef, useState } from "react";
-import { about, apps, desktopItems, allApps, owner, projectApps, timeline, wallpapers, type AppId } from "@/content";
+import { about, apps, desktopItems, allApps, owner, projectApps, timeline, wallpapers, webstern, type AppId } from "@/content";
 import MusicShader from "../scene/MusicShader";
 import { DeskArt, Monogram } from "../shell";
 import { useOS, useWallpaperIndex } from "@/store";
@@ -152,6 +152,10 @@ function AboutPane() {
           {owner.role}. {owner.city}.
         </p>
         <p className={`mt-3 max-w-[52ch] text-ink-2 [text-wrap:pretty] ${compact ? "t-sub" : "text-[13px] leading-[19px]"}`}>{about.intro}</p>
+        {/* his work, on his studio's site (a new tab) */}
+        <Btn size={compact ? "lg" : "md"} variant="bordered" href={webstern.href} label="View more work on webstern.co" icon={<Sym icon={ArrowUpRight} size={compact ? 16 : 13} weight="semibold" />} className="mt-3">
+          View more work
+        </Btn>
       </div>
       {[
         { k: "Story", v: about.story },

@@ -19,7 +19,7 @@ import { useClock, useDate } from "./useClock";
 // to blur until the fade ends: the widgets would sit flat and dark, then snap to glass.
 const LOCK_WIDGETS = [
   { k: "Working on", v: mainWork.name, s: mainWork.role ?? "" },
-  { k: "Studio", v: "Larpo", s: owner.city },
+  { k: "Studio", v: "Webstern", s: owner.city },
 ];
 type FaceMode = "in" | "out";
 const OUT = { duration: 0.28, ease: EASE_OUT } as const;

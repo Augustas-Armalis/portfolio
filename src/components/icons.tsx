@@ -189,7 +189,7 @@ const ART: Partial<Record<AppId, Art>> = {
 // ground.
 type Logo = { src: string; bg: string; mark?: boolean };
 export const LOGOS: Partial<Record<AppId, Logo>> = {
-  larpo: { src: "/logos/larpo.png", bg: "#f2f2f2" },
+  larpo: { src: "/logos/webstern.png", bg: "#f2f2f2" },
   capto: { src: "/logos/capto.webp", bg: "#000000" },
   contles: { src: "/logos/contles.png", bg: "#030303" },
   filzy: { src: "/logos/filzy.png", bg: "#050505" },

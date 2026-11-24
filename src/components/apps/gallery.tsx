@@ -1,59 +1,130 @@
 "use client";
 
-// Gallery: photographs and films, Apple Photos style. The Library is every trip in its own section under a few
-// words from him; Albums is his albums as covers and the media types (Videos, Drone, Photos) as a list. Films play
-// silently in the grid while they are in sight; anything opens into a viewer that steps through the set (arrows,
-// keys, a swipe or the filmstrip) and starts a film at once.
+// Photos: one app for his photographs, his films and his design shots, opened as the Gallery (on the Library) or as
+// Shots (on the Design shots album). On the Mac it is macOS Photos: a sidebar of the Library, the albums and the
+// media types, a grid whose size the toolbar's − and + (or a pinch on the trackpad) change, and Quick Look over it
+// (arrows, Space or Esc, a double click to zoom). On the phone it is iOS Photos: Library and Albums at the top, a
+// grid to the edges that two fingers pinch denser or larger, an album a screen of its own, and a full-screen viewer
+// that swipes between pictures, pinches and double-taps to zoom and is pulled down to put away.
+// The Library is his own work by month, from the day each was taken. Every picture blurs up from a tiny copy, the
+// viewer loads its own size with the neighbours either side, and the largest copy only when zoomed in.
 
 import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useTransform, type AnimationPlaybackControls } from "motion/react";
 import { flushSync } from "react-dom";
-import { ArrowUpRight, ChevronLeft, ChevronRight, Drone, Film, Image as ImageIcon, Play, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { gallery, type Album, type Media } from "@/content";
+import { ArrowUpRight, Briefcase, ChevronLeft, ChevronRight, Drone, Film, Image as ImageIcon, Images, Minus, Play, Plus, X } from "lucide-react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { gallery, shots, webstern, type Album, type Media } from "@/content";
 import { useOS } from "@/store";
 import { Sym } from "../symbols";
-import { Btn, List, ListRow, M, reducedMotion, SectionHeader, Segmented, Toolbar, useChrome, usePhoneBack } from "../ui";
+import { Btn, List, ListRow, M, PhoneNav, reducedMotion, SectionHeader, Segmented, SplitFrame, Toolbar, useChrome, usePhoneBack } from "../ui";
+import { XMark } from "./shared";
 
+// a design shot is a picture too, from his X account; it keeps its 16:10 shape in the grid
+type Item = Media & { shot?: boolean; work?: boolean };
+const shotItems: Item[] = shots.items.map((s) => ({
+  id: `shot-${s.src.replace(/^.*shot-|\.webp$/g, "")}`,
+  kind: "photo",
+  title: s.title,
+  src: s.src,
+  thumb: s.src,
+  credit: { by: shots.handle, href: shots.href, site: "X" },
+  shot: true,
+}));
 const byId = new Map(gallery.media.map((m) => [m.id, m]));
 const itemsOf = (a: Album) => a.items.map((id) => byId.get(id)).filter((m): m is Media => !!m);
-// a set to look through: one of his albums, or everything of one kind
-type Collection = { id: string; title: string; sub: string; items: Media[] };
-const albumSets: Collection[] = gallery.albums.map((a) => ({ id: a.id, title: a.title, sub: a.sub, items: itemsOf(a) }));
-const typeSets: (Collection & { icon: typeof Film })[] = [
+// a set to look through: the Library, one of the albums, or everything of one kind
+type Collection = { id: string; title: string; sub: string; items: Item[]; wide?: boolean; icon?: typeof Film; link?: string };
+const own = gallery.media.filter((m) => m.own);
+const LIBRARY: Collection = { id: "library", title: "Library", sub: "", items: own.length ? own : gallery.media, icon: Images };
+const SHOTS: Collection = { id: "shots", title: "Design shots", sub: "Interface work, posted on X", items: shotItems, wide: true };
+const albumSets: Collection[] = (() => {
+  const sets = gallery.albums.map((a): Collection => ({ id: a.id, title: a.title, sub: a.sub, items: itemsOf(a) }));
+  // his own first, the design shots next, then the rest
+  sets.splice(sets.findIndex((s) => s.id === "mine") + 1, 0, SHOTS);
+  return sets;
+})();
+const typeSets: Collection[] = [
   { id: "videos", title: "Videos", sub: "Every film", icon: Film, items: gallery.media.filter((m) => m.kind === "video") },
   { id: "drone", title: "Drone", sub: "From the air", icon: Drone, items: gallery.media.filter((m) => m.drone) },
   { id: "photos", title: "Photos", sub: "Every photograph", icon: ImageIcon, items: gallery.media.filter((m) => m.kind === "photo") },
 ];
-const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-// a tiny copy of the same picture, shown blurred while the full one loads (Unsplash sizes on request)
-// a tiny copy of the same picture, shown blurred while the full one loads: his own carry one inline (24 px), the
-// Unsplash ones are asked for at 48 px
-const lowRes = (m: Media) => m.placeholder ?? (m.kind === "photo" ? m.src.replace(/w=\d+/, "w=48") : m.poster);
-const dayOf = (iso?: string) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "");
+// his studio's work: a set for each project (its case study's own pictures), and all of them together, first
+const workSets: Collection[] = webstern.projects.map((p) => ({ id: `w-${p.id}`, title: p.title, sub: p.tags, items: p.items.map((m) => ({ ...m, work: true })), wide: true, link: p.href }));
+const WORK: Collection = { id: "webstern", title: webstern.name, sub: "The latest from my studio", items: workSets.flatMap((w) => w.items), wide: true, icon: Briefcase, link: webstern.href };
+const isWork = (id: string) => id === WORK.id || id.startsWith("w-");
+const ALL = [LIBRARY, WORK, ...workSets, ...albumSets, ...typeSets];
+const setById = (id: string) => ALL.find((s) => s.id === id) ?? LIBRARY;
 
-function Tile({ m, onOpen, wide }: { m: Media; onOpen: () => void; wide?: boolean }) {
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+// a tiny copy of the same picture, shown blurred while the full one loads: his own carry one inline (24 px), the
+// Unsplash ones are asked for at 48 px; a design shot has none (its tile shimmers until it is in)
+const lowRes = (m: Item) => m.placeholder ?? (m.shot ? undefined : m.kind === "photo" ? m.src.replace(/w=\d+/, "w=48") : m.poster);
+const dayOf = (iso?: string) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "");
+const monthOf = (iso: string) => new Date(`${iso.slice(0, 7)}-15T12:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+const countOf = (items: Item[]) => {
+  const v = items.filter((m) => m.kind === "video").length;
+  const p = items.length - v;
+  return [p && plural(p, items.every((m) => m.shot) ? "shot" : items.every((m) => m.work) ? "screen" : "photo"), v && plural(v, "film")].filter(Boolean).join(", ");
+};
+// the Library: everything newest first, by the day each was taken
+const LIBRARY_RUN = [...LIBRARY.items].sort((a, b) => ((a.date ?? "") < (b.date ?? "") ? 1 : (a.date ?? "") > (b.date ?? "") ? -1 : 0));
+const spanOf = (items: Item[]) => {
+  // only when every one of them carries its day
+  const ys = items.map((m) => m.date?.slice(0, 4)).filter(Boolean).sort();
+  return ys.length && ys.length === items.length ? (ys[0] === ys[ys.length - 1] ? ys[0]! : `${ys[0]}–${ys[ys.length - 1]}`) : "";
+};
+
+// how dense the grid is: the phone in columns (a pinch steps through them), the Mac in the smallest a tile may be
+const PHONE_COLS = { square: [1, 3, 5], wide: [1, 2, 3] };
+const MAC_SIZES = [96, 140, 200, 300];
+
+function Tile({ m, onOpen, wide, feature }: { m: Item; onOpen: (el: HTMLElement) => void; wide?: boolean; feature?: boolean }) {
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={(e) => onOpen(e.currentTarget)}
+      data-mid={m.id}
+      data-date={m.date}
       aria-label={m.kind === "video" ? `${m.title}, film, ${clock(m.duration ?? 0)}` : m.title}
-      className={`group relative block aspect-square overflow-hidden bg-[var(--fill-2)] bg-cover bg-center outline-none focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${wide ? "col-span-2 row-span-2" : ""}`}
-      // his own carry a 24 px copy: the tile is that, blurred by the scale-up, until the picture is in
+      className={`group relative block overflow-hidden bg-[var(--fill-2)] bg-cover bg-center outline-none focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${wide ? "aspect-[16/10]" : "aspect-square"} ${feature ? "col-span-2 row-span-2" : ""} ${lowRes(m) ? "" : "skeleton"}`}
+      // the tile is the tiny copy, blurred by the scale-up, until the picture is in: nothing jumps when it arrives
       style={m.placeholder ? { backgroundImage: `url(${m.placeholder})` } : undefined}
     >
-      {m.kind === "video" ? (
-        <TilePreview m={m} />
-      ) : (
-        <TileImage src={m.thumb} />
-      )}
+      {m.kind === "video" ? <TilePreview m={m} /> : <TileImage src={m.thumb} />}
+      {/* a screen of white interface would run into the next one: a hairline keeps each its own */}
+      {wide && <span aria-hidden className="pointer-events-none absolute inset-0 shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.12)]" />}
       {m.kind === "video" && (
         <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-end gap-1 bg-gradient-to-t from-black/50 to-transparent px-2 pb-1.5 pt-5 text-[11px] font-semibold tabular-nums text-white">
-          {wide && <span className="mr-auto truncate pr-2 text-left text-[13px] font-semibold">{m.title}</span>}
+          {feature && <span className="mr-auto truncate pr-2 text-left text-[13px] font-semibold">{m.title}</span>}
           <Sym icon={Play} size={10} fill />
           {clock(m.duration ?? 0)}
         </span>
       )}
+      {m.shot && (
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent px-2 pb-1.5 pt-6 text-left text-[11px] font-medium text-white opacity-0 transition-opacity duration-150 hov:group-hover:opacity-100">
+          {m.title}
+        </span>
+      )}
     </button>
+  );
+}
+
+// the last tile of his work: the rest of it, on webstern.co (a new tab)
+function MoreTile({ wide }: { wide?: boolean }) {
+  return (
+    <a
+      href={webstern.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`group flex min-h-[44px] flex-col items-center justify-center gap-1.5 bg-[var(--fill-2)] p-3 text-center outline-none hov:hover:bg-[var(--fill-3,var(--fill-2))] focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${wide ? "aspect-[16/10]" : "aspect-square"}`}
+    >
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--bg)] text-[var(--accent-text)] shadow-[0_1px_3px_rgb(0_0_0/0.12)] transition-transform duration-200 hov:group-hover:scale-105">
+        <Sym icon={ArrowUpRight} size={18} weight="semibold" />
+      </span>
+      <span className="text-[13px] font-semibold text-ink">View more work</span>
+      <span className="text-[11px] text-ink-3">webstern.co</span>
+    </a>
   );
 }
 
@@ -68,14 +139,14 @@ function TileImage({ src }: { src: string }) {
 
 // A film in the grid plays by itself, silent and looping, while it is in sight (and stops when it is not), as
 // Photos does. Not for a visitor who asks for less motion or to save data: they see its first frame.
-function TilePreview({ m }: { m: Media }) {
+function TilePreview({ m }: { m: Item }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const v = ref.current;
     const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
     if (!v || reducedMotion() || saveData) return;
     v.muted = true;
-    const io = new IntersectionObserver(([e]) => (e.isIntersecting ? v.play().catch(() => {}) : v.pause()), { threshold: 0.4 });
+    const io = new IntersectionObserver(([e]) => (e.isIntersecting && document.visibilityState === "visible" ? v.play().catch(() => {}) : v.pause()), { threshold: 0.4 });
     io.observe(v);
     return () => io.disconnect();
   }, []);
@@ -83,13 +154,19 @@ function TilePreview({ m }: { m: Media }) {
   return <video ref={ref} src={m.preview ?? m.src} poster={m.thumb} muted loop playsInline preload="none" disablePictureInPicture className="h-full w-full object-cover" aria-hidden />;
 }
 
-function Grid({ items, open, compact }: { items: Media[]; open: (i: number) => void; compact: boolean }) {
+// The grid, edge to edge with hairline gaps: the phone in columns, the Mac in tiles of at least a size
+function Grid({ items, open, wide, cols, size, more }: { items: Item[]; open: (i: number, el: HTMLElement) => void; wide?: boolean; cols?: number; size?: number; more?: boolean }) {
+  const many = cols ? cols >= 3 : true;
   return (
-    <div className={`grid gap-[2px] ${compact ? "grid-cols-3" : "grid-cols-[repeat(auto-fill,minmax(150px,1fr))]"}`}>
-      {/* his own film leads its set as a large tile */}
+    <div
+      style={{ gridTemplateColumns: cols ? `repeat(${cols}, minmax(0, 1fr))` : `repeat(auto-fill, minmax(${wide ? Math.round((size ?? 140) * 1.6) : size}px, 1fr))` }}
+      className="grid grid-flow-dense gap-[2px]"
+    >
       {items.map((m, i) => (
-        <Tile key={m.id} m={m} wide={m.own && m.kind === "video"} onOpen={() => open(i)} />
+        // his own film is a large tile where there is room for one
+        <Tile key={m.id} m={m} wide={wide} feature={!wide && many && m.own && m.kind === "video"} onOpen={(el) => open(i, el)} />
       ))}
+      {more && <MoreTile wide={wide} />}
     </div>
   );
 }
@@ -97,7 +174,7 @@ function Grid({ items, open, compact }: { items: Media[]; open: (i: number) => v
 // One picture or film in the viewer. Only the one in view plays: its neighbours wait as their posters.
 // A film in the viewer. The stock ones start muted at once; his own starts with its sound where the browser allows it
 // (the tap that opened it counts), muted otherwise. Any of them stops when the tab is hidden, and goes with the viewer.
-function FilmPlayer({ m }: { m: Media }) {
+function FilmPlayer({ m }: { m: Item }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const v = ref.current;
@@ -110,7 +187,7 @@ function FilmPlayer({ m }: { m: Media }) {
   return <video ref={ref} src={m.src} poster={m.poster} controls autoPlay={!m.own} muted={!m.own} playsInline className="max-h-full max-w-full rounded-[10px] bg-black object-contain" />;
 }
 
-function Slide({ m, current, loaded, onLoad, zoomed = false }: { m: Media; current: boolean; loaded: boolean; onLoad: () => void; zoomed?: boolean }) {
+function Slide({ m, current, loaded, onLoad, zoomed = false }: { m: Item; current: boolean; loaded: boolean; onLoad: () => void; zoomed?: boolean }) {
   // zoomed in on one of his own: the full-size copy is fetched, and swapped in once it has arrived
   const [sharp, setSharp] = useState<string | null>(null);
   useEffect(() => {
@@ -125,7 +202,7 @@ function Slide({ m, current, loaded, onLoad, zoomed = false }: { m: Media; curre
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {!loaded && m.kind === "photo" && <img src={lowRes(m)} alt="" aria-hidden className="absolute max-h-full max-w-full object-contain blur-xl" />}
+      {!loaded && m.kind === "photo" && lowRes(m) && <img src={lowRes(m)} alt="" aria-hidden className="absolute max-h-full max-w-full object-contain blur-xl" />}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={current ? m.title : ""} draggable={false} onLoad={onLoad} className={`relative max-h-full max-w-full select-none object-contain transition-opacity duration-300 ${loaded || m.kind === "video" ? "opacity-100" : "opacity-0"}`} />
     </>
@@ -133,7 +210,7 @@ function Slide({ m, current, loaded, onLoad, zoomed = false }: { m: Media; curre
 }
 
 // The filmstrip under the viewer: every item small, the one in view lit and kept in the middle; a tap jumps to it.
-function Strip({ list, index, pick, opacity }: { list: Media[]; index: number; pick: (i: number) => void; opacity: ReturnType<typeof useMotionValue<number>> }) {
+function Strip({ list, index, pick, opacity }: { list: Item[]; index: number; pick: (i: number) => void; opacity: ReturnType<typeof useMotionValue<number>> }) {
   const row = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const r = row.current;
@@ -159,8 +236,14 @@ const GAP = 16;
 // The viewer: the picture in view with its neighbours either side, on one strip that follows the finger. Let go
 // past a quarter of the width (or with a flick) and the next one slides in; a pull down puts it away. The strip
 // can be caught again while it is still moving.
-function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index: number; setIndex: (i: number) => void; close: () => void; label?: string }) {
+function Viewer({ list, index, setIndex, close: put, label, originOf }: { list: Item[]; index: number; setIndex: (i: number) => void; close: () => void; label?: string; originOf: (id: string) => { x: number; y: number } | null }) {
   const { compact } = useChrome();
+  // it grows out of the tile it was opened from, and shrinks back into the tile of the one in view when put away
+  const [origin, setOrigin] = useState(() => originOf(list[index].id));
+  const close = () => {
+    flushSync(() => setOrigin(originOf(list[index].id)));
+    put();
+  };
   const m = list[index];
   const many = list.length > 1;
   const wrap = (i: number) => (i + list.length) % list.length;
@@ -197,12 +280,25 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
+      // Quick Look: Space puts it away too (but plays and pauses a film that has the focus)
+      if (e.key === " " && !compact && (e.target as HTMLElement).tagName !== "VIDEO") {
+        e.preventDefault();
+        close();
+      }
       if (many && e.key === "ArrowRight") go(1);
       if (many && e.key === "ArrowLeft") go(-1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+  // the next two either way are fetched ahead (the ones either side are already on the strip), so a run of swipes
+  // never waits
+  useEffect(() => {
+    for (const d of [2, -2]) {
+      const it = list[(index + d + list.length) % list.length];
+      if (list.length > 3 && it.kind === "photo") new Image().src = it.src;
+    }
+  }, [index, list]);
   // a swipe in from the left edge of the phone puts it away too
   usePhoneBack(true, close);
   // on the phone the viewer is black to the top edge: the status bar turns white over it
@@ -392,6 +488,14 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
         <span className="w-10" />
       </motion.div>
       <div ref={stage} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onDoubleClick={(e) => !compact && zoomAt(e.clientX, e.clientY)} className={`relative min-h-0 flex-1 touch-none overflow-hidden ${zoomable && !compact ? "cursor-zoom-in" : ""}`} data-viewer-stage="">
+        <motion.div
+          className="absolute inset-0"
+          initial={{ opacity: 0, scale: 0.4 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.4, transition: { ...M.ui, duration: 0.3 } }}
+          transition={M.ui}
+          style={{ transformOrigin: origin ? `${origin.x}px ${origin.y - (stage.current?.offsetTop ?? (compact ? 60 : 52))}px` : "50% 50%" }}
+        >
         <motion.div className="absolute inset-0" style={{ x, y, scale: shrink }}>
           {slots.map((d) => {
             const it = list[wrap(index + d)];
@@ -408,6 +512,7 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
             );
           })}
         </motion.div>
+        </motion.div>
         {many && !compact && (
           <>
             <Btn variant="glass-dark" capsule iconOnly size="md" label="Previous" onClick={() => go(-1)} icon={<Sym icon={ChevronLeft} size={20} weight="semibold" />} className="!absolute left-4 top-1/2 !h-11 !w-11 -translate-y-1/2" />
@@ -420,6 +525,18 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
         {m.own ? (
           // his own: the day it was taken
           <span className="tabular-nums text-white/70">{dayOf(m.date)}</span>
+        ) : m.work ? (
+          // his studio's: the project's case study
+          <a href={m.credit.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-white/75 hover:text-white">
+            {m.credit.by} case study on webstern.co
+            <Sym icon={ArrowUpRight} size={11} weight="medium" />
+          </a>
+        ) : m.shot ? (
+          // a design shot: where it was posted
+          <a href={m.credit.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-white/75 hover:text-white">
+            Posted on X as {m.credit.by}
+            <Sym icon={ArrowUpRight} size={11} weight="medium" />
+          </a>
         ) : (
           <>
             {m.kind === "video" ? "Film" : "Photo"} by{" "}
@@ -435,108 +552,418 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
   );
 }
 
-export function Gallery() {
-  const { compact } = useChrome();
-  const [tab, setTab] = useState<"library" | "albums">("library");
-  const [set, setSet] = useState<Collection | null>(null);
-  const [view, setView] = useState<{ list: Media[]; index: number; label: string } | null>(null);
-  // the Library is every trip in order; Best of is an album of what's already there
-  const trips = useMemo(() => albumSets.filter((a) => a.id !== "best"), []);
-  const pad = compact ? "px-4" : "px-5";
-  // an album is a screen of its own: the edge swipe goes back to the albums
-  usePhoneBack(!!set, () => setSet(null));
-  // a new screen (an album opened, or back to the list, or the other tab) starts at its top
-  const top = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    top.current?.closest(".overflow-y-auto, .overflow-auto")?.scrollTo({ top: 0 });
-    top.current?.querySelector(":scope > .overflow-auto")?.scrollTo({ top: 0 });
-  }, [set, tab]);
+// Two fingers on the phone's grid: spread them and the tiles grow (fewer across), pinch and they shrink, one step per
+// gesture, as in iOS Photos. One finger still scrolls; the step is made from where the fingers were.
+function usePinchSteps(step: (dir: 1 | -1, x: number, y: number) => void) {
+  const g = useRef<{ d0: number; done: boolean } | null>(null);
+  const dist = (t: React.TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  return {
+    onTouchStart: (e: React.TouchEvent) => {
+      if (e.touches.length === 2) g.current = { d0: dist(e.touches) || 1, done: false };
+    },
+    onTouchMove: (e: React.TouchEvent) => {
+      const s = g.current;
+      if (!s || s.done || e.touches.length < 2) return;
+      const k = dist(e.touches) / s.d0;
+      if (k > 1.22 || k < 0.82) {
+        s.done = true;
+        step(k > 1 ? 1 : -1, (e.touches[0].clientX + e.touches[1].clientX) / 2, (e.touches[0].clientY + e.touches[1].clientY) / 2);
+      }
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      if (e.touches.length < 2) g.current = null;
+    },
+  };
+}
 
+type View = { list: Item[]; index: number; label: string };
+type From = { k: number; x: string; y: string } | null;
+
+export function Photos({ start = "library" }: { start?: "library" | "webstern" }) {
+  const { compact } = useChrome();
+  const root = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  // the phone: Library or Albums, and an album opened over Albums. The Mac: what the sidebar has chosen.
+  const [tab, setTab] = useState<"library" | "albums">(start === "library" ? "library" : "albums");
+  const [opened, setOpened] = useState<string | null>(start === "library" ? null : start);
+  const [picked, setPicked] = useState<string>(start);
+  const [side, setSide] = useState(false);
+  const [view, setView] = useState<View | null>(null);
+  const shown = compact ? (tab === "albums" && opened ? setById(opened) : tab === "library" ? LIBRARY : null) : setById(picked);
+  const wide = !!shown?.wide;
+
+  // density: a step along the phone's columns or the Mac's tile sizes; the change grows in from where it was made
+  const [steps, setSteps] = useState({ square: 1, wide: 1, mac: 1 });
+  const [from, setFrom] = useState<From>(null);
+  const cols = compact ? PHONE_COLS[wide ? "wide" : "square"][wide ? steps.wide : steps.square] : undefined;
+  const size = compact ? undefined : MAC_SIZES[steps.mac];
+  const change = useCallback(
+    (dir: 1 | -1, x?: number, y?: number) => {
+      const key = compact ? (wide ? "wide" : "square") : "mac";
+      const scale = compact ? PHONE_COLS[wide ? "wide" : "square"] : MAC_SIZES;
+      setSteps((s) => {
+        // the phone's columns run from large to small: spreading the fingers is a step back along them
+        const next = compact ? s[key] - dir : s[key] + dir;
+        if (next < 0 || next >= scale.length) return s;
+        const a = scale[s[key]];
+        const b = scale[next];
+        const box = (compact ? root.current : scroller.current)?.getBoundingClientRect();
+        const top = compact ? 0 : (scroller.current?.scrollTop ?? 0);
+        setFrom({
+          k: compact ? b / a : a / b,
+          x: box && x !== undefined ? `${x - box.left}px` : "50%",
+          y: box && y !== undefined ? `${y - box.top + top}px` : `${top + (box?.height ?? 0) / 2}px`,
+        });
+        return { ...s, [key]: next };
+      });
+    },
+    [compact, wide],
+  );
+  const pinch = usePinchSteps((dir, x, y) => change(dir, x, y));
+  // the Mac: a pinch on the trackpad (a wheel with Ctrl) or ⌘ with the wheel changes the size too
+  useEffect(() => {
+    const el = scroller.current;
+    if (compact || !el) return;
+    let acc = 0;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      acc += e.deltaY;
+      if (Math.abs(acc) > 40) {
+        change(acc < 0 ? 1 : -1, e.clientX, e.clientY);
+        acc = 0;
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [compact, change]);
+
+  // the phone: an opened album is a screen of its own, named in the navigation bar, with Back (or the edge swipe)
+  const nav = useContext(PhoneNav);
+  const openedTitle = tab === "albums" && opened ? setById(opened).title : null;
+  useEffect(() => {
+    if (!compact || !nav) return;
+    nav(openedTitle ? { title: openedTitle, back: () => setOpened(null) } : null);
+    return () => nav(null);
+  }, [compact, nav, openedTitle]);
+  usePhoneBack(compact && !!openedTitle, () => setOpened(null));
+  // a new screen starts at its top
+  useEffect(() => {
+    const el = compact ? root.current?.closest(".overflow-y-auto") : scroller.current;
+    el?.scrollTo({ top: 0 });
+    setFrom(null);
+  }, [compact, tab, opened, picked]);
+
+  // the viewer grows out of the tile it was opened from and goes back into the one it shows when put away
+  const originOf = useCallback(
+    (id: string) => {
+      const el = root.current?.querySelector<HTMLElement>(`[data-mid="${CSS.escape(id)}"]`);
+      const host = root.current;
+      if (!el || !host) return null;
+      const r = el.getBoundingClientRect();
+      const box = compact ? { left: 0, top: 0, height: window.innerHeight } : host.getBoundingClientRect();
+      const y = r.top + r.height / 2 - box.top;
+      // a tile scrolled out of sight: from the middle instead
+      if (y < 0 || y > box.height) return null;
+      return { x: r.left + r.width / 2 - box.left, y };
+    },
+    [compact],
+  );
+  const openAt = (set: Collection, list: Item[]) => (i: number) => setView({ list, index: i, label: set.title });
+
+  const pad = compact ? "px-4" : "px-5";
+
+  // The Library: a few words from him, then his work a month at a time
   const library = (
     <div className="pb-8">
-      <p className={`${pad} max-w-[620px] pb-1 pt-2 text-ink-2 [text-wrap:pretty] ${compact ? "t-sub" : "m-body"}`}>{gallery.intro}</p>
-      {trips.map((a) => (
-        <section key={a.id} className="pt-5">
-          <div className={`${pad} flex items-baseline gap-2 pb-2`}>
-            <h2 className={compact ? "t-title3 text-ink" : "m-large text-ink"}>{a.title}</h2>
-            <span className={`min-w-0 truncate text-ink-3 ${compact ? "t-foot" : "m-sub"}`}>{a.sub}</span>
-          </div>
-          <Grid items={a.items} compact={compact} open={(i) => setView({ list: a.items, index: i, label: a.title })} />
-        </section>
-      ))}
+      <p className={`${pad} max-w-[640px] pb-3 pt-2 text-ink-2 [text-wrap:pretty] ${compact ? "t-sub" : "m-body pt-4"}`}>{gallery.intro}</p>
+      <div className="relative">
+        <DateLabel compact={compact} />
+        <Grid items={LIBRARY_RUN} cols={cols} size={size} open={openAt(LIBRARY, LIBRARY_RUN)} />
+      </div>
     </div>
   );
 
+  // his work's links: the project's case study, and the rest of the work on webstern.co (new tabs, like every link
+  // out of the OS)
+  const workLinks = (set: Collection, sz: "sm" | "lg") => (
+    <>
+      {set.id !== WORK.id && set.link && (
+        <Btn size={sz} href={set.link} label={`Open the ${set.title} case study`} icon={<Sym icon={ArrowUpRight} size={sz === "lg" ? 16 : 12} weight="semibold" />}>
+          Case study
+        </Btn>
+      )}
+      <Btn size={sz} variant={set.id === WORK.id ? "prominent" : "bordered"} href={webstern.href} label="View more work on webstern.co" icon={<Sym icon={ArrowUpRight} size={sz === "lg" ? 16 : 12} weight="semibold" />}>
+        View more work
+      </Btn>
+    </>
+  );
+
+  // An album, or a media type: what is in it, then the grid
+  const album = (set: Collection) => (
+    <div className="pb-8">
+      <div className={`${pad} flex flex-wrap items-center gap-x-3 gap-y-2 pb-3 ${compact ? "pt-0" : "pt-4"}`}>
+        <p className={`min-w-0 flex-1 tabular-nums text-ink-3 ${compact ? "t-foot" : "m-sub"}`}>{/* the Mac's toolbar already counts them */}
+          {[set.sub, compact && countOf(set.items), spanOf(set.items)].filter(Boolean).join(" · ")}</p>
+        {set.id === "shots" && compact && (
+          <Btn size="lg" href={shots.href} label={`Open ${shots.handle} on X`} icon={<XMark size={14} />}>
+            {shots.handle}
+          </Btn>
+        )}
+      </div>
+      {/* on the phone his work's links get a row of their own, at a finger's size */}
+      {compact && isWork(set.id) && <div className={`${pad} flex flex-wrap gap-2 pb-3`}>{workLinks(set, "lg")}</div>}
+      {set.id === WORK.id ? (
+        // all of it: project by project, each under its name and the site's own tags
+        workSets.map((w, k) => (
+          <section key={w.id} className="[contain-intrinsic-size:auto_600px] [content-visibility:auto]">
+            <div className={`${pad} flex items-baseline gap-2 pb-2 ${k ? "pt-6" : "pt-1"}`}>
+              <button type="button" onClick={() => (compact ? setOpened(w.id) : setPicked(w.id))} className={`press text-left font-bold tracking-[-0.01em] text-ink ${compact ? "text-[20px]" : "text-[17px]"}`}>
+                {w.title}
+              </button>
+              <span className={`min-w-0 flex-1 truncate text-ink-3 ${compact ? "text-[13px]" : "text-[12px]"}`}>{w.sub}</span>
+              <a href={w.link} target="_blank" rel="noopener noreferrer" className={`inline-flex shrink-0 items-center gap-0.5 text-[var(--accent-text)] ${compact ? "min-h-[44px] text-[15px]" : "text-[12px]"}`}>
+                Case study
+                <Sym icon={ArrowUpRight} size={compact ? 14 : 11} weight="medium" />
+              </a>
+            </div>
+            <Grid items={w.items} wide cols={cols} size={size} open={openAt(w, w.items)} more={k === workSets.length - 1} />
+          </section>
+        ))
+      ) : (
+        <Grid items={set.items} wide={set.wide} cols={cols} size={size} open={openAt(set, set.items)} more={isWork(set.id)} />
+      )}
+    </div>
+  );
+
+  // The phone's Albums: his albums as covers, then the media types as a list
   const albums = (
     <div className={`${pad} pb-8 pt-3`}>
-      <h2 className={`pb-2 text-ink ${compact ? "t-title3" : "m-headline"}`}>My Albums</h2>
-      <div className={`grid gap-x-4 gap-y-5 ${compact ? "grid-cols-2" : "grid-cols-[repeat(auto-fill,minmax(180px,1fr))]"}`}>
+      <div className="flex items-center justify-between pb-2">
+        <h2 className="t-title3 text-ink">{webstern.name}</h2>
+        <button type="button" onClick={() => setOpened(WORK.id)} className="press flex min-h-[44px] items-center text-[17px] tracking-[-0.02em] text-[var(--accent-text)]">
+          See all
+        </button>
+      </div>
+      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {workSets.map((w) => (
+          <button key={w.id} type="button" onClick={() => setOpened(w.id)} className="press group w-[72%] shrink-0 snap-start text-left outline-none">
+            <span className="sq-card relative block aspect-[16/10] overflow-hidden rounded-[14px] bg-[var(--fill-2)] bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.08)]" style={w.items[0]?.placeholder ? { backgroundImage: `url(${w.items[0].placeholder})` } : undefined} data-sq="">
+              {w.items[0] && <TileImage src={w.items[0].thumb} />}
+            </span>
+            <span className="mt-2 block truncate text-[15px] font-semibold text-ink">{w.title}</span>
+            <span className="block truncate text-[13px] text-ink-3">{w.sub}</span>
+          </button>
+        ))}
+      </div>
+      <h2 className="t-title3 pb-2 pt-7 text-ink">My Albums</h2>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-5">
         {albumSets.map((a) => {
           const cover = a.items[0];
           return (
-            <button key={a.id} type="button" onClick={() => setSet(a)} className="press group text-left outline-none">
-              <span className="sq-card relative block aspect-square overflow-hidden rounded-[14px] bg-[var(--fill-2)] shadow-[0_0_0_0.5px_rgb(0_0_0/0.08)] group-focus-visible:ring-[3px] group-focus-visible:ring-[var(--accent)]" data-sq="">
+            <button key={a.id} type="button" onClick={() => setOpened(a.id)} className="press group text-left outline-none">
+              <span
+                className="sq-card relative block aspect-square overflow-hidden rounded-[14px] bg-[var(--fill-2)] bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.08)] group-focus-visible:ring-[3px] group-focus-visible:ring-[var(--accent)]"
+                style={cover?.placeholder ? { backgroundImage: `url(${cover.placeholder})` } : undefined}
+                data-sq=""
+              >
                 {cover && <TileImage src={cover.thumb} />}
               </span>
-              <span className={`mt-2 block truncate font-semibold text-ink ${compact ? "text-[15px]" : "text-[13px]"}`}>{a.title}</span>
-              <span className={`block tabular-nums text-ink-3 ${compact ? "text-[13px]" : "text-[12px]"}`}>{a.items.length}</span>
+              <span className="mt-2 block truncate text-[15px] font-semibold text-ink">{a.title}</span>
+              <span className="block tabular-nums text-[13px] text-ink-3">{a.items.length}</span>
             </button>
           );
         })}
       </div>
       <div className="mt-7">
-        <SectionHeader mac={!compact}>Media Types</SectionHeader>
-        <List mac={!compact}>
+        <SectionHeader>Media Types</SectionHeader>
+        <List>
           {typeSets.map((t) => (
-            <ListRow
-              key={t.id}
-              mac={!compact}
-              onClick={() => setSet(t)}
-              icon={<Sym icon={t.icon} size={compact ? 22 : 17} weight="medium" className="text-[var(--accent-text)]" />}
-              title={t.title}
-              detail={<span className="tabular-nums text-ink-3">{t.items.length}</span>}
-              chevron
-            />
+            <ListRow key={t.id} onClick={() => setOpened(t.id)} icon={<Sym icon={t.icon!} size={22} weight="medium" className="text-[var(--accent-text)]" />} title={t.title} detail={<span className="tabular-nums text-ink-3">{t.items.length}</span>} chevron />
           ))}
         </List>
       </div>
     </div>
   );
 
-  const opened = set && (
-    <div className="pb-8">
-      <div className={`${pad} pb-3 pt-2`}>
-        <button type="button" onClick={() => setSet(null)} className="press -ml-1 inline-flex items-center gap-0.5 text-[15px] text-[var(--accent-text)]">
-          <Sym icon={ChevronLeft} size={18} weight="semibold" />
-          Albums
-        </button>
-        <h2 className={`mt-1 ${compact ? "t-title2" : "m-large"} text-ink`}>{set.title}</h2>
-        <p className={`tabular-nums text-ink-3 ${compact ? "t-foot" : "m-sub"}`}>{`${set.sub} · ${set.items.length}`}</p>
-      </div>
-      <Grid items={set.items} compact={compact} open={(i) => setView({ list: set.items, index: i, label: set.title })} />
-    </div>
+  const viewer = (
+    <AnimatePresence>
+      {view && <Viewer key="viewer" list={view.list} index={view.index} label={view.label} originOf={originOf} setIndex={(i) => setView((v) => (v ? { ...v, index: i } : v))} close={() => setView(null)} />}
+    </AnimatePresence>
   );
 
-  const tabs = (
-    <Segmented
-      id="gallery-tab"
-      value={tab}
-      onChange={(v) => {
-        setTab(v);
-        setSet(null);
-      }}
-      options={[
-        { value: "library", label: "Library" },
-        { value: "albums", label: "Albums" },
-      ]}
-    />
-  );
+  if (compact) {
+    const screen = tab === "library" ? "library" : (opened ?? "albums");
+    const flat = screen === "library" || screen === "albums";
+    return (
+      <div ref={root} className="relative overflow-x-clip" {...pinch}>
+        {/* an opened album is its own screen: Library and Albums wait under it */}
+        <div className={`px-4 pb-1 ${flat ? "" : "hidden"}`}>
+          <Segmented
+            id="photos-tab"
+            value={tab}
+            onChange={(v) => {
+              setTab(v);
+              setOpened(null);
+            }}
+            options={[
+              { value: "library", label: "Library" },
+              { value: "albums", label: "Albums" },
+            ]}
+          />
+        </div>
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={screen}
+            // an album slides in from the right over Albums, and back out; Library and Albums cross-fade
+            initial={flat ? { opacity: 0 } : { x: "100%" }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={flat ? { opacity: 0, transition: M.out } : { x: "100%", transition: M.ui }}
+            transition={flat ? M.fade : M.ui}
+            className="bg-[var(--bg)]"
+          >
+            <Dense k={`${cols}`} from={from}>
+              {screen === "library" ? library : screen === "albums" ? albums : album(setById(screen))}
+            </Dense>
+          </motion.div>
+        </AnimatePresence>
+        {viewer}
+      </div>
+    );
+  }
+
+  // The Mac: the sidebar, then the chosen set under a toolbar with its size
+  const sideRow = (s: Collection) => {
+    const on = s.id === picked;
+    const cover = s.items[0];
+    return (
+      <button
+        type="button"
+        key={s.id}
+        data-id={s.id}
+        onClick={() => setPicked(s.id)}
+        className={`flex h-[28px] shrink-0 items-center gap-2 rounded-[8px] px-2 text-left text-[13px] tracking-[-0.003em] text-ink ${on ? "bg-black/[0.08]" : "hov:hover:bg-black/[0.035]"}`}
+      >
+        <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center text-[var(--accent-text)]">
+          {s.icon ? (
+            <Sym icon={s.icon} size={16} weight="medium" />
+          ) : (
+            // an album shows its cover, small
+            // eslint-disable-next-line @next/next/no-img-element
+            cover && <img src={cover.thumb} alt="" loading="lazy" decoding="async" className="h-[18px] w-[18px] rounded-[4px] object-cover" />
+          )}
+        </span>
+        <span className="min-w-0 flex-1 truncate">{s.title}</span>
+        <span className="text-[11px] tabular-nums text-ink-3">{s.items.length}</span>
+      </button>
+    );
+  };
+  const sideHead = (t: string) => <div className="mt-3 flex h-[22px] shrink-0 items-center px-2 text-[11px] font-semibold text-ink-3">{t}</div>;
+  const set = shown ?? LIBRARY;
   return (
-    <div ref={top} className="@container relative flex h-full min-h-0 flex-col bg-[var(--bg)]">
-      {!compact && <Toolbar title="Gallery" sub={`${gallery.media.length} photos and films`}>{tabs}</Toolbar>}
-      {compact && <div className="px-4 pb-1">{tabs}</div>}
-      <div className={compact ? "" : "min-h-0 flex-1 overflow-auto"}>{tab === "library" ? library : (opened ?? albums)}</div>
-      <AnimatePresence>{view && <Viewer list={view.list} index={view.index} label={view.label} setIndex={(i) => setView({ ...view, index: i })} close={() => setView(null)} />}</AnimatePresence>
+    <SplitFrame shown={side} setShown={setSide} className="flex h-full min-h-0">
+      <aside
+        data-drag
+        data-shown={side}
+        onClick={() => setSide(false)}
+        onKeyDown={(e) => {
+          // the arrow keys walk the sidebar like a real source list
+          if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+          const ids = ALL.map((s) => s.id);
+          const next = ids[Math.min(ids.length - 1, Math.max(0, ids.indexOf(picked) + (e.key === "ArrowDown" ? 1 : -1)))];
+          e.preventDefault();
+          setPicked(next);
+          (e.currentTarget.querySelector(`[data-id="${next}"]`) as HTMLElement | null)?.focus();
+        }}
+        className="split-side flex w-[210px] shrink-0 flex-col overflow-auto border-r border-black/[0.06] bg-[#F4F4F6] px-2.5 pb-3 pt-[52px]"
+      >
+        {sideRow(LIBRARY)}
+        {sideHead(webstern.name)}
+        {sideRow(WORK)}
+        {workSets.map(sideRow)}
+        {sideHead("Albums")}
+        {albumSets.map(sideRow)}
+        {sideHead("Media Types")}
+        {typeSets.map(sideRow)}
+      </aside>
+      <div ref={root} className="relative flex min-w-0 flex-1 flex-col bg-[var(--bg)]">
+        <Toolbar title={set.title} sub={set.id === "library" ? [countOf(set.items), spanOf(set.items)].filter(Boolean).join(" · ") : countOf(set.items)}>
+          <div className="flex items-center">
+            <Btn variant="plain" size="sm" iconOnly label="Smaller" disabled={steps.mac === 0} onClick={() => change(-1)} icon={<Sym icon={Minus} size={14} weight="semibold" />} />
+            <Btn variant="plain" size="sm" iconOnly label="Larger" disabled={steps.mac === MAC_SIZES.length - 1} onClick={() => change(1)} icon={<Sym icon={Plus} size={14} weight="semibold" />} />
+          </div>
+          {isWork(set.id) && workLinks(set, "sm")}
+          {set.id === "shots" && (
+            <Btn size="sm" href={shots.href} label={`Open ${shots.handle} on X`} icon={<XMark size={12} />}>
+              {shots.handle}
+            </Btn>
+          )}
+        </Toolbar>
+        <div ref={scroller} className="@container relative min-h-0 flex-1 overflow-auto">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={set.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade}>
+              <Dense k={`${size}`} from={from}>
+                {set.id === "library" ? library : album(set)}
+              </Dense>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+        {viewer}
+      </div>
+    </SplitFrame>
+  );
+}
+
+// Over the Library's grid, as in Photos: the month of the row at the top, which changes as it scrolls by. It is read
+// from the tiles under it (each carries its day), on a scroll anywhere, at most once a frame.
+function DateLabel({ compact }: { compact: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [text, setText] = useState(() => (LIBRARY_RUN[0]?.date ? monthOf(LIBRARY_RUN[0].date) : ""));
+  useEffect(() => {
+    const el = ref.current;
+    const grid = el?.nextElementSibling as HTMLElement | null;
+    if (!el || !grid) return;
+    let raf = 0;
+    const read = () => {
+      raf = 0;
+      const line = el.getBoundingClientRect().bottom;
+      for (const t of grid.children as unknown as HTMLElement[]) {
+        // the first row mostly below the line: one only peeking out under the label does not count
+        const r = t.getBoundingClientRect();
+        if (r.bottom - r.height / 2 > line) {
+          const d = t.dataset.date;
+          if (d) setText(monthOf(d));
+          return;
+        }
+      }
+    };
+    const on = () => void (raf ||= requestAnimationFrame(read));
+    window.addEventListener("scroll", on, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("scroll", on, true);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+  if (!text) return null;
+  return (
+    <div ref={ref} className={`pointer-events-none sticky z-10 h-0 ${compact ? "top-[calc(var(--phone-top)+52px)]" : "top-0"}`}>
+      <span className="absolute left-2 top-2 rounded-full bg-black/45 px-2.5 py-1 text-[12px] font-semibold tabular-nums text-white shadow-[0_1px_8px_rgb(0_0_0/0.2)] backdrop-blur-md">{text}</span>
     </div>
   );
+}
+
+// the grid at a new density grows (or shrinks) in from where the change was made
+function Dense({ k, from, children }: { k: string; from: From; children: React.ReactNode }) {
+  return (
+    <motion.div key={k} initial={from ? { scale: from.k, opacity: 0.4 } : false} animate={{ scale: 1, opacity: 1 }} transition={M.ui} style={{ transformOrigin: from ? `${from.x} ${from.y}` : undefined }}>
+      {children}
+    </motion.div>
+  );
+}
+
+export function Gallery() {
+  return <Photos start="library" />;
+}
+export function Shots() {
+  return <Photos start="webstern" />;
 }
