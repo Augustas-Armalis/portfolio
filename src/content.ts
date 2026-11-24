@@ -524,14 +524,16 @@ export const spec: { label: string; value: string }[] = [
   { label: "Studio", value: "Larpo" },
   { label: "Design", value: "Acquisity" },
   { label: "Piano", value: "12+ years" },
+  { label: "Photography", value: "8 years" },
   { label: "X", value: "@augustasdesign" },
 ];
 
-// The longer About ("More Info"). Facts only; nothing private (no age, school, email).
+// The longer About ("More Info"). Facts only; nothing private (no age, school, email). "Since fifth grade" for
+// photography is his own wording, by his choice.
 export const about = {
   name: "Augustas Armalis",
-  intro: "I'm a design engineer and founder. I design websites and products and build them in code, I run Larpo, a design studio, and I write music.",
-  story: "I started in art and drawing. Drawing turned into design, design turned into business, and now I'm finding my way back to music.",
+  intro: "I'm a design engineer and founder. I design websites and products and build them in code, I run Larpo, a design studio, and I write music. I'm also a photographer and filmmaker.",
+  story: "I started in art and drawing. Drawing turned into design, design turned into business, and now I'm finding my way back to music. The camera has been with me the whole way: I've been a photographer since fifth grade, and it grew into cinematography, shooting and editing films of my own.",
   goals: "To build something really big and really good, and to work out how to live a happy, wonderful life.",
   facts: [
     { label: "Based in", value: "Kaunas, Lithuania" },
@@ -539,6 +541,7 @@ export const about = {
     { label: "Studio", value: "Larpo" },
     { label: "Design lead", value: "Acquisity" },
     { label: "Piano", value: "12+ years" },
+    { label: "Photography", value: "8 years, photo and film" },
     { label: "Novel", value: "Žiemos naktys šviesesnės" },
   ],
   tools: [
@@ -546,6 +549,7 @@ export const about = {
     { label: "Code", value: "React, Next.js, Tailwind, Motion, Three.js" },
     { label: "Ships on", value: "Cloudflare, Vercel, Supabase" },
     { label: "Music", value: "MuseScore 4, Logic Pro" },
+    { label: "Film", value: "Photography, cinematography, drone, video editing" },
     { label: "Agents", value: "Claude Code, Codex" },
   ],
 };
@@ -586,6 +590,7 @@ export const resume = {
     { label: "Code", value: "TypeScript, React, Next.js, Tailwind, Motion, Three.js, Swift" },
     { label: "Ships on", value: "Cloudflare, Vercel, Supabase, Stripe" },
     { label: "Music", value: "Piano for 12+ years, music school, composing and scoring" },
+    { label: "Photo and film", value: "Photography for 8 years, cinematography, drone, video editing" },
     { label: "Languages", value: "Lithuanian, English" },
   ],
 };
@@ -593,6 +598,7 @@ export const resume = {
 // The timeline, oldest first. `when` is shown as written.
 export type Milestone = { when: string; title: string; body: string; app?: AppId; key?: boolean };
 export const timeline: Milestone[] = [
+  { when: "2018", title: "The first camera", body: "Photographs from fifth grade on. Later films, a drone for the shots from above, and learning to edit.", app: "gallery" },
   { when: "2024", title: "My own studio", body: "Websites and products for clients, under the names that later became Larpo.", app: "larpo" },
   { when: "Jun 2025", title: "Acquisity", body: "Product design for an AI acquisition platform. Now leading it." },
   { when: "Oct 2025", title: "Lunor", body: "My designs, shared. People bought and used loads of them.", app: "lunor" },
@@ -685,6 +691,8 @@ export type Media = {
   poster?: string;
   duration?: number;
   credit: { by: string; href: string; site: string };
+  // shot from the air: it shows in the Drone album too
+  drone?: boolean;
 };
 export type Album = { id: string; title: string; sub: string; items: string[] };
 const unsplash = (photo: string, id: string, title: string, by: string): Media => ({
@@ -704,6 +712,8 @@ const mixkit = (n: string, title: string, duration: number, page: string): Media
   poster: `/gallery/mixkit-${n}.webp`,
   duration,
   credit: { by: "Mixkit", href: `https://mixkit.co/free-stock-video/${page}/`, site: "Mixkit" },
+  // every film here so far is from the air
+  drone: true,
 });
 const media: Media[] = [
   unsplash("photo-1494565052307-1e66e072bca6", "wPKTJsihIYw", "Snow road near Mývatn", "Jeremy Bishop"),
@@ -720,7 +730,7 @@ const media: Media[] = [
   unsplash("photo-1738358459010-d9354dfa4769", "UWP6ZzHrqfo", "Snow ridge", "Marek Piwnicki"),
   unsplash("photo-1478512611414-50d132a6dcd3", "ATzEluEgZpw", "Into the cloud", "Matt Sclarandis"),
   unsplash("photo-1647430075466-fd32f97d1338", "RIhZ4zFYBCQ", "Switchbacks in snow", "Datingjungle"),
-  unsplash("photo-1724420965567-2199e9d53f05", "PWHEBQS0QXo", "From above", "Seongil Park"),
+  { ...unsplash("photo-1724420965567-2199e9d53f05", "PWHEBQS0QXo", "From above", "Seongil Park"), drone: true },
   unsplash("photo-1701888281351-b9f44b3250bc", "W5ISGAqjAfg", "Shinjuku", "mos design"),
   unsplash("photo-1780631347040-0c5df6053c2f", "2uuaV_fI4LU", "Crossing", "Jezael Melgoza"),
   unsplash("photo-1758881606455-26cc1c2c8de4", "GU8CEZReKxs", "Side street", "Intrepid"),
@@ -743,6 +753,9 @@ const media: Media[] = [
   mixkit("52436", "Road through dry hills", 19, "aerial-view-of-an-asphalt-road-surrounded-by-the-mountains-52436"),
 ];
 export const gallery = {
+  // shown over the Library: who took these, in his words
+  intro:
+    "I've been a photographer since fifth grade, eight years now. Cinematography pulled me in just as hard: shooting films, flying a drone for the shots from above, and then the edit, where the footage finally becomes something.",
   media,
   albums: [
     { id: "best", title: "Best of", sub: "The ones I keep coming back to", items: ["GiDqZkXMqVM", "film-52444", "W5ISGAqjAfg", "x1jAFA-T7GU", "wPKTJsihIYw", "uPwWP83BCeg", "uJIhAvqFJxg", "film-4998", "bINbcn3031o", "_-3P0X11GYI", "GU8CEZReKxs", "kQ0LkrVVuv0"] },
@@ -750,7 +763,6 @@ export const gallery = {
     { id: "dolomites", title: "Dolomites", sub: "High up in the Alps", items: ["x1jAFA-T7GU", "uJIhAvqFJxg", "1oGFKEePOFQ", "film-2788", "kQ0LkrVVuv0", "UWP6ZzHrqfo", "ATzEluEgZpw", "RIhZ4zFYBCQ", "PWHEBQS0QXo"] },
     { id: "tokyo", title: "Tokyo at night", sub: "Shinjuku, Shibuya, Ikebukuro", items: ["W5ISGAqjAfg", "2uuaV_fI4LU", "GU8CEZReKxs", "XMAbH81gUbQ", "kYlfHSJVZT4", "xSJq_ivXjAc", "T11f_AGNKGg"] },
     { id: "golden", title: "Golden hour", sub: "The best twenty minutes of the day", items: ["uPwWP83BCeg", "_-3P0X11GYI", "P4AQFdHDNkQ", "WAQ00FkbA7g", "-mCWpK4aLgQ", "GiDqZkXMqVM", "ypA56XUc4dE", "RraKuk4JjEU", "niYTtTIR-u4"] },
-    { id: "films", title: "Films", sub: "Moving pictures", items: ["film-52444", "film-4998", "film-2788", "film-52436"] },
   ] as Album[],
 };
 
