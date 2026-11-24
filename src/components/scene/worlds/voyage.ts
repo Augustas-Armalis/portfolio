@@ -486,8 +486,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     ceil: 1500,
     pace: 3.3,
     entry: { x: 0, z: 1633, above: 22, yaw: 0 },
-    // at the very top of him: in the crown, between its spires, at the height of its points
-    gate: { x: 0, z: -640, above: 1190, yaw: 0 },
+    // at the very top of him: the great arch that stands on his deck, before the crown
+    gate: { x: 0, z: -560, above: 1190, yaw: 0 },
     // in low over the water for two kilometres, the whole of him standing in the haze ahead; past the painting to the
     // altar and the blade of light; then twice round him, rising all the way, past the globe at his feet, his body and
     // his shoulders, through the shells of his sky one after another; and over his brow, in at the front of his crown
@@ -531,16 +531,25 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [-560, -925, 1112],
       [-600, -709, 1146],
       [-559, -493, 1180],
-      [-443, -405, 1181],
-      [-318, -357, 1182],
-      [-198, -347, 1183],
-      [-93, -371, 1184],
-      [-35, -425, 1186],
-      [8, -478, 1187],
-      [14, -535, 1188],
-      [4, -590, 1189],
-      [0, -640, 1190],
-      [0, -668, 1190],
+      // the last turn is wide and out in the open (never over his crown), so that the plane, whatever its pace, has
+      // come round and is lined up before the long straight run in: a kilometre down the line of the gate, level, to
+      // the middle of the great arch that stands on his deck before the crown
+      [-596, -250, 1186],
+      [-600, 100, 1192],
+      [-585, 290, 1196],
+      [-540, 460, 1199],
+      [-450, 606, 1201],
+      [-318, 692, 1202],
+      [-170, 690, 1201],
+      [-52, 612, 1199],
+      [0, 480, 1197],
+      [0, 300, 1195],
+      [0, 100, 1193],
+      [0, -100, 1192],
+      [0, -300, 1191],
+      [0, -450, 1190],
+      [0, -560, 1190],
+      [0, -600, 1190],
     ],
     // the dark sphere and the king (worlds/Rex.tsx KS; the king's is as high as the deck of his head, so the way over it is clear)
     obstacles: [
