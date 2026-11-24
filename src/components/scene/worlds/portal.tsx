@@ -56,6 +56,13 @@ const state = { next: null as WorldId | null, k: 0, fresh: 0, tick: 0, still: nu
 
 if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") Object.assign(window, { __portal: { state, portalRig, STILL_U, PORTAL_U } });
 
+let domeMesh: THREE.Mesh | null = null;
+function skyDome(scene: THREE.Scene) {
+  if (domeMesh && domeMesh.parent) return domeMesh;
+  domeMesh = (scene.children.find((o) => (o as THREE.Mesh).isMesh && o.renderOrder === -10 && (o as THREE.Mesh).geometry?.type === "SphereGeometry") as THREE.Mesh | undefined) ?? null;
+  return domeMesh;
+}
+
 const E = new THREE.Vector3();
 const G = new THREE.Vector3();
 // How high above or below the gate's middle a thing was, as it is carried to the entry: kept within a few metres
@@ -161,6 +168,14 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     SKY_U.uMist.value = 0;
     const lin = POST_U.uLinearOut.value;
     POST_U.uLinearOut.value = 1;
+    // (the sky's dome travels with the main eye, thousands of metres from the picture's: carried to the picture's eye
+    // for this draw, or the picture sees the dome from outside, a pale wedge, and black where the sky should be)
+    const dome = skyDome(scene);
+    const domeAt = dome ? dome.position.clone() : null;
+    if (dome) {
+      dome.position.copy((cam as THREE.PerspectiveCamera).position);
+      dome.updateMatrixWorld();
+    }
     const prev = gl.getRenderTarget();
     // (no shadow pass for the picture: the room asks for the shadow map by hand each frame, and that asking is kept
     // for the real draw, or the next world's shadows are drawn here and this one goes a frame without its own)
@@ -181,6 +196,10 @@ export function PortalView({ mobile }: { mobile: boolean }) {
       SKY_U.uMist.value = mist0;
       setWorldAir(WORLDS[cur].fog);
       if (skyWas) applySky(skyWas);
+      if (dome && domeAt) {
+        dome.position.copy(domeAt);
+        dome.updateMatrixWorld();
+      }
       warm.visible = false;
       if (stand) stand.visible = standWas;
       homeWas.forEach(([o, v]) => (o.visible = v));
@@ -200,6 +219,17 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     if (able) {
       d = rig.gate.copy(gate!.pos).add(originOf(cur)).distanceTo(voyage.planePos);
       want = d < 320 ? 1 - THREE.MathUtils.smoothstep(d, 200, 300) : 0;
+      // only from the approach side, within a cone of the gate's way: from behind it or far to one side it is no window
+      {
+        const gp = gate!.pos;
+        const o = originOf(cur);
+        const rx = voyage.planePos.x - o.x - gp.x;
+        const rz = voyage.planePos.z - o.z - gp.z;
+        const along = -Math.sin(gate!.yaw) * rx - Math.cos(gate!.yaw) * rz;
+        const side = Math.abs(Math.cos(gate!.yaw) * rx - Math.sin(gate!.yaw) * rz);
+        const ang = Math.atan2(side, -along);
+        if (d > 80) want *= (1 - THREE.MathUtils.smoothstep(ang, 1.0, 1.4)) * (along < 30 ? 1 : 0);
+      }
       // the still: once a world, as soon as it stands warm (its entry, its own sky and air)
       if (state.still !== next) {
         const e = entryOf(next!);
