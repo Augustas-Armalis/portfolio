@@ -472,7 +472,10 @@ export function Land({ mobile }: { mobile: boolean }) {
   return (
     <>
       {mats.map((m, l) => (
-        <mesh key={l} geometry={l === 0 ? geo.full : geo.ring} material={m} renderOrder={-5} frustumCulled={false} />
+        // (drawn after the desk, the grass and the trees, not before them: its shader is the heaviest in the frame and,
+        // with its discard, the GPU cannot set it aside under what stands on it unless what stands on it is drawn first.
+        // Drawn first, every pixel of ground was shaded and then covered again by grass)
+        <mesh key={l} geometry={l === 0 ? geo.full : geo.ring} material={m} renderOrder={3} frustumCulled={false} />
       ))}
     </>
   );
