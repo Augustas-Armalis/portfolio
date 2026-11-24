@@ -16,16 +16,31 @@ export const metadata: Metadata = {
   applicationName: "Augustas OS",
   authors: [{ name: TITLE, url: SITE }],
   creator: TITLE,
+  publisher: TITLE,
+  category: "portfolio",
   keywords: [
     "Augustas Armalis",
+    "Augustas Armalis portfolio",
+    "Augustas Armalis design engineer",
     "design engineer",
+    "design engineer Lithuania",
     "product designer",
+    "UI designer",
+    "creative developer",
+    "WebGL portfolio",
+    "three.js portfolio",
     "founder",
     "Larpo",
+    "Larpo studio",
+    "Contles",
+    "Lunor",
+    "Filzy",
+    "Capto",
     "Kaunas",
     "Lithuania",
     "portfolio",
   ],
+  other: { author: TITLE, owner: TITLE, copyright: `© ${new Date().getFullYear()} ${TITLE}` },
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
@@ -58,21 +73,56 @@ export const viewport: Viewport = {
   ],
 };
 
+const PERSON_ID = `${SITE}/#person`;
+const SITE_ID = `${SITE}/#website`;
+// who owns and wrote the site, in the forms search engines and assistants read: the person, the site he owns and
+// publishes, and the page that is about him
 const jsonLd = {
   "@context": "https://schema.org",
-  "@type": "Person",
-  name: TITLE,
-  url: SITE,
-  image: `${SITE}/img/augustas.jpg`,
-  jobTitle: "Design engineer and founder",
-  homeLocation: { "@type": "Place", name: "Kaunas, Lithuania" },
-  sameAs: [
-    "https://x.com/augustasdesign",
-    "https://www.linkedin.com/in/armaugustas",
-    "https://larpo.studio",
-    "https://github.com/Augustas-Armalis",
+  "@graph": [
+    {
+      "@type": "Person",
+      "@id": PERSON_ID,
+      name: TITLE,
+      givenName: "Augustas",
+      familyName: "Armalis",
+      url: SITE,
+      image: `${SITE}/img/augustas.jpg`,
+      jobTitle: "Design engineer and founder",
+      description: DESCRIPTION,
+      nationality: { "@type": "Country", name: "Lithuania" },
+      homeLocation: { "@type": "Place", name: "Kaunas, Lithuania" },
+      knowsAbout: ["Product design", "Interface design", "Design engineering", "Front-end development", "WebGL and three.js", "Music production", "Writing"],
+      sameAs: [
+        "https://x.com/augustasdesign",
+        "https://www.linkedin.com/in/armaugustas",
+        "https://larpo.studio",
+        "https://github.com/Augustas-Armalis",
+      ],
+      worksFor: { "@type": "Organization", name: "Larpo", url: "https://larpo.studio" },
+    },
+    {
+      "@type": "WebSite",
+      "@id": SITE_ID,
+      url: SITE,
+      name: TITLE,
+      alternateName: "Augustas OS",
+      description: DESCRIPTION,
+      inLanguage: "en",
+      author: { "@id": PERSON_ID },
+      creator: { "@id": PERSON_ID },
+      publisher: { "@id": PERSON_ID },
+      copyrightHolder: { "@id": PERSON_ID },
+    },
+    {
+      "@type": "ProfilePage",
+      "@id": `${SITE}/#profile`,
+      url: SITE,
+      name: `${TITLE}: design engineer and founder`,
+      isPartOf: { "@id": SITE_ID },
+      mainEntity: { "@id": PERSON_ID },
+    },
   ],
-  worksFor: { "@type": "Organization", name: "Larpo", url: "https://larpo.studio" },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -81,6 +131,18 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="antialiased">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         {children}
+        {/* what a crawler, a reader without WebGL or an assistant sees: the plain facts about the owner */}
+        <noscript>
+          <main style={{ maxWidth: 640, margin: "0 auto", padding: "48px 24px", fontFamily: "system-ui, sans-serif", lineHeight: 1.5 }}>
+            <h1>{TITLE}</h1>
+            <p>{DESCRIPTION}</p>
+            <p>
+              This site is a small operating system inside a 3D field: a desk with a display, a piano, headphones, a camera, a novel and a sketchbook.
+              It needs JavaScript and WebGL to run. Contact and links: <a href="https://x.com/augustasdesign">X</a>, <a href="https://www.linkedin.com/in/armaugustas">LinkedIn</a>,{" "}
+              <a href="https://github.com/Augustas-Armalis">GitHub</a>, <a href="https://larpo.studio">Larpo studio</a>.
+            </p>
+          </main>
+        </noscript>
       </body>
     </html>
   );
