@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { mainWork, owner } from "@/content";
 import { isUp, useOS, useWallpaper } from "@/store";
 import Desktop from "./Desktop";
+import { warmFirstWindow } from "./Apps";
 import { Monogram, PowerOverlay } from "./shell";
 import { EASE_OUT, glass, reducedMotion, sfx, useGlassScope } from "./ui";
 import { useClock, useDate } from "./useClock";
@@ -126,6 +127,7 @@ export function LockBackdrop({ wake }: { wake: boolean }) {
 // their places. Nothing above this component swaps or cross-fades when the session unlocks.
 export default function Login() {
   useGlassScope();
+  useEffect(warmFirstWindow, []);
   // Shut Down hands the display back to the room, which fades this screen out over half a second. For that half
   // second the screen holds what it was showing: the session has already ended in the store, and without this the
   // desktop would be swapped for a lock screen waking out of black in the middle of the fade.

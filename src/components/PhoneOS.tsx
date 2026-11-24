@@ -655,12 +655,14 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
   const [page, setPage] = useState(0);
   const [folder, setFolder] = useState<"projects" | "games" | null>(null);
   const x = useMotionValue(0);
+  const slide = useRef<AnimationPlaybackControls | null>(null);
   // a swipe is not a tap: whatever was under the finger does not open
   const swiped = useRef(false);
   const go = (p: number, velocity = 0) => {
     const to = Math.min(PAGES - 1, Math.max(0, p));
     setPage(to);
-    animate(x, -to * w, { ...M.ui, velocity });
+    slide.current?.stop();
+    slide.current = animate(x, -to * w, { ...M.ui, velocity });
   };
   useEffect(() => {
     const f = () => setW(window.innerWidth);
@@ -672,6 +674,54 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
     // only when the width changes (a turn of the phone)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [w]);
+  // The pages follow the finger 1:1 (our own pointer handling: the library drag lost its place on a slow swipe
+  // and snapped back). Past the first or last page it gives a little; let go and a flick turns the page whatever
+  // the distance, otherwise the nearer page wins. A page still moving can be caught.
+  const g = useRef<{ id: number; x0: number; y0: number; bx: number; axis: "x" | "y" | null; hist: { x: number; t: number }[] } | null>(null);
+  const pager = {
+    down: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (folder || g.current || (e.pointerType === "mouse" && e.button !== 0)) return;
+      g.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, bx: x.get(), axis: null, hist: [{ x: e.clientX, t: e.timeStamp }] };
+    },
+    move: (e: React.PointerEvent<HTMLDivElement>) => {
+      const s = g.current;
+      if (!s || s.id !== e.pointerId || s.axis === "y") return;
+      const dx = e.clientX - s.x0;
+      if (!s.axis) {
+        const dy = e.clientY - s.y0;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+        s.axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+        if (s.axis === "y") return;
+        swiped.current = true;
+        slide.current?.stop();
+        s.bx = x.get();
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // the pages fill the screen: the finger stays over them anyway
+        }
+      }
+      const min = -(PAGES - 1) * w;
+      let to = s.bx + dx;
+      if (to > 0) to *= 0.25;
+      if (to < min) to = min + (to - min) * 0.25;
+      x.set(to);
+      s.hist.push({ x: e.clientX, t: e.timeStamp });
+      if (s.hist.length > 5) s.hist.shift();
+    },
+    up: (e: React.PointerEvent<HTMLDivElement>) => {
+      const s = g.current;
+      if (!s || s.id !== e.pointerId) return;
+      g.current = null;
+      if (s.axis !== "x") return;
+      const a = s.hist[0];
+      const b = s.hist[s.hist.length - 1];
+      const v = e.type === "pointercancel" || b.t <= a.t ? 0 : Math.max(-4000, Math.min(4000, ((b.x - a.x) / (b.t - a.t)) * 1000));
+      const at = -x.get() / w;
+      go(Math.abs(v) > 320 ? (v < 0 ? Math.floor(at) + 1 : Math.ceil(at) - 1) : Math.round(at), v);
+      window.setTimeout(() => (swiped.current = false), 80);
+    },
+  };
   const open: Open = (id, o) => {
     if (swiped.current) return;
     if (id === "projects" || id === "games") return setFolder(id);
@@ -688,19 +738,10 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
       <motion.div
         className="relative flex min-h-0 flex-1"
         style={{ x, width: w * PAGES }}
-        drag={folder ? false : "x"}
-        dragDirectionLock
-        dragConstraints={{ left: -(PAGES - 1) * w, right: 0 }}
-        dragElastic={0.2}
-        dragMomentum={false}
-        onDragStart={() => (swiped.current = true)}
-        onDragEnd={(_, info) => {
-          const at = -x.get() / w;
-          const v = info.velocity.x;
-          // a flick turns the page whatever the distance; otherwise the nearer page wins
-          go(Math.abs(v) > 320 ? (v < 0 ? Math.floor(at) + 1 : Math.ceil(at) - 1) : Math.round(at), v);
-          window.setTimeout(() => (swiped.current = false), 80);
-        }}
+        onPointerDown={pager.down}
+        onPointerMove={pager.move}
+        onPointerUp={pager.up}
+        onPointerCancel={pager.up}
         data-home-pages=""
       >
         <div className={pageCls} style={{ width: w }} aria-hidden={page !== 0} data-page="0">
@@ -913,7 +954,9 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
     const r = v >= 0.999 ? 0 : Math.max((vw * 0.225) * (1 - v), 40);
     return `inset(${t}px 0px ${t}px 0px round ${r}px)`;
   });
-  const iconOpacity = useTransform(p, [0, 0.4], [1, 0]);
+  // the icon stays until the window is well on its way (the spring covers the first 40% in a few frames, so an
+  // earlier fade showed a blank card growing), then dissolves into the app drawn under it
+  const iconOpacity = useTransform(p, [0.2, 0.5], [1, 0]);
   // opaque while the window is still small: its glass bars (tab bar, player) need an opaque parent to frost,
   // and would otherwise snap to glass half-way through the move
   const contentOpacity = useTransform(p, [0.04, 0.22], [0, 1]);
