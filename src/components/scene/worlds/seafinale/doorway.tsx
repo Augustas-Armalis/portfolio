@@ -17,7 +17,10 @@ import { FINALE_OPENING } from "./shape";
 export default function FinaleDoorway({ def }: { def: WorldDef }) {
   const b = useDisposable(() => {
     const gate = gateOf("seafinale")!;
-    const [half, rise, reach] = FINALE_OPENING;
+    const [half0, rise0, reach] = FINALE_OPENING;
+    // (the window is cut a hair wider and taller than its nominal size: portal.tsx; the frame stands on that line)
+    const half = half0 * 1.04;
+    const rise = rise0 * 1.03;
     const c = Math.cos(gate.yaw);
     const s = Math.sin(gate.yaw);
     // the outline in the doorway's own plane (u across, y up from the way), as the lancet is drawn everywhere else

@@ -55,6 +55,8 @@ const STORM = airState({
   exposure: 1.0,
   fx: [0.0, 0.0, 0.0, 0],
 });
+// (the wave stands this much of its height from the first: a dark long form with a white crest, readable from far off, and still rearing as the plane comes)
+const RISE0 = 0.12;
 const storm = { k: 0, keyK: -1, sky: null as SkyState | null };
 const sm = (x: number, a: number, b: number) => THREE.MathUtils.smoothstep(x, a, b);
 export const FINALE_PAL: GroundPalette = { a: [0.1, 0.2, 0.1], b: [0.2, 0.22, 0.1], c: [0.08, 0.16, 0.1] };
@@ -240,7 +242,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     return () => {
       if (voyage.skyMod === skyMod) voyage.skyMod = null;
       Object.assign(storm, { k: 0, keyK: -1, sky: null });
-      FINALE_U.uRise.value = 0.02;
+      FINALE_U.uRise.value = RISE0;
       FINALE_U.uSwell.value = 0.5;
       FINALE_U.uCrash.value = 0;
       FINALE_U.uStorm.value = 0;
@@ -254,7 +256,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
       // sea in gentle weather, the wave not yet risen; nothing jumps at the crossing)
       e.on = false;
       storm.k = 0;
-      FINALE_U.uRise.value = 0.02;
+      FINALE_U.uRise.value = RISE0;
       FINALE_U.uStorm.value = 0;
       FINALE_U.uSwell.value = 0.5;
       FINALE_U.uCrash.value = 0;
@@ -298,7 +300,7 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
     const p = e.ps;
     // the wave: a long low swell on the horizon, and from then on it never stops growing, all the way to the end
     // (it is fifteen hundred metres when it falls); it rises fastest at first, when it is far off
-    const rise = 0.02 + 0.98 * Math.pow(sm(p, 0.04, 0.985), 0.8);
+    const rise = RISE0 + (1 - RISE0) * Math.pow(sm(p, 0.02, 0.985), 0.8);
     // the weather: gentle, then turning as the wave stands up, at its height along the face
     const k = sm(p, 0.1, 0.5);
     // the end: the crest comes down over the last of the way

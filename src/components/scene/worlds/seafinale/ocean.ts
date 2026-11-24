@@ -18,7 +18,7 @@ const END = /* glsl */ `
 // how far the great wave has risen (it stands a third lower when the plane arrives and rears to its full height as
 // it comes: the drawn water is never above the height field the plane flies by)
 export const FINALE_U = {
-  uRise: { value: 0.02 },
+  uRise: { value: 0.12 },
   // how hard the sea runs (1: as in a fresh breeze; under 1 a quiet sea, over it a storm's)
   uSwell: { value: 0.4 },
   // the end: the crest comes down over the plane (0..1)
@@ -247,15 +247,15 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         // (only at the very lip: under it the hollow stays dark)
         float shoulder = smoothstep(0.9, 0.985, up) * onWave * front;
         vec3 l3 = vec3(0.0);
-        if (laceOn && tongue > 0.0) l3 = laceW(vec2(s * 0.24, body * 0.24 - uTime * 0.15), uTime * 0.05, fwSB * 0.24);
+        if (laceOn && tongue > 0.0) l3 = laceW(vec2(s * 0.2, body * 0.045 - uTime * 0.03), uTime * 0.05, length(fwidth(vec2(s * 0.2, body * 0.045))));
         // (foam is a paleness with the lace's cells standing open in it, most open at its edges)
         float foam = crest * (0.4 + 0.6 * l1.x) * (0.6 + 0.4 * l2.x) + band * mix(0.3 + 0.6 * max(l1.x * 0.9, l2.x * 0.6), 0.66 + 0.34 * l2.x, smoothstep(0.5, 0.8, ragged)) + tongue * (0.42 + 0.58 * l3.x) + shoulder * (0.6 + 0.4 * l2.x);
         // (far off the lace is only a paleness)
         foam = mix(foam, (crest * 0.5 + band * 0.5 + tongue * 0.3 + shoulder * 0.8), smoothstep(160.0, 700.0, dist));
         // ---- strings of beads: amber, on the green of the face ----
-        vec2 bp = vec2(s * 0.052, body * 0.052 - uTime * 0.03) + 3.0;
+        vec2 bp = vec2(s * 0.05, body * 0.016 - uTime * 0.012) + 3.0;
         float bead = 0.0;
-        if (onWave * front > 0.0 && up > 0.1 && up < 0.84 && dist > 8.0) bead = beadsW(bp, laceW(bp, uTime * 0.1, fwSB * 0.052).x, fwSB * 0.052 * 46.0) * smoothstep(0.1, 0.26, up) * (1.0 - smoothstep(0.62, 0.84, up)) * onWave * front * (1.0 - smoothstep(90.0, 520.0, dist) * 0.85) * smoothstep(8.0, 36.0, dist);
+        if (onWave * front > 0.0 && up > 0.1 && up < 0.84 && dist > 8.0) bead = beadsW(bp, laceW(bp, uTime * 0.1, length(fwidth(bp))).x, length(fwidth(bp)) * 46.0) * smoothstep(0.1, 0.26, up) * (1.0 - smoothstep(0.62, 0.84, up)) * onWave * front * (1.0 - smoothstep(90.0, 520.0, dist) * 0.85) * smoothstep(8.0, 36.0, dist);
         // ---- his initials, in beads, on the face (as on the picture) ----
         vec2 sg = vec2((s - 150.0) / 150.0, (up - 0.3) / 0.11);
         float sign = 0.0;

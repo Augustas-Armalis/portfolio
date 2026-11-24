@@ -44,7 +44,7 @@ export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPor
 // which the eye of the picture stands behind: seen from there it is a cream wall over the whole opening until the eye passes it)
 export const PICTURE = { value: 0 };
 export const STILL_U = { tStill: { value: null as THREE.Texture | null }, uStillMat: { value: new THREE.Matrix4() }, uStillOn: { value: 0 }, uLiveK: { value: 0 } };
-const OPENING: Partial<Record<WorldId, [number, number, number?]>> = { sun: [23, 33], stars: [50, 80, 32], rex: [110, 200, 50], fairy: [18, 27, 74], paradise: [14.5, 22.5], gate: [35, 93], seafinale: FINALE_OPENING, sea: [27, 27], funeral: [15, 28, 9.5] };
+const OPENING: Partial<Record<WorldId, [number, number, number?]>> = { sun: [23, 33], stars: [50, 80, 32], rex: [110, 200, 50], fairy: [18, 27, 74], paradise: [14.5, 22.5], gate: [35, 93, 70], seafinale: FINALE_OPENING, sea: [27, 27], funeral: [15, 28, 9.5] };
 // How wide and how high above its middle a gate counts as gone through: the opening itself (a window the plane
 // is flying at must take it wherever the picture is, not only in the middle nineteen metres of it)
 export function openingReach(id: WorldId): [number, number] | undefined {
@@ -424,13 +424,14 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
           if (uPortalK <= 0.003) discard;
           // a lancet: straight sides, a pointed round head, soft all the way round
           float head = clamp((vUv.y - uSpring) / max(1.0 - uSpring, 0.001), 0.0, 1.0);
-          float wide = sqrt(max(1.0 - head * head, 0.0));
+          // (the Offering's gate and the Finale's doorway are cut to the pointed arch they are drawn with: worlds/offering/arch.ts pointedHalf)
+          float wide = ${id === "gate" || id === "seafinale" ? "max(2.0 * sqrt(max(1.0 - 0.75 * head * head, 0.0)) - 1.0, 0.0)" : "sqrt(max(1.0 - head * head, 0.0))"};
           float dx = abs(vUv.x) / max(wide, 0.001);
           float edgeS = max(dx, head);
           // (a gate hung in the air has no ground to end the picture on: it thins out over its lower part instead of
           // ending in a flat line 15 m under the gate's middle, and carries no lit rim along that edge)
           float edge = max(edgeS, 1.0 - smoothstep(0.0, uBottom, vUv.y));
-          float a = (1.0 - smoothstep(0.9, 1.0, edge)) * uPortalK;
+          float a = (1.0 - smoothstep(${id === "gate" || id === "seafinale" ? "0.62" : "0.9"}, 1.0, edge)) * uPortalK;
           // that world's own light, as it will be seen from inside it: nothing added, nothing laid over it
           vec3 col = uLiveK > 0.0 ? texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb : vec3(0.0);
           if (uStillOn > 0.5 && uLiveK < 1.0) {
