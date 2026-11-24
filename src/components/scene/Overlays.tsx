@@ -367,7 +367,9 @@ function LoaderSky() {
     raf = requestAnimationFrame(draw);
     return () => {
       cancelAnimationFrame(raf);
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
+      // (losing the context right as the world starts to draw blocked the main thread for over a second: let it go
+      // a few seconds later, when nothing is being waited on)
+      window.setTimeout(() => gl.getExtension("WEBGL_lose_context")?.loseContext(), 4000);
     };
   }, []);
   return <canvas ref={ref} className="absolute inset-0 h-full w-full" style={{ opacity: 0, transition: "opacity 1.4s cubic-bezier(.4,0,.2,1)" }} aria-hidden />;
