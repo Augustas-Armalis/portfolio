@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GEIST, geistReady } from "../font";
+import { useQuality } from "@/lib/quality";
 import { POST_U } from "../Post";
 import { WorldGrass } from "../Grass";
 import { GLSL_NOISE } from "../shared";
@@ -522,8 +523,15 @@ export function LightGate({ id, def, tint = [1, 0.88, 0.62], gain = 1, half = 15
 }
 
 // ---------- mist ----------
+// (on the lower gears fewer puffs, each a little denser, so the mist reads the same with less overdraw: Medium keeps four in
+// five, Low about two in three; High and up keep every one)
 export function Mist({ puffs }: { puffs: Puff[] }) {
-  const b = useDisposable(() => ({ geo: puffGeometry(puffs), mat: makePuffMaterial() }), [puffs]);
+  const effects = useQuality().effects;
+  const keep = Math.min(1, 0.5 + 0.5 * effects);
+  const b = useDisposable(() => {
+    const list = keep >= 1 ? puffs : puffs.filter((_, i) => (i * 0.6180339887) % 1 < keep).map((p) => ({ ...p, a: Math.min(1, (p.a ?? 1) / keep) }));
+    return { geo: puffGeometry(list), mat: makePuffMaterial() };
+  }, [puffs, keep]);
   return <mesh geometry={b.geo} material={b.mat} renderOrder={3} />;
 }
 export function Halos({ list, kind = 0 }: { list: Halo[]; kind?: 0 | 1 | 2 | 3 }) {
