@@ -31,3 +31,5 @@ bun run media -- "/path/to/folder"
 - **Each film:** H.264 at 1080p at most, capped at 2.6 Mbit/s, with AAC audio, fast start and no metadata. It also gets a webp poster and a 6-second silent 480p loop for its tile.
 
 Only new or changed files are encoded again; add `--force` to redo everything. Titles come from the filename, or the date for camera names like `IMG_1234`. A better title (and an optional `place`) goes in `scripts/media-captions.json`, keyed by the file's id (`porshe.JPG` is `porshe`).
+
+The Gallery and Shots are one Photos app (`src/components/apps/gallery.tsx`). The Gallery opens on the Library: your own photos and films, newest first, by the day each was taken. Shots opens on the Design shots album, whose pictures are listed in `shots.items` in `src/content.ts`.
