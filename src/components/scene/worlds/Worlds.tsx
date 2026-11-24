@@ -124,13 +124,36 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
   const { gl, camera, scene } = useThree();
   const [warm, setWarm] = useState<WorldId | null>(null);
   const group = useRef<THREE.Group | null>(null);
-  const job = useRef({ id: null as WorldId | null, since: 0, list: null as Drawn[] | null, compiled: 0, pending: 0, t1: 0, drawn: 0, wait: 0, t0: 0, prep: null as (() => boolean) | null, prepFor: null as WorldId | null, closing: null as WorldId | null });
+  const job = useRef({ id: null as WorldId | null, since: 0, list: null as Drawn[] | null, compiled: 0, pending: 0, t1: 0, drawn: 0, wait: 0, t0: 0, later: [] as Drawn[], tLater: 0, prep: null as (() => boolean) | null, prepFor: null as WorldId | null, closing: null as WorldId | null });
   // (one half-float pixel, no samples: the lens's own target is multisampled, and every switch back from it would resolve the
   // whole frame; the shaders made are the same, the target's type is what they are keyed on)
   const tiny = useMemo(() => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: true }), []);
   useEffect(() => () => tiny.dispose(), [tiny]);
   // an object whose shader uses the scene's lights cannot be lit when drawn alone: those are only compiled
   const lit = (o: Drawn) => (Array.isArray(o.material) ? o.material : [o.material]).some((m) => (m as THREE.ShaderMaterial).lights === true || (m as THREE.MeshStandardMaterial).isMeshStandardMaterial);
+  // a program the driver is still linking: drawing with it would stop this thread until it is done (three asks for its
+  // uniforms on first use). Not compiled at all (a lit one, or one compileAsync never reached): drawing would compile it here.
+  const notReady = (o: Drawn) =>
+    (Array.isArray(o.material) ? o.material : [o.material]).some((m) => {
+      const p = (gl.properties.get(m) as { currentProgram?: { isReady: () => boolean } }).currentProgram;
+      return !p || !p.isReady();
+    });
+  // an object drawn as its own scene reads the scene's fog and environment from itself: lend it the world's for the draw
+  const underScene = (o: Drawn, f: () => void) => {
+    const r = o as unknown as { fog?: THREE.Scene["fog"]; environment?: THREE.Texture | null };
+    const f0 = Object.getOwnPropertyDescriptor(r, "fog");
+    const e0 = Object.getOwnPropertyDescriptor(r, "environment");
+    r.fog = scene.fog;
+    r.environment = scene.environment;
+    try {
+      f();
+    } finally {
+      if (f0) Object.defineProperty(r, "fog", f0);
+      else delete r.fog;
+      if (e0) Object.defineProperty(r, "environment", e0);
+      else delete r.environment;
+    }
+  };
   // made where the world itself will be drawn (the lens's linear target, or the screen), so the same shader variants are made
   const into = (rt: THREE.WebGLRenderTarget | null, f: () => void) => {
     const prev = gl.getRenderTarget();
@@ -194,7 +217,7 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
         if (j.prep()) j.prep = null;
         return;
       }
-      Object.assign(j, { id: next, list: null, compiled: 0, pending: 0, drawn: 0, wait: 0, t0: j.prepFor === next ? j.t0 : now });
+      Object.assign(j, { id: next, list: null, compiled: 0, pending: 0, drawn: 0, wait: 0, later: [], tLater: 0, t0: j.prepFor === next ? j.t0 : now });
       tag.v = "mount " + next;
       startTransition(() => setWarm(next));
       return;
@@ -249,18 +272,44 @@ function useWarmWorld(cur: WorldId, props: WorldProps) {
       while (j.drawn < j.list.length && performance.now() - t < slice) {
         const o = j.list[j.drawn++];
         if (lit(o) || !o.parent) continue;
+        // (one whose program is not ready yet is put by and tried again at the end; it is never drawn here unready)
+        if (notReady(o)) {
+          j.later.push(o);
+          continue;
+        }
         // one pixel is enough to upload its buffers and textures
         const fc = o.frustumCulled;
         const ac = gl.autoClear;
         o.frustumCulled = false;
         gl.autoClear = false;
         const td = performance.now();
-        into(tiny, () => gl.render(o, camera));
+        // (drawn as the object alone, but under the world's own fog and environment, so the variant is the one compiled)
+        underScene(o, () => into(tiny, () => gl.render(o, camera)));
         if (process.env.NODE_ENV !== "production" && performance.now() - td > 30) ((window as unknown as { __slow?: unknown[] }).__slow ??= []).push([o.name || o.type, (o.geometry as THREE.BufferGeometry).attributes?.position?.count, Math.round(performance.now() - td), Array.isArray(o.material) ? "multi" : (o.material as THREE.Material).type]);
         gl.autoClear = ac;
         o.frustumCulled = fc;
       }
       return;
+    }
+    // the ones put by: drawn once their programs are ready, or left to be made on first sight after four seconds
+    if (j.later.length) {
+      if (!j.tLater) j.tLater = performance.now();
+      const keep: Drawn[] = [];
+      for (const o of j.later) {
+        if (!o.parent || notReady(o)) {
+          if (performance.now() - j.tLater < 4000) keep.push(o);
+          continue;
+        }
+        const fc = o.frustumCulled;
+        const ac = gl.autoClear;
+        o.frustumCulled = false;
+        gl.autoClear = false;
+        underScene(o, () => into(tiny, () => gl.render(o, camera)));
+        gl.autoClear = ac;
+        o.frustumCulled = fc;
+      }
+      j.later = keep;
+      if (keep.length) return;
     }
     voyage.ready = next;
     if (process.env.NODE_ENV !== "production") console.info(`[voyage] ${next} is warm: ${j.list.length} objects made, compiled and uploaded in ${Math.round(performance.now() - j.t0)} ms while flying ${cur}`);
