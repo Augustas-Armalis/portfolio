@@ -70,16 +70,17 @@ vec3 orbScatter(vec3 p){
 // the ring pressed down onto the ground, so wall and floor are one surface with no seam). The rock is pushed in by
 // long upright folds (the curtains of stone a cave hangs) and broad swellings.
 export function caveGeometry(mobile: boolean) {
-  const NZ = mobile ? 150 : 250;
+  const NZ = mobile ? 190 : 340;
   const NA = mobile ? 120 : 190;
   const pos = new Float32Array((NZ + 1) * (NA + 1) * 3);
   const wallK = new Float32Array((NZ + 1) * (NA + 1));
   const [z0, z1] = CAVE_Z;
   for (let j = 0; j <= NZ; j++) {
-    // (two fifths of the rings are spent on the tunnel and the hall of fog, which are flown close along; the cavern
-    // has the rest, closer together toward its far end where the dome closes)
+    // (a third of the rings are spent on the tunnel, which is flown close along and whose rock is worked small: one
+    // every two and a half metres; a fifth on the hall of fog; the cavern has the rest, closer together toward its
+    // far end where the dome closes)
     const s = j / NZ;
-    const z = s < 0.6 ? z0 + (HALL.z1 - z0) * Math.pow(s / 0.6, 0.85) : HALL.z1 + (z1 - HALL.z1) * ((s - 0.6) / 0.4);
+    const z = s < 0.46 ? z0 + (HALL.z1 - z0) * Math.pow(s / 0.46, 0.85) : s < 0.68 ? HALL.z1 + (TUNNEL.z0 - HALL.z1) * ((s - 0.46) / 0.22) : TUNNEL.z0 + (z1 - TUNNEL.z0) * ((s - 0.68) / 0.32);
     const { w, top } = caveAt(z);
     const yc = top * 0.34;
     const hy = top - yc;
@@ -102,7 +103,22 @@ export function caveGeometry(mobile: boolean) {
       const bay = noise2(arc * 0.0011 + 9.2, z * 0.0012 + 4.4) - 0.5;
       const curtain = ridge2(arc * 0.0042 + 2.0, z * 0.0019, 3);
       const k = Math.min(1, w / 160) * (0.25 + 0.75 * Math.sin(Math.min(1, up * 1.4) * Math.PI * 0.5));
-      const push = ((fold * 34 + swell * 46 - 16) * (1 + 1.2 * big) + (bay * 520 + curtain * 150) * big) * k;
+      let push = ((fold * 34 + swell * 46 - 16) * (1 + 1.2 * big) + (bay * 520 + curtain * 150) * big) * k;
+      // The tunnel is cut rock, not a sheet: beds of it stand out as ledges a few metres apart, and the height of
+      // every ledge wanders along the way so none runs straight; it bulges and falls back by metres; joints are
+      // cut into it across the beds; no two paces of it are alike.
+      const tk = 1 - sst(34, 120, w);
+      if (tk > 0) {
+        const at = th * w;
+        const bedH = y * 0.3 + noise2(z * 0.035 + 2.0, at * 0.02) * 2.6 + noise2(z * 0.11, at * 0.07 + 5) * 0.7;
+        const stp = bedH - Math.floor(bedH);
+        const ledge = sst(0.0, 0.16, stp) - sst(0.5, 1.0, stp);
+        const lump = noise2(at * 0.11 + 7, z * 0.085 + 3) - 0.5;
+        const small = noise2(at * 0.36 + 1, z * 0.2 + 9) - 0.5;
+        const joint = 1 - sst(0.0, 0.04, Math.abs(noise2(at * 0.07 + 13, z * 0.055 + 4) - 0.5));
+        const knob = Math.max(0, noise2(at * 0.2 + 31, z * 0.16 + 17) - 0.68) * 5;
+        push += (ledge * 1.0 + lump * 3.8 + small * 1.3 + knob * 1.6 - joint * 1.2 - 0.7) * tk * (0.25 + 0.75 * sst(0.02, 0.3, up));
+      }
       // pushed toward the middle of the section
       const nx = -ex;
       const ny = -(y - yc) / Math.max(hy, 1);
@@ -157,6 +173,42 @@ export function makeCaveMaterial() {
       ${GLSL_AIR}
       ${GLSL_ORB}
       // the picture's ground: long upright strokes, flecks, and rows of short dark wavy marks (h runs along the wall)
+      // a height drawn on a surface pushes its normal about (from the screen's own derivatives)
+      vec3 bumpN(vec3 n, vec3 P, float h, float k){
+        vec3 dpx = dFdx(P); vec3 dpy = dFdy(P);
+        float hx = dFdx(h); float hy = dFdy(h);
+        vec3 r1 = cross(dpy, n); vec3 r2 = cross(n, dpx);
+        float det = dot(dpx, r1);
+        vec3 g = (r1 * hx + r2 * hy) * sign(det) / max(abs(det), 1e-7);
+        return normalize(n - g * k);
+      }
+      // The tunnel's rock: the home mountain's own, seen from inside. Laid on from three sides, each where the
+      // rock faces it, so nothing is drawn out along the way. Blotches of lighter and darker stone; grain; thin
+      // beds that waver and break; joints across them; seams of mineral, teal and ochre. hgt is its relief.
+      float tri(vec3 P, vec3 w, float f, float o){ return vnoise(P.zy * f + o) * w.x + vnoise(P.xz * f + o + 3.7) * w.y + vnoise(P.xy * f + o + 8.3) * w.z; }
+      vec3 tunnelRock(vec3 P, vec3 n, float fine, float fwh, out float hgt, out float seam){
+        vec3 w = pow(abs(n), vec3(4.0)); w /= w.x + w.y + w.z;
+        float coarse = tri(P, w, 0.06, 0.0);
+        float mid = tri(P, w, 0.33, 5.0) * 0.6 + tri(P, w, 0.9, 11.0) * 0.4;
+        float grain = tri(P, w, 3.3, 2.0) * 0.6 + tri(P, w, 8.0, 6.0) * 0.4;
+        float bed = P.y * 0.5 + fbm(P.xz * 0.045) * 6.0 + vnoise(vec2(P.z * 0.12, P.x * 0.12)) * 1.6;
+        float bl = abs(fract(bed) - 0.5);
+        float bedLine = (1.0 - smoothstep(0.0, 0.04 + fwh * 0.05, bl)) * smoothstep(0.5, 0.72, vnoise(vec2(bed * 0.41, (P.z + P.x) * 0.06)));
+        float bedTone = hash12(vec2(floor(bed), 3.0));
+        float cj = abs(tri(P, w, 0.2, 19.0) - 0.5);
+        // (a joint here and there, not a net of them: most of the rock is whole)
+        float crack = (1.0 - smoothstep(0.0, 0.014 + fwh * 0.012, cj)) * smoothstep(0.52, 0.7, tri(P, w, 0.045, 40.0));
+        vec3 col = mix(vec3(0.05, 0.047, 0.055), vec3(0.2, 0.172, 0.142), coarse * 0.5 + mid * 0.5);
+        col *= (0.78 + 0.44 * bedTone) * (0.8 + 0.4 * grain * fine + 0.2 * (1.0 - fine));
+        float vn = abs(tri(P, w, 0.15, 21.0) + 0.3 * mid - 0.66);
+        seam = 1.0 - smoothstep(0.0, 0.028 + fwh * 0.012, vn);
+        vec3 seamC = mix(vec3(0.05, 0.3, 0.27), vec3(0.44, 0.29, 0.08), smoothstep(0.42, 0.58, vnoise(P.xz * 0.03 + P.y * 0.04)));
+        col = mix(col, seamC, seam * 0.8);
+        col *= 1.0 - 0.6 * crack * fine - 0.24 * bedLine;
+        // (its relief is its broad lumps and its joints: no grain in it, or every wet face would glitter)
+        hgt = mid * 1.1 - crack * 0.8 - bedLine * 0.3 + seam * 0.1;
+        return col;
+      }
       vec3 ground(float h, float y, float fw){
         float s1 = vnoise(vec2(h * 0.16, y * 0.011));
         float s2 = vnoise(vec2(h * 0.55 + 7.0, y * 0.035));
@@ -213,13 +265,22 @@ export function makeCaveMaterial() {
         float c2 = abs(vnoise(vec2((P.x + P.z) * 0.035, P.y * 0.01)) - 0.5);
         float crack = (1.0 - smoothstep(0.0, 0.02 + fwh * 0.01, c1)) * 0.7 + (1.0 - smoothstep(0.0, 0.015 + fwh * 0.008, c2)) * 0.6;
         rock *= 1.0 - 0.55 * crack * fine;
+        // (in the tunnel none of that: its rock is its own, and its relief turns the light)
+        float tHgt; float tSeam;
+        vec3 tRock = tunnelRock(P, n, fine, fwh, tHgt, tSeam);
+        rock = mix(tRock, rock, inC);
+        // water runs down it in places and stands on it: short dark shining runs, more of them low on the walls
+        float wet = smoothstep(0.5, 0.72, vnoise(vec2((P.x + P.z) * 0.33, P.y * 0.07)) + 0.25 * (1.0 - smoothstep(4.0, 22.0, P.y))) * (1.0 - inC);
+        rock *= 1.0 - 0.3 * wet;
+        if (inC < 0.999) n = normalize(mix(bumpN(n, vWorld, tHgt, 0.9), n, inC));
         // the picture's own strokes still in it, faintly: upright, green and gold
         float st = vnoise(vec2((P.x + P.z) * 0.14, P.y * 0.012));
         rock = mix(rock, vec3(0.15, 0.18, 0.06), smoothstep(0.7, 0.85, st) * 0.35 * inC);
         // moss: on every ledge that faces up, thicker low down and toward the light
         float ledge = smoothstep(0.15, 0.6, n.y);
         float mossN = vnoise(P.xz * 0.08) * 0.6 + vnoise(P.xz * 0.31 + 3.0) * 0.4;
-        float moss = ledge * smoothstep(0.35, 0.6, mossN + 0.2 * inC) * mix(0.4, 1.0, inC);
+        // (in the tunnel in patches, wherever a ledge takes the wet and what light there is)
+        float moss = ledge * smoothstep(0.35, 0.6, mossN + 0.2 * inC) * mix(0.75, 1.0, inC);
         vec3 mossC = mix(vec3(0.04, 0.075, 0.03), vec3(0.11, 0.15, 0.04), vnoise(P.xz * 0.6) * fine + 0.3 * (1.0 - fine));
         vec3 wall = mix(rock, mossC, moss);
         // ---- the floor: moss, leaf litter, the dark of roots, still pools
@@ -231,8 +292,9 @@ export function makeCaveMaterial() {
         floorC = mix(floorC, vec3(0.14, 0.09, 0.04), lit * 0.5);
         // roots: long dark winding lines
         float rt = abs(vnoise(vec2(P.x * 0.06 + vnoise(P.xz * 0.02) * 3.0, P.z * 0.012)) - 0.5);
-        floorC *= 1.0 - 0.6 * (1.0 - smoothstep(0.0, 0.03 + fwh * 0.01, rt)) * fine;
-        floorC = mix(floorC, homeRock * 0.8, (1.0 - inC) * 0.7);
+        // (roots are of the wood: there are none on the tunnel's stone)
+        floorC *= 1.0 - 0.6 * (1.0 - smoothstep(0.0, 0.03 + fwh * 0.01, rt)) * fine * inC;
+        floorC = mix(floorC, tRock * 0.8, (1.0 - inC) * 0.75);
         // pools: still dark water in the hollows, the orb and the air in them
         float poolN = vnoise(P.xz * 0.018 + 7.0) * 0.7 + vnoise(P.xz * 0.06) * 0.3;
         float aa = max(fwidth(poolN), 0.002);
@@ -247,13 +309,16 @@ export function makeCaveMaterial() {
         vec3 mouth = vec3(0.0, 22.0, ${(TUNNEL.z0 - 30).toFixed(1)});
         vec3 toM = mouth - P;
         float dm = length(toM);
-        float mouthL = (0.25 + 0.75 * max(dot(n, toM / dm), 0.0)) / (1.0 + pow(dm / 110.0, 2.0)) * (1.0 - inC * 0.6);
-        col += alb * vec3(0.9, 0.8, 0.45) * mouthL * 1.5;
+        // (warm, and falling off along the walls: strong on what faces the mouth near it, a glimmer two hundred
+        // metres back; a seam of mineral takes it and gives a little of it back)
+        float mouthL = (0.12 + 0.88 * max(dot(n, toM / dm), 0.0)) * (1.0 / (1.0 + pow(dm / 80.0, 2.0)) + 0.035) * (1.0 - inC * 0.6);
+        col += alb * vec3(1.0, 0.72, 0.38) * mouthL * 3.0;
+        col += vec3(0.05, 0.22, 0.2) * tSeam * (1.0 - inC) * (0.05 + mouthL * 0.5);
         // damp: a sheen on the wet rock where it faces the orb
         vec3 toO = normalize(uOrb - vWorld);
         float spec = pow(max(dot(reflect(-V, n), toO), 0.0), 24.0);
         col += orbCol() * spec * length(o.rgb) * 0.35 * (1.0 - moss) * fine;
-        col += vec3(0.7, 0.85, 0.45) * pow(max(dot(reflect(-V, n), toM / dm), 0.0), 16.0) * mouthL * 0.5 * fine;
+        col += vec3(1.0, 0.78, 0.46) * pow(max(dot(reflect(-V, n), toM / dm), 0.0), mix(8.0, 16.0, wet)) * (1.0 / (1.0 + pow(dm / 110.0, 2.0)) + 0.02) * (0.1 + 0.55 * wet) * (1.0 - inC) * (1.0 - moss);
         // the pools: a mirror of the air, and the orb's own light lying in them
         if (pool > 0.0) {
           vec3 R = reflect(-V, vec3(0.0, 1.0, 0.0));

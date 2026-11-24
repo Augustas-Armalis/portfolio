@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { Kit, angel, noise2, type Halo, type V3 } from "../kit";
+import { Kit, noise2, type Halo, type V3 } from "../kit";
+import type { AngelSpot } from "../../home/Angels";
 import { funeralLand } from "./land";
 
 // The watchers. Great winged figures stand on ledges cut in the mountain's flanks, high over the road, and look
@@ -17,8 +18,8 @@ export function buildWatchers() {
   const halos: Halo[] = [];
   const stone: V3 = [0.018, 0.03, 0.09];
   const stoneTop: V3 = [0.03, 0.06, 0.14];
-  const robe: V3 = [0.035, 0.07, 0.17];
   const spots: Spot[] = [];
+  const angels: AngelSpot[] = [];
 
   // a place on the flank above the road at sample i, on one side, where the land has risen `rise` metres above the road
   const flank = (i: number, side: number, rise: number, from = 70) => {
@@ -74,11 +75,11 @@ export function buildWatchers() {
     void pts;
     k.tube(arch, s * 0.07, stoneTop, { glow: 0.2, seg: 48, sides: 6 });
     // the figure: pale-robed, bowed a little toward the road, wings closed like a fan
-    angel(k, [x + fx * s * 0.2, top, z + fz * s * 0.2], s * 0.62, yaw, robe, { glow: 0.12, wing: [0.07, 0.15, 0.32], bow: 0.12 });
+    angels.push({ x: x + fx * s * 0.2, y: top, z: z + fz * s * 0.2, yaw, s: s * 0.4, robe: angels.length % 4 });
     halos.push({ p: [x + fx * s * 0.6, top + 1.5, z + fz * s * 0.6], size: s * 0.22, col: [1, 0.72, 0.34], k: 0.45 });
   };
   const onFlank = (i: number, side: number, rise: number, s: number, from?: number) => {
-    const f = flank(i, side, rise, from);
+    const f = flank(i, side, rise, from) ?? flank(i, side, rise * 0.55, from) ?? flank(i, -side, rise * 0.55, from);
     if (!f) return;
     const yaw = Math.atan2(f.to[0], f.to[1]);
     // the shelf is cut a little way into the slope, and its top set over the land there
@@ -117,9 +118,10 @@ export function buildWatchers() {
     }
     k.add(g, [x, base + H / 2, z], stone, { top: stoneTop });
     k.box(24, 2, 24, [x, top - 1, z], stoneTop, { rot: [0, gp.yaw, 0] });
-    angel(k, [x, top, z], 20, gp.yaw, robe, { glow: 0.14, wing: [0.07, 0.15, 0.32], bow: 0.08 });
+    angels.push({ x, y: top, z, yaw: gp.yaw, s: 13, robe: angels.length % 4 });
     halos.push({ p: [x, top + 3, z], size: 7, col: [1, 0.74, 0.36], k: 0.5 });
     spots.push({ x, z, y: top, yaw: gp.yaw, s: 32 });
   }
-  return { geo: k.build(), halos, spots };
+  if (process.env.NODE_ENV !== "production") (globalThis as unknown as { __watchers?: unknown }).__watchers = spots;
+  return { geo: k.build(), halos, spots, angels };
 }
