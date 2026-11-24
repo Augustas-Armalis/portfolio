@@ -479,11 +479,11 @@ function* rockSteps(mobile: boolean, budget: number) {
       // the light behind it
       const pl = cp.length / 3;
       cp.push(p.x + tx * (W0 + REV + 4), L.y[iFar] + 16, p.z + tz * (W0 + REV + 4));
-      ck.push(4, 1, 0, flag);
+      ck.push(7, 1, 0, flag);
       for (let a = 0; a <= NA; a++) {
         const [hu, hy] = hole(a / NA);
         cp.push(p.x + nx * hu + tx * (W0 + REV + 4), L.y[iFar] + hy, p.z + nz * hu + tz * (W0 + REV + 4));
-        ck.push(4, 1, 1, flag);
+        ck.push(7, 1, 1, flag);
       }
       for (let a = 0; a < NA; a++) ci.push(pl, pl + 1 + a, pl + 2 + a);
       ci.push(pl, pl + 1 + NA, pl + 1);
@@ -574,6 +574,11 @@ const ROCK_GLSL = /* glsl */ `
     float tooth = vnoise(l.xz * 1.7 + l.y * 1.1) * 0.5 + vnoise(l.xy * 3.9 - l.z * 2.7) * 0.5;
     return 1.0 + (s1 - 0.5) * 0.7 * nearK + (s2 - 0.5) * 0.8 * farK + (tooth - 0.5) * 0.4 * (1.0 - smoothstep(20.0, 160.0, dist));
   }
+  // planes as he drew them: the side toward the moon a teal-lit ultramarine, the side away near-black indigo
+  vec3 rockLight(vec3 alb, vec3 n, float keyK){
+    float lit = pow(clamp(dot(n, uKeyDir) * 0.8 + 0.2, 0.0, 1.0), 1.6);
+    return alb * (uSkyCol * (0.4 + 0.22 * n.y) * 1.1 + uKeyCol * (lit * 1.35 * keyK + 0.04));
+  }
   const vec3 TEAL = vec3(0.05, 0.36, 0.33);
   const vec3 GOLD = vec3(1.0, 0.74, 0.3);
 `;
@@ -620,15 +625,14 @@ export function makeRockMaterial() {
         }
         vec3 alb = rockAlb(vLocal.xz, vLocal.y, n) * chalk(vLocal, dist);
         alb *= mix(1.0, mix(0.66, 1.16, smoothstep(0.05, 0.6, rib)), steep * rk);
-        float lam = clamp(dot(n, uKeyDir) * 0.55 + 0.45, 0.0, 1.0);
-        vec3 col = alb * (uSkyCol * (0.72 + 0.28 * n.y) * 1.25 + uKeyCol * lam * lam * 0.75);
+        vec3 col = rockLight(alb, n, 1.0);
         // his green-blue line of light along every crest, and a breath of it where a form turns from the eye
         float crest = smoothstep(0.16, 0.75, vK.x);
         float fres = pow(1.0 - max(dot(n, V), 0.0), 5.0);
         float toMoon = smoothstep(-0.2, 0.7, dot(n, uKeyDir));
-        col += TEAL * (crest * 0.72 * (0.25 + 0.75 * toMoon) + fres * 0.14 * toMoon) * (0.6 + 0.8 * vnoise(vLocal.xz * 0.05 + vLocal.y * 0.03));
+        col += TEAL * (crest * 0.46 * (0.25 + 0.75 * toMoon) + fres * 0.14 * toMoon) * (0.6 + 0.8 * vnoise(vLocal.xz * 0.05 + vLocal.y * 0.03));
         // the gullies hold darker chalk
-        col *= 1.0 - 0.4 * smoothstep(0.04, 0.5, -vK.x);
+        col *= 1.0 - 0.62 * smoothstep(0.04, 0.5, -vK.x);
         // the gold the procession carries, on the rock beside it
         col += GOLD * vK.y * vK.y * vK.y * 0.04 * (0.4 + 0.8 * vnoise(vLocal.xz * 0.12 + vLocal.y * 0.1));
         col = funeralAir(col, vWorld);
@@ -638,7 +642,7 @@ export function makeRockMaterial() {
   });
 }
 
-// the road, its cliffs, and the cave: aK.x says which (0 the road, 1 a cliff, 2 the mountain's face round the
+// the road, its cliffs, and the cave: aK.x says which (kinds are blended across a triangle, so the ones that lie side by side are numbered side by side: 0 the road, 1 a cliff, 2 the mountain's face round the
 // mouth, 3 the vault inside, 4 the light at its end)
 export function makeLedgeMaterial() {
   return new THREE.ShaderMaterial({
@@ -700,6 +704,8 @@ export function makeLedgeMaterial() {
           col += TEAL * fres * 0.12 * smoothstep(-0.3, 0.6, dot(n, uKeyDir));
           // the gold spilling over the edge: a bright line at the lip, running a little way down the strokes
           col += GOLD * (exp(-depth * 90.0) * 0.14 + exp(-depth * 7.0) * 0.03 * stroke) * glowK() * 2.0;
+        } else if (kind > 6.5) {
+          col = vec3(1.0, 0.8, 0.45) * mix(1.6, 0.25, vK.z) * (0.85 + 0.15 * sin(uTime * 0.33)) * glowK() * 2.0 * uCaveK;
         } else if (kind > 5.5) {
           // the wall that closes the cave over the portal: the cave's rock, dressed; the light of the other world on the lip of the opening
           float rib = vnoise(vec2(vLocal.x * 0.2 + vLocal.z * 0.2, vLocal.y * 0.12)) * 0.6 + vnoise(vLocal.xz * 0.7 + vLocal.y) * 0.4;
@@ -711,8 +717,9 @@ export function makeLedgeMaterial() {
         } else if (kind > 4.5) {
           // the scree under the cliff: the mountain's own rock
           vec3 alb = rockAlb(vLocal.xz, vLocal.y, n) * chalk(vLocal, dist);
-          float lam = clamp(dot(n, uKeyDir) * 0.55 + 0.45, 0.0, 1.0);
-          col = alb * (uSkyCol * (0.72 + 0.28 * n.y) * 1.25 + uKeyCol * lam * lam * 0.42);
+          // (the scree's own facets are not shown: its normal is half the slope it lies on)
+          n = normalize(mix(n, vec3(0.0, 1.0, 0.0), 0.45));
+          col = rockLight(alb, n, 0.8);
           col += GOLD * exp(-max(vLocal.y, 0.0) * 0.0) * 0.0;
         } else if (kind < 2.5) {
           // the mountain's face round the mouth: carved rock, and the light from inside coming out over its lip
@@ -722,7 +729,7 @@ export function makeLedgeMaterial() {
           float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
           col += TEAL * fres * 0.45 * smoothstep(-0.3, 0.6, dot(n, uKeyDir));
           col += GOLD * exp(-vK.y * 18.0) * 0.22 * (0.7 + 0.3 * sin(uTime * 0.4)) * glowK() * 2.0 * uCaveK * (1.0 - vK.w);
-        } else if (kind < 3.5) {
+        } else if (kind < 4.5) {
           // inside: dark rock, the light of whatever lies at the end growing along the vault, pulsing very slowly
           float deep = vK.y;
           float rib = vnoise(vec2(vLocal.x * 0.2 + vLocal.z * 0.2, vLocal.y * 0.12)) * 0.6 + vnoise(vLocal.xz * 0.7 + vLocal.y) * 0.4;
