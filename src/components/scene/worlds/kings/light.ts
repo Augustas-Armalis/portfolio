@@ -32,7 +32,7 @@ export const DOME_U = {
   uOccC: { value: [occ(-3.55, -0.4, 0), occ(-2.3, 2.5, 0), occ(3.75, 0.2, 0), occ(2.2, 2.95, 0)] },
   uOccR: { value: [new THREE.Vector3(1.5 * R, 2.7 * R, 1.7 * R), new THREE.Vector3(0.85 * R, 0.8 * R, 0.8 * R), new THREE.Vector3(1.55 * R, 3.1 * R, 1.75 * R), new THREE.Vector3(0.9 * R, 0.8 * R, 0.85 * R)] },
   // x: how thick the mist is (per metre at its thickest), y: how much of the light hangs in it, z: how strongly the shafts are cut, w: how light the mist itself is
-  uFogK: { value: new THREE.Vector4(0.0066, 1.3, 1, 0.6) },
+  uFogK: { value: new THREE.Vector4(0.0066, 1.3, 1, 0.73) },
   // what happens as the plane comes on (set each frame by the world): x: the little world's light (1, and brighter as
   // the kings lean to it), y: how far they have leaned (0..1), z: how many of the stars are out (0..1)
   uEvt: { value: new THREE.Vector4(1, 0, 0.3, 0) },
@@ -174,7 +174,7 @@ vec3 bumpN(vec3 n, vec3 P, float h, float k){
 // gives a trunk its roundness in the dark).
 vec3 coolFill(vec3 n){
   return (vec3(0.06, 0.052, 0.044) * (0.6 + 0.4 * n.y)
-    + vec3(0.03, 0.062, 0.07) * pow(max(dot(n, vec3(0.2507, 0.8023, 0.5416)), 0.0), 1.6)) * 0.72;
+    + vec3(0.03, 0.062, 0.07) * pow(max(dot(n, vec3(0.2507, 0.8023, 0.5416)), 0.0), 1.6)) * 0.87;
 }
 `;
 
