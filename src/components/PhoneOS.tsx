@@ -954,7 +954,9 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
     const r = v >= 0.999 ? 0 : Math.max((vw * 0.225) * (1 - v), 40);
     return `inset(${t}px 0px ${t}px 0px round ${r}px)`;
   });
-  const iconOpacity = useTransform(p, [0, 0.4], [1, 0]);
+  // the icon stays until the window is well on its way (the spring covers the first 40% in a few frames, so an
+  // earlier fade showed a blank card growing), then dissolves into the app drawn under it
+  const iconOpacity = useTransform(p, [0.2, 0.5], [1, 0]);
   // opaque while the window is still small: its glass bars (tab bar, player) need an opaque parent to frost,
   // and would otherwise snap to glass half-way through the move
   const contentOpacity = useTransform(p, [0.04, 0.22], [0, 1]);
