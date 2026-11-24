@@ -9,7 +9,8 @@ import { Kit, haloGeometry, makeTempera, rng, type GroundPalette, type Halo, typ
 import { HomeWindow, homeWindowK } from "./kings/homeWindow";
 import { kingSteps, makeCrownMaterial, makeKingMaterial } from "./kings/figures";
 import { makeUnderstory } from "./kings/trees";
-import { BY, DOME_AT, DOME_U, GLSL_END, GLSL_KINGS, GLSL_KINGS_CORE, KINGS_UNIFORMS, R } from "./kings/light";
+import { BY, DOME_AT, DOME_U, GLSL_END, GLSL_KINGS, GLSL_KINGS_CORE, KINGS_UNIFORMS, R, TREE } from "./kings/light";
+import { buildProcession } from "./kings/procession";
 import { aisleX, makeWoodMaterial, woodGeometry, type Walk } from "./kings/wood";
 import { KINGS, KINGS_WATER, ORIGIN, WORLDS, groundAt, heightGLSL, voyage } from "./voyage";
 
@@ -38,6 +39,8 @@ const def = WORLDS.kings;
 const BELL: V3 = [30, 52, 372];
 const BELL_DROP = 120;
 // the world's own tall things (the kings, the painting); the trunks join them whenever the wood is built
+// (the white tree of the souls' road, which the plane goes round like any other tall thing)
+if (!def.obstacles.some((o) => o.x === TREE.x && o.z === TREE.z)) def.obstacles.push({ x: TREE.x, z: TREE.z, r: 22, h: 80 });
 const OWN_OBSTACLES = def.obstacles.length;
 
 export const KINGS_PAL: GroundPalette = {
@@ -824,7 +827,11 @@ function* woodSteps(props: Pick<WorldProps, "mobile" | "trees" | "effects">, bud
   def.obstacles.length = OWN_OBSTACLES;
   for (const t of wood.trunks) def.obstacles.push({ x: t.x, z: t.z, r: t.R + 6, h: t.H });
   yield;
+  // the start of the wood: the cave's mouth, the souls coming out of it, the road and the white tree at the end of it
+  const proc = buildProcession(props.mobile, props.effects);
+  yield;
   return {
+    proc,
     woodChunks: wood.chunks,
     under: makeUnderstory({ mobile: props.mobile, trees: props.trees }),
     bark: makeWoodMaterial(),
@@ -1016,6 +1023,11 @@ export default function KingsWorld({ props }: { props: WorldProps }) {
         <mesh geometry={b.bellCage} material={b.bellDark} position={[0, -BELL_DROP + 2.3, 0]} />
         <mesh geometry={b.bellLamp} material={b.bellGlow} position={[0, -BELL_DROP, 0]} />
       </group>
+      <mesh geometry={b.proc.scenery} material={b.proc.sceneryMat} />
+      <mesh geometry={b.proc.strands} material={b.proc.sceneryMat} />
+      <mesh geometry={b.proc.road} material={b.proc.roadMat} renderOrder={4} />
+      <mesh geometry={b.proc.figs} material={b.proc.figMat} frustumCulled={false} />
+      <mesh geometry={b.proc.lights} material={b.proc.lightMat} renderOrder={7} frustumCulled={false} />
       <mesh geometry={b.walkers} material={b.walkerMat} />
       <mesh geometry={b.leaves} material={b.leafMat} />
       <mesh geometry={b.lampGeo} material={b.lampMat} renderOrder={6} />
@@ -1088,6 +1100,9 @@ function letGo(w: Record<string, unknown>) {
   for (const v of Object.values(w)) {
     if (v instanceof THREE.BufferGeometry || v instanceof THREE.Material || v instanceof THREE.Texture) v.dispose();
     else if (Array.isArray(v)) for (const c of v) (c as { geo?: THREE.BufferGeometry }).geo?.dispose();
-    else if (v && typeof v === "object" && Array.isArray((v as { meshes?: unknown }).meshes)) (v as { dispose: () => void }).dispose();
+    else if (v && typeof v === "object" && "scenery" in v) {
+      const pr = v as { road: THREE.BufferGeometry; roadMat: THREE.Material; strands: THREE.BufferGeometry; scenery: THREE.BufferGeometry; sceneryMat: THREE.Material; figs: THREE.BufferGeometry; figMat: THREE.Material; lights: THREE.BufferGeometry; lightMat: THREE.Material; src: THREE.BufferGeometry };
+      for (const d of [pr.road, pr.roadMat, pr.strands, pr.scenery, pr.sceneryMat, pr.figs, pr.figMat, pr.lights, pr.lightMat, pr.src]) d.dispose();
+    } else if (v && typeof v === "object" && Array.isArray((v as { meshes?: unknown }).meshes)) (v as { dispose: () => void }).dispose();
   }
 }
