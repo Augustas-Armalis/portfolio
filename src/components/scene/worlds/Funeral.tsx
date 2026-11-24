@@ -8,6 +8,7 @@ import { GLSL_SKY, SKY_U } from "../sky";
 import { Halos, LightGate, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, noise2, paint, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, PaintedClouds, type Flock, type PaintedCloud } from "./life";
+import { PICTURE } from "./portal";
 import { ORIGIN, WORLDS, voyage } from "./voyage";
 import { Walkers, useDeepLens } from "./fairy/shared";
 import { FUNERAL_U } from "./funeral/air";
@@ -46,13 +47,15 @@ function makeArrivalVeil() {
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U },
+    uniforms: { ...SKY_U, uPicture: PICTURE },
     vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
-      varying vec2 vUv;
+      varying vec2 vUv; uniform float uPicture;
       ${GLSL_NOISE}
       ${GLSL_SKY}
       void main(){
+        // (not in a window's picture: the eye there is still behind this sheet)
+        if (uPicture > 0.5) discard;
         // the cave's own outline
         float x = (vUv.x - 0.5) * 2.0 * ${(CAVE.half * 1.06).toFixed(2)}; float y = vUv.y * ${(CAVE.top * 1.04).toFixed(2)};
         float hw = y <= ${CAVE.wall.toFixed(1)} ? ${CAVE.half.toFixed(1)} : ${CAVE.half.toFixed(1)} * sqrt(max(0.0, 1.0 - pow((y - ${CAVE.wall.toFixed(1)}) / ${(CAVE.top - CAVE.wall).toFixed(1)}, 2.0)));

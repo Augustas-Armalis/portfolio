@@ -40,6 +40,9 @@ export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPor
 // turn), so it turns with the eye as the live picture does and costs nothing a frame. Close in (from 130 m to 90 m)
 // the live picture takes over; the last stretch is drawn live at the frame's full size, every frame, so the frame
 // after the worlds change places is the frame before.
+// 1 while a window's picture is drawn (for a sheet that belongs to the way the plane came, e.g. the Funeral's arrival veil,
+// which the eye of the picture stands behind: seen from there it is a cream wall over the whole opening until the eye passes it)
+export const PICTURE = { value: 0 };
 const STILL_U = { tStill: { value: null as THREE.Texture | null }, uStillMat: { value: new THREE.Matrix4() }, uStillOn: { value: 0 }, uLiveK: { value: 0 } };
 const OPENING: Partial<Record<WorldId, [number, number, number?]>> = { sun: [23, 33], stars: [50, 80, 32], rex: [40, 72], fairy: [18, 27, 74], paradise: [14.5, 22.5], gate: [35, 93], seafinale: FINALE_OPENING, sea: [27, 27] };
 // How wide and how high above its middle a gate counts as gone through: the opening itself (a window the plane
@@ -186,8 +189,10 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     try {
       gl.setRenderTarget(target);
       gl.clear();
+      PICTURE.value = 1;
       gl.render(scene, cam);
     } finally {
+      PICTURE.value = 0;
       gl.setRenderTarget(prev);
       gl.shadowMap.autoUpdate = shadows;
       gl.shadowMap.needsUpdate = shadowDue;
