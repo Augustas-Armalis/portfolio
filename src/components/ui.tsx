@@ -1,10 +1,10 @@
 "use client";
 
-import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react";
+import { AnimatePresence, MotionGlobalConfig, animate, motion, useMotionValue, useTransform } from "motion/react";
 import { ChevronLeft, ChevronRight, PanelLeft, Search, X } from "lucide-react";
 import { Sym, type SymIcon } from "./symbols";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { apps, type AppId } from "@/content";
 import { useOS } from "@/store";
 import { EDGES, EDGE_CURSOR, EDGE_ZONE, clampMove, pointerGesture, resizeRect, type Edge } from "./windowFrame";
@@ -37,6 +37,94 @@ export function SplitFrame({ shown, setShown, children, className = "" }: { show
 // Back sits top-left where iOS puts it and the large title names the screen you are on.
 export type PhoneDetail = { title: string; back: () => void } | null;
 export const PhoneNav = createContext<((d: PhoneDetail) => void) | null>(null);
+
+// Every screen opened inside a phone app (a pushed pane, an album, a photo, a film) registers its way back; a swipe
+// from the left edge takes the deepest one, the last to register. Off the phone there is no registry and the hook
+// does nothing.
+export const PhoneBack = createContext<{ add: (fn: () => void) => () => void } | null>(null);
+export function usePhoneBack(active: boolean, back: () => void) {
+  const reg = useContext(PhoneBack);
+  const fn = useRef(back);
+  fn.current = back;
+  useEffect(() => {
+    if (!reg || !active) return;
+    return reg.add(() => fn.current());
+  }, [reg, active]);
+}
+
+// Runs `fn` with every animation it starts landing at once, then `after` once those have started: a swipe back has
+// already carried the screen away, so its own exit must not play again behind the finger.
+export function instantly(fn: () => void, after?: () => void) {
+  MotionGlobalConfig.instantAnimations = true;
+  try {
+    flushSync(fn);
+  } finally {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        MotionGlobalConfig.instantAnimations = false;
+        after?.();
+      }),
+    );
+  }
+}
+
+// A swipe in from the left edge, iOS's way back. Spread the handlers on a thin strip along the edge: `move` gets
+// the finger's distance as it goes (the screen follows it 1:1), `end` the distance and the release velocity (px/s).
+// A move that starts mostly up or down is not a swipe, and a tap on the strip goes to whatever is under it.
+export function useEdgeSwipe(h: { start?: () => void; move: (dx: number) => void; end: (dx: number, v: number) => void }) {
+  const st = useRef<{ id: number; x0: number; y0: number; on: boolean; dead: boolean; hist: { x: number; t: number }[] } | null>(null);
+  const H = useRef(h);
+  H.current = h;
+  const finish = (e: React.PointerEvent<HTMLElement>) => {
+    const s = st.current;
+    if (!s || s.id !== e.pointerId) return;
+    st.current = null;
+    if (s.on) {
+      const a = s.hist[0];
+      const b = s.hist[s.hist.length - 1];
+      const v = b.t > a.t ? ((b.x - a.x) / (b.t - a.t)) * 1000 : 0;
+      H.current.end(e.type === "pointercancel" ? 0 : Math.max(0, e.clientX - s.x0), e.type === "pointercancel" ? 0 : v);
+      return;
+    }
+    if (s.dead || e.type !== "pointerup") return;
+    const el = e.currentTarget;
+    el.style.pointerEvents = "none";
+    const under = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    el.style.pointerEvents = "";
+    ((under?.closest("button,a,[role=button],label") as HTMLElement | null) ?? under)?.click();
+  };
+  return {
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      if (st.current || (e.pointerType === "mouse" && e.button !== 0)) return;
+      st.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, dead: false, hist: [{ x: e.clientX, t: e.timeStamp }] };
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // without capture the strip still follows the finger while it stays over the screen
+      }
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      const s = st.current;
+      if (!s || s.id !== e.pointerId || s.dead) return;
+      const dx = e.clientX - s.x0;
+      const dy = e.clientY - s.y0;
+      if (!s.on) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        if (Math.abs(dy) > Math.abs(dx) || dx < 0) {
+          s.dead = true;
+          return;
+        }
+        s.on = true;
+        H.current.start?.();
+      }
+      H.current.move(Math.max(0, dx));
+      s.hist.push({ x: e.clientX, t: e.timeStamp });
+      if (s.hist.length > 5) s.hist.shift();
+    },
+    onPointerUp: finish,
+    onPointerCancel: finish,
+  };
+}
 
 export function Badge({ children, tone = "grey" }: { children: ReactNode; tone?: "grey" | "ink" | "live" }) {
   const cls =
@@ -315,6 +403,7 @@ export function dragFile(title: string, src: string) {
 }
 export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[]; index: number | null; onIndex?: (i: number) => void; onClose: () => void }) {
   const { compact } = useChrome();
+  usePhoneBack(compact && index !== null, onClose);
   const it = index === null ? null : items[index];
   useEffect(() => {
     if (index === null) return;
@@ -654,6 +743,7 @@ export function SplitView({
     nav(pushed ? { title: pushedTitle, back: () => setPushed(false) } : null);
     return () => nav(null);
   }, [compact, nav, pushed, pushedTitle]);
+  usePhoneBack(compact && pushed, () => setPushed(false));
   if (compact) {
     return (
       <div className="relative overflow-hidden">

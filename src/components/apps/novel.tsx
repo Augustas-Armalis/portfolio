@@ -7,7 +7,7 @@ import { BookOpen, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { Sym } from "../symbols";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { novel } from "@/content";
-import { Btn, glass, M, SplitFrame, Toolbar, useChrome } from "../ui";
+import { Btn, glass, M, SplitFrame, Toolbar, useChrome, usePhoneBack } from "../ui";
 import { Empty } from "./shared";
 
 type Chapter = { id: string; title: string; paragraphs: string[]; words: number; image?: string };
@@ -61,6 +61,7 @@ export function Novel() {
   const [book, setBook] = useState<Book | null>(null);
   const [failed, setFailed] = useState(false);
   const [ch, setCh] = useState<number | null>(null);
+  usePhoneBack(compact && ch !== null, () => setCh(null));
   const [saved, setSaved] = useState<Pos | null>(null);
   useEffect(() => {
     let live = true;

@@ -428,6 +428,7 @@ export function makeScreenMaterial(size: [number, number]) {
     logoTex.minFilter = THREE.LinearMipmapLinearFilter;
     logoTex.magFilter = THREE.LinearFilter;
     logoTex.anisotropy = 8;
+    logoTex.wrapS = logoTex.wrapT = THREE.ClampToEdgeWrapping;
     logoBox.set(logo.w / 4, logo.h / 4);
   }
   return new THREE.ShaderMaterial({
@@ -469,8 +470,12 @@ export function makeScreenMaterial(size: [number, number]) {
         float mark = max(cover(sun), cover(horizon));
         if (uLogoOn > 0.5) {
           // the logo's box is centred on the frame; q runs 0..1 across it, top to bottom
+          // sampled outside any branch: inside one, the pixels on the box's edge share a 2x2 quad with pixels that
+          // skip the read, the GPU's level-of-detail there is garbage, and a faint rectangle shows round the logo
+          // as the camera moves in. The pad is clear, so clamping to the edge reads nothing outside the box.
           vec2 q = p / uLogoBox + 0.5;
-          mark = (q.x > 0.0 && q.x < 1.0 && q.y > 0.0 && q.y < 1.0) ? texture2D(uLogo, vec2(q.x, 1.0 - q.y)).a : 0.0;
+          float ink = texture2D(uLogo, vec2(q.x, 1.0 - q.y)).a;
+          mark = ink * step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);
         }
         vec2 bp = p - vec2(0.0, ${f(barY)});
         float track = cover(rbox(bp, vec2(${f(barW / 2)}, ${f(barH / 2)}), ${f(barH / 2)}));

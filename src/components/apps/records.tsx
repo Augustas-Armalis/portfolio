@@ -9,7 +9,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { music, playableTracks, tracks, type Track } from "@/content";
 import { Bars } from "../shell";
 import { useOS } from "@/store";
-import { Btn, glass, List, ListRow, M, useChrome } from "../ui";
+import { Btn, glass, List, ListRow, M, useChrome, usePhoneBack } from "../ui";
 import { trackOf, player, usePlayer } from "./player";
 import { LiveWallpaper } from "../Apps";
 
@@ -338,6 +338,8 @@ export function Records() {
       }
     },
   };
+  // Now Playing is a sheet over the list: the edge swipe puts it away, as the pull down does
+  usePhoneBack(compact && full, () => (setFull(false), setVideo(null)));
   // closing the window quits the app, like Music; on the phone it keeps playing under the Dynamic Island
   useEffect(() => () => void (!useOS.getState().isMobile && player.stop()), []);
   // Now Playing is dark to the top edge: the status bar turns white over it
@@ -372,7 +374,6 @@ export function Records() {
       {/* the mini player; tap it for Now Playing */}
       <motion.button
         type="button"
-        layoutId="np"
         onClick={() => setFull(true)}
         data-glass=""
         className={`${glass("pop")} fixed inset-x-3 bottom-[calc(var(--phone-bottom)+6px)] z-[30] flex h-14 items-center gap-3 rounded-[20px] px-2 text-left`}

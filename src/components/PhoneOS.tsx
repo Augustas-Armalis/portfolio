@@ -1,7 +1,8 @@
 "use client";
 
-import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransform, type AnimationPlaybackControls } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransform, type AnimationPlaybackControls, type MotionValue } from "motion/react";
+import { flushSync } from "react-dom";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { apps, bookCall, dockApps, gallery, gameApps, mainWork, owner, playableTracks, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
 import { flightMusicPrime } from "@/lib/flightMusic";
 import { handoff } from "@/lib/handoff";
@@ -11,7 +12,7 @@ import { Bars, Monogram, PowerOverlay } from "./shell";
 import { IconFace } from "./icons";
 import { Check, ChevronLeft, Pause, Play, Power, Send, Wifi, X } from "lucide-react";
 import { Sym } from "./symbols";
-import { Chrome, EASE_OUT, glass, M, PhoneNav, reducedMotion, SPRING_GLASS, sfx, useGlassScope, type PhoneDetail } from "./ui";
+import { Chrome, EASE_OUT, glass, instantly, M, PhoneBack, PhoneNav, reducedMotion, SPRING_GLASS, sfx, useEdgeSwipe, useGlassScope, type PhoneDetail } from "./ui";
 import { useClock, useDate } from "./useClock";
 
 // iPhone-style OS: lock screen that lifts away, a home screen of icons, and apps
@@ -84,7 +85,7 @@ function Island({ real }: { real: boolean }) {
             </motion.div>
           )}
           {mode === "big" && track && (
-            <motion.div key="b" initial={{ opacity: 0, filter: "blur(6px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} exit={{ opacity: 0 }} transition={{ duration: 0.25, delay: 0.08 }} className="absolute inset-0 flex flex-col px-5 pb-4 pt-5">
+            <motion.div key="b" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, delay: 0.08 }} className="absolute inset-0 flex flex-col px-5 pb-4 pt-5">
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={track.cover} alt="" className="h-[52px] w-[52px] rounded-[16px] object-cover" />
@@ -312,6 +313,21 @@ function HomeIcon({ id, label, onOpen }: { id: AppId; label?: string; onOpen: (i
 
 // ---------- home: pages of widgets and apps ----------
 
+// true while an app covers the home screen: its clocks and slideshows stop ticking, and it is not drawn at all
+const HomeCovered = createContext(false);
+// an interval that only runs while the home screen is in sight
+function useHomeInterval(fn: () => void, ms: number, atOnce = false) {
+  const covered = useContext(HomeCovered);
+  const f = useRef(fn);
+  f.current = fn;
+  useEffect(() => {
+    if (covered) return;
+    if (atOnce) f.current();
+    const iv = window.setInterval(() => document.visibilityState === "visible" && f.current(), ms);
+    return () => window.clearInterval(iv);
+  }, [covered, ms, atOnce]);
+}
+
 // A tap on anything that opens grows the app out of that thing's own rectangle.
 type Open = (id: AppId, o: Origin) => void;
 const rectOf = (el: Element): Origin => {
@@ -370,16 +386,11 @@ function PlayingWidget({ onOpen }: { onOpen: Open }) {
 // The time where he is: a plain clock face, Kaunas under it.
 function ClockWidget({ onOpen }: { onOpen: Open }) {
   const [now, setNow] = useState<{ h: number; m: number; s: number; label: string } | null>(null);
-  useEffect(() => {
-    const tick = () => {
-      const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Vilnius", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).formatToParts(new Date());
-      const n = (t: string) => +(parts.find((x) => x.type === t)?.value ?? 0);
-      setNow({ h: n("hour") % 24, m: n("minute"), s: n("second"), label: `${String(n("hour") % 24).padStart(2, "0")}:${String(n("minute")).padStart(2, "0")}` });
-    };
-    tick();
-    const iv = window.setInterval(tick, 1000);
-    return () => window.clearInterval(iv);
-  }, []);
+  useHomeInterval(() => {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Vilnius", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).formatToParts(new Date());
+    const n = (t: string) => +(parts.find((x) => x.type === t)?.value ?? 0);
+    setNow({ h: n("hour") % 24, m: n("minute"), s: n("second"), label: `${String(n("hour") % 24).padStart(2, "0")}:${String(n("minute")).padStart(2, "0")}` });
+  }, 1000, true);
   const hand = (deg: number, len: number, w: number, col: string) => <line x1="50" y1="50" x2={50 + Math.sin((deg * Math.PI) / 180) * len} y2={50 - Math.cos((deg * Math.PI) / 180) * len} stroke={col} strokeWidth={w} strokeLinecap="round" />;
   return (
     <Widget app="about" onOpen={onOpen} className={`flex ${WIDGET_H} flex-col items-center justify-between p-3`}>
@@ -409,10 +420,7 @@ function ClockWidget({ onOpen }: { onOpen: Open }) {
 const STACK: AppId[] = projectGroups.slice(0, 2).flatMap((g) => g.apps).filter((id) => projects[id]);
 function ProjectsWidget({ onOpen }: { onOpen: Open }) {
   const [i, setI] = useState(0);
-  useEffect(() => {
-    const iv = window.setInterval(() => setI((n) => (n + 1) % STACK.length), 3600);
-    return () => window.clearInterval(iv);
-  }, []);
+  useHomeInterval(() => setI((n) => (n + 1) % STACK.length), 3600);
   const id = STACK[i];
   const p = projects[id]!;
   return (
@@ -420,7 +428,7 @@ function ProjectsWidget({ onOpen }: { onOpen: Open }) {
       <span className={kicker}>Projects</span>
       <span className="relative mt-2 block flex-1">
         <AnimatePresence initial={false} mode="popLayout">
-          <motion.span key={id} className="absolute inset-0 flex flex-col justify-between" initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -8, filter: "blur(4px)" }} transition={{ duration: 0.45, ease: EASE_OUT }}>
+          <motion.span key={id} className="absolute inset-0 flex flex-col justify-between" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.45, ease: EASE_OUT }}>
             <AppIcon id={id} size={46} />
             <span>
               <span className="block truncate text-[17px] font-semibold leading-[21px] tracking-[-0.022em]">{p.name}</span>
@@ -438,10 +446,7 @@ function PhotoWidget({ onOpen }: { onOpen: Open }) {
   // a few of his photographs: the Gallery's Best of, one after another
   const best = useMemo(() => (gallery.albums.find((x) => x.id === "best")?.items ?? []).map((id) => gallery.media.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m && m.kind === "photo"), []);
   const [i, setI] = useState(0);
-  useEffect(() => {
-    const iv = window.setInterval(() => setI((n) => (n + 1) % best.length), 6000);
-    return () => window.clearInterval(iv);
-  }, [best.length]);
+  useHomeInterval(() => setI((n) => (n + 1) % Math.max(1, best.length)), 6000);
   const s = best[i];
   if (!s) return null;
   return (
@@ -546,12 +551,19 @@ const FOLDERS: Record<"projects" | "games", { title: string; apps: AppId[]; all:
 };
 function Folder({ id, onOpen, onClose }: { id: "projects" | "games"; onOpen: Open; onClose: () => void }) {
   const f = FOLDERS[id];
+  // a swipe in from the left edge closes it too: the panel follows the finger
+  const fx = useMotionValue(0);
+  const edge = useEdgeSwipe({
+    move: (dx) => fx.set(dx),
+    end: (dx, v) => (dx > 90 || v > 500 ? onClose() : animate(fx, 0, { ...M.fling, velocity: v })),
+  });
   return (
     // Each layer fades by itself. A backdrop blur (the scrim, the glass panel) inside a parent that is fading has
     // nothing behind it to blur until the fade ends: it would sit flat and then snap to frosted.
     <motion.div className="absolute inset-0 z-[40] flex flex-col items-center justify-center px-6" exit={{ opacity: 1, transition: M.out }} onClick={onClose} role="dialog" aria-label={`${f.title} folder`} data-folder={id}>
       <motion.div aria-hidden className="absolute inset-0 bg-black/35 backdrop-blur-[26px] backdrop-saturate-150" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade} />
-      <motion.div className="relative w-full max-w-[340px]" initial={{ scale: 0.9, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, transition: M.out }} transition={M.ui} onClick={(e) => e.stopPropagation()}>
+      <div {...edge} aria-hidden onClick={(e) => e.stopPropagation()} className="absolute inset-y-0 left-0 z-10 w-4 touch-none" />
+      <motion.div style={{ x: fx }} className="relative w-full max-w-[340px]" initial={{ scale: 0.9, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, transition: M.out }} transition={M.ui} onClick={(e) => e.stopPropagation()}>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade} className="mb-4 px-2 text-[28px] font-semibold leading-8 tracking-[-0.028em] text-white [text-shadow:0_1px_10px_rgb(0_0_0/0.3)]">{f.title}</motion.div>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade} data-glass="" className={`${glass("widget-dark")} max-h-[72dvh] overflow-y-auto overscroll-contain rounded-[34px] px-4 py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>
           <div className="grid grid-cols-3 justify-items-center gap-x-2 gap-y-5">
@@ -711,7 +723,7 @@ function PowerSheet({ onClose }: { onClose: () => void }) {
 
 // ---------- iOS navigation: large title that collapses into the nav bar ----------
 
-function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; dark: boolean; onClose: () => void }) {
+function AppScroll({ id, ground, dark, onClose, onBack }: { id: AppId; ground: string; dark: boolean; onClose: () => void; onBack?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll({ container: ref });
   // a pushed screen (a Settings pane, a Taste list): Back top-left, and the large title names it
@@ -721,7 +733,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
   const story = false as boolean;
   const [hero] = useState(() => (story ? window.innerWidth * 1.25 : 0));
   // the bar comes in as the large title leaves: a pushed screen's title sits a row lower, a story's under its picture
-  const from = story ? hero - 60 : detail ? 74 : 24;
+  const from = story ? hero - 60 : detail || onBack ? 74 : 24;
   const bar = useTransform(scrollY, (v) => Math.min(1, Math.max(0, (v - from) / 20)));
   const big = useTransform(scrollY, (v) => Math.min(1, Math.max(0, 1 - (v - from + 24) / 36)));
   useEffect(() => {
@@ -756,11 +768,11 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
         <Sym icon={X} size={20} weight="semibold" />
       </button>
       <AnimatePresence>
-        {detail && (
+        {(detail || onBack) && (
           <motion.button
             key="back"
             type="button"
-            onClick={detail.back}
+            onClick={detail ? detail.back : onBack}
             aria-label="Back"
             data-glass=""
             initial={{ opacity: 0, scale: 0.8 }}
@@ -780,7 +792,7 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
         ) : (
         <motion.h2
           style={{ opacity: big }}
-          className={`pb-2 pl-4 pr-16 text-[34px] font-bold leading-[41px] tracking-[0.011em] ${detail ? "pt-[calc(var(--phone-top)+56px)]" : "pt-[calc(var(--phone-top)+6px)]"}`}
+          className={`pb-2 pl-4 pr-16 text-[34px] font-bold leading-[41px] tracking-[0.011em] ${detail || onBack ? "pt-[calc(var(--phone-top)+56px)]" : "pt-[calc(var(--phone-top)+6px)]"}`}
         >
           {title}
         </motion.h2>
@@ -797,7 +809,26 @@ function AppScroll({ id, ground, dark, onClose }: { id: AppId; ground: string; d
 
 // ---------- app window: grows out of its icon, home gesture to close ----------
 
-function AppWindow({ id, origin, onClosed, onLeaving }: { id: AppId; origin: Origin | null; onClosed: () => void; onLeaving?: (leaving: boolean) => void }) {
+// A phone app is one of a stack: the first grows out of its icon, one opened from inside another is pushed over it
+// from the right (the one under it drifts a little left and dims, as on iOS). A swipe in from the left edge takes
+// the deepest way back there is: a screen inside the app, else the app under this one, else home. The screen
+// follows the finger and can be caught again while it settles.
+type WindowProps = {
+  id: AppId;
+  origin: Origin | null;
+  enter: "icon" | "push";
+  // 0 is the app in front, 1 the one under it; deeper ones wait out of sight with their state kept
+  depth: number;
+  hidden: boolean;
+  canPop: boolean;
+  topX: MotionValue<number>;
+  onClosed: () => void;
+  onPop: () => void;
+  onLeaving?: (leaving: boolean) => void;
+  // whether the home screen is fully hidden under this app (so it can stop drawing)
+  onCover?: (covered: boolean) => void;
+};
+function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, onPop, onLeaving, onCover }: WindowProps) {
   const [vw] = useState(() => window.innerWidth);
   const [vh] = useState(() => window.innerHeight);
   const o = origin ?? { x: vw / 2 - 31, y: vh / 2 - 31, w: 62, h: 62 };
@@ -807,7 +838,7 @@ function AppWindow({ id, origin, onClosed, onLeaving }: { id: AppId; origin: Ori
   const inset = Math.max(0, (vh - vw) / 2);
 
   // p: 0 = the icon, 1 = full screen. lift: finger offset during the home gesture.
-  const p = useMotionValue(0);
+  const p = useMotionValue(enter === "push" ? 1 : 0);
   const lift = useMotionValue(0);
   const anim = useRef<AnimationPlaybackControls | null>(null);
   const scale = useTransform(p, (v) => s0 + (1 - s0) * v);
@@ -827,21 +858,115 @@ function AppWindow({ id, origin, onClosed, onLeaving }: { id: AppId; origin: Ori
     anim.current?.stop();
     // on its way back to its icon the app no longer covers the home screen: the icons take taps again at once
     onLeaving?.(target === 0);
+    if (target === 0) onCover?.(false);
     anim.current = animate(p, target, {
       ...(target === 1 ? M.sheet : M.ui),
       velocity,
       onComplete: () => {
         if (target === 0) onClosed();
+        else onCover?.(true);
       },
     });
     animate(lift, 0, M.ui);
   };
 
+  // the slide: the app in front moves on topX (shared with the one under it, which follows at a third of the pace);
+  // inside the app, a screen being swiped away moves on navX
+  const navX = useMotionValue(0);
+  const slide = useRef<AnimationPlaybackControls | null>(null);
   useEffect(() => {
-    to(1);
+    if (enter === "push" && !reducedMotion()) {
+      topX.set(vw);
+      slide.current = animate(topX, 0, { ...M.ui, onComplete: () => onCover?.(true) });
+    } else if (enter === "push") {
+      topX.set(0);
+      onCover?.(true);
+    } else {
+      topX.set(0);
+      to(1);
+    }
     // open once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const under = useTransform(topX, (v) => (Math.min(v, vw) - vw) * 0.3);
+  // the app under is only drawn while the one in front is moving off it
+  const underShown = useTransform(topX, (v) => (v > 0.5 ? "visible" : "hidden"));
+  const dim = useTransform(topX, [0, vw], [0.16, 0]);
+  const top = depth === 0;
+
+  // the ways back inside this app, deepest last
+  const backs = useRef<(() => void)[]>([]);
+  const registry = useMemo(
+    () => ({
+      add: (fn: () => void) => {
+        backs.current.push(fn);
+        return () => {
+          backs.current = backs.current.filter((f) => f !== fn);
+        };
+      },
+    }),
+    [],
+  );
+  const pop = (velocity = 0) => {
+    slide.current?.stop();
+    slide.current = animate(topX, vw, {
+      type: "spring",
+      bounce: 0,
+      duration: 0.32,
+      velocity,
+      // a frame later: the animation writes its last value after onComplete, which would undo the reset
+      onComplete: () =>
+        requestAnimationFrame(() => {
+          flushSync(onPop);
+          topX.set(0);
+        }),
+    });
+  };
+  const mode = useRef<"nested" | "pop" | "close">("close");
+  const base = useRef(0);
+  const mv = () => (mode.current === "nested" ? navX : topX);
+  const edge = useEdgeSwipe({
+    start: () => {
+      slide.current?.stop();
+      mode.current = backs.current.length ? "nested" : canPop ? "pop" : "close";
+      if (mode.current === "close") onCover?.(false);
+      base.current = mv().get();
+    },
+    move: (dx) => mv().set(Math.max(0, base.current + dx)),
+    end: (_, v) => {
+      const m = mv();
+      const at = m.get();
+      const go = v > 500 || (at > vw * 0.4 && v > -150);
+      if (!go) {
+        const close = mode.current === "close";
+        slide.current = animate(m, 0, { ...M.fling, velocity: v, onComplete: () => close && onCover?.(true) });
+        return;
+      }
+      if (mode.current === "pop") return pop(v);
+      if (mode.current === "close") onLeaving?.(true);
+      slide.current = animate(m, vw, {
+        type: "spring",
+        bounce: 0,
+        duration: 0.32,
+        velocity: v,
+        onComplete: () => {
+          if (mode.current === "close") return onClosed();
+          // (a frame later, for the same reason as pop)
+          requestAnimationFrame(() => {
+            // the screen under comes back in from a little to the left, as the one under a push does
+            const back = backs.current[backs.current.length - 1];
+            instantly(
+              () => back?.(),
+              () => {
+                slide.current = animate(navX, 0, M.ui);
+              },
+            );
+            navX.set(-vw * 0.3);
+          });
+        },
+      });
+    },
+  });
 
   // Home indicator: swipe up, the app follows the finger and shrinks toward its icon.
   const drag = useRef<{ y0: number; p0: number; hist: { y: number; t: number }[] } | null>(null);
@@ -849,6 +974,7 @@ function AppWindow({ id, origin, onClosed, onLeaving }: { id: AppId; origin: Ori
     // one finger owns the gesture: a second touch does not restart it from somewhere else
     if (drag.current) return;
     anim.current?.stop();
+    onCover?.(false);
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {
@@ -884,10 +1010,19 @@ function AppWindow({ id, origin, onClosed, onLeaving }: { id: AppId; origin: Ori
   const grouped = ["projects", "games", "taste", "kit", "settings", "contact", "records"].includes(id);
   const ground = darkApp ? "bg-[#1C1D20] text-white" : grouped ? "bg-[#F2F2F7] text-ink" : "bg-white text-ink";
   return (
-    <motion.div className="phone-app absolute inset-0 z-[60] will-change-transform" style={{ x, y, scale, clipPath }}>
+    <motion.div
+      className={`absolute inset-0 ${top ? "shadow-[-12px_0_32px_rgb(0_0_0/0.2)]" : ""}`}
+      style={{ x: top ? topX : depth === 1 ? under : 0, zIndex: 60 - depth, visibility: depth > 1 || (!top && hidden) ? "hidden" : depth === 1 ? underShown : undefined }}
+      inert={!top}
+      data-phone-window={id}
+      data-depth={depth}
+    >
+    <motion.div className="phone-app absolute inset-0 will-change-transform" style={{ x, y, scale, clipPath }}>
       <div className={`absolute inset-0 ${ground}`} />
-      <motion.div style={{ opacity: contentOpacity }} className="absolute inset-0">
-        <AppScroll id={id} ground={ground} dark={darkApp} onClose={() => (to(0))} />
+      <motion.div style={{ opacity: contentOpacity, x: navX }} className="absolute inset-0">
+        <PhoneBack.Provider value={registry}>
+          <AppScroll id={id} ground={ground} dark={darkApp} onClose={() => to(0)} onBack={canPop ? () => pop() : undefined} />
+        </PhoneBack.Provider>
       </motion.div>
       {/* the icon the app grows out of */}
       <motion.div style={{ opacity: iconOpacity, top: inset, height: vw }} className="pointer-events-none absolute inset-x-0">
@@ -906,6 +1041,10 @@ function AppWindow({ id, origin, onClosed, onLeaving }: { id: AppId; origin: Ori
         <span className={`h-[5px] w-[134px] rounded-full ${darkApp ? "bg-white/80" : "bg-ink/85"}`} />
       </div>
     </motion.div>
+      {depth === 1 && <motion.div aria-hidden className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: dim }} />}
+      {/* the left edge: a swipe from here goes back */}
+      {top && <div {...edge} aria-hidden data-edge-back="" className="absolute inset-y-0 left-0 z-[2600] w-4 touch-none" />}
+    </motion.div>
   );
 }
 
@@ -917,6 +1056,15 @@ export default function PhoneOS() {
   const origin = useOS((s) => s.phoneOrigin);
   const openPhoneApp = useOS((s) => s.openPhoneApp);
   const heroDark = useOS((s) => s.heroDark);
+  const below = useOS((s) => s.phoneBelow);
+  const enter = useOS((s) => s.phoneEnter);
+  const phoneBack = useOS((s) => s.phoneBack);
+  const stack = useMemo(() => (phoneApp ? [...below, phoneApp] : []), [below, phoneApp]);
+  const topX = useMotionValue(0);
+  const [covered, setCovered] = useState(false);
+  useEffect(() => {
+    if (!phoneApp) setCovered(false);
+  }, [phoneApp]);
   const lightBar = !(up) || !phoneApp || phoneApp === "terminal" || phoneApp === "doom" || phoneApp === "blocks" || (!!phoneApp && heroDark);
   const shutdown = useOS((s) => s.shutdown);
   const [power, setPower] = useState(false);
@@ -967,7 +1115,11 @@ export default function PhoneOS() {
             exit={{ scale: 1, transition: { duration: 0.01 } }}
             transition={M.sheet}
           >
-            <Home onOpen={(id, o) => openPhoneApp(id, o)} onFly={fly} />
+            <HomeCovered.Provider value={covered && !!phoneApp}>
+              <div className="absolute inset-0" style={covered && phoneApp ? { visibility: "hidden" } : undefined}>
+                <Home onOpen={(id, o) => openPhoneApp(id, o)} onFly={fly} />
+              </div>
+            </HomeCovered.Provider>
           </motion.div>
         ) : (
           <motion.div
@@ -982,7 +1134,26 @@ export default function PhoneOS() {
           </motion.div>
         )}
       </AnimatePresence>
-      {up && phoneApp && <AppWindow key={phoneApp} id={phoneApp} origin={origin} onClosed={() => openPhoneApp(null)} onLeaving={setLeaving} />}
+      {up &&
+        stack.map((id, i) => {
+          const depth = stack.length - 1 - i;
+          return (
+            <AppWindow
+              key={`${id}:${i}`}
+              id={id}
+              origin={origin}
+              enter={depth === 0 ? enter : "icon"}
+              depth={depth}
+              hidden={leaving}
+              canPop={i > 0}
+              topX={topX}
+              onClosed={() => openPhoneApp(null)}
+              onPop={phoneBack}
+              onLeaving={setLeaving}
+              onCover={depth === 0 ? setCovered : undefined}
+            />
+          );
+        })}
       <AnimatePresence>{power && <PowerSheet key="power" onClose={() => setPower(false)} />}</AnimatePresence>
       <PowerOverlay />
     </div>
