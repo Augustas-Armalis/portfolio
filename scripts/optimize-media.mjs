@@ -3,6 +3,9 @@
 //
 //   npm run media -- "/path/to/folder"      (or put the files in media/inbox and run `npm run media`)
 //   npm run media -- "/path" --force        (re-encode everything, not only what is new or changed)
+//   npm run media -- "/path" --set=work     (another set: public/gallery/work and src/work.json, for his design work.
+//                                            Files are named <project>--<nn>-<caption>, e.g. kaching--04-bundles-app.png;
+//                                            each keeps its project as its album and its order, and carries no date)
 //
 // The originals are only read, never moved or changed. For every photo (JPG, JPEG, PNG, HEIC, WEBP):
 //   - turned upright from its EXIF orientation, then every bit of metadata dropped (no EXIF, no GPS)
@@ -31,10 +34,11 @@ const ffmpeg = require("ffmpeg-static");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const force = args.includes("--force");
+const SET = args.find((a) => a.startsWith("--set="))?.slice(6) ?? null;
 const IN = path.resolve(args.find((a) => !a.startsWith("--")) ?? process.env.MEDIA_IN ?? path.join(ROOT, "media/inbox"));
-const OUT = path.join(ROOT, "public/gallery/own");
-const MANIFEST = path.join(ROOT, "src/media.json");
-const CAPTIONS = path.join(ROOT, "scripts/media-captions.json");
+const OUT = path.join(ROOT, `public/gallery/${SET ?? "own"}`);
+const MANIFEST = path.join(ROOT, `src/${SET ?? "media"}.json`);
+const CAPTIONS = path.join(ROOT, `scripts/${SET ?? "media"}-captions.json`);
 
 const PHOTO = /\.(jpe?g|png|heic|heif|webp|tiff?)$/i;
 const FILM = /\.(mp4|mov|m4v)$/i;
@@ -64,8 +68,10 @@ const idOf = (file) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 const camera = (file) => /^(\d{14}_)?(IMG|DSC|DJI|PXL|GOPR|MVI)_?\d+$/i.test(path.parse(file).name);
+// a work set's file: "kaching--04-bundles-app" is the fourth of Kaching, "Bundles app"
+const albumOf = (file) => path.parse(file).name.split("--")[0];
 const titleOf = (file) => {
-  const name = path.parse(file).name.replace(/^\d{14}_/, "").replace(/[_-]+/g, " ").trim();
+  const name = path.parse(file).name.replace(/^\d{14}_/, "").replace(/^.*--\d*-?/, "").replace(/[_-]+/g, " ").trim();
   return name.charAt(0).toUpperCase() + name.slice(1);
 };
 const human = (iso) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "");
@@ -83,7 +89,8 @@ async function photo(file) {
   const src = path.join(IN, file);
   const id = idOf(file);
   const prev = oldById.get(id);
-  if (!force && prev?.stamp === stamp(src) && SIZES.every((s) => fs.existsSync(path.join(ROOT, "public", prev.srcs[s.key])))) return prev;
+  // unchanged and already encoded: kept as it is, with a title written by hand since applied
+  if (!force && prev?.stamp === stamp(src) && SIZES.every((s) => fs.existsSync(path.join(ROOT, "public", prev.srcs[s.key])))) return captions[id]?.title ? { ...prev, title: captions[id].title } : prev;
   const meta = await sharp(src).metadata();
   const date = exifDate(meta.exif) ?? new Date(fs.statSync(src).mtimeMs).toISOString().slice(0, 10);
   // upright first; sharp writes no metadata unless asked, so the copies carry no EXIF and no GPS
@@ -102,7 +109,7 @@ async function photo(file) {
     }
     const name = `${id}-${s.box}.webp`;
     fs.writeFileSync(path.join(OUT, name), buf.data);
-    srcs[s.key] = `/gallery/own/${name}`;
+    srcs[s.key] = `/gallery/${SET ?? "own"}/${name}`;
     if (s.key === "zoom") ({ width: w, height: h } = buf.info);
     console.log(`  ${name}  ${buf.info.width}x${buf.info.height}  q${q}  ${kb(buf.data.length)}`);
   }
@@ -112,7 +119,8 @@ async function photo(file) {
     id,
     kind: "photo",
     title: c.title ?? (camera(file) ? human(date) : titleOf(file)),
-    date,
+    // a work set has its project instead of a day (a screenshot's own date says nothing)
+    ...(SET ? { album: albumOf(file) } : { date }),
     ...(c.place ? { place: c.place } : {}),
     w,
     h,
@@ -198,8 +206,9 @@ for (const f of files) {
 }
 // newest first
 const byDate = (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id.localeCompare(b.id));
-photos.sort(byDate);
+// a work set keeps the order its files are named in
+if (!SET) photos.sort(byDate);
 films.sort(byDate);
 fs.writeFileSync(MANIFEST, `${JSON.stringify({ photos, films }, null, 2)}\n`);
 const total = fs.readdirSync(OUT).reduce((n, f) => n + fs.statSync(path.join(OUT, f)).size, 0);
-console.log(`\n${photos.length} photos, ${films.length} films -> public/gallery/own (${(total / 1048576).toFixed(1)} MB), manifest src/media.json`);
+console.log(`\n${photos.length} photos, ${films.length} films -> public/gallery/${SET ?? "own"} (${(total / 1048576).toFixed(1)} MB), manifest src/${SET ?? "media"}.json`);
