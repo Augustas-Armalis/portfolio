@@ -707,6 +707,8 @@ function build(level: number) {
     paint: pass(PAINT, { tMap: { value: ldr.texture }, uTexel: { value: new THREE.Vector2() }, uStep: { value: 1 }, uPaint: { value: paint ? 0.5 : 0 }, uPaintZ: { value: new THREE.Vector2(7, 30) }, ...depthU, ...finishU }),
     pick: pass(PICK, { uPoint: { value: new THREE.Vector2(0.5, 0.5) }, ...depthU }),
   };
+  // (named, so a profile can say which pass is which)
+  for (const [k, mat] of Object.entries(m)) mat.name = `post:${k}`;
   const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ao, ao2, ldr, ...hist, pick];
   // (hist: which of the two holds the frame before, whether it holds one at all, and how the camera saw the world then)
   const past = { i: 0, ok: false, vp: new THREE.Matrix4(), eye: new THREE.Vector3(), q: new THREE.Quaternion(), at: 0, ray: 0 };
