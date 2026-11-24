@@ -124,27 +124,36 @@ function rangeGeometry(rg: Range, segA: number, segR: number) {
   return g;
 }
 
-export function makeRangeMaterial(rg: Range) {
+// tri: 1 for a mountain with steep faces (the cave's): the rock's grain and gullies are then projected from the side on
+// what faces sideways, as well as from above, so a cliff is not streaked; the ranges, all gentle slopes, keep 0
+export function makeRangeMaterial(rg: Range, tri = 0) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, ...HOME_U, uHaze: { value: rg.haze }, uSnow: { value: rg.snow }, uTop: { value: rg.height } },
+    uniforms: { ...SKY_U, ...HOME_U, uHaze: { value: rg.haze }, uSnow: { value: rg.snow }, uTop: { value: rg.height }, uTri: { value: tri } },
     vertexShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vN;
       void main(){ vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vN = normal; gl_Position = projectionMatrix * viewMatrix * wp; }`,
     fragmentShader: /* glsl */ `
-      uniform float uHaze; uniform float uSnow; uniform float uTop;
+      uniform float uHaze; uniform float uSnow; uniform float uTop; uniform float uTri;
       varying vec3 vWorld; varying vec3 vN;
       ${GLSL_NOISE}
       ${GLSL_SKY}
       ${GLSL_HOME_AIR}
       void main(){
         vec3 n = dot(vN, vN) > 1e-10 ? normalize(vN) : vec3(0.0, 1.0, 0.0);
-        if (n.y < 0.0) n = -n;
+        // (a range's slopes all face up; a mountain with sheer faces may be built with any winding, so there the normal is
+        // turned to the eye, never by up and down, which on a cliff flips it in patches and lights them wrong)
+        if (uTri > 0.5) { if (dot(n, cameraPosition - vWorld) < 0.0) n = -n; } else if (n.y < 0.0) n = -n;
         // the rock's own grain: small ribs and gullies the mesh is too coarse to carry
         float fq = 14.0 / uTop;
-        float g0 = fbm(vWorld.xz * fq);
-        vec2 gr = vec2(fbm(vWorld.xz * fq + vec2(0.35, 0.0)) - g0, fbm(vWorld.xz * fq + vec2(0.0, 0.35)) - g0);
-        n = normalize(n + vec3(-gr.x, 0.0, -gr.y) * 2.2 * (1.0 - n.y * 0.5));
+        // (from above on what faces up, from the sides on what faces sideways, blended: the same grain everywhere)
+        vec3 pw = vec3(0.0, 1.0, 0.0);
+        if (uTri > 0.5) { pw = pow(abs(n), vec3(4.0)); pw /= (pw.x + pw.y + pw.z); }
+        float g0 = 0.0; vec3 pert = vec3(0.0);
+        if (pw.y > 0.002) { vec2 q = vWorld.xz * fq; float a = fbm(q); g0 += a * pw.y; pert += vec3(a - fbm(q + vec2(0.35, 0.0)), 0.0, a - fbm(q + vec2(0.0, 0.35))) * pw.y; }
+        if (pw.x > 0.002) { vec2 q = vWorld.zy * fq; float a = fbm(q); g0 += a * pw.x; pert += vec3(0.0, a - fbm(q + vec2(0.0, 0.35)), a - fbm(q + vec2(0.35, 0.0))) * pw.x; }
+        if (pw.z > 0.002) { vec2 q = vWorld.xy * fq; float a = fbm(q); g0 += a * pw.z; pert += vec3(a - fbm(q + vec2(0.35, 0.0)), a - fbm(q + vec2(0.0, 0.35)), 0.0) * pw.z; }
+        n = normalize(n + pert * 2.2 * (1.0 - n.y * 0.5));
         float hN = clamp(vWorld.y / uTop, 0.0, 1.0);
         float steep = 1.0 - n.y;
         float strata = vnoise(vec2(vWorld.y * (9.0 / uTop) + g0 * 2.0, vWorld.x * 0.004));
@@ -155,16 +164,20 @@ export function makeRangeMaterial(rg: Range) {
         alb = mix(alb, rock, smoothstep(0.24, 0.46, hN + steep * 0.45 + (g0 - 0.5) * 0.2));
         // snow: above a ragged line, on anything not too steep; a thin dusting lower in the gullies
         float line = hN + (g0 - 0.5) * 0.3;
-        float sn = uSnow * smoothstep(0.5, 0.62, line) * (1.0 - smoothstep(0.3, 0.62, steep + (1.0 - hN) * 0.25));
+        // (on a mountain of sheer faces snow clings higher up the steep, as it does on the ranges' heads)
+        float sn = uSnow * smoothstep(0.42, 0.56, line) * (1.0 - smoothstep(0.3, 0.62, steep - 0.3 * uTri + (1.0 - hN) * 0.25));
         alb = mix(alb, vec3(0.62, 0.66, 0.74), clamp(sn, 0.0, 1.0));
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         float ndl = clamp(dot(n, uKeyDir) * 0.75 + 0.25, 0.0, 1.0);
-        float cs = mix(1.0, cloudShade(vWorld), 0.7);
+        // (a cloud's shadow falls on what faces up; on a cliff it would only be blotches, so there it fades)
+        float cs = mix(1.0, cloudShade(vWorld), 0.7 * (1.0 - uTri));
         vec3 col = alb * (uSkyCol * (0.55 + 0.45 * n.y) + uKeyCol * ndl * ndl * 1.25 * sunUp * cs);
         // their feet stand in the low haze; their heads clear of it
         vec3 d = normalize(vWorld - cameraPosition);
         float low = (1.0 - smoothstep(0.0, uTop * 0.5, vWorld.y)) * 0.3;
-        float amt = max(homeAirAmt(vWorld) * mix(0.62, 0.9, smoothstep(0.5, 0.0, vWorld.y / uTop)), clamp(uHaze + low, 0.0, 0.96));
+        // (the low mist that lies in woods is drawn from a map of where the woods are: on the foot of a tall mountain
+        // that map would show through as patches, so for it the air is read from well above the trees)
+        float amt = max(homeAirAmt(vec3(vWorld.x, vWorld.y + 60.0 * uTri, vWorld.z)) * mix(0.62, 0.9, smoothstep(0.5, 0.0, vWorld.y / uTop)), clamp(uHaze + low, 0.0, 0.96));
         col = mix(col, homeAirCol(d), amt);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
