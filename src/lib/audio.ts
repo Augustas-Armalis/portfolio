@@ -180,7 +180,10 @@ function hushElements() {
 }
 
 const hasAudio = () => typeof window !== "undefined" && typeof AudioContext !== "undefined";
-const visible = () => typeof document === "undefined" || document.visibilityState === "visible";
+// (the scene's pause, P or its button, silences everything the way a hidden tab does: fade out, stop the elements,
+// put the context to sleep, and wake exactly what was playing, from where it stood)
+let scenePaused = false;
+const visible = () => !scenePaused && (typeof document === "undefined" || document.visibilityState === "visible");
 const soundOn = () => {
   try {
     return useOS.getState().sound;
@@ -1025,11 +1028,8 @@ function devHook(s: State) {
 // Paused: the music plays on as if through a wall (a low-pass to about 700 Hz and -6 dB over 0.4 s), and opens again.
 export function setMuffled(on: boolean) {
   if (typeof window === "undefined") return;
+  scenePaused = on;
   const g = (window as unknown as { __aosAudio?: State }).__aosAudio;
-  if (!g || !g.muffle || !g.muffleGain) return;
-  const t = g.ctx.currentTime;
-  g.muffle.frequency.cancelScheduledValues(t);
-  g.muffle.frequency.setTargetAtTime(on ? 700 : 20000, t, 0.13);
-  g.muffleGain.gain.cancelScheduledValues(t);
-  g.muffleGain.gain.setTargetAtTime(on ? 0.5 : 1, t, 0.13);
+  if (!g) return;
+  onVisibility();
 }

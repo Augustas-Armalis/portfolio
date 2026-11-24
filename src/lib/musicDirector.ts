@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { audioHushed, externalMusic, onMusicClaim, onMuteChange, onOwnerStop, resumeAudio, sceneMuted, setDeskMusic, voice, voicePlay, voicePrime, voiceStop, type Voice } from "@/lib/audio";
+import { audioGraph, audioHushed, channel, externalMusic, fadeParam, onMusicClaim, onMuteChange, onOwnerStop, resumeAudio, sceneMuted, setDeskMusic, voice, voicePlay, voicePrime, voiceRoute, voiceStop, type Voice } from "@/lib/audio";
 import { MUSIC_CREDIT } from "@/lib/musicCredits";
 import { fieldMusicGain, getSoundSettings, masterGain, setSoundSettings, subscribeSoundSettings } from "@/lib/soundSettings";
 
@@ -21,8 +21,16 @@ import { fieldMusicGain, getSoundSettings, masterGain, setSoundSettings, subscri
 // decks, and each piece is taken up where it was left (kept for the visit). In the home world the field's music
 // carries on through the take-off; flying into the forest or near the cave (Room tells us how far in,
 // musicForest), it hands over to the forest's, and back again on the way out. Landing hands back to the field.
-// Files are loaded only when they are first asked for: the field's at the desk, the flight's on take-off. A file
-// that will not load is silence for the visit.
+// Files are loaded only when they are first asked for: the field's at the desk, the flight's on take-off, and the
+// piece that comes next (forest while the field plays, sea while the forest does) is buffered on a deck of its own
+// during the range before it, so a change of range never waits for a file. Nothing starts before the visitor's first
+// touch (it waits, and the sky and the ambience are not told there is music). A file that will not load is silence
+// for the visit.
+//
+// Three decks pour into one bus: a deck carries only its piece's own level and its fades (equal power, seven seconds
+// a hand-over), and everything else (the visitor's levels, the kings' wood, a crossing's duck) leans the bus, so a
+// level never cuts into a fade in progress. A crossing between worlds is silent: musicCrossing ducks the bus into the
+// cloud (0.6 s) and brings it back after the swap (1.2 s), and a piece that is due to change waits until it is over.
 //
 // His own songs are never played here by themselves: they are in the OS's Records and on the desk's headphones,
 // by his choice.
@@ -60,6 +68,12 @@ export const PIECES: Record<PieceId, Piece> = {
 const SEA_RANGE = new Set(["gate", "seafinale", "sea", "funeral", "kings"]);
 // seconds: every hand-over is slow (field to forest and back, the two halves of the voyage, the landing)
 const FADE = { change: 7, desk: 4, out: 2.5, press: 1.6 };
+// A crossing between worlds is silent: the music ducks into the cloud (or the window) and comes back out after the
+// world has changed, and a new piece never begins in the middle of one (see musicCrossing). Seconds, and the share
+// of the level left at the bottom of the duck.
+const DUCK = { down: 0.6, up: 1.2, cloud: 0.22, window: 0.5 };
+// what is loaded ahead, during the range before it (the visit's order: field, then forest, then sea)
+const NEXT: Partial<Record<PieceId, PieceId>> = { field: "forest", forest: "sea" };
 // the forest's edge, with room between going in and coming out so it never flickers (Room: inJourneyForest)
 const FOREST_IN = 0.55;
 const FOREST_OUT = 0.25;
@@ -67,6 +81,7 @@ const STORE = "ag-music";
 
 type Now = { key: PieceId };
 type Deck = { name: string; v: Voice | null; failed: PieceId | null };
+type CrossPhase = "open" | "closing" | "hold" | "opening";
 
 type S = {
   place: Place | null;
@@ -75,9 +90,15 @@ type S = {
   deskWant: boolean; // the ambience would have the field's music at the desk now
   muted: boolean;
   flightVol: number; // the flight's own quieting (the kings' wood)
+  duck: number; // 1, or the crossing's duck (share of the level left)
   now: Now | null;
-  live: 0 | 1; // which deck has the music
-  decks: [Deck, Deck] | null;
+  live: number; // which deck has the music (an index into decks)
+  decks: Deck[] | null; // three: one sounds, one lets go of what it was, one is loading what comes next
+  bus: GainNode | null; // the music's own level, after the decks: the visitor's levels, the kings' wood, the crossing's duck
+  gesture: boolean; // the visitor has touched the page: only then does anything start
+  wait: boolean; // something is wanted and is waiting for that first touch
+  phase: CrossPhase; // the crossing between worlds, as the flight reports it
+  pending: boolean; // the flight's piece changed during a crossing: it is taken up when the crossing is over
   failed: Partial<Record<PieceId, boolean>>; // a file that would not load: that piece is silence for the visit
   pos: Partial<Record<PieceId, number>>; // where each piece was left
   log: string[];
@@ -86,17 +107,24 @@ type S = {
   leaving: number;
   off: (() => void)[]; // what this module listens to, so a reloaded copy can take over cleanly
 };
-const G = globalThis as typeof globalThis & { __aosMusic3?: S };
-const st: S = (G.__aosMusic3 ??= {
+const G = globalThis as typeof globalThis & { __aosMusic4?: S; __aosMusic3?: { tick: number } };
+if (typeof window !== "undefined" && G.__aosMusic3) window.clearInterval(G.__aosMusic3.tick); // (a copy from before a hot reload: its loop watcher goes with it)
+const st: S = (G.__aosMusic4 ??= {
   place: null,
   world: "road",
   forest: false,
   deskWant: false,
   muted: false,
   flightVol: 1,
+  duck: 1,
   now: null,
   live: 0,
   decks: null,
+  bus: null,
+  gesture: false,
+  wait: false,
+  phase: "open",
+  pending: false,
   failed: {},
   pos: {},
   log: [],
@@ -124,8 +152,12 @@ function save() {
   }
 }
 
-// ---- the two decks: voices of the audio manager, owned by nobody (the flight's claim is made for them) ----
-function decks(): [Deck, Deck] {
+// ---- the decks: voices of the audio manager, owned by nobody (the flight's claim is made for them) ----
+// Three of them: one has the music, one is letting go of what it had (a hand-over takes seven seconds, a loop four),
+// and one is loading what comes next, so a change of range never waits for a file and never takes a deck that is
+// still sounding. They all pour into one bus (the music's level), so a change of level (the visitor's slider, the
+// kings' wood, the crossing's duck) never touches a fade that is in progress.
+function decks(): Deck[] {
   if (st.decks) return st.decks;
   const mk = (name: string): Deck => {
     const d: Deck = { name, v: voice(`music-${name}`, { channel: "music", scene: true, loop: false }), failed: null };
@@ -137,15 +169,28 @@ function decks(): [Deck, Deck] {
     d.v?.el.addEventListener("ended", () => onEnded(d));
     return d;
   };
-  st.decks = [mk("a"), mk("b")];
+  st.decks = [mk("a"), mk("b"), mk("c")];
+  if (!st.bus && st.decks.every((d) => d.v?.gate)) {
+    try {
+      const { ctx } = audioGraph();
+      const bus = ctx.createGain();
+      bus.gain.value = busLevel();
+      bus.connect(channel("music"));
+      st.decks.forEach((d) => voiceRoute(d.v, bus));
+      st.bus = bus;
+    } catch {
+      st.bus = null;
+    }
+  }
   return st.decks;
 }
 const srcOf = (d: Deck) => d.v?.el.getAttribute("src") ?? null;
 const volOf = (d: Deck) => (d.v ? (d.v.gain ? d.v.gain.gain.value : d.v.el.volume) : 0);
-const sounding = (d: Deck) => !!d.v && !d.v.el.paused && d.v.want && volOf(d) > 0.001;
+// (heard at all: playing with some level, whether it is wanted or only letting go)
+const sounding = (d: Deck) => !!d.v && !d.v.el.paused && volOf(d) > 0.001;
 const timeOf = (d: Deck) => d.v?.el.currentTime ?? 0;
 const endOf = (d: Deck) => (Number.isFinite(d.v?.el.duration) ? d.v!.el.duration : 0);
-function deckPlay(d: Deck, p: Piece, at: number, level: number, fade: number) {
+function deckPlay(d: Deck, p: Piece, at: number, fade: number) {
   const v = d.v;
   if (!v) return;
   if (srcOf(d) !== p.file) {
@@ -161,7 +206,32 @@ function deckPlay(d: Deck, p: Piece, at: number, level: number, fade: number) {
   };
   if (v.el.readyState >= 1) seek();
   else v.el.addEventListener("loadedmetadata", seek, { once: true });
-  voicePlay(v, { fade, level });
+  voicePlay(v, { fade, level: voiceLevel(p.id) });
+}
+// The deck for a piece that is not being held already: never the one that has the music, and the quietest of the others
+// (one that is not sounding at all, and holds nothing that is wanted soon, before one that is only fading).
+function spare(keep?: PieceId): Deck {
+  const ds = decks();
+  const live = ds[st.live];
+  const hold = keep ? PIECES[keep].file : null;
+  const rank = (d: Deck) => (sounding(d) ? 2 + volOf(d) : srcOf(d) && srcOf(d) === hold ? 1 : srcOf(d) ? 0.5 : 0);
+  return ds.filter((d) => d !== live || !st.now).sort((a, b) => rank(a) - rank(b))[0] ?? ds[(st.live + 1) % ds.length];
+}
+// Load the piece that comes next into a deck of its own while this one plays (paused, silent: only buffered).
+function preloadNext() {
+  if (typeof window === "undefined" || !st.now || st.place !== "flight" || !st.gesture) return;
+  const next = NEXT[st.now.key];
+  if (!next || st.failed[next]) return;
+  const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
+  if (nav.connection?.saveData) return;
+  const file = PIECES[next].file;
+  const ds = decks();
+  if (ds.some((d) => srcOf(d) === file)) return;
+  const d = spare(st.now.key);
+  if (!d.v || sounding(d) || d === ds[st.live]) return;
+  d.v.el.preload = "auto";
+  d.v.el.src = file;
+  note(`loading ${next} ahead on deck ${d.name}`);
 }
 
 // ---- what should be heard now ----
@@ -177,7 +247,14 @@ function resolve(): Now | null {
   return st.failed[key] ? null : { key };
 }
 
-const levelOf = (id: PieceId) => Math.min(1.4, PIECES[id].level * masterGain() * fieldMusicGain() * (st.place === "flight" ? st.flightVol : 1));
+// The music's level is the bus's (the visitor's levels under the master, the flight's own quieting, the crossing's
+// duck); a deck only carries its piece's own level. Without a Web Audio bus the deck carries all of it.
+const busLevel = () => Math.min(1.4, masterGain() * fieldMusicGain() * (st.place === "flight" ? st.flightVol : 1) * st.duck);
+const voiceLevel = (id: PieceId) => (st.bus ? PIECES[id].level : Math.min(1.4, PIECES[id].level * busLevel()));
+function setBus(seconds: number) {
+  if (st.bus) fadeParam(st.bus.gain, busLevel(), seconds);
+  else if (st.now) voicePlay(decks()[st.live].v, { fade: seconds, level: voiceLevel(st.now.key) });
+}
 // in flight the music is the flight's, as a voice of its own would be; at the desk it is background nobody owns
 const owned = () => externalMusic(st.place === "flight" ? "flight" : null, st.place === "flight");
 
@@ -198,6 +275,8 @@ function apply(fade?: number) {
   const want = silent() ? null : resolve();
   const cur = st.now;
   if (!want) {
+    st.wait = false;
+    st.pending = false;
     if (cur) {
       note(`out: ${cur.key}`);
       leave(cur, fade ?? FADE.out);
@@ -207,33 +286,53 @@ function apply(fade?: number) {
     watching(false);
     return emit();
   }
+  // nothing starts before the visitor has touched the page (the browser would refuse it, and the sky and the ambience
+  // would be told there was music): it waits, and starts with the first touch
+  if (!cur && !armed()) {
+    if (!st.wait) note(`${want.key}: waiting for a touch`);
+    st.wait = true;
+    return emit();
+  }
+  st.wait = false;
+  st.gesture = true; // (armed: the page has been touched, if not by anything this module heard)
   const f = fade ?? FADE.change;
   const ds = decks();
   if (cur && cur.key === want.key) {
     // the same piece carries on: only its level leans (and who owns it, as the plane goes up or comes down)
     st.now = want;
-    voicePlay(ds[st.live].v, { fade: 1.2, level: levelOf(want.key) });
+    st.pending = false;
+    setBus(1.2);
     owned();
+    preloadNext();
     return emit();
   }
+  // the flight's piece changes while the cloud is over a crossing: the new one waits for the crossing to be over
+  if (cur && st.place === "flight" && st.phase !== "open") {
+    if (!st.pending) note(`${want.key}: after the crossing`);
+    st.pending = true;
+    return emit();
+  }
+  st.pending = false;
   if (cur) leave(cur, f);
   st.now = want;
   const p = PIECES[want.key];
-  // A deck that still holds this piece (left a moment ago and still fading, or paused where it was) takes it back
-  // up; otherwise the deck that is not sounding takes it, and the other is left to finish its fade.
+  // A deck that still holds this piece (loaded ahead, left a moment ago and still fading, or paused where it was)
+  // takes it up; otherwise the quietest spare deck takes it, and the others are left as they are.
   const held = ds.findIndex((d, i) => srcOf(d) === p.file && !(cur && i === st.live));
-  const next = (held >= 0 ? held : cur || sounding(ds[st.live]) ? 1 - st.live : st.live) as 0 | 1;
+  const next = held >= 0 ? held : ds.indexOf(spare(NEXT[want.key]));
   st.live = next;
   const d = ds[next];
   const turning = held === next && sounding(d);
   let at = turning ? timeOf(d) : (st.pos[want.key] ?? 0);
   const end = endOf(d);
   if (end > 0 && at > end - p.x - 1) at = 0;
-  note(`in: ${want.key} @${Math.round(at)}s${turning ? " (turned round)" : ""}`);
+  note(`in: ${want.key} @${Math.round(at)}s${turning ? " (turned round)" : held >= 0 ? " (was loaded)" : ""}`);
   resumeAudio();
-  deckPlay(d, p, at, levelOf(want.key), f);
+  deckPlay(d, p, at, f);
+  setBus(0.6);
   owned();
   watching(true);
+  preloadNext();
   emit();
 }
 
@@ -250,7 +349,7 @@ function onEnded(d: Deck) {
   // (the seam is normally crossed before the end: see watching; this is the safety net)
   const now = st.now;
   if (!now || decks()[st.live] !== d) return;
-  deckPlay(d, PIECES[now.key], 0, levelOf(now.key), 0.8);
+  deckPlay(d, PIECES[now.key], 0, 0.8);
 }
 
 // While something plays: remember where it is, and loop it without a seam.
@@ -269,17 +368,29 @@ function watching(on: boolean) {
     st.pos[now.key] = t;
     const end = endOf(d);
     if (end <= p.x * 2 || t < end - p.x) return;
-    // a breath before its end the other deck takes it up from the beginning, the two crossing (unless that deck
-    // is still letting another piece go: then on the next tick)
-    const o = ds[1 - st.live];
-    if (sounding(o)) return;
+    // a breath before its end another deck takes it up from the beginning, the two crossing (unless every other
+    // deck is still letting something go: then on the next tick)
+    const o = spare(NEXT[now.key]);
+    if (o === d || sounding(o)) return;
     note(`loop: ${now.key}`);
     voiceStop(d.v, p.x);
-    st.live = (1 - st.live) as 0 | 1;
-    deckPlay(o, p, 0, levelOf(now.key), p.x);
+    st.live = ds.indexOf(o);
+    deckPlay(o, p, 0, p.x);
     st.pos[now.key] = 0;
+    preloadNext();
   }, 250);
 }
+
+// The first touch: from here the browser lets sound start. Whatever was wanted before it starts now.
+function touched() {
+  if (st.gesture) return;
+  st.gesture = true;
+  note("touched");
+  resumeAudio();
+  decks().forEach((d) => voicePrime(d.v));
+  if (st.wait) apply();
+}
+const armed = () => st.gesture || (typeof navigator !== "undefined" && !!(navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive);
 
 // ---- the calls the rest of the site makes ----
 // the ambience: the field's music is wanted at the desk now, or not
@@ -311,6 +422,10 @@ export function musicFlightStop(fade = FADE.change, home = true) {
   if (typeof window === "undefined" || st.place !== "flight") return;
   st.flightVol = 1;
   st.forest = false;
+  // (a crossing that was under way is over: the cloud has nothing to do with the desk)
+  st.phase = "open";
+  st.pending = false;
+  st.duck = 1;
   st.place = home && st.deskWant ? "desk" : null;
   note(`flight: stop${st.place ? " (to the field)" : ""}`);
   apply(fade);
@@ -326,13 +441,52 @@ export function musicForest(k: number) {
 export function musicFlightVolume(v: number) {
   if (typeof window === "undefined") return;
   st.flightVol = v;
-  const now = st.now;
-  if (st.place !== "flight" || !now) return;
-  voicePlay(decks()[st.live].v, { fade: 0.6, level: levelOf(now.key) });
+  if (st.place !== "flight" || !st.now) return;
+  setBus(0.6);
+}
+
+// The crossing between worlds, as the flight's cloud reports it each frame ("open" in clear air). A crossing is
+// silent: the music ducks into the cloud (0.6 s down) and comes back out once the world has changed (1.2 s up), never
+// to nothing, and a piece that is due to change waits for the crossing to be over, then crosses over slowly as always.
+// A window (the gate shows the next world and the plane goes straight through) has no cloud: a shallower dip.
+export function musicCrossing(phase: CrossPhase) {
+  if (typeof window === "undefined" || phase === st.phase) return;
+  const was = st.phase;
+  st.phase = phase;
+  if (st.place !== "flight") return;
+  if (phase === "closing" || phase === "hold") {
+    if (st.duck === DUCK.cloud) return;
+    st.duck = DUCK.cloud;
+    note("crossing: down");
+    setBus(DUCK.down);
+  } else if (phase === "opening" && was === "open") {
+    // through a window: down a little and up again, scheduled whole
+    note("crossing: window");
+    st.duck = 1;
+    if (st.bus) {
+      const { ctx } = audioGraph();
+      const g = st.bus.gain;
+      const t = ctx.currentTime;
+      const top = busLevel();
+      const from = g.value;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(from, t);
+      const N = 8;
+      for (let k = 1; k <= N; k++) g.linearRampToValueAtTime(from + (top * DUCK.window - from) * (1 - Math.cos((k / N) * Math.PI * 0.5)), t + (DUCK.down * k) / N);
+      for (let k = 1; k <= N; k++) g.linearRampToValueAtTime(top * DUCK.window + (top - top * DUCK.window) * Math.sin((k / N) * Math.PI * 0.5), t + DUCK.down + (DUCK.up * k) / N);
+    }
+  } else {
+    // the world has changed: up again (and when it is over, the piece that was waiting)
+    if (st.duck !== 1) note("crossing: up");
+    st.duck = 1;
+    setBus(DUCK.up);
+    if (phase === "open" && st.pending) apply();
+  }
 }
 // (inside a tap: both decks play their moment of silence, so either may start a file later without one)
 export function musicPrime() {
   if (typeof window === "undefined") return;
+  if (!st.gesture) return touched();
   resumeAudio();
   decks().forEach((d) => voicePrime(d.v));
 }
@@ -388,6 +542,18 @@ function init() {
   }
   // the desk's background music is asked for and sent away by the ambience (and primed inside its gestures)
   setDeskMusic(desk, musicPrime);
+  // the first touch lets sound start (a touch screen counts a finger only when it lifts)
+  if (!st.gesture) {
+    const first = (e: Event) => {
+      if (e.type === "pointerdown" && (e as PointerEvent).pointerType !== "mouse") return;
+      go();
+      touched();
+    };
+    const EV = ["pointerdown", "pointerup", "touchend", "click", "keydown"] as const;
+    const go = () => EV.forEach((n) => window.removeEventListener(n, first, true));
+    EV.forEach((n) => window.addEventListener(n, first, true));
+    st.off.push(go);
+  }
   st.off.push(
     // somebody else takes the music (the headphones, the OS's player): ours leaves as a voice would
     onMusicClaim((owner) => {
@@ -403,8 +569,7 @@ function init() {
     onMuteChange(() => apply(0.4)),
     // the visitor's levels (the scene's slider, the OS's Settings): what is playing leans to them
     subscribeSoundSettings(() => {
-      const now = st.now;
-      if (now) voicePlay(decks()[st.live].v, { fade: 0.15, level: levelOf(now.key) });
+      if (st.now) setBus(0.15);
       emit();
     }),
   );
@@ -421,6 +586,12 @@ if (typeof window !== "undefined") {
       now: st.now?.key ?? null,
       silent: silent(),
       muted: st.muted,
+      gesture: st.gesture,
+      wait: st.wait,
+      phase: st.phase,
+      pending: st.pending,
+      duck: st.duck,
+      bus: st.bus ? +st.bus.gain.value.toFixed(3) : null,
       sceneMuted: sceneMuted(),
       hushed: audioHushed(),
       flightVol: st.flightVol,
@@ -431,6 +602,6 @@ if (typeof window !== "undefined") {
       pos: Object.fromEntries(Object.entries(st.pos).map(([k, v]) => [k, Math.round(v ?? 0)])),
       log: st.log.slice(-14),
     });
-    Object.assign(window, { __music: { report, state: st, forest: musicForest, volume: setMusicVolume, mute: setMusicMuted, sound: setSoundSettings, pieces: PIECES } });
+    Object.assign(window, { __music: { report, state: st, forest: musicForest, crossing: musicCrossing, flight: musicFlight, stop: musicFlightStop, prime: musicPrime, volume: setMusicVolume, mute: setMusicMuted, sound: setSoundSettings, pieces: PIECES } });
   }
 }

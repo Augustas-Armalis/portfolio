@@ -12,7 +12,7 @@ import { DeskDust, type DustApi } from "./scene/Dust";
 import { useOS } from "@/store";
 import { ambienceMuted, ambienceScene, onAmbienceChange, setAmbienceMuted, startAmbience } from "@/lib/ambience";
 import { music, sampleMusic, stopOwner } from "@/lib/audio";
-import { flightMusicForest, flightMusicStop, flightMusicTo, flightMusicVolume } from "@/lib/flightMusic";
+import { flightMusicCrossing, flightMusicForest, flightMusicStop, flightMusicTo, flightMusicVolume } from "@/lib/flightMusic";
 import { gyroLook, gyroNudge, gyroStop } from "@/lib/gyro";
 import { handoff } from "@/lib/handoff";
 import { isPaused, usePaused } from "@/lib/pause";
@@ -1410,6 +1410,7 @@ function Scene({
         vol = 0.1 + 0.6 * smooth(clamp01((d - 90) / 520));
       }
       if (Math.abs(vol - musicVol.current) > 0.01) flightMusicVolume((musicVol.current = vol));
+      flightMusicCrossing(voyage.phase);
       // at home, the field's music hands over to the forest's as the plane goes in among the trees or nears the cave
       if (voyage.cur === "home" && voyage.planePos.y > -100) flightMusicForest(inJourneyForest(voyage.planePos.x, voyage.planePos.y, voyage.planePos.z));
     } else musicVol.current = 1;
