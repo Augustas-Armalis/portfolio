@@ -255,14 +255,28 @@ function build() {
   const d1: [number, number] = [(pp.x - pa.x) / dl, (pp.z - pa.z) / dl];
   const fy = ys[iFork] + 12;
   const along = (m: number): [number, number] => [pp.x + d1[0] * m, pp.z + d1[1] * m];
-  for (const m of [-6, 50, 110, 175]) {
-    const [x, z] = along(m);
-    path.push([x, z, Math.max(16, fy + 4 + Math.max(0, m) * 0.04 - ground(x, z))]);
+  // (a point m along the straight way and w to its right: the way on bends out over the abyss, on that side)
+  const off = (m: number, w: number): [number, number] => [pp.x + d1[0] * m - d1[1] * w, pp.z + d1[1] * m + d1[0] * w];
+  // The straight way on from the parting goes into the mountain: from 170 m before the gate to 50 m, the plane flew
+  // inside the rock of the road's far cliffs and the walls over the abyss (a flat dark screen, the gate unseen, then it came
+  // out in one frame). The way on swings out to the right of it, in open air over the abyss (clear by six metres all
+  // the way, checked against the mesh), and the gate stands across the end of that bend, facing along it.
+  const bend: [number, number, number][] = [
+    [-6, 0, 4],
+    [35, 40, 11.5],
+    [75, 70, 17.5],
+    [130, 130, 20.5],
+  ];
+  for (const [m, w, h] of bend) {
+    const [x, z] = off(m, w);
+    path.push([x, z, Math.max(16, fy + h - ground(x, z))]);
   }
   const gp = along(235);
-  const gate = { x: gp[0], z: gp[1], above: Math.max(16, fy + 11 - ground(gp[0], gp[1])), yaw: Math.atan2(-d1[0], -d1[1]) };
-  const gp2 = along(262);
-  path.push([gp[0], gp[1], gate.above], [gp2[0], gp2[1], gate.above]);
+  const last = off(130, 130);
+  const dl2 = Math.hypot(gp[0] - last[0], gp[1] - last[1]);
+  const d2: [number, number] = [(gp[0] - last[0]) / dl2, (gp[1] - last[1]) / dl2];
+  const gate = { x: gp[0], z: gp[1], above: Math.max(16, fy + 11 - ground(gp[0], gp[1])), yaw: Math.atan2(-d2[0], -d2[1]) };
+  path.push([gp[0], gp[1], gate.above], [gp[0] + d2[0] * 27, gp[1] + d2[1] * 27, gate.above]);
   const entry = { x: path[0][0], z: path[0][1], above: path[0][2], yaw: Math.atan2(-tan[iIn][0], -tan[iIn][1]) };
   // (well up the first climb: nothing hangs in the mouth of the cave the plane comes out of)
   const iC = ctlI[7] + 4;
