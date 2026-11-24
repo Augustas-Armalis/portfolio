@@ -188,7 +188,7 @@ export function makeLandMaterial() {
         }
         // under the trees: leaf litter and moss, and far off the canopy itself
         float woods = forestAt(p);
-        {
+        if (woods > 0.22) {
           float canopy = vnoise(p * 0.11) * 0.6 + vnoise(p * 0.31 + 9.0) * 0.4;
           vec3 floorC = mix(vec3(0.04, 0.062, 0.032), vec3(0.075, 0.1, 0.04), canopy);
           alb = mix(alb, floorC, smoothstep(0.22, 0.75, woods) * 0.82);
@@ -287,9 +287,11 @@ export function makeLandMaterial() {
         float sandK = 1.0 - smoothstep(34.0, 104.0, c + (vnoise(p * 0.035) - 0.5) * 46.0);
         // (the lake's rim: a narrow strip of sand at the waterline only, not the whole low bank)
         sandK = max(sandK, (1.0 - smoothstep(0.02, 0.4, h - LAKE_Y)) * (1.0 - smoothstep(1.2, 1.32, lk)) * 0.7);
-        vec3 sand = mix(vec3(0.36, 0.3, 0.2), vec3(0.47, 0.41, 0.29), vnoise(p * 0.21) * 0.6 + vnoise(p * 2.3) * 0.4);
-        sand *= mix(0.62, 1.0, smoothstep(level, level + 0.7, h));
-        alb = mix(alb, sand, sandK);
+        if (sandK > 0.0) {
+          vec3 sand = mix(vec3(0.36, 0.3, 0.2), vec3(0.47, 0.41, 0.29), vnoise(p * 0.21) * 0.6 + vnoise(p * 2.3) * 0.4);
+          sand *= mix(0.62, 1.0, smoothstep(level, level + 0.7, h));
+          alb = mix(alb, sand, sandK);
+        }
 
         // far off, the field is the tops of its grass, and reads as grass: fine strokes standing along the line of sight
         {
@@ -298,9 +300,9 @@ export function makeLandMaterial() {
           if (grassK > 0.0) {
           const vec2 vd = vec2(0.864, 0.503);
           vec2 sq = vec2(dot(p, vec2(-vd.y, vd.x)), dot(p, vd));
-          float streak = (vnoise(sq * vec2(0.9, 0.16)) - 0.5) * 0.26 * (1.0 - smoothstep(0.35, 1.3, fw));
-          float streak2 = (vnoise(sq * vec2(2.6, 0.45) + 9.0) - 0.5) * 0.16 * (1.0 - smoothstep(0.12, 0.5, fw));
-          float streak3 = (vnoise(sq * vec2(0.22, 0.05) + 3.0) - 0.5) * 0.2 * (1.0 - smoothstep(1.5, 6.0, fw));
+          float streak = fw < 1.3 ? (vnoise(sq * vec2(0.9, 0.16)) - 0.5) * 0.26 * (1.0 - smoothstep(0.35, 1.3, fw)) : 0.0;
+          float streak2 = fw < 0.5 ? (vnoise(sq * vec2(2.6, 0.45) + 9.0) - 0.5) * 0.16 * (1.0 - smoothstep(0.12, 0.5, fw)) : 0.0;
+          float streak3 = fw < 6.0 ? (vnoise(sq * vec2(0.22, 0.05) + 3.0) - 0.5) * 0.2 * (1.0 - smoothstep(1.5, 6.0, fw)) : 0.0;
           alb = mix(alb, fieldFar(alb, dist) * (1.0 + (streak + streak2 + streak3) * smoothstep(10.0, 40.0, dist)), grassK);
           }
         }
