@@ -102,7 +102,12 @@ function mouthLine(n = 60): [number, number][] {
 // how far back the cliff stands at a point: rough rock leaning back, curling in toward the mouth
 function cliffA(u: number, y: number) {
   // (broad buttresses and gullies running down it, as the ranges' faces have them, kept off the mouth's own rim)
-  const gully = (ridged(u * 0.022 + 7, y * 0.012) - 0.55) * 26 * sst(10, 34, mouthDist(u, y)) * sst(6, 26, y);
+  // (long buttresses and gullies running down the face, tens of metres deep, strongest high up; the light and shadow
+  // they make are what show it is rock)
+  const away = sst(12, 40, mouthDist(u, y));
+  // (kept gentle enough in how it grows with height that the face never leans back on itself: an overhang there is a
+  // crack along the join with the mountain)
+  const gully = ((ridged(u * 0.011 + 7, y * 0.0015) - 0.55) * 36 + (ridged(u * 0.032 + 2, y * 0.004 + 5) - 0.55) * 9) * away * sst(10, 150, y);
   const relief = (vn(u * 0.07 + 2, y * 0.07) - 0.5) * 6 + (vn(u * 0.21, y * 0.19 + 5) - 0.5) * 1.8 + gully;
   // (the face leans back, and more as it climbs, curving into the mountain's own slope: no brow where it ends)
   const lean = 0.16 * Math.max(0, y - 4) + 0.0042 * Math.max(0, y - 24) ** 2;
@@ -151,7 +156,8 @@ function lines(lo: number, hi: number, fineLo: number, fineHi: number, step: num
 
 function buildCliff() {
   const b = newBuf();
-  const us = lines(-210, 210, -30, 30, 1.0, 1.13);
+  // (as wide as the mountain, so its sides and the cliff's meet on the same columns: no sliver where one ends)
+  const us = lines(-330, 330, -30, 30, 1.0, 1.13);
   const ys = lines(-12, 44, -12, 44, 1.0, 1);
   const top = us.map((u) => Math.max(faceTop(u), -14));
   // rows: the fine ones, then fractions toward the top edge (one lattice: no cracks)
@@ -198,14 +204,20 @@ function buildMass() {
       // (from the cliff's top the surface climbs smoothly into the mountain's own height, over a hundred metres or so:
       // not a wall where the cliff ends and the mountain, far higher, begins)
       const mh = massH(u, a);
-      const y = j === 0 ? t : mh >= t ? t + (mh - t) * sst(0, 110, as[j]) : Math.max(mh, t - 6 * j);
+      // (it leaves the cliff's top at the cliff's own slope, and only then eases into the mountain's height: a ramp
+      // that began level would lie along the join as a shelf)
+      const s0 = 1 / Math.max(0.35, 0.16 + 0.0084 * Math.max(0, t - 24));
+      const along = as[j];
+      const y = j === 0 ? t : mh >= t ? (t + s0 * along) * (1 - sst(0, 120, along)) + mh * sst(0, 120, along) : Math.max(mh, t - 6 * j);
       pos.push(...W(u, y, a));
     }
   const row = us.length;
   for (let j = 0; j < as.length - 1; j++)
     for (let i = 0; i < row - 1; i++) {
       const a = j * row + i;
-      idx.push(a, a + row, a + 1, a + 1, a + row, a + row + 1);
+      // (wound so its normals point up and out like the cliff's, not into the mountain: where the two meet their
+      // normals are taken together, and opposite ones would cancel along the join as a dark crack)
+      idx.push(a, a + 1, a + row, a + 1, a + row + 1, a + row);
     }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));

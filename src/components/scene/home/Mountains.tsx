@@ -165,7 +165,7 @@ export function makeRangeMaterial(rg: Range, tri = 0) {
         // snow: above a ragged line, on anything not too steep; a thin dusting lower in the gullies
         float line = hN + (g0 - 0.5) * 0.3;
         // (on a mountain of sheer faces snow clings higher up the steep, as it does on the ranges' heads)
-        float sn = uSnow * smoothstep(0.42, 0.56, line) * (1.0 - smoothstep(0.3, 0.62, steep - 0.3 * uTri + (1.0 - hN) * 0.25));
+        float sn = uSnow * smoothstep(0.42 - 0.1 * uTri, 0.56 - 0.1 * uTri, line) * (1.0 - smoothstep(0.3, 0.62, steep - 0.3 * uTri + (1.0 - hN) * 0.25));
         alb = mix(alb, vec3(0.62, 0.66, 0.74), clamp(sn, 0.0, 1.0));
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         float ndl = clamp(dot(n, uKeyDir) * 0.75 + 0.25, 0.0, 1.0);
