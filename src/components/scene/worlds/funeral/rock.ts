@@ -79,6 +79,8 @@ function roadIndex() {
 
 // the mouth of the cave: half its width at a height above the road
 export const CAVE = { half: 21, wall: 20, top: 47 };
+// the opening at the cave's far end, in metres from the road's floor (it is the gate's window: see worlds/portal.tsx OPENING)
+export const PORTAL = { half: 15, foot: -0.5, spring: 11, top: 37.8, rise: 28, reach: 9.5 };
 const archHalf = (y: number) => (y <= CAVE.wall ? CAVE.half * (1 + 0.04 * Math.sin(y * 0.3)) : CAVE.half * Math.sqrt(Math.max(0, 1 - ((y - CAVE.wall) / (CAVE.top - CAVE.wall)) ** 2)));
 // a point on its outline: a 0 (the left foot) .. 1 (the right foot), over the top
 function archPoint(a: number): [number, number] {
@@ -239,9 +241,11 @@ function* rockSteps(mobile: boolean, budget: number) {
     const nx = -L.tan[i][1];
     const nz = L.tan[i][0];
     const y = L.y[i];
+    // (the water of the cave they come in by: the road is a channel of still water down to the dock, a little under the quays)
+    const wet = i < L.iDock - 1 ? 1 : 0;
     for (const u of ROADC) {
-      lp.push(p.x + nx * u * HALF, y, p.z + nz * u * HALF);
-      lk.push(0, u, 0, i * L.STEP);
+      lp.push(p.x + nx * u * HALF, y - wet * 1.1, p.z + nz * u * HALF);
+      lk.push(0, u, wet, i * L.STEP);
     }
     for (const side of [-1, 1]) {
       const inCave = i >= L.iMouth - 2 || i <= L.iOut + 2;
@@ -252,7 +256,9 @@ function* rockSteps(mobile: boolean, budget: number) {
           // (the foot of the cliff again, as the head of the scree)
           const o = lp.length - 3;
           lp.push(lp[o], lp[o + 1], lp[o + 2]);
-          lk.push(5, side, 1, i * L.STEP);
+          if (i >= L.iMouth - 3) lk.push(3, Math.max(0, (i - L.iMouth) / (iLast - L.iMouth)), 0.02, 0);
+          else if (i <= L.iOut + 3) lk.push(3, Math.max(0, (L.iOut - i) / L.iOut), 0.02, 1);
+          else lk.push(5, side, 1, i * L.STEP);
           return;
         }
         if (k > CLIFF) {
@@ -260,9 +266,12 @@ function* rockSteps(mobile: boolean, budget: number) {
           const z = p.z + nz * side * (HALF + e);
           const g = L.ground(x, z);
           const last = k === SK.length - 1;
-          const yy = i >= L.iMouth - 3 || i <= L.iOut + 3 ? y - 6 - e * 0.1 : c < 0.03 ? g - 4 : Math.min(y - c * (D * 1.05 + (e - 8.4) * 0.78), g + 0.7) - (last ? 7 : 0);
+          const yy = i >= L.iMouth - 3 || i <= L.iOut + 3 ? y - 0.45 - Math.max(0, e - 13) * 0.6 : c < 0.03 ? g - 4 : Math.min(y - c * (D * 1.05 + (e - 8.4) * 0.78), g + 0.7) - (last ? 7 : 0);
           lp.push(x, yy, z);
-          lk.push(5, side, 1, i * L.STEP);
+          // (inside a cave the ground by the road is the cave's own floor)
+          if (i >= L.iMouth - 3) lk.push(3, Math.max(0, (i - L.iMouth) / (iLast - L.iMouth)), 0.02, 0);
+          else if (i <= L.iOut + 3) lk.push(3, Math.max(0, (L.iOut - i) / L.iOut), 0.02, 1);
+          else lk.push(5, side, 1, i * L.STEP);
           return;
         }
         const drop = k < 3 ? d : d * D;
@@ -273,7 +282,9 @@ function* rockSteps(mobile: boolean, budget: number) {
         // (where the land does not fall away there is no cliff: it is folded in under the road)
         const out = c < 0.03 ? HALF - 0.6 : HALF + (e + rough) * (0.25 + 0.75 * c);
         lp.push(p.x + nx * side * out, y + drop * c - (c < 0.03 ? 0.5 : 0), p.z + nz * side * out);
-        lk.push(1, side, Math.min(1, -drop / (D * 1.05) + (1 - Math.min(1, c * 3))), i * L.STEP);
+        if (i >= L.iMouth - 3) lk.push(3, Math.max(0, (i - L.iMouth) / (iLast - L.iMouth)), 0.02, 0);
+        else if (i <= L.iOut + 3) lk.push(3, Math.max(0, (L.iOut - i) / L.iOut), 0.02, 1);
+        else lk.push(1, side, Math.min(1, -drop / (D * 1.05) + (1 - Math.min(1, c * 3))), i * L.STEP);
       });
     }
     if (i < iLast) {
@@ -402,19 +413,81 @@ function* rockSteps(mobile: boolean, budget: number) {
           ci.push(p0, p1, p0 + 1, p1, p1 + 1, p0 + 1);
         }
     }
-    // its far end: only light (or, where the road comes out of the rock, only dark)
+    // its far end
     const e0 = cp.length / 3;
     const p = L.pts[iFar];
     const nx = -L.tan[iFar][1];
     const nz = L.tan[iFar][0];
-    cp.push(p.x, L.y[iFar] + 18, p.z);
-    ck.push(dark ? 3 : 4, 1, 0, flag);
-    for (let a = 0; a <= NA; a++) {
-      const [au, ay] = archPoint(a / NA);
-      cp.push(p.x + nx * au * 1.1, L.y[iFar] + ay * 1.1 - 2, p.z + nz * au * 1.1);
-      ck.push(dark ? 3 : 4, 1, 1, flag);
+    const tx = L.tan[iFar][0] * sg;
+    const tz = L.tan[iFar][1] * sg;
+    if (dark) {
+      // (where the road comes out of the rock: only dark)
+      cp.push(p.x, L.y[iFar] + 18, p.z);
+      ck.push(3, 1, 0, flag);
+      for (let a = 0; a <= NA; a++) {
+        const [au, ay] = archPoint(a / NA);
+        cp.push(p.x + nx * au * 1.1, L.y[iFar] + ay * 1.1 - 2, p.z + nz * au * 1.1);
+        ck.push(3, 1, 1, flag);
+      }
+      for (let a = 0; a < NA; a++) ci.push(e0, e0 + 1 + a, e0 + 2 + a);
+      ci.push(e0, e0 + 1 + NA, e0 + 1);
+    } else {
+      // The portal at the cave's end: a wall of the cave's own rock closes the vault, and in it the opening (the
+      // lancet the gate's window fills, worlds/portal.tsx), set back a little in a reveal of rock; behind it, if the
+      // window is not drawn, the light itself.
+      const PH = PORTAL.half * 1.04 * 0.985;
+      const spring = PORTAL.spring;
+      const top = PORTAL.top;
+      const hole = (t: number): [number, number] => {
+        // 0..1 round the opening: left foot, up the straight, over the head, down the right
+        const side = PORTAL.foot;
+        const straight = spring - side;
+        const head = top - spring;
+        const arc = (Math.PI * (PH + head)) / 2;
+        const total = straight * 2 + arc;
+        const s = t * total;
+        if (s < straight) return [-PH, side + s];
+        if (s > total - straight) return [PH, side + (total - s)];
+        const q = ((s - straight) / arc) * Math.PI;
+        return [-PH * Math.cos(q), spring + head * Math.sin(q)];
+      };
+      const base = cp.length / 3;
+      const W0 = 0.6; // the wall's plane, just behind the window's
+      const REV = 1.6; // how far back the opening is set
+      for (let a = 0; a <= NA; a++) {
+        const t = a / NA;
+        const [ou, oy] = archPoint(t);
+        const [hu, hy] = hole(t);
+        // the outer edge meets the vault; then the face of the wall; then the opening's lip; then back into the reveal
+        const rows: [number, number, number, number][] = [
+          [ou * 1.0, a === 0 || a === NA ? -1.5 : oy * 1.0, W0, 1],
+          [(ou + hu) * 0.5, (oy + hy) * 0.5, W0, 0.55],
+          [hu * 1.05, hy + (hy > spring ? 0.7 : 0), W0, 0.12],
+          [hu, hy, W0 + REV, 0],
+        ];
+        for (const [u, y, w, k] of rows) {
+          cp.push(p.x + nx * u + tx * w, L.y[iFar] + y, p.z + nz * u + tz * w);
+          ck.push(6, k, t, flag);
+        }
+      }
+      for (let a = 0; a < NA; a++)
+        for (let r = 0; r < 3; r++) {
+          const p0 = base + a * 4 + r;
+          const p1 = p0 + 4;
+          ci.push(p0, p1, p0 + 1, p1, p1 + 1, p0 + 1);
+        }
+      // the light behind it
+      const pl = cp.length / 3;
+      cp.push(p.x + tx * (W0 + REV + 4), L.y[iFar] + 16, p.z + tz * (W0 + REV + 4));
+      ck.push(7, 1, 0, flag);
+      for (let a = 0; a <= NA; a++) {
+        const [hu, hy] = hole(a / NA);
+        cp.push(p.x + nx * hu + tx * (W0 + REV + 4), L.y[iFar] + hy, p.z + nz * hu + tz * (W0 + REV + 4));
+        ck.push(7, 1, 1, flag);
+      }
+      for (let a = 0; a < NA; a++) ci.push(pl, pl + 1 + a, pl + 2 + a);
+      ci.push(pl, pl + 1 + NA, pl + 1);
     }
-    for (let a = 0; a < NA; a++) ci.push(e0, e0 + 1 + a, e0 + 2 + a);
   }
   // the roof over the slot the tunnel lies in, seen only from above
   {
@@ -501,6 +574,11 @@ const ROCK_GLSL = /* glsl */ `
     float tooth = vnoise(l.xz * 1.7 + l.y * 1.1) * 0.5 + vnoise(l.xy * 3.9 - l.z * 2.7) * 0.5;
     return 1.0 + (s1 - 0.5) * 0.7 * nearK + (s2 - 0.5) * 0.8 * farK + (tooth - 0.5) * 0.4 * (1.0 - smoothstep(20.0, 160.0, dist));
   }
+  // planes as he drew them: the side toward the moon a teal-lit ultramarine, the side away near-black indigo
+  vec3 rockLight(vec3 alb, vec3 n, float keyK){
+    float lit = pow(clamp(dot(n, uKeyDir) * 0.8 + 0.2, 0.0, 1.0), 1.6);
+    return alb * (uSkyCol * (0.3 + 0.2 * n.y) * 1.0 + uKeyCol * (lit * 1.25 * keyK + 0.03));
+  }
   const vec3 TEAL = vec3(0.05, 0.36, 0.33);
   const vec3 GOLD = vec3(1.0, 0.74, 0.3);
 `;
@@ -547,15 +625,14 @@ export function makeRockMaterial() {
         }
         vec3 alb = rockAlb(vLocal.xz, vLocal.y, n) * chalk(vLocal, dist);
         alb *= mix(1.0, mix(0.66, 1.16, smoothstep(0.05, 0.6, rib)), steep * rk);
-        float lam = clamp(dot(n, uKeyDir) * 0.55 + 0.45, 0.0, 1.0);
-        vec3 col = alb * (uSkyCol * (0.72 + 0.28 * n.y) * 1.25 + uKeyCol * lam * lam * 0.75);
+        vec3 col = rockLight(alb, n, 1.0);
         // his green-blue line of light along every crest, and a breath of it where a form turns from the eye
         float crest = smoothstep(0.16, 0.75, vK.x);
         float fres = pow(1.0 - max(dot(n, V), 0.0), 5.0);
         float toMoon = smoothstep(-0.2, 0.7, dot(n, uKeyDir));
-        col += TEAL * (crest * 0.72 * (0.25 + 0.75 * toMoon) + fres * 0.14 * toMoon) * (0.6 + 0.8 * vnoise(vLocal.xz * 0.05 + vLocal.y * 0.03));
+        col += TEAL * (crest * 0.46 * (0.25 + 0.75 * toMoon) + fres * 0.14 * toMoon) * (0.6 + 0.8 * vnoise(vLocal.xz * 0.05 + vLocal.y * 0.03));
         // the gullies hold darker chalk
-        col *= 1.0 - 0.4 * smoothstep(0.04, 0.5, -vK.x);
+        col *= 1.0 - 0.62 * smoothstep(0.04, 0.5, -vK.x);
         // the gold the procession carries, on the rock beside it
         col += GOLD * vK.y * vK.y * vK.y * 0.04 * (0.4 + 0.8 * vnoise(vLocal.xz * 0.12 + vLocal.y * 0.1));
         col = funeralAir(col, vWorld);
@@ -565,7 +642,7 @@ export function makeRockMaterial() {
   });
 }
 
-// the road, its cliffs, and the cave: aK.x says which (0 the road, 1 a cliff, 2 the mountain's face round the
+// the road, its cliffs, and the cave: aK.x says which (kinds are blended across a triangle, so the ones that lie side by side are numbered side by side: 0 the road, 1 a cliff, 2 the mountain's face round the
 // mouth, 3 the vault inside, 4 the light at its end)
 export function makeLedgeMaterial() {
   return new THREE.ShaderMaterial({
@@ -601,9 +678,18 @@ export function makeLedgeMaterial() {
           vec3 alb = mix(vec3(0.02, 0.03, 0.1), vec3(0.05, 0.055, 0.1), 0.4 + 0.6 * dab);
           // (inside the cave it comes out of the road is almost black: only where the night reaches in does it take its blue)
           col = alb * (uSkyCol * 1.2 + uKeyCol * 0.16) * mix(0.16, 1.0, smoothstep(uBorn + 10.0, uBorn + 90.0, vK.w));
+          if (vK.z > 0.001) {
+            // still black water in the cave: it holds the night's blue and the lights on it, a slow wrinkle at the surface
+            vec2 q = vLocal.xz * 0.35;
+            float rip = vnoise(q + vec2(uTime * 0.05, 0.0)) * 0.6 + vnoise(q * 2.7 - vec2(0.0, uTime * 0.08)) * 0.4;
+            vec3 wn = normalize(vec3((rip - 0.5) * 0.35, 1.0, (vnoise(q * 1.7 + 5.0) - 0.5) * 0.35));
+            float fr = pow(1.0 - max(dot(wn, V), 0.0), 4.0);
+            vec3 water = vec3(0.004, 0.01, 0.04) + uSkyCol * (0.25 + 1.6 * fr) + vec3(0.03, 0.09, 0.2) * fr * rip;
+            col = mix(col, water, smoothstep(0.0, 0.9, vK.z));
+          }
           float mid = 1.0 - smoothstep(0.55, 1.0, abs(vK.y));
           // (no gold where no one walks yet: far inside the cave the road comes out of it is bare dark rock)
-          col += GOLD * (0.04 + 0.2 * smoothstep(0.25, 0.8, pool) + 0.5 * bellAt(vK.w)) * (0.45 + 0.55 * dab) * mid * glowK() * 2.2 * smoothstep(uBorn - 6.0, uBorn + 40.0, vK.w);
+          col += GOLD * (0.04 + 0.2 * smoothstep(0.25, 0.8, pool) + 0.5 * bellAt(vK.w)) * (0.45 + 0.55 * dab) * mid * glowK() * 2.2 * smoothstep(uBorn - 6.0, uBorn + 40.0, vK.w) * (1.0 - vK.z);
         } else if (kind < 1.5) {
           // the cliff under the road's edge: dark indigo rock drawn in long upright strokes, its lip catching the
           // gold from above, its foot going down into green-black
@@ -618,11 +704,22 @@ export function makeLedgeMaterial() {
           col += TEAL * fres * 0.12 * smoothstep(-0.3, 0.6, dot(n, uKeyDir));
           // the gold spilling over the edge: a bright line at the lip, running a little way down the strokes
           col += GOLD * (exp(-depth * 90.0) * 0.14 + exp(-depth * 7.0) * 0.03 * stroke) * glowK() * 2.0;
+        } else if (kind > 6.5) {
+          col = vec3(1.0, 0.8, 0.45) * mix(1.6, 0.25, vK.z) * (0.85 + 0.15 * sin(uTime * 0.33)) * glowK() * 2.0 * uCaveK;
+        } else if (kind > 5.5) {
+          // the wall that closes the cave over the portal: the cave's rock, dressed; the light of the other world on the lip of the opening
+          float rib = vnoise(vec2(vLocal.x * 0.2 + vLocal.z * 0.2, vLocal.y * 0.12)) * 0.6 + vnoise(vLocal.xz * 0.7 + vLocal.y) * 0.4;
+          float bed = vnoise(vec2(vLocal.y * 0.5 + rib * 3.0, (vLocal.x + vLocal.z) * 0.03));
+          vec3 alb = vec3(0.016, 0.024, 0.085) * (0.45 + rib) * (0.6 + 0.8 * bed);
+          col = alb * (uSkyCol * 1.3);
+          float lip = exp(-vK.y * 9.0);
+          col += mix(vec3(1.0, 0.8, 0.45), vec3(0.45, 0.8, 0.7), 0.35 + 0.3 * vnoise(vec2(vK.z * 30.0, uTime * 0.2))) * (lip * 0.55 + exp(-vK.y * 2.2) * 0.12) * (0.85 + 0.15 * sin(uTime * 0.5)) * glowK() * 2.0;
         } else if (kind > 4.5) {
           // the scree under the cliff: the mountain's own rock
+          // (the scree's own facets are not shown: its normal is mostly the slope it lies on, for the paint as for the light)
+          n = normalize(mix(n, vec3(0.0, 1.0, 0.0), 0.8));
           vec3 alb = rockAlb(vLocal.xz, vLocal.y, n) * chalk(vLocal, dist);
-          float lam = clamp(dot(n, uKeyDir) * 0.55 + 0.45, 0.0, 1.0);
-          col = alb * (uSkyCol * (0.72 + 0.28 * n.y) * 1.25 + uKeyCol * lam * lam * 0.42);
+          col = rockLight(alb, n, 0.8);
           col += GOLD * exp(-max(vLocal.y, 0.0) * 0.0) * 0.0;
         } else if (kind < 2.5) {
           // the mountain's face round the mouth: carved rock, and the light from inside coming out over its lip
@@ -632,7 +729,7 @@ export function makeLedgeMaterial() {
           float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
           col += TEAL * fres * 0.45 * smoothstep(-0.3, 0.6, dot(n, uKeyDir));
           col += GOLD * exp(-vK.y * 18.0) * 0.22 * (0.7 + 0.3 * sin(uTime * 0.4)) * glowK() * 2.0 * uCaveK * (1.0 - vK.w);
-        } else if (kind < 3.5) {
+        } else if (kind < 4.5) {
           // inside: dark rock, the light of whatever lies at the end growing along the vault, pulsing very slowly
           float deep = vK.y;
           float rib = vnoise(vec2(vLocal.x * 0.2 + vLocal.z * 0.2, vLocal.y * 0.12)) * 0.6 + vnoise(vLocal.xz * 0.7 + vLocal.y) * 0.4;
@@ -649,17 +746,27 @@ export function makeLedgeMaterial() {
             // and far inside, the sheet of light it came through (the still sea's pale green-gold) on the vault round it
             col += vec3(0.2, 0.25, 0.15) * exp(-(1.0 - deep) * 5.5) * (0.3 + 1.5 * rib * bed) * 0.45;
           } else {
-            col = alb * uSkyCol * (1.3 - deep);
-            float breath = (0.85 + 0.15 * sin(uTime * 0.33)) * uCaveK;
-            // (veins in the rock that take the light: it runs along them in threads)
-            float vein = 1.0 - smoothstep(0.0, 0.05, abs(vnoise(vec2(vLocal.x * 0.09 + vLocal.z * 0.07 + bed, vLocal.y * 0.2)) - 0.5));
-            col += GOLD * (0.004 + 0.1 * deep * deep * deep) * (0.2 + 1.1 * rib * bed * 2.0 + 1.4 * vein) * (1.0 - 0.5 * vK.z) * breath * glowK() * 2.0;
-            col += GOLD * exp(-vK.z * 7.0) * 0.035 * glowK() * 2.0 * uCaveK;
+            // a built gallery of dressed rock: an arch of heavier stone every sixteen metres, the beds of the rock between
+            // them, blue-black, and the light of the portal at the far end growing along the vault, cream with the wood's teal in it
+            float rp = fract(deep * 15.5);
+            float archK = smoothstep(0.0, 1.0, 1.0 - abs(rp - 0.5) * 2.0 / 0.34);
+            float stone = (0.35 + rib) * (0.6 + 0.8 * bed) * (1.0 + 0.7 * archK);
+            vec3 sal = vec3(0.011, 0.02, 0.075) * stone;
+            vec3 pcol = mix(vec3(1.0, 0.82, 0.5), vec3(0.45, 0.85, 0.75), 0.3 + 0.25 * vnoise(vec2(vLocal.y * 0.1, uTime * 0.15)));
+            float lightK = pow(deep, 2.2) * (0.25 + 0.9 * clamp(dot(n, V) * 0.0 + 0.5 + 0.5 * (1.0 - vK.z), 0.0, 1.0));
+            col = sal * (uSkyCol * 0.9 + pcol * lightK * 2.6 * (0.6 + 0.4 * sin(uTime * 0.33)) * min(uCaveK, 1.4));
+            col += pcol * lightK * 0.03 * (0.4 + archK * 1.4) * glowK() * 2.0;
+            // (the wet beds of the rock hold a thread of that light)
+            col += pcol * 0.02 * deep * smoothstep(0.55, 0.75, bed) * glowK() * 2.0;
+            col += GOLD * exp(-vK.z * 7.0) * 0.03 * glowK() * 2.0 * uCaveK;
+            // the floor at the road's sides: dark flags, the glow of the portal only a breath on them
+            float flr = 1.0 - smoothstep(0.0, 0.07, vK.z);
+            col = mix(col, sal * uSkyCol * 1.0 + pcol * lightK * 0.05 * glowK() * 2.0, flr);
           }
         } else {
           col = vec3(1.0, 0.8, 0.45) * mix(1.6, 0.25, vK.z) * (0.85 + 0.15 * sin(uTime * 0.33)) * glowK() * 2.0 * uCaveK;
         }
-        if (kind < 2.5 || kind > 4.5) col = funeralAir(col, vWorld);
+        if (kind < 2.5 || (kind > 4.5 && kind < 5.5)) col = funeralAir(col, vWorld);
         else if (vK.w < 0.5) col = mix(col, vec3(1.0, 0.7, 0.34) * 0.05 * glowK() * 2.0, (1.0 - exp(-dist * 0.004)) * 0.6);
         gl_FragColor = vec4(col, 1.0);
         ${END}

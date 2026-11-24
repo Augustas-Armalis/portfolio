@@ -159,7 +159,7 @@ export function* herSteps(coarse: boolean, budget: number, far = false): Generat
   const along = (t: number): V3 => [El[0] + (Wr[0] - El[0]) * t, El[1] + (Wr[1] - El[1]) * t, El[2] + (Wr[2] - El[2]) * t];
   body.limb(Sh, El, 0.3 * U, 0.27 * U, SLEEVE, { k: 0.2 * U, soft: 3 });
   body.limb(El, along(0.76), 0.26 * U, 0.2 * U, SLEEVE, { k: 0.1 * U, soft: 2 });
-  body.limb(along(0.3), Wr, 0.17 * U, 0.088 * U, SKIN, { k: 0.05 * U, soft: 1.2 });
+  body.limb(along(0.3), Wr, 0.17 * U, 0.112 * U, SKIN, { k: 0.05 * U, soft: 1.2 });
   // (the fall of the sleeve: a sheet hanging from under the forearm, thin, longest at the sleeve's mouth)
   for (const t of [0.05, 0.22, 0.39, 0.56, 0.72]) {
     const a = along(t);
@@ -187,19 +187,22 @@ export function* herSteps(coarse: boolean, budget: number, far = false): Generat
   };
 
   // ---- the hand ----
-  // Open beneath the orb and holding it from below as one holds a ball: the palm laid to its underside, and from the
-  // knuckles the four fingers fanned out and curving up the orb's near side and its far edge, each slender, tapering,
-  // bent at its two joints, with light between them; the thumb apart from them, opposed, rising up the near side
-  // toward her. Seen from the way in, all five stand dark against the orb's light. Proportions are a hand's: the palm
-  // as long as the middle finger, the fingers a fifth as thick as they are long at the root and thinner to the tip.
+  // Open and at rest beneath the orb, holding it as one holds a pearl: the palm laid to its underside, the four
+  // fingers together, long and soft, following its curve up its far side with the least gap between them, the
+  // thumb a little apart on the near side, lightly on it. As in the picture: a calm, open hand, no splay, no bent
+  // joints; the joints only felt, the fingertips rounded, the nails small. Proportions are a hand's, a delicate one:
+  // each finger a fifth as thick as long, the palm a little longer than the middle finger, wrist as broad as three
+  // fingers and the forearm coming into it without a break.
   //
-  // Laid out on the orb: from the middle of the palm (P, on the orb's underside) each digit goes out along its own
-  // great circle, at an angle `phi` round from "away from her" (0) toward the near side (90) and her own side (180).
+  // Laid on the orb: a point on it is reached by `dir(a, b)`, a degrees along the orb's underside from the palm's
+  // middle toward the fingertips and b degrees across it toward the thumb. The fingers each keep their own b, the
+  // way a hand's lie side by side on a ball.
   const hand = new Clay(0.012 * U);
   const R0 = ORB.r;
   const DEG = Math.PI / 180;
   const v3 = {
     add: (a: V3, b: V3, k = 1): V3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k],
+    sub: (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
     norm: (a: V3): V3 => {
       const l = Math.hypot(a[0], a[1], a[2]) || 1;
       return [a[0] / l, a[1] / l, a[2] / l];
@@ -210,62 +213,65 @@ export function* herSteps(coarse: boolean, budget: number, far = false): Generat
   const Pd = dirAt(-15, 2);
   const eU = v3.norm([-Math.cos(-15 * DEG), Math.sin(-15 * DEG), 0]);
   const eV = v3.norm(v3.cross(eU, Pd));
-  const tang = (phi: number): V3 => v3.add(v3.add([0, 0, 0], eU, Math.cos(phi * DEG)), eV, Math.sin(phi * DEG));
-  // a direction on the orb: from the palm's middle, `len` units of arc along `phi`
-  const go = (phi: number, len: number, r = R0 + 3): V3 => {
-    const th = len / r;
-    return v3.norm(v3.add(v3.add([0, 0, 0], Pd, Math.cos(th)), tang(phi), Math.sin(th)));
-  };
-  const on = (d: V3, out: number): V3 => v3.add([O[0], O[1], O[2]], d, R0 + out);
-  const MID = 52;
-  const palmAx = tang(MID);
-  // the wrist, out of the forearm, bending up to the heel of the hand
-  hand.limb(Wr, on(go(MID + 180, 12), 6), 0.08 * U, 0.068 * U, SKIN, { k: 0.05 * U, flat: 1.25 });
-  // the palm: a slim pad laid to the orb, fuller at the heel, at the root of the thumb and under the little finger
-  hand.ball(on(Pd, 3.0), [11, 2.9, 8.6], SKIN, { x: palmAx, y: Pd, k: 2.2 });
-  hand.ball(on(go(MID + 180, 8), 3.8), [6, 3.6, 7], SKIN, { x: palmAx, y: go(MID + 180, 8), k: 2 });
-  hand.ball(on(go(132, 6.5), 3.8), [6.2, 3.6, 4.4], SKIN, { x: tang(132), y: go(132, 6.5), k: 1.8 });
-  hand.ball(on(go(-40, 6.5), 3.4), [6, 3.1, 3.6], SKIN, { x: tang(-40), y: go(-40, 6.5), k: 1.8 });
-  // the four fingers, fanned: index nearest the thumb
+  const dir = (a: number, b: number): V3 => v3.norm(v3.add(v3.add(v3.add([0, 0, 0], Pd, Math.cos(a * DEG) * Math.cos(b * DEG)), eU, Math.sin(a * DEG) * Math.cos(b * DEG)), eV, Math.sin(b * DEG)));
+  // a point `out` off the orb's skin along dir(a, b)
+  const on = (a: number, b: number, out: number): V3 => v3.add([O[0], O[1], O[2]], dir(a, b), R0 + out);
+  // the way along the orb at that place (and `dir` is the way out)
+  const way = (a: number, b: number) => v3.norm(v3.sub(dir(a + 1, b), dir(a - 1, b)));
+    // an egg lying on the orb at (a, b): `len` along the fingers, `thick` out of the orb, `wid` across
+  const pad = (a: number, b: number, out: number, len: number, thick: number, wid: number, k = 2.4) =>
+    hand.ball(on(a, b, out), [len, thick, wid], SKIN, { x: way(a, b), y: dir(a, b), k });
+  // degrees of arc for a length on the orb
+  const arc = (len: number) => (len / (R0 + 3)) / DEG;
+
+  // the wrist, out of the forearm and into the heel of the hand without a break
+  const heel = on(-30, -2, 4.2);
+  hand.limb(Wr, heel, 0.108 * U, 0.1 * U, SKIN, { k: 0.06 * U, flat: 1.1 });
+  // the palm: a soft pad laid to the orb, fuller at the heel and at the root of the thumb, a little less under the
+  // smallest finger; a gentle hollow in the middle where the orb sits
+  pad(-4, 1, 3.1, 15.5, 3.6, 14.2, 3);
+  pad(-24, -1, 4.0, 9.5, 4.3, 12.2, 3);
+  pad(-8, 26, 3.8, 11, 4.2, 7.4, 2.6);
+  pad(-6, -19, 3.2, 10.5, 3.4, 5.6, 2.4);
+  // the four fingers, together: index nearest the thumb; their roots in a gentle arc across the palm, and each
+  // keeps to its own line round the orb (drawing a little together toward the tips, as a resting hand's do)
   const fingers = [
-    { phi: 100, len: 18, r: 2.0, at: 10.5 },
-    { phi: 72, len: 20, r: 2.08, at: 11.5 },
-    { phi: 44, len: 19, r: 2.0, at: 11 },
-    { phi: 15, len: 15.5, r: 1.82, at: 9.5 },
+    { b: 17.5, len: 31, r: 3.35, at: 22 },
+    { b: 5.6, len: 34, r: 3.45, at: 24 },
+    { b: -6.4, len: 32, r: 3.3, at: 23 },
+    { b: -18, len: 25.5, r: 2.95, at: 20 },
   ];
   for (const fg of fingers) {
-    // knuckle, middle joint, last joint, tip: each bone shorter, each joint standing a little off the orb so the finger
-    // bends there (straight bones, bent joints), the tip resting on the orb
-    const s0 = fg.at;
-    const s1 = s0 + fg.len * 0.46;
-    const s2 = s1 + fg.len * 0.29;
-    const s3 = s2 + fg.len * 0.25;
-    const rad = [fg.r, fg.r * 0.84, fg.r * 0.72, fg.r * 0.58];
-    const lift = [0.5, 1.35, 0.7, 0.0];
-    const pts = [s0, s1, s2, s3].map((sv, i) => on(go(fg.phi, sv), rad[i] + lift[i]));
+    const L = arc(fg.len);
+    // knuckle, middle joint, last joint, tip: three bones, the first the longest; the line drifts a little toward
+    // the middle finger's as it goes
+    const as = [fg.at, fg.at + L * 0.43, fg.at + L * 0.72, fg.at + L];
+    const bs = as.map((_, i) => fg.b * (1 - 0.09 * i));
+    const rad = [fg.r, fg.r * 0.92, fg.r * 0.83, fg.r * 0.7];
+    // (a hand at rest: the knuckle stands the least bit off the orb and the tip lies on it)
+    const lift = [1.0, 1.5, 1.0, 0.3];
+    const pts = as.map((a, i) => on(a, bs[i], rad[i] + lift[i]));
     // (the bone of the hand under its back, from the heel to the knuckle)
-    hand.limb(on(go(MID + 180, 4), 3.6), pts[0], 2.4, fg.r, SKIN, { k: 1.3 });
-    hand.chain(pts, rad, SKIN, { k: 0.08 });
-    hand.ball(pts[3], rad[3] * 0.98, SKIN, { k: 0.08 });
-    // the knuckle at the root stands the least bit proud on the back of the hand
-    hand.ball(v3.add(pts[0], go(fg.phi, s0), -0.3), fg.r * 0.95, SKIN, { k: 0.6 });
-    // the nail
-    const nd = go(fg.phi, s3 - fg.len * 0.08);
-    hand.ball(on(nd, rad[3] * 1.45), [rad[3] * 1.2, rad[3] * 0.4, rad[3] * 0.78], NAIL, { paint: true, x: tang(fg.phi), y: nd, k: 0.2 });
+    hand.limb(on(-6, fg.b * 0.5, 3.4), pts[0], 3.0, fg.r, SKIN, { k: 1.8 });
+    hand.chain(pts, rad, SKIN, { k: 0.5 });
+    hand.ball(pts[3], rad[3] * 0.98, SKIN, { k: 0.3 });
+    // the nail, small, on the back of the last joint
+    const na = as[3] - arc(fg.len * 0.1);
+    hand.ball(on(na, bs[3], rad[3] * 1.5 + 0.2), [rad[3] * 0.82, rad[3] * 0.3, rad[3] * 0.6], NAIL, { paint: true, x: way(na, bs[3]), y: dir(na, bs[3]), k: 0.2 });
   }
-  // the thumb: from the fleshy pad at the root of the palm, out and up the near side toward her, well apart from the
-  // index finger; its long first bone, then two joints
+  // the thumb: from the full pad at the root of the palm, out along the orb's near side, apart from the index finger
+  // by a thumb's breadth, and lightly on it
   {
-    const phi = 152;
-    const ss = [5, 14, 21, 27];
-    const tr = [2.9, 2.45, 2.1, 1.6];
-    const lift = [3.2, 1.2, 0.7, 0];
-    const pts = ss.map((sv, i) => on(go(phi + i * 3, sv), tr[i] + lift[i]));
-    hand.chain(pts, tr, SKIN, { k: 0.1 });
-    hand.limb(on(go(132, 4), 3.6), pts[1], 3.2, tr[1] * 0.95, SKIN, { k: 1.4 });
-    hand.ball(pts[3], tr[3] * 0.98, SKIN, { k: 0.08 });
-    const nd = go(phi + 9, 25.5);
-    hand.ball(on(nd, tr[3] * 1.5), [tr[3] * 1.2, tr[3] * 0.42, tr[3] * 0.8], NAIL, { paint: true, x: tang(phi + 9), y: nd, k: 0.2 });
+    const as = [-10, 3, 18, 33];
+    const bs = [29, 37, 42, 44];
+    const tr = [4.0, 3.4, 3.0, 2.6];
+    const lift = [3.0, 1.6, 0.8, 0.2];
+    const pts = as.map((a, i) => on(a, bs[i], tr[i] + lift[i]));
+    hand.chain(pts, tr, SKIN, { k: 0.6 });
+    hand.limb(on(-6, 22, 3.6), pts[1], 4.6, tr[1], SKIN, { k: 2 });
+    hand.ball(pts[3], tr[3] * 0.98, SKIN, { k: 0.3 });
+    const na = as[3] - 2.5;
+    hand.ball(on(na, bs[3], tr[3] * 1.5 + 0.2), [tr[3] * 0.9, tr[3] * 0.32, tr[3] * 0.66], NAIL, { paint: true, x: way(na, bs[3]), y: dir(na, bs[3]), k: 0.2 });
   }
 
   const parts = [

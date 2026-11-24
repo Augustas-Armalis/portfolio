@@ -190,7 +190,9 @@ function build() {
   const all: B[] = [...BASE, ...bumps().filter((b) => Math.abs(b[3]) > 0.4)];
   const terrain: Terrain = { base: 0, sines: SINES, bumps: all, rim: RIM };
   const chainB = bumps();
-  const ground = (x: number, z: number) => baseAt(x, z) + sum(chainB, x, z);
+  // (the notch the cave at the pass is cut in, added once the road's own height is known: see below)
+  const notch: B[] = [];
+  const ground = (x: number, z: number) => baseAt(x, z) + sum(chainB, x, z) + (notch.length ? sum(notch, x, z) : 0);
 
   // the road as it lies: level across, at the lowest the land is under it (so the drawn road is never above the
   // ground the plane reads), smoothed along its length
@@ -231,11 +233,43 @@ function build() {
   let iOut = 0;
   while (iOut < N - 1 && baseAt(pts[iOut + 1].x, pts[iOut + 1].z) - ys[iOut + 1] > 62) iOut++;
 
+  // The land under the road, as the plane reads it. The crest hills only level the road across its middle: against the
+  // mountain's walls the land under the road's middle stands up to 25 m above the road's lowest edge, and a plane that
+  // flies the road (this same field is its ground) found itself under the ground, or lifted off the road to clear a
+  // rise that is not in its way. A row of hollows along the road, solved the same way as the crest, brings the field down
+  // to a little over the road's floor wherever it stood higher: all the way up, and through the cave at the pass, so the
+  // plane can fly the cave at its own height above its floor. (Only ever a cut; the mesh is cut to the road
+  // by its own rule, so it only follows where the field was higher than the mesh.)
+  {
+    const R2 = 30;
+    const ST = 3;
+    const stations: number[] = [];
+    for (let i = iOut + 20; i <= Math.min(N - 1, iEnd + 12); i += ST) stations.push(i);
+    const amp = new Float32Array(stations.length);
+    const gain2 = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5].reduce((a, j) => a + Math.exp(-(((j * ST * STEP) / R2) ** 2)), 0);
+    const mk = (): B[] => stations.map((i, k) => [pts[i].x, pts[i].z, R2, amp[k]] as B);
+    for (let it = 0; it < 24; it++) {
+      const cb = mk();
+      for (let k = 0; k < stations.length; k++) {
+        const p = pts[stations[k]];
+        const target = ys[stations[k]] + 2.5;
+        const h = baseAt(p.x, p.z) + sum(chainB, p.x, p.z) + sum(cb, p.x, p.z);
+        amp[k] = Math.min(0, amp[k] + ((target - h) / gain2) * 0.8);
+      }
+    }
+    // (a soft start where the first of them begins; and none that does not cut by at least a metre or two)
+    notch.push(...mk().map((b, k): B => [b[0], b[1], b[2], b[3] * Math.min(1, k / 3 + 0.2)]).filter((b) => b[3] < -1));
+    all.push(...notch);
+  }
+
+
   // the path of light: out of the cave over the road's middle, rising as the valley opens so the whole climb is
   // seen at once; then down beside the road on its valley side, a little above the hoods; round each turn on the
   // outside, over the drop, looking back at the crowd on the edge; at the pass over their heads and in
   // (the plane arrives a little way inside the mouth: a few seconds of dark with the night's blue ahead, not a long tunnel)
   const iIn = Math.max(8, iOut - 36);
+  // the dock: where the souls step ashore (the water of the cave they come in by ends here)
+  const iDock = iOut - 16;
   const path: [number, number, number][] = [];
   const iFork = iPass - 14;
   for (let i = iIn; i <= iFork; i += 10) {
@@ -247,22 +281,25 @@ function build() {
     const lift = 7.5 + 2.5 * turn * turn * out + 6.5 * (1 - out) + out * (1 - sstep(iOut + 30, ctlI[5], i)) * 34;
     path.push([x, z, Math.max(3.5, ys[i] + lift - ground(x, z))]);
   }
-  // the parting of the ways: the crowd goes on up to the tree and in; the plane goes straight on over the edge, to a
-  // gate standing in the air over the abyss
-  const pp = pts[iPass];
-  const pa = pts[iPass - 36];
-  const dl = Math.hypot(pp.x - pa.x, pp.z - pa.z);
-  const d1: [number, number] = [(pp.x - pa.x) / dl, (pp.z - pa.z) / dl];
-  const fy = ys[iFork] + 12;
-  const along = (m: number): [number, number] => [pp.x + d1[0] * m, pp.z + d1[1] * m];
-  for (const m of [-6, 50, 110, 175]) {
-    const [x, z] = along(m);
-    path.push([x, z, Math.max(16, fy + 4 + Math.max(0, m) * 0.04 - ground(x, z))]);
+  // The way on follows the road: over the pass between the two cypresses and into the cave, down the middle of its
+  // floor to the portal at its far end (the plane flies the road's own line, a little above it: no longer does it leave
+  // the crowd at the pass and swing out over the abyss to a gate hanging in the air)
+  const iGateEnd = iEnd;
+  for (let i = iFork + 10; i < iGateEnd - 6; i += 10) {
+    const p = pts[i];
+    // (the nearer the cave, the more it is the road's own middle: the way is drawn in from the valley side)
+    const mid = sstep(iFork - 30, iMouth - 16, i);
+    const out = sstep(iOut - 4, iOut + 26, i) * (1 - mid);
+    const x = p.x - tan[i][1] * 0;
+    const z = p.z + 13 * out;
+    const inCave = sstep(iMouth - 10, iMouth + 14, i);
+    const lift = 7.5 + 1.5 * inCave;
+    path.push([x, z, Math.max(3, ys[i] + lift - ground(x, z))]);
   }
-  const gp = along(235);
-  const gate = { x: gp[0], z: gp[1], above: Math.max(16, fy + 11 - ground(gp[0], gp[1])), yaw: Math.atan2(-d1[0], -d1[1]) };
-  const gp2 = along(262);
-  path.push([gp[0], gp[1], gate.above], [gp2[0], gp2[1], gate.above]);
+  const pg = pts[iGateEnd];
+  const gateAbove = ys[iGateEnd] + 9 - ground(pg.x, pg.z);
+  const gate = { x: pg.x, z: pg.z, above: gateAbove, yaw: Math.atan2(-tan[iGateEnd][0], -tan[iGateEnd][1]) };
+  path.push([pg.x, pg.z, gateAbove]);
   const entry = { x: path[0][0], z: path[0][1], above: path[0][2], yaw: Math.atan2(-tan[iIn][0], -tan[iIn][1]) };
   // (well up the first climb: nothing hangs in the mouth of the cave the plane comes out of)
   const iC = ctlI[7] + 4;
@@ -292,7 +329,7 @@ function build() {
     { x: -800, z: 120, r: 320, h: 840, bell: true },
   ];
 
-  return { terrain, pts, tan, y: ys, crest, N, STEP, len: (N - 1) * STEP, ground, baseAt, iPass, iMouth, iGate, iEnd, iOut, iIn, path, entry, gate, canvas, cyp, obstacles };
+  return { terrain, pts, tan, y: ys, crest, N, STEP, len: (N - 1) * STEP, ground, baseAt, iPass, iMouth, iGate, iEnd, iOut, iIn, iDock, path, entry, gate, canvas, cyp, obstacles };
 }
 
 let land: ReturnType<typeof build> | null = null;

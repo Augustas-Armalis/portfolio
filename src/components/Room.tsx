@@ -571,6 +571,12 @@ function Scene({
   const skyTick = useRef(-1);
   const musicClock = useRef(nowS());
   const musicDrift = useRef({ t: 0 });
+  // the desk's sun: the light as the sky asks for it (goal) and as it is now (eased toward it: see easeSun), and how much of
+  // its shadow is let through (k: 1 within reach of the desk, 0 away from it; it is faded, never switched)
+  const sunGoal = useRef({ set: false, dir: new THREE.Vector3(0, 1, 0), col: new THREE.Color(), i: 0, beat: 0 });
+  const sunNow = useRef({ dir: new THREE.Vector3(0, 1, 0), col: new THREE.Color(), i: 0 });
+  const shade = useRef({ k: 1, on: true });
+  const sunWorld = useRef("home");
   const lastH = useRef(-1);
   const lastLabel = useRef("");
   const veilH = useRef(-2);
@@ -1244,6 +1250,26 @@ function Scene({
     }
   };
 
+  const easeSun = (dt: number, snap = false) => {
+    const l = sun.current;
+    const g = sunGoal.current;
+    if (!l || !g.set) return;
+    const n = sunNow.current;
+    // (only at home, and only within one world: a painted world brings its own light behind the cloud and keeps it as it is)
+    if (voyage.cur !== sunWorld.current || voyage.cur !== "home") {
+      sunWorld.current = voyage.cur;
+      snap = true;
+    }
+    const k = snap ? 1 : 1 - Math.exp(-dt / 0.45);
+    n.dir.lerp(g.dir, k).normalize();
+    n.col.lerp(g.col, k);
+    n.i += (g.i - n.i) * k;
+    l.position.copy(n.dir).multiplyScalar(6).add(sunTarget.position);
+    l.color.copy(n.col);
+    // (the music's beat rides on top of the eased strength, as before)
+    l.intensity = n.i * (1 + g.beat * 0.25);
+  };
+
   const updateSky = (now: number) => {
     SKY_U.uTime.value = now;
     // While music plays the day leans toward evening and on into night, a slow
@@ -1270,10 +1296,16 @@ function Scene({
     const beat = SKY_U.uPulse.value;
     gl.toneMappingExposure = s.exposure * (1 + beat * 0.07);
     fog.color.copy(s.horizon);
-    if (sun.current) {
-      sun.current.position.copy(s.keyDir).multiplyScalar(6).add(sunTarget.position);
-      sun.current.color.copy(s.keyCol);
-      sun.current.intensity = s.keyI * 0.85 * (1 + beat * 0.25);
+    // (the sky hands the sun over to the moon at a stroke, a different direction, colour and strength: the desk's key
+    // light is eased toward what the sky asks for, so its shadows swing across the wood instead of jumping)
+    const sg = sunGoal.current;
+    sg.dir.copy(s.keyDir);
+    sg.col.copy(s.keyCol);
+    sg.i = s.keyI * 0.85;
+    sg.beat = beat;
+    if (!sg.set && sun.current) {
+      sg.set = true;
+      easeSun(0, true);
     }
     if (hemi.current) {
       hemi.current.color.copy(s.amb).multiplyScalar(1.6);
@@ -1311,8 +1343,10 @@ function Scene({
   const lens = (dt: number) => {
     const s = stage.current;
     let focus = cam.position.distanceTo(v.tmp.set(...cfg.target));
-    // after dark the lens stops down: the stars stay points of light
-    let dof = 1 - 0.85 * SKY_U.uNight.value;
+    // (the depth of field is the same by night as by day. It used to stop down after dark, to keep the stars points of
+    // light, and the sky leans to night while music plays: so after a flight, which plays music all the way, the desk
+    // was at night and the blur behind it was gone. A star blurred at f/2 is only a softer, dimmer star.)
+    let dof = 1;
     // (f/2 at the desk: a 36 mm lens focused on the desk two metres off throws a circle of about seven pixels in nine
     // hundred lines onto the far wood and the mountains, a field that is plainly soft behind a sharp desk. At f/2.8
     // and a part of it, as it was, the circle was under two pixels and he could not see any depth of field at all.)
@@ -1401,14 +1435,10 @@ function Scene({
     });
     // (going through a gate makes no sound of its own: the owner wants the crossing silent, only the music)
     if (flying && voyage.phase !== gatePhase.current) gatePhase.current = voyage.phase;
-    // the kings' wood grows quiet: the music sinks as the plane nears the light they hold
+    // (the music stays at its own level all the way through the kings' world: it used to sink to a tenth near the dome,
+    // and the owner heard it as the sound going missing)
     if (flying) {
-      let vol = 1;
-      if (voyage.cur === "kings" && !voyage.homing && planeApi.current) {
-        const pp = planeApi.current.pos;
-        const d = Math.hypot(pp.x - ORIGIN.x, pp.z - ORIGIN.z - KINGS.z);
-        vol = 0.1 + 0.6 * smooth(clamp01((d - 90) / 520));
-      }
+      const vol = 1;
       if (Math.abs(vol - musicVol.current) > 0.01) flightMusicVolume((musicVol.current = vol));
       flightMusicCrossing(voyage.phase);
       // at home, the field's music hands over to the forest's as the plane goes in among the trees or nears the cave
@@ -1438,10 +1468,17 @@ function Scene({
     CALM.on = stage.current === "idle" && !voyage.flying && at !== null && now - at > ARR + 3;
     gl.shadowMap.autoUpdate = false;
     // (the sun's shadow map covers only the desk, two metres across, and what casts into it does not move while the plane
-    // is away: in flight beyond the field round the desk, or in another world, it is not drawn again; it is drawn every
-    // frame again as the plane comes back within forty metres)
-    const deskAway = voyage.flying && (voyage.cur !== "home" || Math.hypot(cam.position.x, cam.position.z) > 40);
-    gl.shadowMap.needsUpdate = !deskAway && (!CALM.on || (CALM.frame & 1) === 1);
+    // is away: in flight beyond the field round the desk, or in another world, it is not drawn at all)
+    const sh = shade.current;
+    const dDesk = voyage.cur === "home" ? Math.hypot(cam.position.x, cam.position.y - 1, cam.position.z) : Infinity;
+    sh.on = !voyage.flying || dDesk < (sh.on ? 260 : 220);
+    // (the shadow is faded in and out over about a second, not switched: the map is drawn again from far out, two hundred
+    // metres before the desk, and is fresh from the first frame of the fade; it was drawn again only forty metres off,
+    // after a flight with the sun somewhere else, and the shadows jumped across the wood as it came up)
+    sh.k = clamp01(sh.k + (sh.on ? dt : -dt) / 0.9);
+    gl.shadowMap.needsUpdate = (sh.on || sh.k > 0) && (!CALM.on || (CALM.frame & 1) === 1);
+    if (sun.current) sun.current.shadow.intensity = smooth(sh.k);
+    easeSun(dt);
     if (!voyage.flying) {
       const dd = Math.hypot(cam.position.x, cam.position.y - 1, cam.position.z);
       const near = dd < 6 ? 0.01 : Math.min(8, 0.01 + (dd - 6) * 0.01);

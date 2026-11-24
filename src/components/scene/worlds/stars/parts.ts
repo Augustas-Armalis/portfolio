@@ -13,9 +13,10 @@ const END = /* glsl */ `
 const HASH = /* glsl */ `float h11(float x){ return fract(sin(x * 12.9898) * 43758.5453); }`;
 
 // ---------- the sea of waves ----------
-// Not land: long bands of deep blue, blue-green and umber lying one behind another like staves, each edged with a
-// thread of gold, some hatched with fine level lines as he drew them, all drifting very slowly. `uLight`: where
-// the pyramid stands (its light lies on the waves round its foot).
+// A great calm swell, lit gold from where the pyramid stands: broad soft fields of deep blue-green, indigo and a
+// little umber (as in the paintings' waves, never stripes), each long crest catching the light that lies on the
+// sea ahead, the horizon's gold mirrored in it more the lower the eye looks, the pyramids mirrored too, and a road
+// of broken glints running to the door. `uLight`: where the pyramid's foot stands (its light lies on the waves).
 export function makeWaveSea(light: V3, reflect = "vec4 worldReflect(vec3 P, vec3 r){ return vec4(0.0); }") {
   return new THREE.ShaderMaterial({
     uniforms: { ...SKY_U, ...WORLD_U, uLight: { value: new THREE.Vector3(...light) } },
@@ -30,55 +31,45 @@ export function makeWaveSea(light: V3, reflect = "vec4 worldReflect(vec3 P, vec3
       ${GLSL_AIR}
       ${HASH}
       ${reflect}
-      vec3 seaBand(float pick){ return pick < 0.3 ? vec3(0.008, 0.040, 0.060) : pick < 0.52 ? vec3(0.012, 0.062, 0.064) : pick < 0.66 ? vec3(0.010, 0.024, 0.085) : pick < 0.8 ? vec3(0.070, 0.040, 0.018) : pick < 0.9 ? vec3(0.120, 0.078, 0.028) : vec3(0.030, 0.080, 0.064); }
       void main(){
         vec2 p = vLocal.xz; float h = vLocal.y;
         vec3 camL = cameraPosition - (vWorld - vLocal);
         float dist = length(vWorld - cameraPosition);
-        float warp = fbm(p * 0.003 + vec2(0.0, uTime * 0.003));
-        float s = p.y * 0.03 + warp * 2.2 + 0.22 * sin(p.x * 0.006 + warp * 4.0);
-        float fw = fwidth(s);
-        float bi = floor(s); float bf = fract(s);
-        vec3 deep = vec3(0.007, 0.032, 0.046);
-        vec3 band = mix(seaBand(h11(bi - 1.0)), seaBand(h11(bi)), smoothstep(0.0, 0.45, bf));
-        // far off the bands melt into one deep tone (and never shimmer)
-        float farK = smoothstep(0.18, 0.9, fw);
-        band = mix(band, deep, farK);
-        float nearK = 1.0 - smoothstep(60.0, 420.0, dist);
-        band = mix(band, deep * 1.5, nearK * 0.93);
-        // each band is lighter toward its crest, as a wave is
-        vec3 col = band * (0.55 + 0.9 * bf * bf * (1.0 - farK) * (1.0 - 0.85 * nearK) + 0.3 * nearK);
-        // long strokes of the pastel laid along the band, and its grain
-        float stroke = vnoise(vec2(p.x * 0.05, s * 14.0)) * 0.6 + vnoise(vec2(p.x * 0.21, s * 40.0)) * 0.4;
-        col *= 1.0 + (stroke - 0.5) * 0.6 * (1.0 - smoothstep(60.0, 420.0, dist));
-        col *= 0.8 + 0.4 * fbm(p * 0.0016 + 9.0);
-        // fine level hatching in some of them
-        float hl = bf * 26.0; float hw = fwidth(hl);
-        float hatch = (1.0 - smoothstep(0.12, 0.2 + hw, abs(fract(hl) - 0.5))) * step(0.45, h11(bi + 7.0)) * (1.0 - smoothstep(0.3, 0.9, hw));
-        col += vec3(0.04, 0.13, 0.10) * hatch * 0.6 * (1.0 - 0.6 * nearK);
-        // the gold thread along every crest
-        float crest = 1.0 - smoothstep(fw * 0.8, fw * 2.0 + 0.008, 1.0 - bf);
-        vec3 gold = vec3(1.0, 0.8, 0.42);
-        col += gold * crest * (0.1 + 0.1 * sin(p.x * 0.02 + uTime * 0.2 + bi)) * (1.0 - smoothstep(0.2, 1.0, fw));
-        col *= uSkyCol * 2.3 + 0.2;
-        // the light of the pyramid on the waves round its foot
-        vec2 dL = p - uLight.xz; float dl = length(dL);
-        col += gold * (0.4 + 0.6 * bf) * (exp(-dl * dl / (uLight.y * uLight.y)) * 0.22 + exp(-dl / (uLight.y * 2.4)) * 0.04) * glowK() * 2.0;
-        // and its road across them toward the eye, broken into glints on the crests
+        vec3 V = normalize(cameraPosition - vWorld); vec3 n = normalize(vN);
+        // broad fields of colour, drifting very slowly
+        float f1 = fbm(p * 0.0012 + vec2(0.0, uTime * 0.0025));
+        float f2 = fbm(p * 0.0007 + 4.0);
+        float f3 = fbm(p * 0.0021 + 9.0);
+        vec3 base = mix(vec3(0.010, 0.045, 0.058), vec3(0.018, 0.092, 0.084), smoothstep(0.3, 0.72, f1));
+        base = mix(base, vec3(0.020, 0.040, 0.105), smoothstep(0.5, 0.85, f2) * 0.5);
+        base = mix(base, vec3(0.095, 0.062, 0.028), smoothstep(0.62, 0.85, f3) * 0.4);
+        // each swell lighter toward its crest (the height itself), darker in the trough
+        base *= 0.55 + 1.1 * smoothstep(-22.0, 22.0, h);
+        // the light that lies on the sea toward the pyramid: a slope turned to it takes the gold
+        vec3 toL = normalize(vec3(uLight.x - p.x, 320.0, uLight.z - p.y));
+        float nl = max(dot(n, toL), 0.0);
+        float dl = length(p - uLight.xz);
+        float reach = exp(-dl / 2600.0);
+        vec3 gold = vec3(1.0, 0.78, 0.4);
+        vec3 col = base * (uSkyCol * 2.2 + 0.18);
+        col += gold * (pow(nl, 2.0) * 0.08 + nl * 0.02 + 0.01 + 0.1 * smoothstep(-2.0, 24.0, h)) * reach * glowK() * 2.0;
+        col += gold * exp(-dl * dl / (uLight.y * uLight.y * 1.6)) * 0.05 * glowK() * 2.0;
+        // its road across the waves toward the eye, broken into glints on the crests
+        vec2 dL = p - uLight.xz;
         vec2 tc = camL.xz - uLight.xz; float D = length(tc); tc /= max(D, 1.0);
         float along = dot(dL, tc); float perp = dot(dL, vec2(-tc.y, tc.x));
-        float wd = 26.0 + along * 0.07;
-        float road = exp(-perp * perp / (wd * wd)) * smoothstep(150.0, 480.0, along) * (1.0 - smoothstep(D * 0.7, D, along));
-        float spark = smoothstep(0.5, 0.86, vnoise(vec2(p.x * 0.07 + uTime * 0.35, s * 16.0))) * (0.3 + 0.7 * bf);
-        col += gold * road * (0.035 + 0.6 * spark * (1.0 - farK)) * glowK() * 2.0;
-        // the pyramids and their light mirrored in the swell, more of it the lower the eye looks
-        {
-          vec3 V = normalize(cameraPosition - vWorld); vec3 n = normalize(vN);
-          vec3 rr = reflect(-V, n); rr.y = abs(rr.y) + 0.002; rr = normalize(rr);
-          vec4 wr = worldReflect(vec3(p.x, 0.0, p.y), rr);
-          float fr = 0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
-          col = mix(col, wr.rgb, wr.a * clamp(fr * 1.3 + 0.12, 0.0, 1.0));
-        }
+        float wd = 40.0 + along * 0.08;
+        float road = exp(-perp * perp / (wd * wd)) * smoothstep(120.0, 480.0, along) * (1.0 - smoothstep(D * 0.7, D, along));
+        float spark = smoothstep(0.66, 0.92, vnoise(p * vec2(0.16, 0.34) + vec2(uTime * 0.25, -uTime * 0.12)));
+        float farK = smoothstep(500.0, 3500.0, dist);
+        col += gold * road * (0.02 + 0.32 * spark * (1.0 - farK)) * glowK() * 2.0;
+        // the sky mirrored in it (the horizon's gold, more the lower the eye looks) and the pyramids standing in it
+        vec3 rr = reflect(-V, n); rr.y = abs(rr.y) + 0.002; rr = normalize(rr);
+        float fr = 0.03 + 0.97 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
+        col = mix(col, skyBase(rr) * 1.0, clamp(fr * 0.7, 0.0, 0.6) * (0.25 + 0.75 * smoothstep(120.0, 900.0, dist)));
+        vec4 wr = worldReflect(vec3(p.x, 0.0, p.y), rr);
+        // (the mirrored pyramids: faint, softer the nearer the eye, and gone far off)
+        col = mix(col, wr.rgb, wr.a * clamp(fr * 0.8 + 0.03, 0.0, 0.4) * smoothstep(150.0, 900.0, dist) * (1.0 - smoothstep(1500.0, 4500.0, dist)));
         col = applyAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         ${END}
@@ -89,17 +80,17 @@ export function makeWaveSea(light: V3, reflect = "vec4 worldReflect(vec3 P, vec3
 // ---------- a veil of light ----------
 // What the pyramid is made of: bands of pale colour with scalloped edges lying one over another like cloud seen
 // through cloud, a gold thread along each, its four edges drawn in light, brighter toward the point.
-export function makePyramidVeil(o: { h: number; half: number; alpha: number; seed: number; freq: number; edge?: number }) {
+export function makePyramidVeil(o: { h: number; half: number; alpha: number; seed: number; freq: number; edge?: number; base?: number }) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, ...WORLD_U, uH: { value: o.h }, uHalf: { value: o.half }, uAlpha: { value: o.alpha }, uSeed: { value: o.seed }, uFreq: { value: o.freq }, uEdge: { value: o.edge ?? 0 } },
+    uniforms: { ...SKY_U, ...WORLD_U, uH: { value: o.h }, uHalf: { value: o.half }, uAlpha: { value: o.alpha }, uSeed: { value: o.seed }, uBands: { value: o.freq }, uEdge: { value: o.edge ?? 0 }, uBase: { value: o.base ?? 0 } },
     vertexShader: /* glsl */ `
       varying vec3 vLocal; varying vec3 vWorld; varying vec2 vUv;
       void main(){ vLocal = position; vUv = uv; vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
-      uniform float uH; uniform float uHalf; uniform float uAlpha; uniform float uSeed; uniform float uFreq; uniform float uEdge;
+      uniform float uH; uniform float uHalf; uniform float uAlpha; uniform float uSeed; uniform float uBands; uniform float uEdge; uniform float uBase;
       varying vec3 vLocal; varying vec3 vWorld; varying vec2 vUv;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -112,26 +103,34 @@ export function makePyramidVeil(o: { h: number; half: number; alpha: number; see
         float across = (f - 0.5) * wide;
         float edgeM = (0.5 - abs(f - 0.5)) * wide;
         float dist = length(vWorld - cameraPosition);
-        float warp = fbm(vec2(across * 0.005 + uSeed, vLocal.y * 0.004 - uTime * 0.004)) * 110.0;
-        float s = (vLocal.y + warp + 16.0 * abs(sin(across * 0.021 + vLocal.y * 0.003 + uSeed * 3.0))) * uFreq * (1.0 + t * 0.7) + uTime * 0.01;
-        float fw = fwidth(s);
+        // a few broad veils lying one over another, each with a wide soft scalloped lower edge (no fine stripes)
+        float wob = fbm(vec2(across * 0.0014 + uSeed, vLocal.y * 0.0009 - uTime * 0.0015));
+        float s = t * uBands + (wob - 0.5) * 1.5 + 0.28 * sin(across * 0.0042 * (800.0 / uHalf) + uSeed * 3.0);
+        float aw = fwidth(s);
         float bi = floor(s); float bf = fract(s);
         float pick = h11(bi + uSeed * 7.0);
-        vec3 c = pick < 0.34 ? vec3(1.0, 0.70, 0.30) : pick < 0.56 ? vec3(0.36, 0.70, 0.50) : pick < 0.82 ? vec3(0.92, 0.50, 0.34) : vec3(1.0, 0.86, 0.60);
-        float line = (1.0 - smoothstep(fw, fw * 2.5 + 0.03, bf)) * (1.0 - smoothstep(0.3, 1.2, fw));
-        float edge = (1.0 - smoothstep(0.3 + dist * 0.0008, 1.2 + dist * 0.0028, edgeM)) * uEdge;
-        // drawn stars scattered over it
-        vec2 sq = vec2(across, vLocal.y) / 26.0; vec2 sc = floor(sq); float sh = hash12(sc + uSeed * 13.0);
-        vec2 sd = fract(sq) - 0.5 - (vec2(hash12(sc + 3.1), hash12(sc + 7.7)) - 0.5) * 0.6;
+        vec3 c = pick < 0.3 ? vec3(1.0, 0.72, 0.34) : pick < 0.55 ? vec3(0.4, 0.72, 0.56) : pick < 0.8 ? vec3(0.95, 0.58, 0.38) : vec3(1.0, 0.88, 0.62);
+        // each veil is fullest under its upper lip and thins away to its scalloped edge; far off they all melt together
+        float soft = smoothstep(0.0, 0.18, bf) * (1.0 - 0.45 * bf);
+        float calm = smoothstep(0.25, 0.9, aw);
+        soft = mix(soft, 0.55, calm);
+        float line = (1.0 - smoothstep(0.0, max(0.03, aw * 1.6), bf)) * (1.0 - calm);
+        float edge = (1.0 - smoothstep(0.4 + dist * 0.0006, 2.0 + dist * 0.003, edgeM)) * uEdge;
+        // a few great drawn stars on the faces, near ones only
+        vec2 sq = vec2(across, vLocal.y) / 120.0; vec2 sc = floor(sq); float sh = hash12(sc + uSeed * 13.0);
+        vec2 sd = fract(sq) - 0.5 - (vec2(hash12(sc + 3.1), hash12(sc + 7.7)) - 0.5) * 0.5;
         float sr = length(sd); float sa = atan(sd.y, sd.x);
-        float star = step(0.8, sh) * smoothstep(0.16 * (0.25 + 0.75 * pow(abs(cos(sa * 3.0)), 8.0)), 0.0, sr) * (0.6 + 0.4 * sin(uTime * (1.0 + 2.0 * sh) + sh * 40.0));
-        star *= 1.0 - smoothstep(300.0, 900.0, dist);
-        vec3 gold = vec3(1.0, 0.86, 0.52);
-        vec3 col = c * (0.3 + 0.5 * t + 0.14 * pick) + gold * (line * 0.5 + edge * 0.8 + star * 1.6);
-        col *= glowK() * 2.2;
-        float a = uAlpha * (0.45 + 0.55 * pick) * (0.6 + 0.6 * t) + line * 0.2 + edge * 0.5 + star * 0.6;
-        a *= smoothstep(0.0, 0.04, t) * smoothstep(8.0, 110.0, dist) * (1.0 - airAmt(vWorld) * 0.6) * exp(-dist * uMist * 1.5);
-        gl_FragColor = vec4(col * (1.0 + uPulse * 0.4), clamp(a, 0.0, 0.9));
+        float star = step(0.93, sh) * smoothstep(0.2 * (0.25 + 0.75 * pow(abs(cos(sa * 3.0)), 8.0)), 0.0, sr) * (0.6 + 0.4 * sin(uTime * (1.0 + 2.0 * sh) + sh * 40.0));
+        star *= 1.0 - smoothstep(500.0, 1800.0, dist);
+        vec3 gold = vec3(1.0, 0.84, 0.5);
+        // the light inside the greatest: a warm pool low on the face that has the door, and the foot of every face alight
+        float nearFace = step(abs(vLocal.x), vLocal.z);
+        float pool = uBase * (nearFace * exp(-(across * across) / (uHalf * uHalf * 0.07) - pow(vLocal.y / (uH * 0.095), 2.0)) * 1.4 + exp(-vLocal.y / (uH * 0.07)) * 0.35);
+        vec3 col = c * (0.34 + 0.5 * t + 0.12 * pick) * (0.55 + 0.45 * soft) + gold * (line * 0.55 + edge * 0.85 + star * 1.5) + vec3(1.0, 0.72, 0.36) * pool * 0.5;
+        col *= glowK() * 2.1;
+        float a = uAlpha * (0.5 + 0.5 * pick) * (0.55 + 0.6 * t) * soft + line * 0.18 + edge * 0.45 + star * 0.5 + pool * 0.2;
+        a *= smoothstep(0.0, 0.05, t) * smoothstep(8.0, 110.0, dist) * (1.0 - airAmt(vWorld) * 0.6) * exp(-dist * uMist * 1.5);
+        gl_FragColor = vec4(col * (1.0 + uPulse * 0.4), clamp(a, 0.0, 0.88));
         ${END}
       }`,
   });
@@ -420,3 +419,51 @@ export function constellation(kind: number, fig: number, c: THREE.Vector3, towar
     }
 }
 export const FIG_KINDS = FIGS.length;
+
+// ---------- a painted world ----------
+// A planet as he paints one: bands of colour that wander, continents of paler gold and blue-green with soft edges
+// and a fine gold line along some of them, light from the key on one side, a gold line of light round the limb.
+export function makePlanet(o: { a: V3; b: V3; c: V3; seed: number }) {
+  return new THREE.ShaderMaterial({
+    uniforms: { ...SKY_U, ...WORLD_U, uA: { value: new THREE.Color(...o.a) }, uB: { value: new THREE.Color(...o.b) }, uC: { value: new THREE.Color(...o.c) }, uSeed: { value: o.seed } },
+    vertexShader: /* glsl */ `
+      varying vec3 vO; varying vec3 vWorld;
+      void main(){ vO = normalize(position); vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uA; uniform vec3 uB; uniform vec3 uC; uniform float uSeed;
+      varying vec3 vO; varying vec3 vWorld;
+      ${GLSL_NOISE}
+      ${GLSL_SKY}
+      ${GLSL_AIR}
+      float f3(vec3 n, float k, float sd){ vec3 w = abs(n); w /= w.x + w.y + w.z; return fbm(n.yz * k + sd) * w.x + fbm(n.xz * k + sd * 1.7) * w.y + fbm(n.xy * k + sd * 2.3) * w.z; }
+      void main(){
+        vec3 n = normalize(vO);
+        vec3 V = normalize(cameraPosition - vWorld);
+        float warp = f3(n, 2.2, uSeed) - 0.5;
+        float lat = n.y + warp * 0.55;
+        float bandF = lat * 7.0;
+        float bi = floor(bandF); float bf = fract(bandF);
+        float aw = fwidth(bandF);
+        float pick = fract(sin((bi + uSeed) * 12.9898) * 43758.5453);
+        vec3 band = mix(uA, uB, 0.25 + 0.6 * pick);
+        band = mix(band, uA * 0.85, smoothstep(0.3, 0.9, bf) * 0.4);
+        // continents: broad, soft-edged, paler and bluer
+        float cont = smoothstep(0.52, 0.6, f3(n, 1.5, uSeed + 5.0));
+        vec3 alb = mix(band, mix(uB * 1.1, uC, smoothstep(0.45, 0.7, f3(n, 3.4, uSeed + 9.0))), cont);
+        alb *= 0.92 + 0.16 * f3(n, 9.0, uSeed + 2.0);
+        // the fine gold line along some band edges and round the continents
+        float ln = (1.0 - smoothstep(0.0, max(0.03, aw * 1.5), bf)) * step(0.5, pick) * (1.0 - smoothstep(0.2, 0.6, aw));
+        float cl = (1.0 - smoothstep(0.0, 0.012, abs(f3(n, 1.5, uSeed + 5.0) - 0.56))) * 0.7;
+        alb += vec3(1.0, 0.8, 0.45) * (ln * 0.35 + cl * 0.3);
+        float lit = clamp(dot(n, uKeyDir) * 0.5 + 0.55, 0.0, 1.0);
+        vec3 col = alb * (uSkyCol * 1.1 + 0.05 + uKeyCol * lit * 0.5);
+        // soft light round the limb, and a glow within
+        float fr = pow(1.0 - max(dot(n, V), 0.0), 2.6);
+        col += vec3(1.0, 0.78, 0.42) * fr * 0.4 * glowK() * 2.0;
+        col += alb * 0.08 * glowK() * 2.0;
+        col = applyAir(col, vWorld);
+        gl_FragColor = vec4(col, 1.0);
+        ${END}
+      }`,
+  });
+}

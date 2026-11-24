@@ -154,10 +154,10 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   stars: {
     label: "Sonata of the Stars",
     zenith: [0.003, 0.011, 0.03],
-    upper: [0.006, 0.03, 0.05],
-    horizon: [0.014, 0.062, 0.07],
-    glow: [0.6, 0.52, 0.3],
-    amb: [0.13, 0.23, 0.26],
+    upper: [0.01, 0.034, 0.05],
+    horizon: [0.07, 0.078, 0.062],
+    glow: [0.9, 0.62, 0.28],
+    amb: [0.17, 0.22, 0.24],
     key: [1.0, 0.9, 0.66],
     keyI: 0.95,
     sunAz: 0,
@@ -411,14 +411,15 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     place: "sea",
     air: AIR.stars,
     // (clear air: the pyramids stand kilometres off, their feet in haze and their points in the stars)
-    fog: [0.00012, 0.0032],
-    // a rolling swell: long seas the way rises and falls over, a few metres, and smaller ripples laid on them
+    fog: [0.00014, 0.0032],
+    // a great rolling swell: long seas the way rides up and over, twenty metres from trough to crest (the sea is calmed
+    // flat where the door stands, so the greatest pyramid's foot meets it level)
     terrain: {
       base: 0,
       sines: [
-        [0.0035, 0.026, 0.3, 5],
-        [0.008, 0.015, 2.2, 3.5],
-        [-0.012, 0.006, 1.1, 2],
+        [0.0042, 0.0058, 0.18, 13],
+        [-0.0031, 0.0086, 2.2, 9],
+        [0.0105, 0.0042, 1.1, 4],
         [0.02, -0.05, 4.0, 0.8],
         [0.05, 0.03, 1.0, 0.4],
       ],
@@ -433,20 +434,25 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     entry: { x: 0, z: 3300, above: 30, yaw: 0 },
     // the door at the foot of the greatest pyramid (stars/pyramids.ts DOOR_Z): the way runs straight into it
     gate: { x: 0, z: 586, above: 30, yaw: 0 },
-    // in low over the sea, a long way; between the two near pyramids, which stand close beside the way; then straight
-    // on to the door of the greatest
+    // in low over the swell, a long way: through the glass globe (it stands in the sea and the plane goes in and out
+    // through it), over the top of the golden world that lies half sunk in the sea, then down toward the foot of the
+    // greatest pyramid and straight in at its door (the heights here are above the swell, which is -20..+17 m)
     path: [
       [0, 3300, 30],
-      [0, 3000, 27],
-      [-110, 2600, 25],
-      [-250, 2200, 27],
-      [-290, 1850, 29],
-      [-220, 1500, 29],
-      [-100, 1180, 28],
-      [0, 930, 28],
-      [0, 760, 30],
-      [0, 640, 30],
-      [0, 586, 30],
+      [-80, 3050, 36],
+      [-300, 2750, 38],
+      [-560, 2450, 55],
+      [-640, 2350, 80],
+      [-640, 2150, 62],
+      [-520, 1800, 42],
+      [-300, 1500, 48],
+      [-240, 1380, 110],
+      [-150, 1230, 140],
+      [-100, 1090, 150],
+      [-60, 960, 112],
+      [-20, 850, 66],
+      [0, 720, 38],
+      [0, 600, 30],
       [0, 556, 30],
     ],
     obstacles: [
@@ -486,8 +492,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     ceil: 1500,
     pace: 3.3,
     entry: { x: 0, z: 1633, above: 22, yaw: 0 },
-    // at the very top of him: in the crown, between its spires, at the height of its points
-    gate: { x: 0, z: -640, above: 1190, yaw: 0 },
+    // at the very top of him: the great arch that stands on his deck, before the crown
+    gate: { x: 0, z: -560, above: 1190, yaw: 0 },
     // in low over the water for two kilometres, the whole of him standing in the haze ahead; past the painting to the
     // altar and the blade of light; then twice round him, rising all the way, past the globe at his feet, his body and
     // his shoulders, through the shells of his sky one after another; and over his brow, in at the front of his crown
@@ -531,16 +537,25 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [-560, -925, 1112],
       [-600, -709, 1146],
       [-559, -493, 1180],
-      [-443, -405, 1181],
-      [-318, -357, 1182],
-      [-198, -347, 1183],
-      [-93, -371, 1184],
-      [-35, -425, 1186],
-      [8, -478, 1187],
-      [14, -535, 1188],
-      [4, -590, 1189],
-      [0, -640, 1190],
-      [0, -668, 1190],
+      // the last turn is wide and out in the open (never over his crown), so that the plane, whatever its pace, has
+      // come round and is lined up before the long straight run in: a kilometre down the line of the gate, level, to
+      // the middle of the great arch that stands on his deck before the crown
+      [-596, -250, 1186],
+      [-600, 100, 1192],
+      [-585, 290, 1196],
+      [-540, 460, 1199],
+      [-450, 606, 1201],
+      [-318, 692, 1202],
+      [-170, 690, 1201],
+      [-52, 612, 1199],
+      [0, 480, 1197],
+      [0, 300, 1195],
+      [0, 100, 1193],
+      [0, -100, 1192],
+      [0, -300, 1191],
+      [0, -450, 1190],
+      [0, -560, 1190],
+      [0, -600, 1190],
     ],
     // the dark sphere and the king (worlds/Rex.tsx KS; the king's is as high as the deck of his head, so the way over it is clear)
     obstacles: [
@@ -911,7 +926,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 200],
     radius: 620,
     ceil: 150,
-    entry: { x: 0, z: 700, above: 14, yaw: 0 },
+    entry: { x: 0, z: 700, above: 22, yaw: 0 },
     gate: null,
     // a long way in: the path winds wide between the great trunks, so that from the entry the kings are hidden and
     // their light is only glimpsed through the wood, now on one side, now on the other;
@@ -919,15 +934,17 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // hills as it comes and it is already at the height of their hands well before them: the last hundred and fifty
     // metres are level, straight at the light, and the plane goes into it without turning its eye up or down
     path: [
-      [0, 700, 14],
-      [-30, 632, 14],
-      [-66, 560, 15],
-      [-62, 490, 15],
-      [-22, 420, 16],
-      [36, 350, 17],
-      [52, 285, 19],
-      [30, 222, 23],
-      [6, 156, 29],
+      [0, 700, 24],
+      [16, 640, 32],
+      [14, 590, 38],
+      [-14, 548, 40],
+      [-48, 520, 40],
+      [-62, 490, 40],
+      [-22, 420, 44],
+      [36, 350, 48],
+      [52, 285, 50],
+      [30, 222, 52],
+      [6, 156, 54],
       [0, 80, 38],
       [0, 20, 50],
       [0, -30, 62],
@@ -968,7 +985,7 @@ export const kingsDome = () => {
 };
 // It goes slowly here, and slowest where the whole picture stands in the frame.
 // (briskly through the outer wood, easing as the light grows, slowest of all under the kings; the last of it a glide)
-export const kingsPace = (ahead: number) => 0.42 + 0.3 * smooth01((ahead - 270) / 170) + 0.38 * smooth01((ahead - 520) / 220) + 0.08 * smooth01((90 - ahead) / 60);
+export const kingsPace = (ahead: number) => (0.6 + 0.4 * smooth01((730 - ahead) / 120)) * (0.42 + 0.3 * smooth01((ahead - 270) / 170) + 0.38 * smooth01((ahead - 520) / 220) + 0.08 * smooth01((90 - ahead) / 60));
 // the level of the still water that lies in the wood's hollows
 export const KINGS_WATER = -1.3;
 // The eye is raised from the plane's own line toward the middle of the picture (between the dome and the

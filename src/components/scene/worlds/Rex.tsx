@@ -6,12 +6,13 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
-import { GLSL_AIR, Kit, WORLD_U, angel, haloGeometry, makeHaloMaterial, makePoints, makeTempera, makeWater, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { GLSL_AIR, Kit, WORLD_U, haloGeometry, makeHaloMaterial, makePoints, makeTempera, makeWater, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, GreatSun, type Flock } from "./life";
 import { makeCloudPaint, paintedCloudGeometry, type PCloud } from "./stars/forms";
-import { ORIGIN, WORLDS, pathOf } from "./voyage";
+import { ORIGIN, WORLDS, gateOf, pathOf } from "./voyage";
 import { Kindling, useDeepLens, type Lamp } from "./fairy/shared";
 import { Comet } from "./stars/comet";
+import { buildAngels, type AngelSpot } from "../home/Angels";
 import { buildWisps, makeWispMaterial } from "./sea/water";
 
 // Rex (1909). Umber dusk, almost one colour. On a still sea a globe lies half
@@ -26,6 +27,11 @@ import { buildWisps, makeWispMaterial } from "./sea/water";
 // the water, circles the king and rises through the shells one by one.
 
 const def = WORLDS.rex;
+// the great arch's opening, as worlds/portal.tsx OPENING.rex has it
+const GATE_HALF = 110;
+const GATE_RISE = 200;
+// (the air the angels of the home forest stand in here: Rex's own, dusk throughout)
+const REX_ANGEL_AIR = { glsl: GLSL_AIR, apply: "applyAir(col, vWorld)", amount: "airAmt(vWorld)", uniforms: WORLD_U, night: { value: 0.55 } };
 export const REX_PAL: GroundPalette = { a: [0.19, 0.145, 0.1], b: [0.27, 0.2, 0.13], c: [0.12, 0.1, 0.08], shore: [0.33, 0.25, 0.17], rock: [0.12, 0.095, 0.085] };
 
 // Everything is built at the size of the painting's first sketch and then made colossal: the king, his globe
@@ -83,6 +89,49 @@ const DECK = 236 * KS;
 const kingGLSL = `float kingR0(float y){ return y < 60.0 ? 0.0 : y < 119.0 ? 49.0 : y < 167.0 ? 49.0 + 13.0 * sin((y - 119.0) / 48.0 * 3.1416) : y < 222.0 ? 41.0 : y < 236.0 ? 55.0 : y < 258.0 ? 24.0 : 0.0; }
 float kingR(float y){ return kingR0(y / ${KS.toFixed(1)}) * ${KS.toFixed(1)}; }`;
 
+
+// Painted stone at the size he is. Every mark is drawn in the sketch's own units (world metres / KS), so a tower
+// 100 m across carries the same camouflage of olive, grey-green and rose as the king himself, laid by three planes
+// (never stretched down a wall), with the long upright strokes of the pastel over it and courses of dressed stone
+// whose lines go out before they could shimmer. The deck is paved in rings and spokes inlaid with gilt.
+const STONE_GLSL = /* glsl */ `
+float st3(vec2 p){ return vnoise(p) * 0.55 + vnoise(p * 2.1 + 7.0) * 0.3 + vnoise(p * 4.3 + 13.0) * 0.15; }
+vec3 stoneAlb(vec3 P, vec3 n, vec3 base){
+  vec3 w = pow(abs(n), vec3(5.0)); w /= (w.x + w.y + w.z);
+  float blot = 0.0; float blot2 = 0.0; float stroke = 0.0;
+  if (w.x > 0.02) { blot += w.x * st3(P.zy * 0.05 + 1.0); blot2 += w.x * st3(P.zy * 0.13 + 5.0); stroke += w.x * (vnoise(vec2(P.z * 0.55, P.y * 0.05)) * 0.6 + vnoise(vec2(P.z * 1.7 + 3.0, P.y * 0.16)) * 0.4); }
+  if (w.z > 0.02) { blot += w.z * st3(P.xy * 0.05 + 9.0); blot2 += w.z * st3(P.xy * 0.13 + 2.0); stroke += w.z * (vnoise(vec2(P.x * 0.55 + 4.0, P.y * 0.05)) * 0.6 + vnoise(vec2(P.x * 1.7, P.y * 0.16 + 3.0)) * 0.4); }
+  if (w.y > 0.02) { blot += w.y * st3(P.xz * 0.05 + 4.0); blot2 += w.y * st3(P.xz * 0.13 + 8.0); stroke += w.y * (vnoise(P.xz * 0.5) * 0.6 + vnoise(P.xz * 1.6 + 3.0) * 0.4); }
+  // camouflage: dark olive stone with grey-green and rose-umber blotches, as in the painting's body
+  vec3 c = base * mix(0.8, 1.35, smoothstep(0.3, 0.7, blot2));
+  c = mix(c, vec3(0.085, 0.095, 0.062), smoothstep(0.5, 0.62, blot) * 0.85);
+  c = mix(c, vec3(0.15, 0.165, 0.14), smoothstep(0.56, 0.7, blot2) * smoothstep(0.45, 0.6, blot) * 0.7);
+  c = mix(c, vec3(0.2, 0.135, 0.12), smoothstep(0.64, 0.76, blot + (blot2 - 0.5) * 0.4) * 0.55);
+  c *= 0.82 + (stroke - 0.5) * 0.5;
+  // courses of dressed stone up the walls, offset row on row, each block a shade of its own
+  float side = 1.0 - smoothstep(0.35, 0.7, abs(n.y));
+  float ch = 5.0;
+  float cy = P.y / ch; float row = floor(cy);
+  float along = P.x * w.z + P.z * w.x;
+  float bx = along / 11.0 + row * 0.5; float bi = floor(bx);
+  float aa = max(fwidth(cy), fwidth(bx)) * 1.2;
+  float fade = 1.0 - smoothstep(0.12, 0.4, aa);
+  float lineY = smoothstep(0.035 + aa, 0.0, min(fract(cy), 1.0 - fract(cy)));
+  float lineX = smoothstep(0.03 + aa, 0.0, min(fract(bx), 1.0 - fract(bx)));
+  float blk = hash12(vec2(bi, row));
+  c *= 1.0 + (blk - 0.5) * 0.5 * side * fade;
+  c = mix(c, c * 0.45, max(lineY, lineX * step(0.5, side)) * side * fade);
+  // (the lip of each course catches the light)
+  c += vec3(0.045, 0.03, 0.02) * smoothstep(0.9, 1.0, fract(cy)) * side * fade;
+  return c;
+}`;
+const patchStone = (m: THREE.ShaderMaterial) => {
+  m.fragmentShader = m.fragmentShader
+    .replace("void main(){", `${STONE_GLSL}\nvoid main(){`)
+    .replace("vec3 alb = vCol.rgb * (1.0 + (dab - 0.5) * 0.34 * uDab);", `vec3 alb = mix(stoneAlb(vLocal / ${KS.toFixed(2)}, n, vCol.rgb), vCol.rgb * (1.0 + (dab - 0.5) * 0.3), clamp(vCol.a * 1.6, 0.0, 1.0));`);
+  return m;
+};
+
 const GLOBE_GLSL = /* glsl */ `
 vec3 globeAlb(vec3 q){
   // lands and seas of a dark world: broad pale shapes with torn edges
@@ -136,6 +185,7 @@ function makeKingMaterial() {
       ${GLSL_NOISE}
       ${GLSL_SKY}
       ${GLSL_AIR}
+      ${STONE_GLSL}
       void main(){
         vec3 n = normalize(vN);
         if (!gl_FrontFacing) n = -n;
@@ -155,28 +205,43 @@ function makeKingMaterial() {
         float zig = abs(fract(u * 0.36) - 0.5) * 2.0;
         float crown = (1.0 - smoothstep(8.6, 9.2, u)) * step(165.5, y) * (1.0 - smoothstep(-0.3, 0.3, y - 172.5 - zig * 3.4));
         float m = max(body, max(tower, crown)) * smoothstep(0.35, 0.8, abs(normalize(L.xz).y));
-        // patches of cloud, long and level
-        vec2 pc = vec2(s * 0.035 + (front ? 0.0 : 17.0), y * 0.1);
+        // patches of cloud, long and level (laid along the arc of his side, never stretched across it)
+        float arc = atan(L.x, L.z) * 49.0;
+        vec2 pc = vec2(arc * 0.035 + (front ? 0.0 : 17.0), y * 0.1);
         float c1 = fbm(pc + 3.0);
         float c2 = fbm(pc * 1.9 + 11.0);
-        vec3 inner = mix(vec3(0.19, 0.25, 0.16), vec3(0.52, 0.36, 0.33), smoothstep(0.4, 0.58, c1));
+        vec3 inner = mix(vec3(0.17, 0.23, 0.15), vec3(0.56, 0.4, 0.36), smoothstep(0.4, 0.58, c1));
         inner = mix(inner, vec3(0.1, 0.12, 0.19), smoothstep(0.54, 0.66, c2) * 0.85);
+        inner = mix(inner, vec3(0.5, 0.48, 0.4), smoothstep(0.62, 0.7, c1 + (c2 - 0.5) * 0.3) * 0.3);
         inner *= mix(1.0, 0.72, smoothstep(134.0, 131.0, y) * smoothstep(127.0, 131.0, y));
-        float dab = vnoise(L.xz * 0.21 + y * 0.17) * 0.6 + vnoise(vec2(s, y) * 0.8) * 0.4;
-        // level beds in the dark stone, and the long upright strokes of the pastel over them
-        float bed = vnoise(vec2(y * 0.2 + vnoise(L.xz * 0.03) * 2.0, 1.7));
-        float stroke = vnoise(vec2(s * 0.9, y * 0.05)) * 0.6 + vnoise(vec2(s * 3.1, y * 0.2 + 5.0)) * 0.4;
-        dab = mix(dab, stroke, 0.45);
-        vec3 dark = vec3(0.045, 0.037, 0.031) * (0.8 + 0.5 * bed);
-        vec3 alb = mix(dark, inner, m) * (1.0 + (dab - 0.5) * 0.3);
+        // the long upright strokes of the pastel, and a fine tooth
+        float hatch = vnoise(vec2(arc * 0.9, y * 0.05)) * 0.55 + vnoise(vec2(arc * 3.3, y * 0.22 + 5.0)) * 0.3 + vnoise(vec2(arc * 9.0, y * 0.9)) * 0.15;
+        inner *= 0.86 + hatch * 0.3;
+        vec3 dark = stoneAlb(L, n, vec3(0.052, 0.049, 0.036));
+        // the deck: flagged in rings and spokes, a thread of gilt between
+        float onDeck = smoothstep(0.88, 0.97, n.y) * step(234.0, y);
+        float rr = length(L.xz);
+        float ang = atan(L.x, L.z);
+        float daa = fwidth(rr) * 1.4;
+        float ring = smoothstep(0.35 + daa, 0.0, abs(fract(rr / 11.0 - 0.5) - 0.5) * 11.0);
+        float spoke = smoothstep(0.3 + daa, 0.0, abs(fract(ang * 12.0 / 3.14159 + 0.5) - 0.5) * rr * 0.26) * step(11.0, rr);
+        float flag = hash12(floor(vec2(rr / 5.5, ang * rr / 5.5)));
+        vec3 deck = dark * (0.8 + flag * 0.7) * mix(vec3(1.0), vec3(1.5, 1.35, 1.05), 0.4);
+        deck = mix(deck, vec3(0.95, 0.68, 0.36) * 0.5, max(ring * step(rr, 53.0), spoke) * (1.0 - smoothstep(0.1, 0.5, daa)));
+        dark = mix(dark, deck, onDeck);
+        vec3 alb = mix(dark, inner, m * (1.0 - onDeck));
+        // the foot of him stands in the shade of the water and of his own sphere
+        float ao = mix(0.5, 1.0, smoothstep(30.0, 130.0, y));
         float lit = clamp(dot(n, uKeyDir) * 0.6 + 0.4, 0.0, 1.0);
-        vec3 col = alb * (uSkyCol * (0.7 + 0.3 * n.y) + uKeyCol * lit * 0.5);
+        // (the key warms the faces turned to it; the shade side takes the cool of the sky)
+        vec3 col = alb * (uSkyCol * (0.75 + 0.3 * n.y) * ao + vec3(0.02, 0.026, 0.045) + uKeyCol * lit * lit * 0.62 * mix(1.0, ao, 0.5));
         // the inner king keeps a little light of his own, so he reads at dusk
         col += inner * m * 0.16 * glowK() * 2.0;
-        col += vec3(0.36, 0.25, 0.14) * pow(1.0 - abs(dot(n, V)), 3.0) * (1.0 - m);
+        // a thin warm line on the edge of the form against the sky, as he outlined things
+        col += vec3(0.3, 0.2, 0.11) * pow(1.0 - abs(dot(n, V)), 4.0) * (1.0 - m) * 0.6;
         // he is so tall the air between the eye and his crown turns cool: far is hazier and bluer
         col = applyAir(col, vWorld);
-        col = mix(col, uHorizon * vec3(0.62, 0.66, 0.92) + vec3(0.02, 0.025, 0.05), smoothstep(${(300 * Q).toFixed(1)}, ${(2400 * Q).toFixed(1)}, length(vWorld - cameraPosition)) * 0.62);
+        col = mix(col, uHorizon * vec3(0.62, 0.66, 0.92) + vec3(0.02, 0.025, 0.05), smoothstep(${(300 * Q).toFixed(1)}, ${(2400 * Q).toFixed(1)}, length(vWorld - cameraPosition)) * 0.45);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -346,12 +411,20 @@ function* rexSteps(props: WorldProps) {
       const rad = kingRad(yy) * KS + 0.8;
       k.add(new THREE.CylinderGeometry(rad, rad, 1.6, props.mobile ? 48 : 96, 1, true), [X, yy * KS, Z], DARK_TOP);
     }
-    // watchers on his brow and his shoulders: pale, winged, each as tall as a tower and lost on him
-    for (let i = 0; i < (props.mobile ? 10 : 28); i++) {
-      const a = ((i + 0.5) / 28) * Math.PI * 2;
+    // watchers on his brow and his shoulders: the home forest's angels (robes that go to mist, wings that breathe), each
+    // as tall as a tower and lost on him, turned outward; and two greater still, guarding the arch
+    const spots: AngelSpot[] = [];
+    const nW = props.mobile ? 6 : 14;
+    for (let i = 0; i < nW; i++) {
+      const a = ((i + 0.5) / nW) * Math.PI * 2;
       const top = i % 2 === 0;
-      const rad = (top ? 53 : 54) * KS;
-      angel(k, [X + Math.sin(a) * rad, top ? DECK + 0.2 : 164.2 * KS, Z + Math.cos(a) * rad], 4.2, a, [0.7, 0.6, 0.46], { glow: 0.5, wing: [0.9, 0.8, 0.66] });
+      const rad = (top ? 52 : 54) * KS;
+      if (top && Math.min(a, Math.PI * 2 - a) < 0.5) continue; // (the way in to the arch stays clear)
+      spots.push({ x: X + Math.sin(a) * rad, y: top ? DECK : 164.2 * KS, z: Z + Math.cos(a) * rad, yaw: a, s: top ? 19 : 22, robe: i % 4 });
+    }
+    {
+      const G = gateOf("rex")!.pos;
+      for (const sx of [-1, 1]) spots.push({ x: X + sx * (GATE_HALF + 62), y: DECK, z: G.z + 30, yaw: sx * 0.35, s: 30, robe: sx > 0 ? 0 : 1 });
     }
     // eight towers round his brow, the two at either hand of his face the tallest, each roofed with a spire
     for (let i = 0; i < 8; i++) {
@@ -363,6 +436,41 @@ function* rexSteps(props: WorldProps) {
       k.add(new THREE.CylinderGeometry(4.3 * KS * big, 3.4 * KS * big, 2 * KS, 12), [p[0], p[1] + (12 * big + 1) * KS, p[2]], DARK_TOP);
       k.add(new THREE.ConeGeometry(4.6 * KS * big, 13 * KS * big, 12), [p[0], p[1] + (12 * big + 2 + 6.5 * big) * KS, p[2]], DARK, { top: [0.5, 0.36, 0.22] });
       for (let j = 0; j < 3; j++) k.box(0.5 * KS, 1.6 * KS, 0.3, [p[0] + Math.sin(a) * 3.7 * KS * big, p[1] + (3 + j * 3) * KS * big, p[2] + Math.cos(a) * 3.7 * KS * big], [1, 0.74, 0.4], { glow: 1.3, rot: [0, a, 0] });
+    }
+
+    // the great arch: it stands on his deck before the crown, a lancet of dressed stone as wide as the crown itself,
+    // and the plane goes in at its middle (the opening is worlds/portal.tsx OPENING.rex: half width GATE_HALF, GATE_RISE
+    // above the gate's height; the stone is drawn exactly round it)
+    {
+      const G = gateOf("rex")!.pos;
+      const wide = GATE_HALF * 1.04;
+      const foot = DECK - 2;
+      const spring = G.y + 2;
+      const head = GATE_RISE * 1.03;
+      const outline: V3[] = [[X - wide, foot, G.z]];
+      outline.push([X - wide, spring, G.z]);
+      for (let i = 1; i < 28; i++) {
+        const th = Math.PI - (i / 28) * Math.PI;
+        outline.push([X + Math.cos(th) * wide, spring + Math.sin(th) ** 0.9 * head, G.z]);
+      }
+      outline.push([X + wide, spring, G.z]);
+      outline.push([X + wide, foot, G.z]);
+      // two mouldings one over the other, the outer broad and dark, a thread of gilt in the angle of the inner
+      k.tube(outline, 7.5, DARK, { seg: 220, sides: 10, top: DARK_TOP });
+      k.tube(outline.map((q, i): V3 => (i === 0 || i === outline.length - 1 ? [q[0] * 0.97, q[1], q[2] + 6] : [X + (q[0] - X) * 0.955, G.y + (q[1] - G.y) * 0.97, q[2] + 6])), 4.2, DARK_TOP, { seg: 220, sides: 8 });
+      k.tube(outline.map((q, i): V3 => (i === 0 || i === outline.length - 1 ? [q[0] * 0.945, q[1], q[2] + 3] : [X + (q[0] - X) * 0.925, G.y + (q[1] - G.y) * 0.945, q[2] + 3])), 1.1, GILT, { seg: 220, sides: 5, glow: 1.3 });
+      // piers either side, each a tall block of courses with a pinnacle, and a flight of steps before the whole
+      for (const sx of [-1, 1]) {
+        k.box(30, 92, 36, [X + sx * (wide + 6), foot + 44, G.z], DARK, { top: DARK_TOP });
+        k.box(36, 6, 42, [X + sx * (wide + 6), foot + 93, G.z], DARK_TOP);
+        k.add(new THREE.ConeGeometry(11, 46, 4), [X + sx * (wide + 6), foot + 119, G.z], DARK, { top: [0.5, 0.36, 0.22], rot: [0, Math.PI / 4, 0], flat: true });
+        glows.push({ p: [X + sx * (wide + 6), foot + 146, G.z], size: 26, col: [1, 0.8, 0.52], k: 0.5 });
+        for (let j = 0; j < 4; j++) k.box(2.4, 14, 1, [X + sx * (wide + 6) + sx * 0, foot + 30 + j * 18, G.z + 18.5], [1, 0.74, 0.4], { glow: 1.2 });
+      }
+      for (let i = 0; i < 3; i++) k.box(2 * wide + 90 - i * 30, 3, 26 - i * 6, [X, foot + 1.5 + i * 3, G.z + 6 + i * 3], DARK_TOP, { top: [0.12, 0.095, 0.07] });
+      // the keystone, a crowned boss at the point of the arch
+      k.add(new THREE.ConeGeometry(9, 28, 4), [X, G.y + head + 14, G.z], DARK, { top: [0.9, 0.62, 0.32], glow: 0.14, rot: [0, Math.PI / 4, 0], flat: true });
+      halos.push({ p: [X, G.y + head + 32, G.z], size: 22, col: [1, 0.84, 0.58], k: 0.9 });
     }
     yield;
     // great buttresses up his body and pilasters up his neck, each ending in a pinnacle: he is built, not turned
@@ -438,19 +546,12 @@ function* rexSteps(props: WorldProps) {
 
     yield;
     // the wings of the upper air: tall pale angels standing in a row along the third shell, before and behind
-    // (each of the tall angels of the row has a ring of light behind its head, kept apart from the rest so that it
-    // can turn: as the plane comes by, their heads turn to follow it)
-    const nimbi: number[] = [];
-    const nA = props.mobile ? 24 : 72;
     const RA = (SHELLS[1] + SHELLS[2]) / 2 - 3 * SS;
+    const nA = props.mobile ? 8 : 18;
+    const spots2: AngelSpot[] = [];
     for (let i = 0; i < nA; i++) {
-      const a = Math.PI / 2 + (i - (nA - 1) / 2) * (1.5 / nA);
-      for (const s of [-1, 1]) {
-        const p: V3 = [X + Math.cos(a) * RA, Math.sin(a) * RA - DROP - 4 * SS, Z + s * 1.5 * SS];
-        const as = (i % 6 === 3 ? 2.6 : 1.5) * SS;
-        angel(k, p, as, s > 0 ? 0 : Math.PI, [0.66, 0.56, 0.44], { glow: 0.6, wing: [0.9, 0.8, 0.66], open: 0.5 });
-        nimbi.push(p[0], p[1] + 1.68 * as, p[2], as, s > 0 ? 0 : Math.PI);
-      }
+      const a = Math.PI / 2 + (i - (nA - 1) / 2) * (1.5 / nA) * 1.0;
+      for (const s of [-1, 1]) spots2.push({ x: X + Math.cos(a) * RA, y: Math.sin(a) * RA - DROP - 4 * SS, z: Z + s * 1.5 * SS, yaw: s > 0 ? 0 : Math.PI, s: (i % 6 === 3 ? 4.6 : 3.2) * SS, robe: (i + (s > 0 ? 0 : 2)) % 4 });
       if (i % 4 === 0) glows.push({ p: [X + Math.cos(a) * RA, Math.sin(a) * RA - DROP, Z], size: 30 * SS, col: [1, 0.82, 0.6], k: 0.1 });
     }
 
@@ -585,7 +686,8 @@ function* rexSteps(props: WorldProps) {
     yield;
     return {
       set: setGeo,
-      tempera: makeTempera({ amb: 1, key: 0.5, rim: [0.34, 0.235, 0.13], rimPow: 3, grain: 1, ao: 0.35, aoH: 120, wrap: 0.4 }),
+      tempera: patchStone(makeTempera({ amb: 1, key: 0.55, rim: [0.34, 0.235, 0.13], rimPow: 3, grain: 0.4, ao: 0.4, aoH: 200, wrap: 0.4 })),
+      temperaSky: makeTempera({ amb: 1, key: 0.5, rim: [0.34, 0.235, 0.13], rimPow: 3, grain: 1, wrap: 0.4 }),
       king,
       kingMat: makeKingMaterial(),
       globe: new THREE.SphereGeometry(REX.r, 72, 48),
@@ -603,63 +705,8 @@ function* rexSteps(props: WorldProps) {
         { x: REX.x, z: REX.z - 700 * Q, w: 2400 * Q, d: 600 * Q, y: 8, a: 0.4 },
       ]),
       wispMat: makeWispMaterial(),
-      nimbi: (() => {
-        const g = new THREE.InstancedBufferGeometry();
-        // a ring of light and, before it, the pale oval of a face
-        const ring = new THREE.RingGeometry(0.19, 0.27, 28);
-        const face = new THREE.CircleGeometry(0.1, 14);
-        face.translate(0, -0.01, 0.12);
-        const pos = [...(ring.toNonIndexed().attributes.position.array as Float32Array), ...(face.toNonIndexed().attributes.position.array as Float32Array)];
-        g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-        const n = nimbi.length / 5;
-        const a = new Float32Array(n * 4);
-        const y = new Float32Array(n);
-        for (let i = 0; i < n; i++) {
-          a.set(nimbi.slice(i * 5, i * 5 + 4), i * 4);
-          y[i] = nimbi[i * 5 + 4];
-        }
-        g.setAttribute("aP", new THREE.InstancedBufferAttribute(a, 4));
-        g.setAttribute("aYaw", new THREE.InstancedBufferAttribute(y, 1));
-        g.instanceCount = n;
-        g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
-        ring.dispose();
-        face.dispose();
-        return g;
-      })(),
-      nimbusMat: new THREE.ShaderMaterial({
-        side: THREE.DoubleSide,
-        uniforms: { ...SKY_U, ...WORLD_U },
-        vertexShader: /* glsl */ `
-          attribute vec4 aP; attribute float aYaw;
-          varying vec3 vWorld; varying float vFace;
-          void main(){
-            vec3 c = (modelMatrix * vec4(aP.xyz, 1.0)).xyz;
-            // asleep it faces the way its angel stands; as the eye comes near it turns to it, and follows
-            vec3 toEye = cameraPosition - c;
-            float wake = 1.0 - smoothstep(260.0, 900.0, length(toEye));
-            vec2 f0 = vec2(sin(aYaw), cos(aYaw));
-            vec2 f1 = normalize(toEye.xz + vec2(1e-4));
-            vec2 f = normalize(mix(f0, f1, wake * 0.92) + vec2(1e-5));
-            float tilt = clamp(toEye.y / max(length(toEye.xz), 1.0), -0.6, 0.6) * wake;
-            vec3 fw = normalize(vec3(f.x, tilt, f.y));
-            vec3 rt = normalize(cross(vec3(0.0, 1.0, 0.0), fw));
-            vec3 up = cross(fw, rt);
-            vec3 w = c + (rt * position.x + up * position.y + fw * position.z) * aP.w;
-            vWorld = w; vFace = step(0.05, position.z);
-            gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
-          }`,
-        fragmentShader: /* glsl */ `
-          varying vec3 vWorld; varying float vFace;
-          ${GLSL_SKY}
-          ${GLSL_AIR}
-          void main(){
-            vec3 col = mix(vec3(1.0, 0.82, 0.5) * 1.5, vec3(0.94, 0.8, 0.68) * (uSkyCol + 0.25), vFace);
-            col = applyAir(col, vWorld);
-            gl_FragColor = vec4(col, 1.0);
-            #include <tonemapping_fragment>
-            #include <colorspace_fragment>
-          }`,
-      }),
+      angels: buildAngels(spots, REX_ANGEL_AIR),
+      angelsFar: buildAngels(spots2, REX_ANGEL_AIR),
       comets: ck.build(),
       cometHalos: haloGeometry(cometHalos),
       cometHaloMat: makeHaloMaterial(0),
@@ -762,7 +809,7 @@ export default function RexWorld({ props }: { props: WorldProps }) {
   return (
     <>
       <GreatSun size={0.6} tint={[1, 0.74, 0.42]} rays={56} gain={0.9} />
-      <WorldBase id="rex" def={def} pal={REX_PAL} props={props} grass={false} pathTint={[1, 0.84, 0.6]} pathGain={1.0} angels={false} gate="veil" gateSize={[40, 72]} />
+      <WorldBase id="rex" def={def} pal={REX_PAL} props={props} grass={false} pathTint={[1, 0.84, 0.6]} pathGain={1.0} angels={false} gate="veil" gateSize={[GATE_HALF, GATE_RISE]} />
       <mesh material={b.water} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
         <planeGeometry args={[9000, 9000]} />
       </mesh>
@@ -771,12 +818,15 @@ export default function RexWorld({ props }: { props: WorldProps }) {
         <mesh key={i} geometry={b.shells[i]} material={b.shellMats[i]} position={[REX.x, -DROP, REX.z]} renderOrder={-3 + (2 - i)} />
       ))}
       <mesh geometry={b.set} material={b.tempera} />
-      <mesh geometry={b.nimbi} material={b.nimbusMat} frustumCulled={false} />
+      <mesh geometry={b.angels.glow} material={b.angels.glowMat} renderOrder={2} frustumCulled={false} />
+      <mesh geometry={b.angels.geo} material={b.angels.mat} renderOrder={3} frustumCulled={false} />
+      <mesh geometry={b.angelsFar.glow} material={b.angelsFar.glowMat} renderOrder={2} frustumCulled={false} />
+      <mesh geometry={b.angelsFar.geo} material={b.angelsFar.mat} renderOrder={3} frustumCulled={false} />
       <mesh geometry={b.wisps} material={b.wispMat} renderOrder={3} />
       <mesh geometry={b.king} material={b.kingMat} position={[REX.x, 0, REX.z]} />
       <mesh geometry={b.globe} material={b.globeMat} position={[REX.x, 0, REX.z]} />
       <group ref={comets} position={[REX.x, -DROP, REX.z]}>
-        <mesh geometry={b.comets} material={b.tempera} />
+        <mesh geometry={b.comets} material={b.temperaSky} />
         <mesh geometry={b.cometHalos} material={b.cometHaloMat} renderOrder={6} />
       </group>
       <mesh geometry={b.clouds} material={b.cloudMat} frustumCulled={false} renderOrder={2} />
@@ -785,7 +835,7 @@ export default function RexWorld({ props }: { props: WorldProps }) {
       <Birds flocks={b.flocks} tint={[0.07, 0.055, 0.045]} />
       <Birds flocks={b.winged} tint={[0.9, 0.78, 0.62]} seed={9} lit />
       <group ref={sky}>
-        <mesh geometry={b.sky} material={b.tempera} frustumCulled={false} />
+        <mesh geometry={b.sky} material={b.temperaSky} frustumCulled={false} />
         <Halos list={b.skyGlows} kind={2} />
         <Halos list={b.skyHalos} />
       </group>

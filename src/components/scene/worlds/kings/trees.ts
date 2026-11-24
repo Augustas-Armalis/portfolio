@@ -3,6 +3,7 @@ import { buildTree, makeLeafTexture } from "../../home/trees";
 import { rng } from "../kit";
 import { KINGS, WORLDS, groundAt } from "../voyage";
 import { GLSL_END, GLSL_KINGS, KINGS_UNIFORMS } from "./light";
+import { inGlade } from "./procession";
 import { aisleClear, aisleX } from "./wood";
 
 // The young wood under the old one. Between the great trunks, along both sides of the way and round the glade,
@@ -122,6 +123,7 @@ export function makeUnderstory(o: { mobile: boolean; trees: number }) {
       const x = back ? (r() - 0.5) * 620 : aisleX(z) + (r() < 0.5 ? -1 : 1) * off;
       // (never in the glade itself, nor where the kings stand)
       if (Math.abs(z - KINGS.z) < 90 && Math.abs(x) < 250) continue;
+      if (inGlade(x, z, 6)) continue;
       const g0 = groundAt(def, x, z);
       const s = tall * (0.7 + r() * 0.7);
       seeds[placed] = r();

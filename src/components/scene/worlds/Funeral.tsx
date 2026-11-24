@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
-import { Halos, LightGate, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
+import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, makePoints, makeTempera, noise2, paint, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, PaintedClouds, type Flock, type PaintedCloud } from "./life";
 import { PICTURE } from "./portal";
@@ -13,10 +13,10 @@ import { ORIGIN, WORLDS, voyage } from "./voyage";
 import { Walkers, useDeepLens } from "./fairy/shared";
 import { FUNERAL_U } from "./funeral/air";
 import { ROAD_W, funeralLand } from "./funeral/land";
-import { CAVE, buildFuneralRock, dropFuneralRock, makeLedgeMaterial, makeRockMaterial, prepareFuneralRock } from "./funeral/rock";
+import { CAVE, PORTAL, buildFuneralRock, dropFuneralRock, makeLedgeMaterial, makeRockMaterial, prepareFuneralRock } from "./funeral/rock";
 import { buildSouls } from "./funeral/souls";
-import { buildTree, makeTreeMaterial } from "./funeral/tree";
 import { buildWatchers } from "./funeral/ledges";
+import { buildBoats } from "./funeral/boats";
 import { buildAngels } from "../home/Angels";
 import { GLSL_AIR, WORLD_U } from "./kit";
 import { GLSL_FUNERAL_AIR } from "./funeral/air";
@@ -255,7 +255,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
     glows.push({ p: [m.x + mt[0] * 30, my + 20, m.z + mt[1] * 30], size: 40, col: [1, 0.7, 0.32], k: 0.22 });
     glows.push({ p: [m.x - mt[0] * 4, my + 22, m.z - mt[1] * 4], size: 90, col: [0.9, 0.6, 0.28], k: 0.05 });
     const e = L.pts[L.iEnd];
-    halos.push({ p: [e.x, L.y[L.iEnd] + 16, e.z], size: 26, col: [1, 0.84, 0.5], k: 0.9 });
+    glows.push({ p: [e.x - mt[0] * 6, L.y[L.iEnd] + 14, e.z - mt[1] * 6], size: 70, col: [0.85, 0.78, 0.5], k: 0.12 });
     // inside the cave at the pass: candles set in niches along both walls, small and far apart, going in
     for (let i = L.iMouth + 5; i < L.iEnd - 4; i += 7) {
       const side = (i >> 1) % 2 ? 1 : -1;
@@ -285,6 +285,8 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
     glows.push({ p: [m.x - mt[0] * 30, my + 26, m.z - mt[1] * 30], size: 230, col: [1, 0.66, 0.3], k: 0.05 });
     glows.push({ p: [m.x - mt[0] * 120, my - 20, m.z - mt[1] * 120], size: 190, col: [1, 0.62, 0.28], k: 0.03 });
     // the watchers: the home forest's angels on the rock above the road, two on needles of rock either side of the gate
+    const boats = buildBoats();
+    halos.push(...boats.halos);
     const watch = buildWatchers();
     halos.push(...watch.halos);
     // spirit lights: the road as the shader walks it, for the lights that go up it above the crowd
@@ -389,11 +391,11 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       flocks,
       clouds,
       shrines: shrines.build(),
+      boats: boats.geo,
+      boatMat: makeTempera({ amb: 1.0, key: 0.3, rim: [0.03, 0.1, 0.12], rimPow: 3.6 }),
       watchers: watch.geo,
       watcherMat: makeTempera({ amb: 0.9, key: 0.3, grain: 1.0 }),
       angels: buildAngels(watch.angels, { glsl: `${GLSL_AIR}\n${GLSL_FUNERAL_AIR}`, apply: "funeralAir(col, vWorld)", amount: "max(airAmt(vWorld), valleyAmt(vWorld))", uniforms: { ...WORLD_U, ...FUNERAL_U }, night: { value: 1 } }),
-      tree: buildTree(props.mobile),
-      treeMat: makeTreeMaterial(),
       spiritRoad,
       auroraMat: makeAuroraMaterial(),
       veil,
@@ -418,6 +420,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       const d = (s - sMouth - 60) / 240;
       FUNERAL_U.uCaveK.value = 1 + 1.5 * Math.exp(-d * d);
       FUNERAL_U.uBorn.value = (L.iOut - 16) * L.STEP;
+      FUNERAL_U.uEnd.value = L.iEnd * L.STEP;
     }
     // made ready ahead of time, it waits
     if (voyage.cur !== "funeral") return;
@@ -428,7 +431,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
   });
   return (
     <>
-      <WorldBase id="funeral" def={def} pal={FUNERAL_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.86, 0.56]} pathGain={0.16} angels={false} marks={false} />
+      <WorldBase id="funeral" def={def} pal={FUNERAL_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.86, 0.56]} pathGain={0.16} angels={false} marks={false} gateSize={[PORTAL.half, PORTAL.rise]} />
       <mesh ref={shell} geometry={b.shellGeo} material={b.grainMat} frustumCulled={false} renderOrder={-9} />
       <mesh geometry={b.shellGeo} material={b.auroraMat} position={[0, 0, 0]} frustumCulled={false} renderOrder={-8.5} ref={aurora} />
       <mesh geometry={b.quad} material={b.moonMat} frustumCulled={false} renderOrder={-8} />
@@ -436,8 +439,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       <mesh geometry={b.rock.ledge} material={b.ledgeMat} />
       <mesh geometry={b.rock.cave} material={b.caveMat} />
       <mesh geometry={b.veilGeo} material={b.veilMat} position={b.veil.p} rotation={[0, b.veil.yaw, 0]} renderOrder={5} />
-      {/* in the cave at the pass, the way on: a soft sheet of light with the wood of the kings faintly in it */}
-      <LightGate id="funeral" def={def} look="arch" half={26} rise={40} gain={0.9} tint={[1, 0.86, 0.56]} />
+      {/* the way on is the portal at the cave's far end: its window (worlds/portal.tsx) is mounted by WorldBase */}
       {b.cyp.map((g, i) => (
         <mesh key={i} geometry={g} material={b.tempera} />
       ))}
@@ -445,8 +447,8 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       <primitive object={b.souls.bierMesh} />
       <primitive object={b.souls.lampMesh} />
       <mesh geometry={b.shrines} material={b.shrineMat} />
+      <mesh geometry={b.boats} material={b.boatMat} />
       <mesh geometry={b.watchers} material={b.watcherMat} />
-      <mesh geometry={b.tree} material={b.treeMat} />
       <mesh geometry={b.angels.glow} material={b.angels.glowMat} renderOrder={2} frustumCulled={false} />
       <mesh geometry={b.angels.geo} material={b.angels.mat} renderOrder={3} />
       {/* spirit lights going up the road above the crowd toward the cave, slowly, each bobbing a little */}

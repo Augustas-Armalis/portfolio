@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
-import { KINGS, ORIGIN, kingsDome } from "../voyage";
+import { KINGS, ORIGIN, WORLDS, groundAt, kingsDome } from "../voyage";
 
 // The light and the air of the kings' wood, shared by everything that stands in it.
 //
@@ -18,6 +18,10 @@ import { KINGS, ORIGIN, kingsDome } from "../voyage";
 // into the sky before its geometry ends.
 
 export const R = KINGS.domeR;
+// The white fountain of a tree the souls walk to, at the start of this world (kings/procession.ts): where it stands (the
+// world's own coordinates), how big it is made (the little one in the glass is 1), and how high the ground is there.
+export const TREE = { x: 44, z: 520, s: 1.6 };
+export const TREE_Y = groundAt(WORLDS.kings, TREE.x, TREE.z);
 export const DOME_AT = kingsDome();
 export const BY = DOME_AT.y;
 // the kings as the light sees them: four rounded masses (two bodies, two crowned heads), in the scene's own coordinates
@@ -28,18 +32,27 @@ export const DOME_U = {
   uOccC: { value: [occ(-3.55, -0.4, 0), occ(-2.3, 2.5, 0), occ(3.75, 0.2, 0), occ(2.2, 2.95, 0)] },
   uOccR: { value: [new THREE.Vector3(1.5 * R, 2.7 * R, 1.7 * R), new THREE.Vector3(0.85 * R, 0.8 * R, 0.8 * R), new THREE.Vector3(1.55 * R, 3.1 * R, 1.75 * R), new THREE.Vector3(0.9 * R, 0.8 * R, 0.85 * R)] },
   // x: how thick the mist is (per metre at its thickest), y: how much of the light hangs in it, z: how strongly the shafts are cut, w: how light the mist itself is
-  uFogK: { value: new THREE.Vector4(0.0066, 1.3, 1, 0.82) },
+  uFogK: { value: new THREE.Vector4(0.0066, 1.3, 1, 0.6) },
   // what happens as the plane comes on (set each frame by the world): x: the little world's light (1, and brighter as
   // the kings lean to it), y: how far they have leaned (0..1), z: how many of the stars are out (0..1)
   uEvt: { value: new THREE.Vector4(1, 0, 0.3, 0) },
+  // the tree's foot (scene coordinates) and how brightly it burns
+  uTree: { value: new THREE.Vector4(ORIGIN.x + TREE.x, ORIGIN.y + TREE_Y, ORIGIN.z + TREE.z, 1) },
 };
 export const KINGS_UNIFORMS = { ...SKY_U, ...DOME_U };
 if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __kingsU: DOME_U });
 
 // (the core alone, for shaders that already carry the noise and the sky: the ground)
 export const GLSL_KINGS_CORE = /* glsl */ `
-uniform vec3 uDome; uniform float uR; uniform vec3 uOccC[4]; uniform vec3 uOccR[4]; uniform vec4 uFogK; uniform vec4 uEvt;
+uniform vec3 uDome; uniform float uR; uniform vec3 uOccC[4]; uniform vec3 uOccR[4]; uniform vec4 uFogK; uniform vec4 uEvt; uniform vec4 uTree;
 const vec3 DOME_WARM = vec3(1.0, 0.62, 0.31);
+const vec3 TREE_COL = vec3(0.8, 0.9, 1.0);
+// the white tree's light on a surface at P facing n (the crown's heart is forty metres up)
+vec3 treeLight(vec3 P, vec3 n){
+  vec3 L = uTree.xyz + vec3(0.0, ${(40 * 1.6).toFixed(1)}, 0.0) - P; float d = length(L); L /= max(d, 0.001);
+  float att = 1.0 / (1.0 + d * d / 3800.0);
+  return TREE_COL * att * (0.3 + 0.7 * clamp(dot(n, L) * 0.7 + 0.3, 0.0, 1.0)) * uTree.w;
+}
 
 // ---- the night behind the wood ----
 // long level strokes of blue, lighter and darker, low between the trunks; darker overhead
@@ -132,7 +145,15 @@ vec3 airFrom(vec3 col, vec3 ro, vec3 P){
   k *= exp(-od * (tc / max(len, 0.001)) * 0.6);
   // it does not light the air beneath the dish
   k *= mix(0.2, 1.0, smoothstep(-0.7, 0.15, q.y / max(sqrt(p2), 1.0)));
-  return col + DOME_WARM * gathered * k * uR * 0.082 * (1.0 + uPulse * 0.25) * (1.0 + 0.05 * sin(uTime * 0.38)) * uEvt.x;
+  col += DOME_WARM * gathered * k * uR * 0.082 * (1.0 + uPulse * 0.25) * (1.0 + 0.05 * sin(uTime * 0.38)) * uEvt.x;
+  // the white tree's light hangs in the mist round its crown, as the little world's does round the kings
+  {
+    vec3 oc2 = ro - (uTree.xyz + vec3(0.0, ${(42 * 1.6).toFixed(1)}, 0.0)); float b2 = dot(oc2, rd);
+    vec3 q2 = oc2 - rd * b2; float s2 = sqrt(dot(q2, q2) + 650.0);
+    float g2 = (atan((len + b2) / s2) - atan(b2 / s2)) / s2;
+    col += TREE_COL * g2 * (0.3 + 0.7 * clamp(m1 * uFogK.y, 0.0, 1.4)) * 0.8 * (1.0 + 0.06 * sin(uTime * 0.5)) * uTree.w;
+  }
+  return col;
 }
 vec3 kingsAir(vec3 col, vec3 P){ return airFrom(col, cameraPosition, P); }
 
@@ -152,8 +173,8 @@ vec3 bumpN(vec3 n, vec3 P, float h, float k){
 // all round, and only on what faces up a little of the sky's teal coming down through the vault (it is this that
 // gives a trunk its roundness in the dark).
 vec3 coolFill(vec3 n){
-  return vec3(0.06, 0.052, 0.044) * (0.6 + 0.4 * n.y)
-    + vec3(0.03, 0.062, 0.07) * pow(max(dot(n, vec3(0.2507, 0.8023, 0.5416)), 0.0), 1.6);
+  return (vec3(0.06, 0.052, 0.044) * (0.6 + 0.4 * n.y)
+    + vec3(0.03, 0.062, 0.07) * pow(max(dot(n, vec3(0.2507, 0.8023, 0.5416)), 0.0), 1.6)) * 0.72;
 }
 `;
 
