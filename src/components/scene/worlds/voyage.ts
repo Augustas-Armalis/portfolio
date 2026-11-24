@@ -90,7 +90,9 @@ export type WorldDef = {
   centre: [number, number];
   radius: number; // beyond this the air turns the plane back
   ceil: number;
-  pace?: number; // a world built several times larger than the rest is flown this many times faster (default 1)
+  // The size of the world in the pace of flying it: every one of the six speed steps is this many times faster here than at
+  // home (default 1), so the top step feels as fast in a world of kilometres, flown high, as it does low over the desk's field.
+  pace?: number;
   entry: { x: number; z: number; above: number; yaw: number };
   gate: { x: number; z: number; above: number; yaw: number } | null; // the way onward; the last world has none
   path: [x: number, z: number, above: number][]; // the path of light, from the entry to the gate
@@ -372,7 +374,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     radius: 1720,
     ceil: 470,
     // (a world several times the size of the rest: flown the faster for it)
-    pace: 2.0,
+    pace: 1.65,
     entry: FRIEND_ENTRY,
     // in the heart of the orb she holds out: the plane flies into its light, and through it into the Sun
     gate: FRIEND_GATE,
@@ -396,7 +398,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, -40],
     radius: 2060,
     ceil: 520,
-    pace: 1.8,
+    pace: 2.35,
     entry: SUN_ENTRY,
     gate: SUN_GATE,
     path: SUN_PATH,
@@ -429,7 +431,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, -300],
     radius: 4300,
     ceil: 2800,
-    pace: 3.0,
+    pace: 2.5,
     entry: { x: 0, z: 3300, above: 30, yaw: 0 },
     // the door at the foot of the greatest pyramid (stars/pyramids.ts DOOR_Z): the way runs straight into it
     gate: { x: 0, z: 586, above: 30, yaw: 0 },
@@ -580,6 +582,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 50],
     radius: 1560,
     ceil: 660,
+    pace: 2.0,
     entry: { x: -45, z: 1840, above: 7.5, yaw: -0.155 },
     gate: { x: 646, z: -1335, above: 70, yaw: -0.363 },
     // in low under the trees of a wood, along a winding track, the castle only glimpsed through the leaves; up over
@@ -639,6 +642,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [-100, 0],
     radius: 1050,
     ceil: 300,
+    pace: 1.5,
     entry: { x: -1040, z: 150, above: 30, yaw: -1.39 },
     gate: { x: 0, z: 111, above: 131, yaw: Math.PI },
     // in over the sea straight at the isle, the whole mount ahead with its terraces and falling water; then left
@@ -720,6 +724,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 200],
     radius: 1450,
     ceil: 420,
+    pace: 1.6,
     entry: { x: 0, z: 1480, above: 36, yaw: 0 },
     gate: { x: 0, z: -720, above: 48, yaw: 0 },
     // up the valley, under the ring of pearls and the dark smoke, between the terrace and the altar, to the pass;
@@ -781,6 +786,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [200, 180],
     radius: 1900,
     ceil: 260,
+    pace: 1.4,
     // (it comes in a kilometre and a half from the island's head: a long while over the glass with the whole of it in view)
     // (the way in is laid toward the island's head, not its middle: on a tall narrow screen the head and its two
     // eyes are then in the frame from the first, the long back running off to the left)
@@ -841,7 +847,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [-500, 350],
     radius: 3900,
     ceil: 2300,
-    pace: 3.2,
+    pace: 2.8,
     entry: FINALE_ENTRY,
     // at the wave's far end, in the hanging lace of its crest: out through it, into calm (no arch of light)
     gate: FINALE_GATE,
@@ -866,6 +872,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 180],
     radius: 1320,
     ceil: 430,
+    pace: 1.7,
     entry: FUNERAL.entry,
     // inside the cave's mouth, where the procession goes into the mountain (no arch of light: worlds/Funeral.tsx)
     gate: FUNERAL.gate,
@@ -911,27 +918,29 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 200],
     radius: 620,
     ceil: 150,
-    entry: { x: 0, z: 700, above: 14, yaw: 0 },
+    entry: { x: 0, z: 700, above: 26, yaw: 0 },
     gate: null,
     // a long way in: the path winds wide between the great trunks, so that from the entry the kings are hidden and
     // their light is only glimpsed through the wood, now on one side, now on the other;
     // then it straightens into the glade and rises with it, gently and early, so the kings stand over the plane like
     // hills as it comes and it is already at the height of their hands well before them: the last hundred and fifty
     // metres are level, straight at the light, and the plane goes into it without turning its eye up or down
+    // (flown from above, not through the trunks' feet: the way is some twenty metres higher over the whole wood than it
+    // was, and the plane is a good deal above the stream and the glade from the first moment)
     path: [
-      [0, 700, 14],
-      [-30, 632, 14],
-      [-66, 560, 15],
-      [-62, 490, 15],
-      [-22, 420, 16],
-      [36, 350, 17],
-      [52, 285, 19],
-      [30, 222, 23],
-      [6, 156, 29],
-      [0, 80, 38],
-      [0, 20, 50],
-      [0, -30, 62],
-      [0, -70, 72],
+      [0, 700, 26],
+      [-30, 632, 28],
+      [-66, 560, 31],
+      [-62, 490, 34],
+      [-22, 420, 37],
+      [36, 350, 40],
+      [52, 285, 44],
+      [30, 222, 48],
+      [6, 156, 53],
+      [0, 80, 58],
+      [0, 20, 63],
+      [0, -30, 68],
+      [0, -70, 73],
       [0, -105, 77.5],
       [0, KINGS.z + KINGS.domeR + 5, KINGS.domeY + KINGS.domeR * 0.3],
       [0, KINGS.z, KINGS.domeY + KINGS.domeR * 0.3],
