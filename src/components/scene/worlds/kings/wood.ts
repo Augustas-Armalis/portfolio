@@ -549,12 +549,12 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
     leaf(-1);
     leaf(1);
     // light: a soft warm halo in the mouth, and a lantern hung on each jamb
-    lamps.push({ p: P(0, 3.2, 1.5), size: 11, col: [1, 0.6, 0.26], k: 0.34 });
+    lamps.push({ p: P(0, 4.5, 2.5), size: 22, col: [1, 0.6, 0.26], k: 0.5 });
     lamps.push({ p: P(0, 6.5, 3.5), size: 8, col: [1, 0.64, 0.3], k: 0.2 });
     for (const s2 of [-1, 1]) {
       const L = P(s2 * (hw + T + 0.3), h - 0.6, depth + 1.2);
       b.lump(L, [0.45, 0.62, 0.45], [1, 0.62, 0.26], LAMP);
-      lamps.push({ p: L, size: 3.6, col: [1, 0.68, 0.34], k: 0.95 });
+      lamps.push({ p: L, size: 6, col: [1, 0.68, 0.34], k: 1 });
     }
   };
   const tree = (t: Trunk) => {
