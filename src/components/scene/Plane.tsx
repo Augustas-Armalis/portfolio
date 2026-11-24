@@ -187,6 +187,7 @@ export function Plane({
       idle: 9, // seconds since the controls were last touched
       pathI: 0,
       pathMax: 0, // the farthest along the path the plane has been (the way back never snaps to an earlier lap or a lower switchback)
+      tunnel: false, // the way here runs under the land (a cave): the ground is not the mountain over it
       vPath: 1e9, // the speed the bends and the end of the path allow while the quiet hand flies (m/s)
       seek: 0,
       gateSide: -1,
@@ -322,7 +323,9 @@ export function Plane({
     // it simply held above the surface.
     const id = voyage.cur;
     const o = originOf(id);
-    const g = id === "home" ? homeGround(want.x, want.z) : groundAt(WORLDS[id], want.x - o.x, want.z - o.z);
+    let g = id === "home" ? homeGround(want.x, want.z) : groundAt(WORLDS[id], want.x - o.x, want.z - o.z);
+    // (in a tunnel under the mountain the lens is not lifted over it)
+    if (st.tunnel) g = Math.min(g, st.pos.y - 4);
     const need = Math.max(0, g + 0.9 - want.y);
     if (st.snap) st.camLift = need;
     else spring2(st, "camLift", "camLiftV", need, 7, dt);
@@ -532,6 +535,8 @@ export function Plane({
     const a = voyage.assist;
 
     // the quiet hand: aim a little way down the path of light
+    // (a way steeper than the plane's own 0.55 rad climb, a great wave's face: the hand may lift the nose further, to 0.95)
+    let extraPitch = 0;
     const path = pathOf(id);
     nearestOnPath(path.pts, lx, st.pos.y, lz, !!def.loop, dt);
     if (a > 0.001) {
@@ -544,6 +549,11 @@ export function Plane({
       let tx = tp.x;
       let ty = tp.y;
       let tz = tp.z;
+      // (the height is aimed at nearer than the heading is: the nose follows the way's rise and fall closely, so a climb of a
+      // few hundred metres at a hundred metres a second is not begun two seconds before it comes)
+      const vp = path.pts[def.loop ? (st.pathI + Math.round((14 + st.speed * 0.5) / 4)) % n : Math.min(n - 1, st.pathI + Math.round((14 + st.speed * 0.5) / 4))];
+      let aimY = vp.y;
+      let aimD = Math.hypot(vp.x - lx, vp.z - lz);
       // The end of the way is the gate, and the hand flies the GATE, not the last point of the path. Aimed at that
       // last point, a plane that came in too high or too wide could only circle it for ever (the point was nearer
       // than it can turn). Instead it follows the line through the gate: its mark runs ahead of it along that
@@ -565,9 +575,13 @@ export function Plane({
         // flown at, whatever way the last of the path bends: a path that comes at its gate from the side is not flown at
         // the gate's edge at the last moment, with no room left to turn)
         const bearing = wrap(Math.atan2(rx, rz) - st.yaw);
-        const near = off < Math.max(260, R * 3) && along < -20 && Math.abs(bearing) < 1.3;
+        // (only for the last of the way: a gate standing over the middle of a long spiral (Rex) is near in plan from the first
+        // lap, and aiming at its height from there would simply climb straight up)
+        const left = (n - 1 - st.pathI) * 4;
+        const near = left < Math.max(300, R * 2.2) && off < Math.max(260, R * 3) && along < -20 && Math.abs(bearing) < 1.3;
         const ending = (ti >= n - 1 || st.gateBack || near) && off < D * 3 + 400;
         if (ending) {
+          aimY = NaN;
           // It has missed the gate only when it can no longer be lined up on it: past its plane, too high, or too far
           // aside for the distance left (an arc of the circle it turns in, R, takes up `side` metres in about
           // sqrt(2 R side) of the way; a plane some metres off at a hundred metres is simply brought in, not sent round)
@@ -595,9 +609,15 @@ export function Plane({
       const dz = tz - lz;
       const err = wrap(Math.atan2(-dx, -dz) - st.yaw);
       const ax = THREE.MathUtils.clamp(-err * 1.5, -1, 1);
-      const ay = THREE.MathUtils.clamp((Math.atan2(ty - st.pos.y, Math.hypot(dx, dz) + 6) / 0.5) * 1.5, -1, 1);
+      if (Number.isNaN(aimY)) {
+        aimY = ty;
+        aimD = Math.hypot(dx, dz);
+      }
+      const ay = THREE.MathUtils.clamp((Math.atan2(aimY - st.pos.y, aimD + 6) / 0.5) * 1.5, -1, 1);
       sx = sx * (1 - a) + ax * a;
       sy = sy * (1 - a) + ay * a;
+      const want3 = Math.atan2(aimY - st.pos.y, aimD + 6);
+      extraPitch = a * (THREE.MathUtils.clamp(want3 * 1.65, -0.95, 0.95) - THREE.MathUtils.clamp(want3 * 1.65, -0.55, 0.55));
       // The speed the way allows: no bend may be flown faster than the plane can turn it (about 0.5 rad/s at full bank,
       // whatever the speed), looked at far enough ahead to slow in time, and the last of the way, where the gate or
       // the light is, is come to at about two fifths of the top pace. Where it matters, never under 16 m/s.
@@ -607,6 +627,7 @@ export function Plane({
         let lim = top * (0.45 + 0.55 * smooth01((rem - 60) / 480));
         const H = THREE.MathUtils.clamp(st.speed * 4.5, 140, 700);
         let h0 = 0;
+        let q0 = 0;
         for (let k = 0; k * 24 < H; k++) {
           const i0 = st.pathI + k * 6;
           const i1 = i0 + 6;
@@ -614,13 +635,19 @@ export function Plane({
           const p0 = path.pts[i0];
           const p1 = path.pts[i1];
           const h1 = Math.atan2(p1.x - p0.x, p1.z - p0.z);
+          const q1 = Math.atan2(p1.y - p0.y, Math.hypot(p1.x - p0.x, p1.z - p0.z));
           if (k > 0) {
+            // (a climb that begins or ends quickly is followed no faster than the nose can come up to it: the pitch is the
+            // slower of the plane's two turns, about 0.3 rad/s)
+            const vq = 0.3 / Math.max(Math.abs(q1 - q0) / 24, 1e-4);
+            lim = Math.min(lim, Math.sqrt(vq * vq + 2 * 26 * k * 24));
             const kap = Math.abs(wrap(h1 - h0)) / 24;
             // (a hairpin tighter than the plane can turn is flown as slowly as that costs, and no slower than a glide)
             const vb = 0.5 / Math.max(kap, 1e-4);
             lim = Math.min(lim, Math.sqrt(vb * vb + 2 * 26 * k * 24));
           }
           h0 = h1;
+          q0 = q1;
         }
         st.vPath = Math.max(16, lim);
       } else st.vPath = 1e9;
@@ -712,9 +739,21 @@ export function Plane({
     const gk = opts.launching ? smooth01((st.t - 0.2) / 2.6) : 1;
     const hx = -Math.sin(st.yaw);
     const hz = -Math.cos(st.yaw);
-    const g0 = ground(lx, lz);
+    let g0 = ground(lx, lz);
     let g1 = ground(lx + hx * st.speed * 0.9, lz + hz * st.speed * 0.9);
     let g2 = ground(lx + hx * st.speed * 2.0, lz + hz * st.speed * 2.0);
+    // A tunnel: where the way itself runs well under the surface of the land (a cave in a mountain: the funeral's, the
+    // home forest's), the land over it is not what the plane must clear. Near such a part of the path the ground it reads
+    // is the way's own, so it flies in under the rock instead of being lifted over the mountain (it was carried up
+    // hundreds of metres at the cave's mouth and never went in).
+    let tunnel = false;
+    if (!def.loop && path.pts.length > 4) {
+      const pp = path.pts;
+      for (const k of [0, 6, 12, 20]) {
+        const q = pp[Math.min(pp.length - 1, st.pathI + k)];
+        if (ground(q.x, q.z) > q.y + 8 && Math.hypot(q.x - lx, q.y - st.pos.y, q.z - lz) < 90) tunnel = true;
+      }
+    }
     // While the quiet hand flies, the land it must clear is the land UNDER THE PATH ahead, not what lies along the nose:
     // a path that winds along a cliff (the funeral's road) turns away from the wall that the straight line ahead hits,
     // and reading that wall made the plane climb over rock it was never going to meet ("flies upward at random").
@@ -722,11 +761,18 @@ export function Plane({
       const pp = path.pts;
       const at = (m: number) => {
         const q = pp[Math.min(pp.length - 1, st.pathI + Math.round(m / 4))];
-        return ground(q.x, q.z);
+        const gq = ground(q.x, q.z);
+        return gq > q.y + 8 ? q.y - 3 : gq;
       };
       const k = smooth01(voyage.assist);
-      g1 += (Math.max(g0, at(st.speed * 0.9)) - g1) * k;
-      g2 += (Math.max(g0, at(st.speed * 2.0)) - g2) * k;
+      g1 += (Math.max(Math.min(g0, st.pos.y - 3), at(st.speed * 0.9)) - g1) * k;
+      g2 += (Math.max(Math.min(g0, st.pos.y - 3), at(st.speed * 2.0)) - g2) * k;
+    }
+    st.tunnel = tunnel;
+    if (tunnel) {
+      g0 = Math.min(g0, st.pos.y - 3);
+      g1 = Math.min(g1, st.pos.y - 3);
+      g2 = Math.min(g2, st.pos.y - 3);
     }
     // It may fly low: a metre and a half over land or water, level, for as long as it likes. The air only holds
     // it off the ground it is SINKING toward (the faster it comes down, the sooner), and off ground that rises ahead.
@@ -736,7 +782,7 @@ export function Plane({
     const low3 = low * low * low;
     // (W and S: he asked to go up and down quicker. The nose answers nearly twice as far as it did, eased in by the
     // spring below, and a dive gathers speed while a climb spends it, further down)
-    let pitchT = sy * 0.55 + climb * 0.7;
+    let pitchT = sy * 0.55 + climb * 0.7 + extraPitch;
     if (low > 0) pitchT = Math.max(pitchT, pitchT * (1 - low) + low3 * 0.6);
     // At home the land rises into hills and mountains: the plane looks further ahead too, and begins to climb in
     // good time for whatever stands in its way (the nose comes up as steeply as the rise needs, never as a jolt
@@ -796,7 +842,7 @@ export function Plane({
     if (low > 0) st.pos.y += low3 * (2 + st.speed * 0.4) * dt * gk;
     if (st.pos.y < floor) st.pos.y = damp(st.pos.y, floor, 10, dt);
     // (never under the surface itself, however steep the land and however long the frame)
-    const gNow = ground(st.pos.x - o.x, st.pos.z - o.z);
+    const gNow = tunnel ? Math.min(ground(st.pos.x - o.x, st.pos.z - o.z), st.pos.y - 5) : ground(st.pos.x - o.x, st.pos.z - o.z);
     if (st.pos.y < gNow + 0.25 * gk) st.pos.y = gNow + 0.25 * gk;
     st.alt = st.pos.y - gNow;
     return edge;
