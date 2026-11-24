@@ -68,6 +68,8 @@ const bAt = (t: number, off: number): P2 => {
   return [B0[0] + dx * t + (dz / L) * -off, B0[1] + dz * t + (dx / L) * off];
 };
 export const ROAD_B: P2[] = [
+  // (it begins just inside the little gate in the mountain's back, so the road meets the towers and not bare grass)
+  [B0[0] - 7, B0[1] + 17],
   B0,
   bAt(0.14, 5),
   bAt(0.28, 11),
@@ -79,8 +81,13 @@ export const ROAD_B: P2[] = [
   onAxis(-120),
   onAxis(-60),
   bEnd,
+  // and on, straight through the arch's opening and out over the far side of the hill, as wide as ever, until it is
+  // lost in the haze of the plain, so there is no end to be seen from the arch
   onAxis(60),
-  onAxis(120),
+  onAxis(130),
+  onAxis(210),
+  onAxis(300),
+  onAxis(380),
 ];
 
 export type Way = { pts: THREE.Vector2[]; len: number };
@@ -182,7 +189,7 @@ export const ROAD_AX = { top: A_TOP, step: A_STEP, n: A_N };
 
 // ---- the ways as a field the ground can read: signed distance to the nearest way centre (+ on the right of its
 // direction), in a byte, 0.5 = on it, saturating at +-20 m
-export const FIELD = { x0: -820, z0: -1500, w: 1600, h: 3480, res: 2.5, range: 20 };
+export const FIELD = { x0: -820, z0: -1820, w: 1700, h: 3800, res: 2.5, range: 20 };
 export function makeWayField() {
   const W = Math.ceil(FIELD.w / FIELD.res);
   const H = Math.ceil(FIELD.h / FIELD.res);
