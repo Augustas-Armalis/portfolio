@@ -150,8 +150,11 @@ function StatusBar({ light }: { light?: boolean }) {
 
 // ---------- lock ----------
 
-function Lock({ onPower }: { onPower: () => void }) {
+function Lock({ onPower, lift, onPeek }: { onPower: () => void; lift: MotionValue<number>; onPeek: (on: boolean) => void }) {
   const login = useOS((s) => s.login);
+  // swipe up to open: the lock screen follows the finger with the home screen settling in under it; let go high
+  // enough (or with a flick) and it carries on up from where it is, otherwise it drops back
+  const lifting = useRef<{ id: number; y0: number; on: boolean; hist: { y: number; t: number }[] } | null>(null);
   // a long press anywhere on the lock screen asks about power, as holding the side button would
   const hold = useRef<number | undefined>(undefined);
   const held = useRef(false);
@@ -163,18 +166,48 @@ function Lock({ onPower }: { onPower: () => void }) {
   // it as it lifts away, so the picture never changes)
   return (
     <div
-      className="wp-photo absolute inset-0 flex flex-col items-center bg-black text-white"
+      className="wp-photo absolute inset-0 flex touch-none flex-col items-center bg-black text-white"
       style={wp.src.startsWith("live:") ? undefined : { backgroundImage: `url(${wp.src})` }}
-      onPointerDown={() => {
+      onPointerDown={(e) => {
         held.current = false;
         hold.current = window.setTimeout(() => {
           held.current = true;
           onPower();
         }, 600);
+        if (!lifting.current) lifting.current = { id: e.pointerId, y0: e.clientY, on: false, hist: [{ y: e.clientY, t: e.timeStamp }] };
       }}
-      onPointerUp={() => window.clearTimeout(hold.current)}
-      onPointerLeave={() => window.clearTimeout(hold.current)}
-      onPointerCancel={() => window.clearTimeout(hold.current)}
+      onPointerMove={(e) => {
+        const d = lifting.current;
+        if (!d || d.id !== e.pointerId) return;
+        const dy = e.clientY - d.y0;
+        if (!d.on) {
+          if (dy > -10) return;
+          d.on = true;
+          held.current = true;
+          window.clearTimeout(hold.current);
+          onPeek(true);
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            // the lock screen fills the phone: the finger stays over it anyway
+          }
+        }
+        lift.set(Math.min(0, dy));
+        d.hist.push({ y: e.clientY, t: e.timeStamp });
+        if (d.hist.length > 5) d.hist.shift();
+      }}
+      onPointerUp={(e) => {
+        window.clearTimeout(hold.current);
+        const d = lifting.current;
+        lifting.current = null;
+        if (!d?.on) return;
+        const a = d.hist[0];
+        const b = d.hist[d.hist.length - 1];
+        const v = b.t > a.t ? ((b.y - a.y) / (b.t - a.t)) * 1000 : 0;
+        if (e.type !== "pointercancel" && (lift.get() < -window.innerHeight * 0.18 || v < -500)) login();
+        else animate(lift, 0, { ...M.fling, velocity: v, onComplete: () => onPeek(false) });
+      }}
+      onPointerLeave={() => !lifting.current?.on && window.clearTimeout(hold.current)}
       // a tap anywhere opens it; the control a keyboard or a screen reader finds is the button below
       onClick={() => !held.current && login()}
       data-lock=""
@@ -1068,6 +1101,11 @@ export default function PhoneOS() {
   const lightBar = !(up) || !phoneApp || phoneApp === "terminal" || phoneApp === "doom" || phoneApp === "blocks" || (!!phoneApp && heroDark);
   const shutdown = useOS((s) => s.shutdown);
   const [power, setPower] = useState(false);
+  const lift = useMotionValue(0);
+  const [peek, setPeek] = useState(false);
+  useEffect(() => {
+    if (up) setPeek(false);
+  }, [up]);
   // an app that is closing has let go of the home screen
   const [leaving, setLeaving] = useState(false);
   useEffect(() => setLeaving(false), [phoneApp]);
@@ -1102,7 +1140,8 @@ export default function PhoneOS() {
       {!real && <StatusBar light={lightBar} />}
       <Island real={real} />
       <AnimatePresence initial={false}>
-        {up ? (
+        {/* the home screen is there under the lock screen while it is being swiped up */}
+        {(up || peek) && (
           <motion.div
             key="home"
             className="absolute inset-0"
@@ -1121,16 +1160,18 @@ export default function PhoneOS() {
               </div>
             </HomeCovered.Provider>
           </motion.div>
-        ) : (
+        )}
+        {!up && (
           <motion.div
             key="lock"
             className="absolute inset-0 z-[50]"
+            style={{ y: lift }}
             initial={false}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ y: "-100%", transition: M.sheet }}
+            exit={{ y: -(typeof window === "undefined" ? 900 : window.innerHeight) - 40, transition: M.sheet }}
             transition={M.fade}
           >
-            <Lock onPower={() => setPower(true)} />
+            <Lock onPower={() => setPower(true)} lift={lift} onPeek={setPeek} />
           </motion.div>
         )}
       </AnimatePresence>
