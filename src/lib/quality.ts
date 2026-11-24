@@ -28,7 +28,7 @@ export type Quality = {
 
 export const PRESETS: Record<Preset, Quality> = {
   low: { preset: "low", dpr: 1, grass: 0.3, trees: 0.5, shadows: 512, effects: 0.3, far: 0.6, post: 0, budget: 1.2, fps: 0 },
-  medium: { preset: "medium", dpr: 1.25, grass: 0.6, trees: 0.75, shadows: 1024, effects: 0.6, far: 0.8, post: 1, budget: 2.2, fps: 0 },
+  medium: { preset: "medium", dpr: 1.25, grass: 0.6, trees: 0.75, shadows: 1024, effects: 0.6, far: 0.8, post: 1, budget: 1.6, fps: 0 },
   high: { preset: "high", dpr: 1.5, grass: 1, trees: 1, shadows: 2048, effects: 1, far: 1, post: 2, budget: 2.6, fps: 0 },
   ultra: { preset: "ultra", dpr: 2, grass: 1.5, trees: 1, shadows: 4096, effects: 1, far: 1.25, post: 3, budget: 4.2, fps: 0 },
 };
