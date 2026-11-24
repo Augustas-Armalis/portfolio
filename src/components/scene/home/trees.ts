@@ -69,11 +69,13 @@ function card(m: Mesh, c: THREE.Vector3, size: number, cell: number, turn: numbe
 
 // A rounded lobe of a crown: clumps set on its skin (a few a little way in), and a dark heart so no sky shows
 // straight through it.
-function lobe(m: Mesh, r: () => number, c: THREE.Vector3, rad: V3, n: number, size: number, cell: number, heart: THREE.Vector3, heartR: number, lo: V3, hi: V3, spin = 1) {
+// (heartCell, heartK: the card at a lobe's middle: by default the dense round mass at nearly the lobe's width; a pine's
+// flat pads take a sprig of needles at a smaller size, or that middle card would show as a glossy ball)
+function lobe(m: Mesh, r: () => number, c: THREE.Vector3, rad: V3, n: number, size: number, cell: number, heart: THREE.Vector3, heartR: number, lo: V3, hi: V3, spin = 1, heartCell = 3, heartK = 0.92) {
   const p = V(0, 0, 0);
   const nn = V(0, 0, 0);
   const d = V(0, 0, 0);
-  card(m, c, Math.max(rad[0], rad[2]) * 0.92, 3, r() * spin, V(0, 0.6, 0).add(c.clone().sub(heart).normalize().multiplyScalar(0.6)).normalize(), 0.12, mixc(lo, hi, 0.15));
+  card(m, c, Math.max(rad[0], rad[2]) * heartK, heartCell, r() * spin, V(0, 0.6, 0).add(c.clone().sub(heart).normalize().multiplyScalar(0.6)).normalize(), 0.12, mixc(lo, hi, 0.15));
   let made = 0;
   let guard = 0;
   while (made < n && guard++ < n * 6) {
@@ -242,7 +244,7 @@ function pine(seed: number, rich: number) {
   const heart = at(0.84);
   const W = 2.7 + r() * 0.9;
   // the crown: flat clouds of needles carried out on branches in a loose spiral, the whole a broad flat-topped head
-  const tiers = rich ? 5 : 3;
+  const tiers = rich ? 5 : 4;
   for (let i = 0; i < tiers; i++) {
     const t = i / (tiers - 1);
     const o = at(0.66 + t * 0.28);
@@ -251,11 +253,12 @@ function pine(seed: number, rich: number) {
     const off = W * (0.78 - t * 0.55) * (0.8 + r() * 0.3);
     const c = V(o.x + Math.cos(a) * off, o.y + 0.6 + r() * 0.5, o.z + Math.sin(a) * off);
     limb(m, [o, o.clone().lerp(c, 0.55).add(V(0, 0.3, 0)), c.clone().setY(c.y - 0.2)], 0.075, 0.02, rich ? 5 : 3, 2, [0.4, 0.22, 0.11], [0.3, 0.19, 0.1]);
-    lobe(m, r, c, [w, w * 0.46, w * 0.92], rich ? 16 : 6, w * (rich ? 0.36 : 0.56), 2, heart, W * 1.4, lo, hi);
+    // (the coarse cut too has many smallish cards in a flat pad: a few big ones read as glossy balls)
+    lobe(m, r, c, [w, w * 0.4, w * 0.92], rich ? 16 : 11, w * (rich ? 0.36 : 0.38), 2, heart, W * 1.4, lo, hi, 1, 2, 0.62);
   }
   const cap = at(0.99);
   const cw = W * 0.56;
-  lobe(m, r, V(cap.x, cap.y + 0.25, cap.z), [cw, cw * 0.5, cw], rich ? 12 : 5, cw * (rich ? 0.4 : 0.6), 2, heart, W * 1.4, lo, hi);
+  lobe(m, r, V(cap.x, cap.y + 0.25, cap.z), [cw, cw * 0.45, cw], rich ? 12 : 8, cw * (rich ? 0.4 : 0.42), 2, heart, W * 1.4, lo, hi, 1, 2, 0.62);
   return m.geometry();
 }
 
@@ -267,18 +270,19 @@ function spruce(seed: number, rich: number) {
   limb(m, [V(0, 0, 0), V(bend * 0.4, H * 0.5, 0), V(bend, H * 0.99, 0)], 0.19, 0.02, rich ? 7 : 4, rich ? 5 : 2, [0.08, 0.066, 0.058], [0.13, 0.1, 0.085], 0, 0.3);
   const lo: V3 = [0.012, 0.042, 0.03];
   const hi: V3 = [0.032, 0.078, 0.045];
-  const n = rich ? 10 : 5;
+  const n = rich ? 10 : 7;
   const W = H * (0.2 + r() * 0.035);
   for (let i = 0; i < n; i++) {
     const k = i / (n - 1);
     const y = H * (0.17 + 0.8 * k);
     // widest low down, drawing in to the spire; not a straight cone: a slight belly
     const w = W * (Math.pow(1 - k, 0.82) + 0.05) * (0.9 + r() * 0.2);
-    const size = (w * 0.5 + 0.34) * (rich ? 1 : 1.35);
-    const count = Math.max(3, Math.round(((Math.PI * 2 * w) / (size * 1.25)) * (rich ? 1 : 0.7)));
+    const size = (w * 0.5 + 0.34) * (rich ? 1 : 1.1);
+    const count = Math.max(3, Math.round(((Math.PI * 2 * w) / (size * 1.25)) * (rich ? 1 : 0.9)));
     const ph = r() * 6.28;
     // the dark heart of the tier, at the stem
-    card(m, V(bend * k, y - size * 0.2, 0), w * 0.7 + 0.3, 3, r() * 0.2, V(0, 0.5, 0.2).normalize(), 0.1, mixc(lo, hi, 0.1));
+    // (a sprig of needles, not the dense round mass: that, one to a tier, stacked as a column of glossy balls)
+    card(m, V(bend * k, y - size * 0.2, 0), w * 0.62 + 0.25, 2, r() * 6.28, V(0, 0.5, 0.2).normalize(), 0.1, mixc(lo, hi, 0.1));
     for (let j = 0; j < count; j++) {
       const a = ph + (j / count) * Math.PI * 2 + (r() - 0.5) * 0.4;
       const rr = w * (0.62 + r() * 0.42);
@@ -481,11 +485,22 @@ export function makeFarTreeTexture() {
   const S = 256;
   const { c, g } = sheet(S * 2);
   const r = rng(1291);
-  const blob = (x: number, y: number, rad: number, nx: number, top: number) => {
+  // soft: 1 a lump with a lit top and a dark underside (the broad crowns' big lumps); below 1 a flat tuft that only
+  // takes its tone from where it sits, so a drift of many reads as foliage, never as a heap of glossy beads
+  const blob = (x: number, y: number, rad: number, nx: number, top: number, soft = 1) => {
     const R = Math.round(255 * Math.min(1, Math.max(0, nx * 0.5 + 0.5)));
-    const gr = g.createRadialGradient(x, y - rad * 0.55, rad * 0.1, x, y, rad);
-    const hi = Math.round(255 * Math.min(1, top + 0.22));
-    const lo = Math.round(255 * Math.max(0, top - 0.42));
+    if (soft < 0.5) {
+      // a flat tuft: one tone, set by where it sits (its `top`), so where tufts overlap there is no rim and no bead: a
+      // spruce's tier or a pine's pad is one mass of needles, lit on its upper side and dark under it
+      g.fillStyle = `rgb(${R},${Math.round(255 * Math.min(1, Math.max(0, top)))},255)`;
+      g.beginPath();
+      g.arc(x, y, rad, 0, 6.2832);
+      g.fill();
+      return;
+    }
+    const gr = g.createRadialGradient(x, y - rad * 0.55 * soft, rad * 0.1, x, y, rad);
+    const hi = Math.round(255 * Math.min(1, top + 0.22 * soft));
+    const lo = Math.round(255 * Math.max(0, top - 0.42 * soft));
     gr.addColorStop(0, `rgb(${R},${hi},255)`);
     gr.addColorStop(0.55, `rgb(${R},${Math.round((hi + lo) / 2)},255)`);
     gr.addColorStop(1, `rgb(${R},${lo},255)`);
@@ -514,7 +529,7 @@ export function makeFarTreeTexture() {
     g.restore();
   };
   // a heap of lumps inside an outline, the lower ones drawn first so the upper lie over them
-  const heap = (ox: number, oy: number, cx: number, cy: number, rx: number, ry: number, n: number, rad: [number, number], flat = 1) => {
+  const heap = (ox: number, oy: number, cx: number, cy: number, rx: number, ry: number, n: number, rad: [number, number], flat = 1, soft = 1) => {
     const list: [number, number, number][] = [];
     let guard = 0;
     while (list.length < n && guard++ < n * 20) {
@@ -524,48 +539,58 @@ export function makeFarTreeTexture() {
       list.push([x, y, rad[0] + r() * (rad[1] - rad[0])]);
     }
     list.sort((a, b) => b[1] - a[1]);
-    for (const [x, y, rr] of list) blob(ox + cx + x * rx, oy + cy + y * ry * flat, rr, x * 0.95, 0.5 - y * 0.42 + (r() - 0.5) * 0.12);
+    for (const [x, y, rr] of list) blob(ox + cx + x * rx, oy + cy + y * ry * flat, rr, x * 0.95, 0.5 - y * 0.42 + (r() - 0.5) * (soft < 0.5 ? 0.035 : 0.12), soft);
   };
-  // 0: a broad crown on a short trunk: a heaped, uneven mass of smaller lumps that comes down low, never a ball on a stick
+  // 0: a broad crown on a short trunk: one heaped, uneven mass of fine flat tufts that comes down low (never a ball on a
+  // stick, never a cluster of glossy balls): lit on its upper side, dark under its lower lobes
   at(0, (ox, oy) => {
     trunk(ox + 128, oy + 256, oy + 196, 10, 7, 3);
-    heap(ox, oy, 128, 150, 108, 84, 46, [16, 26], 1);
-    heap(ox, oy, 92, 104, 58, 52, 22, [13, 21]);
-    heap(ox, oy, 162, 92, 56, 56, 22, [13, 21]);
-    heap(ox, oy, 124, 62, 52, 38, 16, [11, 18]);
+    heap(ox, oy, 128, 150, 108, 84, 190, [8, 14], 1, 0.3);
+    heap(ox, oy, 92, 104, 58, 52, 90, [7, 12], 1, 0.3);
+    heap(ox, oy, 162, 92, 56, 56, 90, [7, 12], 1, 0.3);
+    heap(ox, oy, 124, 62, 52, 38, 60, [6, 11], 1, 0.3);
   });
   // 1: a pine: bare trunk, a flat-topped head
   at(1, (ox, oy) => {
     trunk(ox + 128, oy + 256, oy + 70, 6, 3.5, 6);
-    heap(ox, oy, 136, 58, 70, 30, 18, [12, 19]);
-    heap(ox, oy, 100, 84, 40, 18, 9, [10, 15]);
-    heap(ox, oy, 160, 92, 34, 14, 7, [9, 13]);
-    heap(ox, oy, 118, 118, 22, 10, 4, [8, 11]);
+    // (flat clouds of needles, each a drift of many small overlapping tufts: from far off, a flat pad with a ragged
+    // edge, never a heap of balls)
+    heap(ox, oy, 134, 56, 74, 26, 90, [5.5, 9.5], 1, 0.3);
+    heap(ox, oy, 100, 84, 44, 15, 44, [5, 8.5], 1, 0.3);
+    heap(ox, oy, 162, 94, 38, 12, 34, [4.5, 8], 1, 0.3);
+    heap(ox, oy, 116, 120, 26, 8, 16, [4.5, 7.5], 1, 0.3);
   });
-  // 2: a spruce: tiers narrowing to a spire
+  // 2: a spruce: drooping tiers narrowing to a spire, each a skirt of overlapping fine tufts (never a row of balls):
+  // the tuft spacing is far inside its size, so what is seen is one fringed tier lying over the one below it
   at(2, (ox, oy) => {
-    trunk(ox + 128, oy + 256, oy + 200, 5, 4);
-    for (let i = 0; i < 9; i++) {
-      const k = i / 8;
-      const y = 226 - k * 196;
-      const w = 62 * Math.pow(1 - k, 0.85) + 5;
-      const n = Math.max(1, Math.round(w / 9));
+    trunk(ox + 128, oy + 256, oy + 204, 5, 4);
+    const tiers = 12;
+    for (let i = 0; i < tiers; i++) {
+      const k = i / (tiers - 1);
+      const y = 222 - k * 190;
+      const w = 64 * Math.pow(1 - k, 0.9) + 4;
+      const n = Math.max(2, Math.round(w / 3.2));
       for (let j = 0; j < n; j++) {
         const x = n === 1 ? 0 : (j / (n - 1)) * 2 - 1;
-        blob(ox + 128 + x * w, oy + y + Math.abs(x) * 9 + (r() - 0.5) * 4, 10 + (1 - k) * 6 + r() * 3, x * 0.95, 0.5 + (r() - 0.5) * 0.15);
+        // (the skirt droops toward its edges, its fringe ragged)
+        const droop = Math.pow(Math.abs(x), 1.3) * (13 - k * 5);
+        const dy = droop + (r() - 0.5) * 4;
+        // (lit across the upper part of the tier, darker toward its drooping edge, and a little lighter near the top of the tree)
+        blob(ox + 128 + x * w + (r() - 0.5) * 2.5, oy + y + dy, 5.5 + (1 - k) * 3 + r() * 2.5, x * 0.95, 0.78 - 0.03 * dy + k * 0.08 - Math.abs(x) * 0.06, 0.3);
       }
     }
   });
-  // 3: a narrow flame (a cypress, or far off a birch)
+  // 3: a narrow flame (a cypress, or far off a birch): a leafy column of fine tufts, fuller in the middle
   at(3, (ox, oy) => {
-    trunk(ox + 128, oy + 256, oy + 210, 4, 3);
-    for (let i = 0; i < 16; i++) {
-      const k = i / 15;
+    trunk(ox + 128, oy + 256, oy + 214, 4, 3);
+    for (let i = 0; i < 26; i++) {
+      const k = i / 25;
       const y = 232 - k * 214;
       const w = 30 * (0.45 + 1.1 * Math.sin(Math.PI * Math.pow(k, 0.62)) * (1 - k * 0.55));
-      for (let j = 0; j < 3; j++) {
-        const x = j - 1 + (r() - 0.5) * 0.4;
-        blob(ox + 128 + x * w * 0.62, oy + y + (r() - 0.5) * 6, w * 0.5 + 5, x * 0.9, 0.5 + (r() - 0.5) * 0.18);
+      const n = Math.max(3, Math.round(w / 3.4));
+      for (let j = 0; j < n; j++) {
+        const x = (j / (n - 1)) * 2 - 1;
+        blob(ox + 128 + x * w * 0.62 + (r() - 0.5) * 3, oy + y + (r() - 0.5) * 7, 4.8 + w * 0.09 + r() * 2.2, x * 0.9, 0.55 + k * 0.2 + (r() - 0.5) * 0.14, 0.3);
       }
     }
   });

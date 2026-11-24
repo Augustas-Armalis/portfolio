@@ -66,8 +66,9 @@ const PK = (() => {
 })();
 function massH(u: number, a: number) {
   const dome = Math.exp(-(((u - PK.u) / 190) ** 2) - ((a - PK.a) / 215) ** 2);
-  const r = ridged(u * 0.011 + 3.1, a * 0.011 - 1.7);
-  const gully = vn(u * 0.035 + 9, a * 0.012) * 0.25;
+  // (ridges and gullies on the ranges' own scale, hundreds of metres across: finer and the walls go sheer)
+  const r = ridged(u * 0.0045 + 3.1, a * 0.0045 - 1.7);
+  const gully = vn(u * 0.012 + 9, a * 0.005) * 0.25;
   const h = PEAK.h * Math.pow(dome, 0.85) * (0.72 + 0.42 * r - gully) - 24 * (1 - dome);
   // (where it runs out it dives well under the land: two surfaces a few metres apart flicker from far off)
   return h - 4 - 60 * (1 - sst(0, 30, h));
@@ -100,8 +101,16 @@ function mouthLine(n = 60): [number, number][] {
 }
 // how far back the cliff stands at a point: rough rock leaning back, curling in toward the mouth
 function cliffA(u: number, y: number) {
-  const relief = (vn(u * 0.07 + 2, y * 0.07) - 0.5) * 6 + (vn(u * 0.21, y * 0.19 + 5) - 0.5) * 1.8;
-  const lean = 0.16 * Math.max(0, y - 4);
+  // (broad buttresses and gullies running down it, as the ranges' faces have them, kept off the mouth's own rim)
+  // (long buttresses and gullies running down the face, tens of metres deep, strongest high up; the light and shadow
+  // they make are what show it is rock)
+  const away = sst(12, 40, mouthDist(u, y));
+  // (kept gentle enough in how it grows with height that the face never leans back on itself: an overhang there is a
+  // crack along the join with the mountain)
+  const gully = ((ridged(u * 0.011 + 7, y * 0.0015) - 0.55) * 36 + (ridged(u * 0.032 + 2, y * 0.004 + 5) - 0.55) * 9) * away * sst(10, 150, y);
+  const relief = (vn(u * 0.07 + 2, y * 0.07) - 0.5) * 6 + (vn(u * 0.21, y * 0.19 + 5) - 0.5) * 1.8 + gully;
+  // (the face leans back, and more as it climbs, curving into the mountain's own slope: no brow where it ends)
+  const lean = 0.16 * Math.max(0, y - 4) + 0.0042 * Math.max(0, y - 24) ** 2;
   const curl = 3.5 * Math.exp(-Math.max(0, mouthDist(u, y)) / 7);
   return relief + lean + curl + 0.0012 * u * u;
 }
@@ -147,7 +156,8 @@ function lines(lo: number, hi: number, fineLo: number, fineHi: number, step: num
 
 function buildCliff() {
   const b = newBuf();
-  const us = lines(-210, 210, -30, 30, 1.0, 1.13);
+  // (as wide as the mountain, so its sides and the cliff's meet on the same columns: no sliver where one ends)
+  const us = lines(-330, 330, -30, 30, 1.0, 1.13);
   const ys = lines(-12, 44, -12, 44, 1.0, 1);
   const top = us.map((u) => Math.max(faceTop(u), -14));
   // rows: the fine ones, then fractions toward the top edge (one lattice: no cracks)
@@ -181,8 +191,9 @@ function buildCliff() {
 function buildMass() {
   const pos: number[] = [];
   const idx: number[] = [];
-  // (fine enough over the whole of the mountain that its outline against the sky is a ridge, not a row of facets)
-  const us = lines(-330, 330, -30, 30, 1.0, 1.035).filter((_, i, a) => i % 2 === 0 || i === a.length - 1);
+  // (the cliff's own columns, so its top edge and the mountain's front row are the same vertices; rows deep enough
+  // that its outline against the sky is a ridge, not a row of facets)
+  const us = lines(-330, 330, -30, 30, 1.0, 1.13);
   const as: number[] = [];
   for (let a = 0, s = 2; a < 600; a += s, s = Math.min(5, s * 1.03)) as.push(a);
   for (let j = 0; j < as.length; j++)
@@ -190,14 +201,23 @@ function buildMass() {
       const t = Math.max(faceTop(u), -14);
       const a0 = cliffA(u, t);
       const a = a0 + as[j];
-      const y = j === 0 ? t : Math.max(massH(u, a), t - 6 * j);
+      // (from the cliff's top the surface climbs smoothly into the mountain's own height, over a hundred metres or so:
+      // not a wall where the cliff ends and the mountain, far higher, begins)
+      const mh = massH(u, a);
+      // (it leaves the cliff's top at the cliff's own slope, and only then eases into the mountain's height: a ramp
+      // that began level would lie along the join as a shelf)
+      const s0 = 1 / Math.max(0.35, 0.16 + 0.0084 * Math.max(0, t - 24));
+      const along = as[j];
+      const y = j === 0 ? t : mh >= t ? (t + s0 * along) * (1 - sst(0, 120, along)) + mh * sst(0, 120, along) : Math.max(mh, t - 6 * j);
       pos.push(...W(u, y, a));
     }
   const row = us.length;
   for (let j = 0; j < as.length - 1; j++)
     for (let i = 0; i < row - 1; i++) {
       const a = j * row + i;
-      idx.push(a, a + row, a + 1, a + 1, a + row, a + row + 1);
+      // (wound so its normals point up and out like the cliff's, not into the mountain: where the two meet their
+      // normals are taken together, and opposite ones would cancel along the join as a dark crack)
+      idx.push(a, a + 1, a + row, a + 1, a + row + 1, a + row);
     }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
@@ -430,6 +450,27 @@ function makeBeyondMaterial() {
 
 const f2 = (n: number) => n.toFixed(2);
 
+// the cliff's top edge and the mountain's front row are the same line of points; their normals are taken together
+// there (each mesh alone would give the edge its own, a crease the light shows as a hard seam)
+function joinSeam(cliff: THREE.BufferGeometry, mass: THREE.BufferGeometry) {
+  const key = (a: THREE.BufferAttribute, i: number) => `${a.getX(i).toFixed(2)},${a.getY(i).toFixed(2)},${a.getZ(i).toFixed(2)}`;
+  const cp = cliff.attributes.position as THREE.BufferAttribute;
+  const cn = cliff.attributes.normal as THREE.BufferAttribute;
+  const mp = mass.attributes.position as THREE.BufferAttribute;
+  const mn = mass.attributes.normal as THREE.BufferAttribute;
+  const at = new Map<string, number>();
+  for (let i = 0; i < mp.count; i++) at.set(key(mp, i), i);
+  const v = new THREE.Vector3();
+  for (let i = 0; i < cp.count; i++) {
+    const j = at.get(key(cp, i));
+    if (j === undefined) continue;
+    v.set(cn.getX(i) + mn.getX(j), cn.getY(i) + mn.getY(j), cn.getZ(i) + mn.getZ(j)).normalize();
+    cn.setXYZ(i, v.x, v.y, v.z);
+    mn.setXYZ(j, v.x, v.y, v.z);
+  }
+  return { cliff, mass };
+}
+
 function makeStoneMaterial() {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
@@ -544,8 +585,7 @@ export function Cave() {
   const m = useMemo(
     () =>
       timed("cave", () => ({
-        cliff: buildCliff(),
-        mass: buildMass(),
+        ...joinSeam(buildCliff(), buildMass()),
         cave: buildCave(),
         plug: buildPlug(),
         beyond: buildBeyond(),
@@ -553,7 +593,7 @@ export function Cave() {
         motes: buildMotes(70),
         mat: makeStoneMaterial(),
         // (the range's own material and measure: one of them, not a mountain pasted in front)
-        massMat: makeRangeMaterial(MAIN_RANGE),
+        massMat: makeRangeMaterial(MAIN_RANGE, 1),
       })),
     [],
   );
@@ -577,7 +617,7 @@ export function Cave() {
   return (
     <>
       <mesh geometry={m.mass} material={m.massMat} />
-      <mesh geometry={m.cliff} material={m.mat} />
+      <mesh geometry={m.cliff} material={m.massMat} />
       <mesh ref={plug} geometry={m.plug} material={m.mat} visible={false} />
       <group ref={inner}>
       <mesh geometry={m.cave} material={m.mat} />
