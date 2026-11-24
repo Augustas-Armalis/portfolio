@@ -815,7 +815,7 @@ export const CONTACT_EMAIL: string | null = "augustasarmalis@gmail.com";
 // Every channel, in the order he gave them: email, X, Instagram, then his studio's site (the main thing), then the
 // rest. href null would mean "not filled in yet" (the row points at "#").
 export type Channel = {
-  id: "email" | "x" | "instagram" | "website" | "linkedin" | "github" | "spotify" | "youtube";
+  id: "email" | "x" | "instagram" | "website" | "linkedin" | "spotify" | "youtube";
   label: string;
   value: string;
   href: string | null;
@@ -826,7 +826,6 @@ export const CONTACTS: Record<Channel["id"], Channel> = {
   instagram: { id: "instagram", label: "Instagram", value: "@augustas_armalis", href: "https://www.instagram.com/augustas_armalis" },
   website: { id: "website", label: "Website", value: "webstern.co", href: "https://webstern.co/" },
   linkedin: { id: "linkedin", label: "LinkedIn", value: "armaugustas", href: "https://www.linkedin.com/in/armaugustas" },
-  github: { id: "github", label: "GitHub", value: "Augustas-Armalis", href: "https://github.com/Augustas-Armalis" },
   spotify: { id: "spotify", label: "Spotify", value: "Augustas Armalis", href: "https://open.spotify.com/artist/1caZzY2xlQW23Xe1DWtw6H" },
   youtube: { id: "youtube", label: "YouTube", value: "hollow kid", href: "https://www.youtube.com/@hollowkidsongs" },
 };

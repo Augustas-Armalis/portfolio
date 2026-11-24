@@ -5,7 +5,7 @@
 // read), loads what is typed in the address field (an address, or a search), and says so plainly when a site
 // refuses to be shown inside another page instead of leaving a blank window.
 
-import { ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, Github, Globe, Instagram, Linkedin, RotateCw, Search, ShieldOff, X } from "lucide-react";
+import { ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, Globe, Instagram, Linkedin, RotateCw, Search, ShieldOff, X } from "lucide-react";
 import { Sym } from "../symbols";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { bookCall, contactList, projects, type AppId, type Channel } from "@/content";
@@ -80,7 +80,6 @@ const GLYPH: Partial<Record<Channel["id"], ReactNode>> = {
   x: <XMark size={24} />,
   linkedin: <Sym icon={Linkedin} size={26} weight="medium" />,
   instagram: <Sym icon={Instagram} size={26} weight="medium" />,
-  github: <Sym icon={Github} size={26} weight="medium" />,
 };
 export function elsewhere(): Fav[] {
   const links = contactList.filter((c) => c.href && c.id !== "website" && c.id !== "email").map((c) => ({ name: c.label, url: c.href!, sub: c.value, glyph: GLYPH[c.id] ?? <Sym icon={Globe} size={26} weight="medium" /> }));

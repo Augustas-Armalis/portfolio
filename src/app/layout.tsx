@@ -99,7 +99,6 @@ const jsonLd = {
         "https://x.com/augustasdesign",
         "https://www.instagram.com/augustas_armalis",
         "https://www.linkedin.com/in/armaugustas",
-        "https://github.com/Augustas-Armalis",
       ],
       worksFor: { "@type": "Organization", name: "Webstern", url: "https://webstern.co" },
     },
@@ -141,7 +140,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <p>
               This site is a small operating system inside a 3D field: a desk with a display, a piano, headphones, a camera, a novel and a sketchbook.
               It needs JavaScript and WebGL to run. Contact and links: <a href="https://x.com/augustasdesign">X</a>, <a href="https://www.linkedin.com/in/armaugustas">LinkedIn</a>,{" "}
-              <a href="https://github.com/Augustas-Armalis">GitHub</a>, <a href="https://webstern.co">Webstern</a>, <a href="https://www.instagram.com/augustas_armalis">Instagram</a>.
+              <a href="https://webstern.co">Webstern</a>, <a href="https://www.instagram.com/augustas_armalis">Instagram</a>.
             </p>
           </main>
         </noscript>
