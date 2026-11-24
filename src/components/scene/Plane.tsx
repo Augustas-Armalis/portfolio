@@ -574,7 +574,7 @@ export function Plane({
         const err = wrap(Math.atan2(rx, rz) - st.yaw);
         if (Math.abs(err) < 1.25) {
           // (only while the controls are left alone: a hand on them is never argued with)
-          const k = touching ? 0 : smooth01((150 + along) / 80) * smooth01((80 - Math.abs(side)) / 45) * 0.6 * (1 - a);
+          const k = touching || !voyage.guide ? 0 : smooth01((150 + along) / 80) * smooth01((80 - Math.abs(side)) / 45) * 0.6 * (1 - a);
           sx = sx * (1 - k) + THREE.MathUtils.clamp(-err * 1.5, -1, 1) * k;
           const ay = THREE.MathUtils.clamp((Math.atan2(gate.pos.y - st.pos.y, Math.hypot(rx, rz) + 6) / 0.5) * 1.5, -1, 1);
           sy = sy * (1 - k) + ay * k;
