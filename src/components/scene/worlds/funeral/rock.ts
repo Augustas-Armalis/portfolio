@@ -241,9 +241,11 @@ function* rockSteps(mobile: boolean, budget: number) {
     const nx = -L.tan[i][1];
     const nz = L.tan[i][0];
     const y = L.y[i];
+    // (the water of the cave they come in by: the road is a channel of still water down to the dock, a little under the quays)
+    const wet = i < L.iDock - 1 ? 1 : 0;
     for (const u of ROADC) {
-      lp.push(p.x + nx * u * HALF, y, p.z + nz * u * HALF);
-      lk.push(0, u, 0, i * L.STEP);
+      lp.push(p.x + nx * u * HALF, y - wet * 1.1, p.z + nz * u * HALF);
+      lk.push(0, u, wet, i * L.STEP);
     }
     for (const side of [-1, 1]) {
       const inCave = i >= L.iMouth - 2 || i <= L.iOut + 2;
@@ -672,9 +674,18 @@ export function makeLedgeMaterial() {
           vec3 alb = mix(vec3(0.02, 0.03, 0.1), vec3(0.05, 0.055, 0.1), 0.4 + 0.6 * dab);
           // (inside the cave it comes out of the road is almost black: only where the night reaches in does it take its blue)
           col = alb * (uSkyCol * 1.2 + uKeyCol * 0.16) * mix(0.16, 1.0, smoothstep(uBorn + 10.0, uBorn + 90.0, vK.w));
+          if (vK.z > 0.001) {
+            // still black water in the cave: it holds the night's blue and the lights on it, a slow wrinkle at the surface
+            vec2 q = vLocal.xz * 0.35;
+            float rip = vnoise(q + vec2(uTime * 0.05, 0.0)) * 0.6 + vnoise(q * 2.7 - vec2(0.0, uTime * 0.08)) * 0.4;
+            vec3 wn = normalize(vec3((rip - 0.5) * 0.35, 1.0, (vnoise(q * 1.7 + 5.0) - 0.5) * 0.35));
+            float fr = pow(1.0 - max(dot(wn, V), 0.0), 4.0);
+            vec3 water = vec3(0.004, 0.01, 0.04) + uSkyCol * (0.25 + 1.6 * fr) + vec3(0.03, 0.09, 0.2) * fr * rip;
+            col = mix(col, water, smoothstep(0.0, 0.9, vK.z));
+          }
           float mid = 1.0 - smoothstep(0.55, 1.0, abs(vK.y));
           // (no gold where no one walks yet: far inside the cave the road comes out of it is bare dark rock)
-          col += GOLD * (0.04 + 0.2 * smoothstep(0.25, 0.8, pool) + 0.5 * bellAt(vK.w)) * (0.45 + 0.55 * dab) * mid * glowK() * 2.2 * smoothstep(uBorn - 6.0, uBorn + 40.0, vK.w);
+          col += GOLD * (0.04 + 0.2 * smoothstep(0.25, 0.8, pool) + 0.5 * bellAt(vK.w)) * (0.45 + 0.55 * dab) * mid * glowK() * 2.2 * smoothstep(uBorn - 6.0, uBorn + 40.0, vK.w) * (1.0 - vK.z);
         } else if (kind < 1.5) {
           // the cliff under the road's edge: dark indigo rock drawn in long upright strokes, its lip catching the
           // gold from above, its foot going down into green-black

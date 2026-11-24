@@ -66,7 +66,7 @@ const MID_PROFILE: [number, number][] = [
 const ROAD_GLSL = /* glsl */ `
   uniform sampler2D uRoad; uniform vec4 uRd; uniform float uWalk; uniform vec3 uFO; uniform float uBorn; uniform float uBell; uniform float uEnd;
   // (a soul comes into being inside the cave the road comes out of, rising out of the dark over a few steps)
-  float born(float s){ return smoothstep(uBorn, uBorn + 12.0, s) * (1.0 - smoothstep(uEnd - 2.6, uEnd - 0.5, s)); }
+  float born(float s){ return smoothstep(uBorn, uBorn + 8.0, s) * (1.0 - smoothstep(uEnd - 2.6, uEnd - 0.5, s)); }
   // the road at s metres along it: its middle, and the way it runs
   vec3 roadAt(float s, out vec2 tn){
     float f = clamp(s / uRd.y, 0.0, uRd.x - 1.001);

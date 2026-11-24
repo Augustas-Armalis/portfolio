@@ -264,6 +264,8 @@ function build() {
   // outside, over the drop, looking back at the crowd on the edge; at the pass over their heads and in
   // (the plane arrives a little way inside the mouth: a few seconds of dark with the night's blue ahead, not a long tunnel)
   const iIn = Math.max(8, iOut - 36);
+  // the dock: where the souls step ashore (the water of the cave they come in by ends here)
+  const iDock = iOut - 16;
   const path: [number, number, number][] = [];
   const iFork = iPass - 14;
   for (let i = iIn; i <= iFork; i += 10) {
@@ -323,7 +325,7 @@ function build() {
     { x: -800, z: 120, r: 320, h: 840, bell: true },
   ];
 
-  return { terrain, pts, tan, y: ys, crest, N, STEP, len: (N - 1) * STEP, ground, baseAt, iPass, iMouth, iGate, iEnd, iOut, iIn, path, entry, gate, canvas, cyp, obstacles };
+  return { terrain, pts, tan, y: ys, crest, N, STEP, len: (N - 1) * STEP, ground, baseAt, iPass, iMouth, iGate, iEnd, iOut, iIn, iDock, path, entry, gate, canvas, cyp, obstacles };
 }
 
 let land: ReturnType<typeof build> | null = null;
