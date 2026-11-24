@@ -216,7 +216,7 @@ function* starsSteps(props: WorldProps) {
   const gy0 = SEA_H(GOLDEN.x, GOLDEN.z) - 32 - 0;
   const gc: V3 = [GOLDEN.x, gy0, GOLDEN.z];
   glows.push({ p: [GOLDEN.x, gy0 + GOLDEN.r * 0.6, GOLDEN.z], size: GOLDEN.r * 3.2, col: [1, 0.7, 0.32], k: 0.34 });
-  for (const [rk, rr] of [[1.75, 0.012], [1.95, 0.008]] as const) k.add(new THREE.TorusGeometry(GOLDEN.r * rk, GOLDEN.r * rr, 5, 140), gc, GOLD, { glow: 0.9, rot: [Math.PI / 2 - 0.72, 0, 0.12], scale: [1, 1, 0.4] });
+  for (const [rk, rr] of [[2.15, 0.012], [2.35, 0.008]] as const) k.add(new THREE.TorusGeometry(GOLDEN.r * rk, GOLDEN.r * rr, 5, 140), gc, GOLD, { glow: 0.9, rot: [Math.PI / 2 - 0.72, 0, 0.12], scale: [1, 1, 0.4] });
   // the angels of the home forest, large and graceful, standing on the crown of the golden world, facing the way the
   // plane comes (and a few turned to one another)
   const spots: AngelSpot[] = [];
