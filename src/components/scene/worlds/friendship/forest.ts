@@ -265,6 +265,15 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     if (Math.abs(x - pathX(z)) < 24 && c.top * 0.8 - len < 60) continue;
     k.add(new THREE.ConeGeometry(len * 0.12, len, 6, 2), [x, c.top * 0.86 - len / 2, z], rockLo, { rot: [Math.PI, r() * 6.283, 0] });
   }
+  // (and in the tunnel small ones: a hand to a few metres, in clusters along the roof and down the tops of the walls)
+  for (let i = 0; i < Math.round(110 * few); i++) {
+    const z = TUNNEL.z0 + 8 + r() * (CAVE_Z[1] - 30 - TUNNEL.z0);
+    const c = caveAt(z);
+    const x = (r() * 2 - 1) * c.w * 0.72;
+    const len = 0.8 + Math.pow(r(), 2) * 5.5;
+    const roof = c.top * 0.34 + c.top * 0.66 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(x) / c.w, 1.28)), 0.78);
+    k.add(new THREE.ConeGeometry(len * (0.1 + r() * 0.08), len, 6, 2), [x, roof - len / 2 + 0.9, z], [0.06, 0.055, 0.06], { rot: [Math.PI + (r() - 0.5) * 0.12, r() * 6.283, (r() - 0.5) * 0.12] });
+  }
   const rock = k.build();
   const rockMat = withOrb(makeTempera({ amb: 1.1, key: 0.35, strata: 0.8, grain: 1.0, ao: 0.6, aoH: 220, rim: [0.04, 0.07, 0.05], rimPow: 3 }), 1.0, 1100);
   yield* lap();
@@ -340,6 +349,19 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
       shroom([mx, g(mx, mz) - 0.05, mz], 0.6 + r() * 1.6, col, 1.3);
     }
     glows.push({ p: [x, g(x, z) + 1.6, z], size: 7, col, k: 0.18 });
+  }
+  // (a few in the tunnel too, at the feet of its walls: the first light met on the way in)
+  for (let c = 0; c < Math.round(9 * few); c++) {
+    const z = TUNNEL.z0 + 20 + r() * (CAVE_Z[1] - 70 - TUNNEL.z0);
+    const sd = r() < 0.5 ? -1 : 1;
+    const x = sd * (TUNNEL.half * (0.5 + r() * 0.28));
+    const col: V3 = r() < 0.6 ? [0.3, 0.9, 0.75] : [1.0, 0.72, 0.3];
+    for (let j = 0; j < 3 + Math.floor(r() * 4); j++) {
+      const mx = x + (r() - 0.5) * 3;
+      const mz = z + (r() - 0.5) * 4;
+      shroom([mx, g(mx, mz) - 0.05, mz], 0.4 + r() * 0.9, col, 1.3);
+    }
+    glows.push({ p: [x, g(x, z) + 1.0, z], size: 5, col, k: 0.2 });
   }
   const groves = Math.round(70 * few);
   for (let c = 0; c < groves; c++) {
