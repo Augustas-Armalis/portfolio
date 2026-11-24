@@ -183,25 +183,90 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
     return () => useOS.getState().setHeroDark(false);
   }, [compact]);
 
-  const g = useRef<{ id: number; x0: number; y0: number; bx: number; axis: "x" | "y" | null; hist: { x: number; y: number; t: number }[] } | null>(null);
+  // Zoom, on a photograph: a double tap (or a double click) goes in where it lands and back out; two fingers pinch
+  // and move it; zoomed in, one finger moves it about instead of turning the page. Another picture starts unzoomed.
+  const zoomable = m.kind === "photo";
+  const z = useMotionValue(1);
+  const zx = useMotionValue(0);
+  const zy = useMotionValue(0);
+  const pts = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ d0: number; z0: number; mx: number; my: number; px: number; py: number } | null>(null);
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
+  useEffect(() => {
+    z.set(1);
+    zx.set(0);
+    zy.set(0);
+  }, [index, z, zx, zy]);
+  const clampPan = (k: number) => {
+    const r = stage.current?.getBoundingClientRect();
+    if (!r) return;
+    const mx = ((k - 1) * r.width) / 2;
+    const my = ((k - 1) * r.height) / 2;
+    zx.set(Math.max(-mx, Math.min(mx, zx.get())));
+    zy.set(Math.max(-my, Math.min(my, zy.get())));
+  };
+  const zoomAt = (cx: number, cy: number) => {
+    const r = stage.current?.getBoundingClientRect();
+    if (!r || !zoomable) return;
+    if (z.get() > 1.01) {
+      animate(z, 1, M.ui);
+      animate(zx, 0, M.ui);
+      animate(zy, 0, M.ui);
+      return;
+    }
+    const k = 2.5;
+    const mx = ((k - 1) * r.width) / 2;
+    const my = ((k - 1) * r.height) / 2;
+    animate(z, k, M.ui);
+    animate(zx, Math.max(-mx, Math.min(mx, (r.left + r.width / 2 - cx) * (k - 1))), M.ui);
+    animate(zy, Math.max(-my, Math.min(my, (r.top + r.height / 2 - cy) * (k - 1))), M.ui);
+  };
+
+  const g = useRef<{ id: number; x0: number; y0: number; bx: number; by: number; axis: "x" | "y" | "pan" | null; hist: { x: number; y: number; t: number }[] } | null>(null);
   const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (g.current || (e.pointerType === "mouse" && !compact)) return;
+    if (e.pointerType === "mouse" && !compact) return;
     // the film's own controls keep their touches
     const t = e.target as HTMLElement;
     if (t.tagName === "VIDEO" && e.clientY > t.getBoundingClientRect().bottom - 64) return;
+    pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.current.size === 2 && zoomable) {
+      // a second finger: a pinch, whatever the first one was doing
+      const [a, b] = [...pts.current.values()];
+      if (g.current?.axis === "x") animate(x, 0, M.fling);
+      if (g.current?.axis === "y") animate(y, 0, M.fling);
+      g.current = null;
+      pinch.current = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: z.get(), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, px: zx.get(), py: zy.get() };
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // the stage fills the screen
+      }
+      return;
+    }
+    if (g.current) return;
     anim.current?.stop();
     tok.current++;
     land();
-    g.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, bx: x.get(), axis: null, hist: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }] };
+    g.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, bx: z.get() > 1.01 ? zx.get() : x.get(), by: zy.get(), axis: null, hist: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }] };
   };
   const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (pts.current.has(e.pointerId)) pts.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const p = pinch.current;
+    if (p && pts.current.size >= 2) {
+      const [a, b] = [...pts.current.values()];
+      const k = Math.max(0.8, Math.min(5, (p.z0 * Math.hypot(a.x - b.x, a.y - b.y)) / p.d0));
+      z.set(k);
+      zx.set(p.px + ((a.x + b.x) / 2 - p.mx));
+      zy.set(p.py + ((a.y + b.y) / 2 - p.my));
+      return;
+    }
     const s = g.current;
     if (!s || s.id !== e.pointerId) return;
     const dx = e.clientX - s.x0;
     const dy = e.clientY - s.y0;
     if (!s.axis) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
-      s.axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+      s.axis = z.get() > 1.01 ? "pan" : Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
       try {
         e.currentTarget.setPointerCapture(e.pointerId);
       } catch {
@@ -210,15 +275,44 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
     }
     s.hist.push({ x: e.clientX, y: e.clientY, t: e.timeStamp });
     if (s.hist.length > 5) s.hist.shift();
+    if (s.axis === "pan") {
+      zx.set(s.bx + dx);
+      zy.set(s.by + dy);
+      clampPan(z.get());
+    }
     // past the first or last there is nothing more: it gives, but only a little
-    if (s.axis === "x") x.set(s.bx + (many ? dx : dx * 0.3));
+    else if (s.axis === "x") x.set(s.bx + (many ? dx : dx * 0.3));
     else y.set(dy > 0 ? dy : dy * 0.2);
   };
   const onUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    pts.current.delete(e.pointerId);
+    if (pinch.current) {
+      if (pts.current.size < 2) {
+        pinch.current = null;
+        // let go small: back to the whole picture; otherwise held where it is, inside its edges
+        const k = z.get();
+        if (k < 1.05) {
+          animate(z, 1, M.fling);
+          animate(zx, 0, M.fling);
+          animate(zy, 0, M.fling);
+        } else if (k > 4) animate(z, 4, M.fling);
+        else clampPan(k);
+      }
+      return;
+    }
     const s = g.current;
     if (!s || s.id !== e.pointerId) return;
     g.current = null;
-    if (!s.axis) return;
+    if (!s.axis) {
+      // two taps close together in time and place: zoom there
+      const l = lastTap.current;
+      if (e.type === "pointerup" && l && e.timeStamp - l.t < 320 && Math.hypot(e.clientX - l.x, e.clientY - l.y) < 30) {
+        lastTap.current = null;
+        zoomAt(e.clientX, e.clientY);
+      } else lastTap.current = { t: e.timeStamp, x: e.clientX, y: e.clientY };
+      return;
+    }
+    if (s.axis === "pan") return;
     const a = s.hist[0];
     const b = s.hist[s.hist.length - 1];
     const dt = Math.max(1, b.t - a.t);
@@ -264,13 +358,19 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
         </div>
         <span className="w-10" />
       </motion.div>
-      <div ref={stage} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} className="relative min-h-0 flex-1 touch-none overflow-hidden" data-viewer-stage="">
+      <div ref={stage} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onDoubleClick={(e) => !compact && zoomAt(e.clientX, e.clientY)} className={`relative min-h-0 flex-1 touch-none overflow-hidden ${zoomable && !compact ? "cursor-zoom-in" : ""}`} data-viewer-stage="">
         <motion.div className="absolute inset-0" style={{ x, y, scale: shrink }}>
           {slots.map((d) => {
             const it = list[wrap(index + d)];
             return (
               <div key={it.id + (many && list.length < 3 && d ? `:${d}` : "")} className="absolute inset-0 flex items-center justify-center px-2 py-3" style={{ transform: `translateX(calc(${d * 100}% + ${d * GAP}px))` }} aria-hidden={d !== 0}>
-                <Slide m={it} current={d === 0} loaded={!!loaded[it.id]} onLoad={() => setLoaded((l) => (l[it.id] ? l : { ...l, [it.id]: true }))} />
+                {d === 0 ? (
+                  <motion.div className="flex h-full w-full items-center justify-center" style={{ scale: z, x: zx, y: zy }}>
+                    <Slide m={it} current loaded={!!loaded[it.id]} onLoad={() => setLoaded((l) => (l[it.id] ? l : { ...l, [it.id]: true }))} />
+                  </motion.div>
+                ) : (
+                  <Slide m={it} current={false} loaded={!!loaded[it.id]} onLoad={() => setLoaded((l) => (l[it.id] ? l : { ...l, [it.id]: true }))} />
+                )}
               </div>
             );
           })}
