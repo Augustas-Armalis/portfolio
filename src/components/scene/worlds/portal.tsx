@@ -134,7 +134,10 @@ export function PortalView({ mobile }: { mobile: boolean }) {
   cfg.mobile = mobile;
   useEffect(() => {
     portalRig.gl = gl;
-  }, [gl]);
+    // (the still's target is made now, behind the loader: its 1440 x 900 four-sample half-float buffers, some forty
+    // megabytes, were otherwise allocated in the frame the first still was drawn, in the middle of a flight)
+    if (!mobile && typeof gl.initRenderTarget === "function") gl.initRenderTarget(rig.still);
+  }, [gl, rig, mobile]);
   useEffect(
     () => () => {
       rig.rt.dispose();
