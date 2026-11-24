@@ -68,18 +68,20 @@ export function LakeMirror({ quality }: { quality: number }) {
     const mesh = new THREE.Mesh(g, mat);
     mesh.renderOrder = 1e7;
     mesh.castShadow = mesh.receiveShadow = false;
-    const st = { mesh, q: null as WebGLQuery | null, busy: false, open: false, seenAt: -1e9, frame: 0 };
+    const rim: THREE.Vector4[] = [];
+    for (let i = 3; i < pos.length; i += 3) rim.push(new THREE.Vector4(pos[i], pos[i + 1], pos[i + 2], 1));
+    const st = { mesh, rim, v: new THREE.Vector4(), vp: new THREE.Matrix4(), crop: new THREE.Matrix4(), q: null as WebGLQuery | null, busy: false, open: false, seenAt: -1e9, frame: 0 };
     const ctx = gl.getContext() as WebGL2RenderingContext;
     mesh.onBeforeRender = (_r, _s, c) => {
       if (c !== camera || st.busy || typeof ctx.beginQuery !== "function") return;
       st.q ??= ctx.createQuery();
       if (!st.q) return;
-      ctx.beginQuery(ctx.ANY_SAMPLES_PASSED_CONSERVATIVE, st.q);
+      ctx.beginQuery(ctx.ANY_SAMPLES_PASSED, st.q);
       st.open = true;
     };
     mesh.onAfterRender = () => {
       if (!st.open) return;
-      ctx.endQuery(ctx.ANY_SAMPLES_PASSED_CONSERVATIVE);
+      ctx.endQuery(ctx.ANY_SAMPLES_PASSED);
       st.open = false;
       st.busy = true;
     };
@@ -147,6 +149,44 @@ export function LakeMirror({ quality }: { quality: number }) {
     mc.updateMatrixWorld();
     mc.layers.set(MIRROR_LAYER);
     REFLECT_U.uReflMat.value.copy(BIAS).multiply(mc.projectionMatrix).multiply(mc.matrixWorldInverse);
+    // Only the part of the mirror the water is laid over is drawn. A point of the water's own plane is seen by the
+    // mirrored eye where the eye sees it, flipped left to right, so the lake's outline on the screen (with a margin
+    // for the ripples' loosening) is all of the picture that is ever read. The mirrored eye is narrowed to that
+    // window (an off-centre crop of the same lens, drawn into the same pixels of the target), so what lies outside it
+    // is neither shaded nor sent to the card. From the desk the lake is a far sliver: a few hundredths of the frame.
+    let x0 = 1, x1 = -1, y0 = 1, y1 = -1;
+    const vp = occ.vp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    for (const r of occ.rim) {
+      const v = occ.v.copy(r).applyMatrix4(vp);
+      if (v.w < 0.05) {
+        x0 = y0 = -1;
+        x1 = y1 = 1;
+        break;
+      }
+      const nx = v.x / v.w, ny = v.y / v.w;
+      if (nx < x0) x0 = nx;
+      if (nx > x1) x1 = nx;
+      if (ny < y0) y0 = ny;
+      if (ny > y1) y1 = ny;
+    }
+    // (the ripples move a reflection a few hundredths of the frame; and the screen's own edge)
+    const W = rt.width, H = rt.height;
+    const mx0 = Math.max(-1, -x1 - 0.08), mx1 = Math.min(1, -x0 + 0.08);
+    const my0 = Math.max(-1, y0 - 0.1), my1 = Math.min(1, y1 + 0.1);
+    if (mx1 <= mx0 || my1 <= my0) {
+      REFLECT_U.uReflOn.value = 0;
+      return;
+    }
+    // (on a grid of eight pixels, so the window does not creep a pixel at a time)
+    const px0 = Math.max(0, Math.floor((((mx0 + 1) / 2) * W) / 8) * 8), px1 = Math.min(W, Math.ceil((((mx1 + 1) / 2) * W) / 8) * 8);
+    const py0 = Math.max(0, Math.floor((((my0 + 1) / 2) * H) / 8) * 8), py1 = Math.min(H, Math.ceil((((my1 + 1) / 2) * H) / 8) * 8);
+    const cx0 = (px0 / W) * 2 - 1, cx1 = (px1 / W) * 2 - 1, cy0 = (py0 / H) * 2 - 1, cy1 = (py1 / H) * 2 - 1;
+    occ.crop.set(2 / (cx1 - cx0), 0, 0, -(cx1 + cx0) / (cx1 - cx0), 0, 2 / (cy1 - cy0), 0, -(cy1 + cy0) / (cy1 - cy0), 0, 0, 1, 0, 0, 0, 0, 1);
+    mc.projectionMatrix.premultiply(occ.crop);
+    mc.projectionMatrixInverse.copy(mc.projectionMatrix).invert();
+    rt.viewport.set(px0, py0, px1 - px0, py1 - py0);
+    rt.scissor.copy(rt.viewport);
+    rt.scissorTest = true;
     const prev = gl.getRenderTarget();
     const auto = gl.shadowMap.autoUpdate;
     // (and the shadow map asked for this frame is kept for the real draw: drawn from the mirror's eye it would hold
