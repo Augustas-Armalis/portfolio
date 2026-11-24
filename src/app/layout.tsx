@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-inter" 
 const SITE = "https://augustasarmalis.com";
 const TITLE = "Augustas Armalis";
 const DESCRIPTION =
-  "Design engineer and founder from Kaunas, Lithuania. Larpo studio, Contles, Lunor, Filzy, Capto, music and a novel, all inside a little operating system.";
+  "Design engineer and founder from Kaunas, Lithuania. Head of design at Webstern (webstern.co), a full-stack web partner for SaaS and AI teams. Contles, Lunor, Filzy, Capto, music and a novel, all inside a little operating system.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
@@ -30,8 +30,9 @@ export const metadata: Metadata = {
     "WebGL portfolio",
     "three.js portfolio",
     "founder",
-    "Larpo",
-    "Larpo studio",
+    "Webstern",
+    "webstern.co",
+    "Webstern studio",
     "Contles",
     "Lunor",
     "Filzy",
@@ -94,12 +95,13 @@ const jsonLd = {
       homeLocation: { "@type": "Place", name: "Kaunas, Lithuania" },
       knowsAbout: ["Product design", "Interface design", "Design engineering", "Front-end development", "WebGL and three.js", "Music production", "Writing"],
       sameAs: [
+        "https://webstern.co",
         "https://x.com/augustasdesign",
+        "https://www.instagram.com/augustas_armalis",
         "https://www.linkedin.com/in/armaugustas",
-        "https://larpo.studio",
         "https://github.com/Augustas-Armalis",
       ],
-      worksFor: { "@type": "Organization", name: "Larpo", url: "https://larpo.studio" },
+      worksFor: { "@type": "Organization", name: "Webstern", url: "https://webstern.co" },
     },
     {
       "@type": "WebSite",
@@ -139,7 +141,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <p>
               This site is a small operating system inside a 3D field: a desk with a display, a piano, headphones, a camera, a novel and a sketchbook.
               It needs JavaScript and WebGL to run. Contact and links: <a href="https://x.com/augustasdesign">X</a>, <a href="https://www.linkedin.com/in/armaugustas">LinkedIn</a>,{" "}
-              <a href="https://github.com/Augustas-Armalis">GitHub</a>, <a href="https://larpo.studio">Larpo studio</a>.
+              <a href="https://github.com/Augustas-Armalis">GitHub</a>, <a href="https://webstern.co">Webstern</a>, <a href="https://www.instagram.com/augustas_armalis">Instagram</a>.
             </p>
           </main>
         </noscript>
