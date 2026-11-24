@@ -16,7 +16,7 @@ const HASH = /* glsl */ `float h11(float x){ return fract(sin(x * 12.9898) * 437
 // Not land: long bands of deep blue, blue-green and umber lying one behind another like staves, each edged with a
 // thread of gold, some hatched with fine level lines as he drew them, all drifting very slowly. `uLight`: where
 // the pyramid stands (its light lies on the waves round its foot).
-export function makeWaveSea(light: V3) {
+export function makeWaveSea(light: V3, reflect = "vec4 worldReflect(vec3 P, vec3 r){ return vec4(0.0); }") {
   return new THREE.ShaderMaterial({
     uniforms: { ...SKY_U, ...WORLD_U, uLight: { value: new THREE.Vector3(...light) } },
     vertexShader: /* glsl */ `
@@ -29,6 +29,7 @@ export function makeWaveSea(light: V3) {
       ${GLSL_SKY}
       ${GLSL_AIR}
       ${HASH}
+      ${reflect}
       vec3 seaBand(float pick){ return pick < 0.3 ? vec3(0.008, 0.040, 0.060) : pick < 0.52 ? vec3(0.012, 0.062, 0.064) : pick < 0.66 ? vec3(0.010, 0.024, 0.085) : pick < 0.8 ? vec3(0.070, 0.040, 0.018) : pick < 0.9 ? vec3(0.120, 0.078, 0.028) : vec3(0.030, 0.080, 0.064); }
       void main(){
         vec2 p = vLocal.xz; float h = vLocal.y;
@@ -70,6 +71,14 @@ export function makeWaveSea(light: V3) {
         float road = exp(-perp * perp / (wd * wd)) * smoothstep(150.0, 480.0, along) * (1.0 - smoothstep(D * 0.7, D, along));
         float spark = smoothstep(0.5, 0.86, vnoise(vec2(p.x * 0.07 + uTime * 0.35, s * 16.0))) * (0.3 + 0.7 * bf);
         col += gold * road * (0.035 + 0.6 * spark * (1.0 - farK)) * glowK() * 2.0;
+        // the pyramids and their light mirrored in the swell, more of it the lower the eye looks
+        {
+          vec3 V = normalize(cameraPosition - vWorld); vec3 n = normalize(vN);
+          vec3 rr = reflect(-V, n); rr.y = abs(rr.y) + 0.002; rr = normalize(rr);
+          vec4 wr = worldReflect(vec3(p.x, 0.0, p.y), rr);
+          float fr = 0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
+          col = mix(col, wr.rgb, wr.a * clamp(fr * 1.3 + 0.12, 0.0, 1.0));
+        }
         col = applyAir(col, vWorld);
         gl_FragColor = vec4(col, 1.0);
         ${END}
