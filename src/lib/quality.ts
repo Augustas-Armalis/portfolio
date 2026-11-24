@@ -279,6 +279,39 @@ function early(dt: number, t: number) {
   earlyN = 0;
   emit(false);
 }
+// ---- the card's own time (Auto only) ----
+// A frame's length on screen is the display's beat (16.7 ms at 60 Hz) however much room the card has, so the frame
+// loop alone cannot tell a gear that holds sixty with room to spare from one that only just does. The lens times
+// one frame in twenty to the end of its work on the card (and every fourth one for the first seconds of a visit,
+// which is the start-up benchmark behind the loader) and reports it here. Auto aims at 12 ms: over 12.5 it steps
+// down at once (two gears over 24), and it climbs only when the next gear up would still be under 12.
+const GPU: number[] = [];
+const gpuMed = () => {
+  if (GPU.length < 5) return 0;
+  const b = [...GPU].sort((x, y) => x - y);
+  return b[b.length >> 1];
+};
+export function reportGpu(ms: number) {
+  const s = get();
+  if (s.choice !== "auto" || ms <= 0 || ms > 250) return;
+  GPU.push(ms);
+  if (GPU.length > 9) GPU.shift();
+  const med = gpuMed();
+  const now = performance.now();
+  if (!med || now - lastStep < 2500) return;
+  const i = ORDER.indexOf(s.auto);
+  if (med > 12.5 && i > 0) {
+    s.auto = ORDER[Math.max(0, i - (med > 24 ? 2 : 1))];
+    s.ceiling = s.auto;
+    window.setTimeout(() => (get().ceiling = ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(get().auto) + 1)]), 60000);
+    lastStep = now;
+    slowFor = fastFor = 0;
+    GPU.length = 0;
+    remember(s.auto);
+    emit(false);
+  }
+}
+
 export function reportFrame(dt: number, up = true) {
   const s = get();
   const t = performance.now();
@@ -304,8 +337,10 @@ export function reportFrame(dt: number, up = true) {
     // a step down is remembered as the ceiling for a while: don't bounce
     s.ceiling = s.auto;
     window.setTimeout(() => (get().ceiling = ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(get().auto) + 1)]), 60000);
-  } else if (up && fastFor >= 12 && i < ORDER.indexOf(s.ceiling)) s.auto = ORDER[i + 1];
-  else return;
+  } else if (up && fastFor >= 12 && i < ORDER.indexOf(s.ceiling) && (!gpuMed() || gpuMed() * 1.45 < 12)) {
+    s.auto = ORDER[i + 1];
+    GPU.length = 0;
+  } else return;
   lastStep = now;
   slowFor = fastFor = 0;
   remember(s.auto);

@@ -3,7 +3,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { noteGpu } from "@/lib/quality";
+import { getQualityChoice, noteGpu, reportGpu } from "@/lib/quality";
 import { SKY_U } from "./sky";
 
 // (read once a frame: kept, not made anew)
@@ -832,8 +832,27 @@ export function Post({ level }: { level: number }) {
   }, []);
   useEffect(() => () => over.tri.dispose(), [over]);
 
+  // (Auto's yardstick: one frame in twenty, and every fourth for the first seconds, is timed to the end of its work
+  // on the card by reading one pixel back; see reportGpu in quality.ts)
+  const probeN = useMemo(() => ({ n: 0, born: performance.now(), px: new Uint8Array(4) }), []);
+  const probe = (t0: number, out?: THREE.WebGLRenderTarget) => {
+    if (out) return;
+    // (while the loader is up the world is not drawn: the clock of the first seconds starts when it lifts)
+    if (postCtl.overlay) {
+      probeN.born = performance.now();
+      return;
+    }
+    probeN.n++;
+    const young = performance.now() - probeN.born < 9000;
+    if (probeN.n % (young ? 4 : 20) !== 0 || getQualityChoice() !== "auto") return;
+    const g = gl.getContext();
+    g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, probeN.px);
+    reportGpu(performance.now() - t0);
+  };
+
   // `out` set: the finished frame goes into that target at its size (a photograph) instead of to the screen
   const draw = (scene: THREE.Scene, camera: THREE.Camera, out?: THREE.WebGLRenderTarget) => {
+    const t0 = performance.now();
     const overlay = () => {
       if (!postCtl.overlay || out) return;
       over.q.material = postCtl.overlay;
@@ -1085,6 +1104,7 @@ export function Post({ level }: { level: number }) {
       run(p.m.paint, out ?? null);
     } else run(p.m.comp, out ?? null);
     overlay();
+    probe(t0, out);
   };
 
   const state = useThree();
