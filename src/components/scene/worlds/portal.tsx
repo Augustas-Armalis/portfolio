@@ -44,7 +44,7 @@ export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPor
 // which the eye of the picture stands behind: seen from there it is a cream wall over the whole opening until the eye passes it)
 export const PICTURE = { value: 0 };
 const STILL_U = { tStill: { value: null as THREE.Texture | null }, uStillMat: { value: new THREE.Matrix4() }, uStillOn: { value: 0 }, uLiveK: { value: 0 } };
-const OPENING: Partial<Record<WorldId, [number, number, number?]>> = { sun: [23, 33], stars: [50, 80, 32], rex: [110, 200, 50], fairy: [18, 27, 74], paradise: [14.5, 22.5], gate: [35, 93], seafinale: FINALE_OPENING, sea: [27, 27] };
+const OPENING: Partial<Record<WorldId, [number, number, number?]>> = { sun: [23, 33], stars: [50, 80, 32], rex: [110, 200, 50], fairy: [18, 27, 74], paradise: [14.5, 22.5], gate: [35, 93], seafinale: FINALE_OPENING, sea: [27, 27], funeral: [15, 28, 9.5] };
 // How wide and how high above its middle a gate counts as gone through: the opening itself (a window the plane
 // is flying at must take it wherever the picture is, not only in the middle nineteen metres of it)
 export function openingReach(id: WorldId): [number, number] | undefined {
