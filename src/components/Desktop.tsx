@@ -21,7 +21,7 @@ import { focusedApp, isUp, useOS, useWallpaper, type Win } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, warmApps } from "./Apps";
 import { DocArt, FolderArt, TrashArt } from "./icons";
 import { Bars, DeskArt, Monogram, Resume } from "./shell";
-import { Btn, Chrome, EASE_OUT, FILE_MIME, M, QuickLook, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useMorph, type LookItem, type MenuAction } from "./ui";
+import { Btn, Chrome, EASE_OUT, FILE_MIME, M, QuickLook, Segmented, glass, reducedMotion, sfx, useContextMenu, useGlassScope, useLiveInterval, useMorph, type LookItem, type MenuAction } from "./ui";
 import { useClock } from "./useClock";
 import { EDGES, EDGE_CURSOR, EDGE_ZONE, clampMove, pointerGesture, resizeRect, type Bounds, type Edge } from "./windowFrame";
 
@@ -1508,11 +1508,7 @@ function DeskWidgets({ dark }: { dark: boolean }) {
     return ids.map((id) => gallery.media.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m && m.kind === "photo");
   }, []);
   const [i, setI] = useState(0);
-  useEffect(() => {
-    if (best.length < 2 || reducedMotion()) return;
-    const t = window.setInterval(() => setI((n) => (n + 1) % best.length), 7000);
-    return () => window.clearInterval(t);
-  }, [best.length]);
+  useLiveInterval(() => setI((n) => (n + 1) % best.length), best.length < 2 || reducedMotion() ? null : 7000);
   const featured = projects.contles;
   const shell = `${glass(dark ? "widget-dark" : "widget")} sq-panel press pointer-events-auto relative overflow-hidden rounded-[22px] text-left`;
   const sub = dark ? "text-white/65" : "text-ink-2";

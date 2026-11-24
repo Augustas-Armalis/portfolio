@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLiveInterval } from "./ui";
 
 const fmt = (d: Date, withDay: boolean) =>
   d.toLocaleString("en-GB", {
@@ -11,12 +12,8 @@ const fmt = (d: Date, withDay: boolean) =>
 
 export function useClock(withDay = true) {
   const [t, setT] = useState("");
-  useEffect(() => {
-    const tick = () => setT(fmt(new Date(), withDay));
-    tick();
-    const iv = window.setInterval(tick, 15000);
-    return () => window.clearInterval(iv);
-  }, [withDay]);
+  // ticks only while it can be seen (useLiveInterval), and at once when it can again
+  useLiveInterval(() => setT(fmt(new Date(), withDay)), 15000, true);
   return t;
 }
 
