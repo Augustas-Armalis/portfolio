@@ -5,15 +5,15 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { SKY_U } from "../sky";
 import { FarGround, Gallery, Halos, LightGate, LightPath, useDisposable, type WorldProps } from "./common";
-import { Kit, makePoints, makeTempera, pointsGeometry, terrainGeometry, rng, type Halo, type V3 } from "./kit";
+import { Kit, angel, makePoints, makeTempera, pointsGeometry, terrainGeometry, rng, type Halo, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { linesGeometry, makeCloudPaint, makeLineMaterial, makeRayDiscMaterial, makeSoftMaterial, paintedCloudGeometry, softGeometry, type PCloud, type Seg, type Soft } from "./stars/forms";
 import { heroAngel, makePyramidVeil, makeWaveSea, wingFan } from "./stars/parts";
-import { GLOBE, RIVER, buildGarden } from "./stars/garden";
+import { GLOBE, buildGarden } from "./stars/garden";
 import { Kindling } from "./fairy/shared";
 import { useMoment } from "./moments";
 import { DOOR, DOOR_Z, GREAT, PYRS, SKY_RING, makePyramidMaterial, makeStarBand, pyramidGeometry, pyramidReflectGLSL, skyAt } from "./stars/pyramids";
-import { ORIGIN, WORLDS } from "./voyage";
+import { ORIGIN, WORLDS, heightAt } from "./voyage";
 import { Comet } from "./stars/comet";
 import { buildWisps, makeWispMaterial } from "./sea/water";
 import { useDeepLens } from "./fairy/shared";
@@ -37,10 +37,22 @@ const def = WORLDS.stars;
 const GOLD: V3 = [1.0, 0.8, 0.44];
 // the glow that grows toward the way out, and the one that wakes round the globe (drawn about their own centres)
 const DOOR_GLOW: Halo[] = [
-  { p: [0, 0, -4], size: 520, col: [1, 0.72, 0.36], k: 0.55 },
-  { p: [0, 60, 120], size: 1100, col: [1, 0.78, 0.45], k: 0.2 },
-  { p: [0, 120, 400], size: 1800, col: [0.9, 0.75, 0.5], k: 0.09 },
+  { p: [0, 0, -4], size: 420, col: [1, 0.72, 0.36], k: 0.4 },
+  { p: [0, 60, 120], size: 900, col: [1, 0.78, 0.45], k: 0.1 },
+  { p: [0, 120, 400], size: 1500, col: [0.9, 0.75, 0.5], k: 0.04 },
 ];
+// The worlds the way goes over: the golden one lies half sunk in the sea and the plane flies over its top, close enough
+// to see the small angels who stand there (path in voyage.ts runs over (-120, 1150) at the height of its crown); the
+// rest hang or rest nearer and further along, each with its ring of gold.
+const SEA_H = (x: number, z: number) => heightAt(def.terrain!, x, z);
+const GOLDEN = { x: -120, z: 1150, r: 125 };
+const WORLD_SET: { x: number; z: number; r: number; up: number; col: V3; ring?: number; tilt?: number }[] = [
+  { x: 520, z: 1750, r: 92, up: 40, col: [0.4, 0.74, 0.62], ring: 1.9, tilt: 0.4 },
+  { x: -980, z: 1300, r: 64, up: 130, col: [0.92, 0.5, 0.4], ring: 0, tilt: 0 },
+  { x: 380, z: 820, r: 40, up: 150, col: [0.96, 0.72, 0.34], ring: 1.8, tilt: -0.5 },
+  { x: -560, z: 640, r: 84, up: 70, col: [0.34, 0.48, 0.92], ring: 1.7, tilt: 0.3 },
+];
+const GOLDEN_GLOW: Halo[] = [{ p: [0, 0, 0], size: 700, col: [1, 0.7, 0.32], k: 0.14 }];
 const GLOBE_GLOW: Halo[] = [{ p: [0, 0, 0], size: 700, col: [0.5, 0.95, 0.75], k: 0.2 }];
 
 // The whole of it, made part by part with a pause after each, so that it can be made a little a frame under the
@@ -69,8 +81,9 @@ function* starsSteps(props: WorldProps) {
   PYRS.forEach((p, i) => {
     const near = i < 3;
     const great = i === 0;
-    for (const s2 of near ? [0.5, 0.76, 1] : [1])
-      veilPyr.push({ p, geo: cone(p, s2), mat: makePyramidVeil({ h: p.h * s2, half: p.w * s2, alpha: great ? (s2 < 1 ? 0.42 : 0.6) : near ? (s2 < 1 ? 0.34 : 0.46) : 0.6, seed: p.seed, freq: 0.017 * (1000 / p.w) ** 0.5, edge: s2 === 1 ? (near ? 1 : 0.8) : 0.12 }) });
+    // (the greatest: two veils, one inside the other, with the light inside it; the near two and the far three one each)
+    for (const s2 of great ? [0.7, 1] : [1])
+      veilPyr.push({ p, geo: cone(p, s2), mat: makePyramidVeil({ h: p.h * s2, half: p.w * s2, alpha: great ? (s2 < 1 ? 0.4 : 0.55) : near ? 0.5 : 0.62, seed: p.seed, freq: great ? 9 : near ? 7 : 8, edge: s2 === 1 ? (near ? 1 : 0.7) : 0.1, base: great ? 1 : 0 }) });
   });
 
   yield;
@@ -100,11 +113,6 @@ function* starsSteps(props: WorldProps) {
     [0.95, 0.62, 0.3],
     { glow: 0.5, seg: 120, sides: 5 },
   );
-  for (let i = 0; i < 3; i++) k.box(190 - i * 34, 3, 70 - i * 14, [0, 1.2 + i * 2.6, DOOR_Z + 70 - i * 14], [0.012, 0.03, 0.046], { top: [0.05, 0.09, 0.11] });
-  for (const s of [-1, 1]) {
-    k.box(4, 22, 4, [s * (DOOR.half + 26), 11, DOOR_Z + 30], [0.02, 0.04, 0.06], { top: [0.1, 0.14, 0.16] });
-    halos.push({ p: [s * (DOOR.half + 26), 25, DOOR_Z + 30], size: 20, col: [1, 0.82, 0.5], k: 1.1 });
-  }
   glows.push({ p: [0, 48, DOOR_Z - 6], size: 420, col: [1, 0.7, 0.34], k: 0.8 });
   glows.push({ p: [0, 30, DOOR_Z + 60], size: 260, col: [1, 0.74, 0.4], k: 0.4 });
   // the pyramids' own points, each with its small light
@@ -113,25 +121,18 @@ function* starsSteps(props: WorldProps) {
   yield;
   // ----- the sea's mist, in long level bands at the feet of the pyramids -----
   const wisps = buildWisps([
-    { x: 0, z: DOOR_Z + 200, w: 2600, d: 620, y: 10, a: 0.5 },
-    { x: -1750, z: 1900, w: 1900, d: 800, y: 14, a: 0.45 },
-    { x: 1850, z: 1500, w: 2100, d: 800, y: 14, a: 0.45 },
-    { x: 0, z: 2600, w: 2600, d: 700, y: 8, a: 0.3 },
-    { x: -2300, z: -400, w: 3000, d: 800, y: 16, a: 0.4 },
-    { x: 2500, z: -300, w: 3000, d: 800, y: 16, a: 0.4 },
-    { x: 0, z: -1800, w: 5000, d: 900, y: 22, a: 0.5 },
-    { x: -400, z: 3300, w: 2400, d: 600, y: 8, a: 0.3 },
+    { x: 0, z: DOOR_Z + 200, w: 2600, d: 620, y: 10, a: 0.25 },
+    { x: -900, z: 2000, w: 1500, d: 700, y: 12, a: 0.3 },
+    { x: 1000, z: 1300, w: 1500, d: 700, y: 12, a: 0.3 },
   ]);
 
   yield;
   // ----- veils of cloud lying across the faces of the near pyramids -----
   const veils: PCloud[] = [];
   for (const [pi, n] of [
-    [0, 16],
-    [1, 8],
-    [2, 9],
-    [3, 6],
-    [4, 5],
+    [0, 9],
+    [1, 5],
+    [2, 6],
   ] as [number, number][]) {
     const p = PYRS[pi];
     for (let i = 0; i < n; i++) {
@@ -195,9 +196,9 @@ function* starsSteps(props: WorldProps) {
     skyGlows.push({ p: c.toArray() as V3, size: size * 3, col, k: 0.18 });
   }
   // gold strings hung from the band to the sea
-  for (const az of [-150, -100, -58, -14, 30, 74, 118, 160]) {
+  for (const az of [-130, -58, 30, 118]) {
     const p = skyAt(az, 0, SKY_RING.r * 0.97);
-    segs.push({ a: [p[0], SKY_RING.y - SKY_RING.h * 0.4, p[2]], b: [p[0], -20, p[2]], w: 7, col: GOLD });
+    segs.push({ a: [p[0], SKY_RING.y - SKY_RING.h * 0.4, p[2]], b: [p[0], -20, p[2]], w: 6, col: GOLD });
   }
 
   yield;
@@ -209,6 +210,29 @@ function* starsSteps(props: WorldProps) {
     { c: [0, 120, 300], r: 300, n: props.mobile ? 6 : 12, size: 3, speed: 12 },
   ];
 
+  yield;
+  // ----- the worlds of the way, with their rings, and the angels on the golden one -----
+  const near: Soft[] = [];
+  const gy0 = SEA_H(GOLDEN.x, GOLDEN.z) - 32 - 0;
+  const gc: V3 = [GOLDEN.x, gy0, GOLDEN.z];
+  near.push({ p: gc, r: GOLDEN.r, col: [0.82, 0.46, 0.17], glow: 0.1, seed: 0.37 });
+  glows.push({ p: [GOLDEN.x, gy0 + GOLDEN.r * 0.6, GOLDEN.z], size: GOLDEN.r * 3.2, col: [1, 0.7, 0.32], k: 0.34 });
+  for (const [rk, rr] of [[1.75, 0.012], [1.95, 0.008]] as const) k.add(new THREE.TorusGeometry(GOLDEN.r * rk, GOLDEN.r * rr, 5, 140), gc, GOLD, { glow: 0.9, rot: [Math.PI / 2 - 0.72, 0, 0.12], scale: [1, 1, 0.4] });
+  for (let i = 0; i < 7; i++) {
+    const a = r() * Math.PI * 2;
+    const d = 14 + r() * GOLDEN.r * 0.34;
+    const x = GOLDEN.x + Math.cos(a) * d;
+    const z = GOLDEN.z + Math.sin(a) * d;
+    const y = gy0 + Math.sqrt(GOLDEN.r * GOLDEN.r - d * d) - 1;
+    angel(k, [x, y, z], 5 + r() * 2.5, a + Math.PI, r() < 0.5 ? [0.7, 0.42, 0.16] : [0.2, 0.34, 0.66], { glow: 0.5, wing: r() < 0.5 ? [0.9, 0.7, 0.4] : [0.5, 0.7, 0.9] });
+  }
+  for (const w of WORLD_SET) {
+    const wy = SEA_H(w.x, w.z) + w.up + w.r * 0.3;
+    near.push({ p: [w.x, wy, w.z], r: w.r, col: w.col, glow: 0.12, seed: r() });
+    glows.push({ p: [w.x, wy, w.z], size: w.r * 4, col: w.col, k: 0.4 });
+    if (w.ring) k.add(new THREE.TorusGeometry(w.r * w.ring, w.r * 0.014, 5, 110), [w.x, wy, w.z], GOLD, { glow: 0.9, rot: [Math.PI / 2 - w.tilt!, 0, w.tilt! * 0.6], scale: [1, 1, 0.4] });
+  }
+  const nearWorlds = softGeometry(near, props.mobile ? 2 : 3);
   yield;
   const garden = buildGarden(props.mobile, props.effects);
   yield;
@@ -223,19 +247,20 @@ function* starsSteps(props: WorldProps) {
       orb: makeSoftMaterial({ shade: [0.35, 0.4, 0.7], under: [0.4, 0.4, 0.6], rim: 1.4, dab: 0.8, amb: 1.2, key: 0.9, sway: 0.4 }),
       thread: makeLineMaterial({ gain: 1.3, minW: 0.0022, flow: 0.6 }),
       figs: makeLineMaterial({ figs: garden.figs.length, gain: 1.6, minW: 0.0018 }),
-      dust: makePoints({ a: [1.0, 0.92, 0.7], b: [0.7, 0.84, 1.0], scale: 420, gain: 0.9, max: 30, drift: 1.2 }),
-      motes: makePoints({ a: [1.0, 0.9, 0.62], b: [0.74, 0.88, 1.0], scale: 500, gain: 0, max: 26, drift: 1.8 }),
+            motes: makePoints({ a: [1.0, 0.9, 0.62], b: [0.74, 0.88, 1.0], scale: 500, gain: 0, max: 26, drift: 1.8 }),
     },
     wisps,
     wispMat: makeWispMaterial(),
     set: setGeo,
+    nearWorlds,
+    nearMat: makeSoftMaterial({ shade: [0.34, 0.4, 0.66], under: [0.34, 0.34, 0.54], rim: 1.5, dab: 0.8, amb: 1.25, key: 0.95, air: 0.15 }),
     skySet,
     tempera: makeTempera({ amb: 1, key: 0.5, rim: [0.5, 0.42, 0.2], rimPow: 2.5 }),
     wingL: wingFan(-1, AS),
     wingR: wingFan(1, AS),
     AS,
     disc: makeRayDiscMaterial({ col: [1, 0.66, 0.26], hot: [1, 0.86, 0.56], rays: 120, gain: 0.42, disc: 0.2, near: [20, 60] }),
-    sea: terrainGeometry(def.terrain!, 9000, props.mobile ? 170 : 280),
+    sea: terrainGeometry(def.terrain!, 24000, props.mobile ? 190 : 300),
     seaMat: makeWaveSea([0, 420, DOOR_Z + 20], pyramidReflectGLSL()),
     band: makeStarBand(),
     orbs: softGeometry(orbs, props.mobile ? 2 : 3),
@@ -282,14 +307,16 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
   const wings = useRef<(THREE.Group | null)[]>([]);
   const sky = useRef<THREE.Group>(null);
   const rings = useRef<(THREE.Mesh | null)[]>([]);
-  const walker = useRef<THREE.Group>(null);
   const doorGlow = useRef<THREE.Group>(null);
   const globeGlow = useRef<THREE.Group>(null);
+  const goldGlow = useRef<THREE.Group>(null);
   const clock = useRef(0);
   // the beats of the journey: star-motes begin to stream along the way; the globe wakes as the plane comes to it;
   // a soft glow grows toward the door as the way out comes near
   const motes = useMoment("stars", { id: "motes", after: 2, ease: 6 });
   const globeM = useMoment("stars", { id: "globe", at: [GLOBE.x, 60, GLOBE.z], within: 800, ease: 5 });
+  // the golden world wakes (its glow rises and its light spills over the sea) as the plane comes to fly over it
+  const goldM = useMoment("stars", { id: "golden", at: [GOLDEN.x, 100, GOLDEN.z], within: 1000, ease: 5 });
   const welcome = useMoment("stars", { id: "welcome", at: [0, 30, DOOR_Z], within: 1800, ease: 9 });
   const b = useDisposable(() => buildStars(props), [props.mobile, props.effects > 0.5]);
   useEffect(
@@ -305,16 +332,13 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
     clock.current = t;
     b.gardenMats.motes.uniforms.uGain.value = 1.1 * motes.k.value;
     if (doorGlow.current) doorGlow.current.scale.setScalar(0.25 + 1.05 * welcome.k.value);
+    if (goldGlow.current) goldGlow.current.scale.setScalar(0.3 + 1.1 * goldM.k.value);
     if (globeGlow.current) globeGlow.current.scale.setScalar(0.4 + 0.9 * globeM.k.value);
     // the hanging worlds' rings turn slowly, each its own way
     g.rings.forEach((rg, i) => {
       const m = rings.current[i];
       if (m) m.rotation.set(rg.tilt, t * 0.05 * (i % 2 ? 1 : -1) + i, 0);
     });
-    if (walker.current) {
-      const x = Math.sin(t * 0.04) * 60;
-      walker.current.position.set(x, RIVER.y + Math.abs(Math.sin(t * 1.3)) * 0.5, RIVER.z);
-    }
     // a figure draws itself when the plane comes within sight of it, and once drawn it stays
     const prog = b.gardenMats.figs.uniforms.uProg.value as Float32Array;
     const cx = camera.position.x - ORIGIN.x;
@@ -340,7 +364,6 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       {b.veilPyr.map((v, i) => (
         <mesh key={`v${i}`} geometry={v.geo} material={v.mat} position={[v.p.x, 0, v.p.z]} renderOrder={2 + (i % 2) * 0.1} />
       ))}
-      <mesh geometry={b.garden.set} material={b.tempera} />
       <mesh geometry={b.garden.globeGeo} material={b.garden.globeMat} position={[GLOBE.x, b.garden.gy, GLOBE.z]} renderOrder={3} />
       <group position={[GLOBE.x, b.garden.gy, GLOBE.z]}>
         <mesh geometry={b.garden.starRing} material={b.garden.starRingMat} renderOrder={3.2} />
@@ -350,12 +373,11 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       <group ref={globeGlow} position={[GLOBE.x, b.garden.gy, GLOBE.z]}>
         <Halos list={GLOBE_GLOW} kind={2} />
       </group>
-      <mesh geometry={b.garden.river} material={b.garden.riverMat} renderOrder={3} />
-      <points geometry={b.garden.riverDust} material={b.gardenMats.dust} renderOrder={4} />
-      <group ref={walker}>
-        <mesh geometry={b.garden.walker} material={b.tempera} />
-      </group>
       <mesh geometry={b.garden.threads} material={b.gardenMats.thread} renderOrder={5} frustumCulled={false} />
+      <mesh geometry={b.nearWorlds} material={b.nearMat} frustumCulled={false} />
+      <group ref={goldGlow} position={[GOLDEN.x, SEA_H(GOLDEN.x, GOLDEN.z) + 60, GOLDEN.z]}>
+        <Halos list={GOLDEN_GLOW} kind={2} />
+      </group>
       <mesh geometry={b.garden.orbs} material={b.gardenMats.orb} frustumCulled={false} />
       {b.garden.rings.map((rg, i) => (
         <mesh key={`r${i}`} ref={(el) => void (rings.current[i] = el)} geometry={b.garden.ringGeo} material={b.tempera} position={rg.p} scale={[rg.rad, rg.rad, rg.rad * 0.3]} />

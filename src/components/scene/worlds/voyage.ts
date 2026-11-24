@@ -154,10 +154,10 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
   stars: {
     label: "Sonata of the Stars",
     zenith: [0.003, 0.011, 0.03],
-    upper: [0.006, 0.03, 0.05],
-    horizon: [0.014, 0.062, 0.07],
-    glow: [0.6, 0.52, 0.3],
-    amb: [0.13, 0.23, 0.26],
+    upper: [0.01, 0.034, 0.05],
+    horizon: [0.07, 0.078, 0.062],
+    glow: [0.9, 0.62, 0.28],
+    amb: [0.17, 0.22, 0.24],
     key: [1.0, 0.9, 0.66],
     keyI: 0.95,
     sunAz: 0,
@@ -411,14 +411,15 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     place: "sea",
     air: AIR.stars,
     // (clear air: the pyramids stand kilometres off, their feet in haze and their points in the stars)
-    fog: [0.00012, 0.0032],
-    // a rolling swell: long seas the way rises and falls over, a few metres, and smaller ripples laid on them
+    fog: [0.00014, 0.0032],
+    // a great rolling swell: long seas the way rides up and over, twenty metres from trough to crest (the sea is calmed
+    // flat where the door stands, so the greatest pyramid's foot meets it level)
     terrain: {
       base: 0,
       sines: [
-        [0.0035, 0.026, 0.3, 5],
-        [0.008, 0.015, 2.2, 3.5],
-        [-0.012, 0.006, 1.1, 2],
+        [0.0042, 0.0058, 0.18, 13],
+        [-0.0031, 0.0086, 2.2, 9],
+        [0.0105, 0.0042, 1.1, 4],
         [0.02, -0.05, 4.0, 0.8],
         [0.05, 0.03, 1.0, 0.4],
       ],
@@ -433,20 +434,24 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     entry: { x: 0, z: 3300, above: 30, yaw: 0 },
     // the door at the foot of the greatest pyramid (stars/pyramids.ts DOOR_Z): the way runs straight into it
     gate: { x: 0, z: 586, above: 30, yaw: 0 },
-    // in low over the sea, a long way; between the two near pyramids, which stand close beside the way; then straight
-    // on to the door of the greatest
+    // in low over the swell, a long way: through the glass globe (it stands in the sea and the plane goes in and out
+    // through it), over the top of the golden world that lies half sunk in the sea, then down toward the foot of the
+    // greatest pyramid and straight in at its door (the heights here are above the swell, which is -20..+17 m)
     path: [
       [0, 3300, 30],
-      [0, 3000, 27],
-      [-110, 2600, 25],
-      [-250, 2200, 27],
-      [-290, 1850, 29],
-      [-220, 1500, 29],
-      [-100, 1180, 28],
-      [0, 930, 28],
-      [0, 760, 30],
-      [0, 640, 30],
-      [0, 586, 30],
+      [-80, 3050, 36],
+      [-300, 2750, 38],
+      [-560, 2450, 55],
+      [-640, 2350, 80],
+      [-640, 2150, 62],
+      [-520, 1800, 42],
+      [-300, 1500, 48],
+      [-220, 1330, 88],
+      [-120, 1150, 125],
+      [-40, 980, 78],
+      [0, 840, 48],
+      [0, 700, 34],
+      [0, 600, 30],
       [0, 556, 30],
     ],
     obstacles: [

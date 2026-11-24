@@ -15,12 +15,10 @@ export const PYRS: Pyr[] = [
   { x: 0, z: -300, w: 900, h: 2600, seed: 1.3 },
   { x: -1750, z: 1900, w: 470, h: 1150, seed: 4.1 },
   { x: 1850, z: 1500, w: 560, h: 1350, seed: 7.7 },
-  { x: -3000, z: -1200, w: 900, h: 2200, seed: 2.2 },
-  { x: 3300, z: -800, w: 800, h: 1800, seed: 5.5 },
-  { x: -1300, z: -2700, w: 1000, h: 2700, seed: 9.1 },
-  { x: 1900, z: -3000, w: 1100, h: 3100, seed: 3.3 },
-  { x: -4300, z: 700, w: 700, h: 1600, seed: 6.6 },
-  { x: 4300, z: 1900, w: 600, h: 1400, seed: 8.4 },
+  // (three far ones, only: great and soft in the haze, so the near ones stand out of the distance)
+  { x: -3600, z: -1100, w: 900, h: 2200, seed: 2.2 },
+  { x: 3700, z: -1500, w: 850, h: 1900, seed: 5.5 },
+  { x: -1300, z: -3600, w: 1000, h: 2900, seed: 9.1 },
 ];
 export const GREAT = PYRS[0];
 // the door in the greatest one's near face: [half width, height where the straight sides end, height of the point]
