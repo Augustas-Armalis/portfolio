@@ -431,7 +431,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
   });
   return (
     <>
-      <WorldBase id="funeral" def={def} pal={FUNERAL_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.86, 0.56]} pathGain={0.16} angels={false} marks={false} gateSize={[PORTAL.half, PORTAL.rise]} />
+      <WorldBase id="funeral" def={def} pal={FUNERAL_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[1, 0.86, 0.56]} pathGain={0} angels={false} marks={false} gateSize={[PORTAL.half, PORTAL.rise]} />
       <mesh ref={shell} geometry={b.shellGeo} material={b.grainMat} frustumCulled={false} renderOrder={-9} />
       <mesh geometry={b.shellGeo} material={b.auroraMat} position={[0, 0, 0]} frustumCulled={false} renderOrder={-8.5} ref={aurora} />
       <mesh geometry={b.quad} material={b.moonMat} frustumCulled={false} renderOrder={-8} />
