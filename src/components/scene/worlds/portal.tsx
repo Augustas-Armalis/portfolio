@@ -409,7 +409,7 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
           float wide = sqrt(max(1.0 - head * head, 0.0));
           float dx = abs(vUv.x) / max(wide, 0.001);
           float edge = max(dx, max(head, 1.0 - smoothstep(0.0, 0.04, vUv.y)));
-          float a = (1.0 - smoothstep(0.72, 0.98, edge)) * uPortalK;
+          float a = (1.0 - smoothstep(0.8, 1.0, edge)) * uPortalK;
           // that world's own light, as it will be seen from inside it: nothing added, nothing laid over it
           vec3 col = uLiveK > 0.0 ? texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb : vec3(0.0);
           if (uStillOn > 0.5 && uLiveK < 1.0) {
