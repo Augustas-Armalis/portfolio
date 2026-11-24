@@ -112,6 +112,11 @@ function creep() {
     if (loader.progress < ceil) {
       loader.progress += (ceil - loader.progress) * (1 - Math.exp(-dt / 2.6));
       subs.forEach((f) => f());
+    } else if (loader.progress < 0.97) {
+      // (when the real work stalls, e.g. the shaders compiling, the count never stands still at some number: it
+      // keeps drifting on very slowly toward the end, so a long wait reads as a long, smooth load)
+      loader.progress += (0.97 - loader.progress) * (1 - Math.exp(-dt / 22));
+      subs.forEach((f) => f());
     }
     requestAnimationFrame(step);
   };
