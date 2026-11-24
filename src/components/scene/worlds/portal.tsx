@@ -424,7 +424,7 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
           float wide = sqrt(max(1.0 - head * head, 0.0));
           float dx = abs(vUv.x) / max(wide, 0.001);
           float edge = max(dx, max(head, 1.0 - smoothstep(0.0, 0.04, vUv.y)));
-          float a = (1.0 - smoothstep(0.8, 1.0, edge)) * uPortalK;
+          float a = (1.0 - smoothstep(0.9, 1.0, edge)) * uPortalK;
           // that world's own light, as it will be seen from inside it: nothing added, nothing laid over it
           vec3 col = uLiveK > 0.0 ? texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb : vec3(0.0);
           if (uStillOn > 0.5 && uLiveK < 1.0) {
@@ -440,7 +440,7 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
           col = mix(vec3(lum), col, 1.0 + 0.3 * uPortalFar) * (1.0 + 0.45 * uPortalFar) * pulse;
           vec3 aired = ${id === "home" ? "homeAir(col, vW)" : "applyAir(col, vW)"};
           col = mix(aired, col, 0.7 * uPortalFar);
-          float rim = smoothstep(0.62, 0.9, edge) * (1.0 - smoothstep(0.93, 1.0, edge));
+          float rim = smoothstep(0.84, 0.95, edge) * (1.0 - smoothstep(0.97, 1.0, edge));
           col += rim * vec3(1.0, 0.86, 0.6) * (0.35 + 0.9 * uPortalFar) * pulse;
           a = max(a, rim * 0.55 * uPortalK);
           gl_FragColor = vec4(col, a);
