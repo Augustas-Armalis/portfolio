@@ -78,6 +78,10 @@ const smooth01 = (t: number) => {
 // The six speeds (voyage.ts SPEED_STEPS, 0..1) are evenly spread from `min`, a slow drift, to `max`, fast;
 // `cruise` is where the eye's widening for speed (fovT) eases off.
 export const SPEED = { min: 4, cruise: 28, max: 60 };
+// How far the paper leans into a full turn (radians): a gentle bank, about 35 degrees. The turn itself is the same as
+// it was at the deeper lean it had before (0.8 rad): TURN_PER_BANK gives the heading its rate from the smaller bank.
+const BANK = 0.62;
+const TURN_PER_BANK = 0.8 / BANK;
 // how far the chase camera stands back (1 = as designed), kept for the rest of the visit
 export const zoomMem = { v: 1, min: 0.55, max: 3.4 };
 // The bank keys (A / D and the arrows), held by the plane itself while it flies with a keyboard.
@@ -681,14 +685,14 @@ export function Plane({
     if (high > 0) pitchT = Math.min(pitchT, pitchT * (1 - high) - high * 0.3);
 
     // bank and pitch are critically damped springs: they arrive, they never snap or ring
-    const rollT = THREE.MathUtils.clamp(sx, -1, 1) * 0.8;
+    const rollT = THREE.MathUtils.clamp(sx, -1, 1) * BANK;
     // (rolling into a turn is a little quicker than levelling out of it: it answers at once and lets go gently)
     spring2(st, "roll", "rollV", rollT, Math.abs(rollT) > Math.abs(st.roll) ? 4.8 : 4.0, dt);
     spring2(st, "pitch", "pitchV", pitchT, 4.2, dt);
     // The bank is the turn (slow flight turns a little tighter). The bank is already a spring, so the rate of turn
     // has no corner in it and the heading swings in and out of a turn; a second spring on top of it only made
     // the plane wait half a second before it answered and carry on turning long after the key was let go.
-    st.yawR = st.roll * (0.62 + 1.5 / Math.max(st.speed, 3));
+    st.yawR = st.roll * TURN_PER_BANK * (0.62 + 1.5 / Math.max(st.speed, 3));
     st.yaw -= st.yawR * dt;
     // speed follows the throttle; diving gathers a little, climbing spends a little
     // the kings' wood is gone through slowly
@@ -942,7 +946,7 @@ export function Plane({
         cam.updateProjectionMatrix();
       }
       // the mist: from a brisk pace up, more in a bank and a dive; none in the first moments off the desk or under cloud
-      const mist = smooth01((st.speed - 8) / 16) * (0.75 + 0.75 * Math.min(1, Math.abs(st.roll) / 0.6) + 1.1 * clamp01(-st.pitch / 0.45)) * smooth01((st.t - 1.6) / 2) * (1 - voyage.veil);
+      const mist = smooth01((st.speed - 8) / 16) * (0.75 + 0.75 * Math.min(1, Math.abs(st.roll) / 0.47) + 1.1 * clamp01(-st.pitch / 0.45)) * smooth01((st.t - 1.6) / 2) * (1 - voyage.veil);
       sync(dt, cam, Math.min(1.4, mist));
     },
     beginLand: (cam) => {
