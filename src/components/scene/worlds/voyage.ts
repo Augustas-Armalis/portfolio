@@ -414,16 +414,16 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     air: AIR.stars,
     // (clear air: the pyramids stand kilometres off, their feet in haze and their points in the stars)
     fog: [0.00014, 0.0032],
-    // a great rolling swell: long seas the way rides up and over, twenty metres from trough to crest (the sea is calmed
+    // a great rolling swell: long seas the way rides up and over, seventy metres from trough to crest (the sea is calmed
     // flat where the door stands, so the greatest pyramid's foot meets it level)
     terrain: {
       base: 0,
       sines: [
-        [0.0042, 0.0058, 0.18, 13],
-        [-0.0031, 0.0086, 2.2, 9],
-        [0.0105, 0.0042, 1.1, 4],
-        [0.02, -0.05, 4.0, 0.8],
-        [0.05, 0.03, 1.0, 0.4],
+        [0.005, 0.0066, 1.98, 22],
+        [-0.0034, 0.0092, 2.2, 12],
+        [0.0105, 0.0042, 1.1, 5],
+        [0.02, -0.05, 4.0, 2.4],
+        [0.05, 0.03, 1.0, 1.0],
       ],
       bumps: [],
       rim: [1, 2, 0],
@@ -438,19 +438,19 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     gate: { x: 0, z: 586, above: 30, yaw: 0 },
     // in low over the swell, a long way: through the glass globe (it stands in the sea and the plane goes in and out
     // through it), over the top of the golden world that lies half sunk in the sea, then down toward the foot of the
-    // greatest pyramid and straight in at its door (the heights here are above the swell, which is -20..+17 m)
+    // greatest pyramid and straight in at its door (the heights here are above the swell, which runs -40..+40 m)
     path: [
       [0, 3300, 30],
-      [-80, 3050, 36],
-      [-300, 2750, 38],
-      [-560, 2450, 55],
-      [-640, 2350, 80],
-      [-640, 2150, 62],
-      [-520, 1800, 42],
-      [-300, 1500, 48],
-      [-240, 1380, 110],
-      [-150, 1230, 140],
-      [-100, 1090, 150],
+      [-80, 3050, 34],
+      [-300, 2750, 36],
+      [-560, 2450, 50],
+      [-640, 2350, 70],
+      [-640, 2150, 56],
+      [-520, 1800, 40],
+      [-300, 1500, 60],
+      [-240, 1380, 112],
+      [-150, 1230, 142],
+      [-100, 1090, 152],
       [-60, 960, 112],
       [-20, 850, 66],
       [0, 720, 38],

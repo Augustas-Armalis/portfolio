@@ -44,7 +44,13 @@ export function makeWaveSea(light: V3, reflect = "vec4 worldReflect(vec3 P, vec3
         base = mix(base, vec3(0.020, 0.040, 0.105), smoothstep(0.5, 0.85, f2) * 0.5);
         base = mix(base, vec3(0.095, 0.062, 0.028), smoothstep(0.62, 0.85, f3) * 0.4);
         // each swell lighter toward its crest (the height itself), darker in the trough
-        base *= 0.55 + 1.1 * smoothstep(-22.0, 22.0, h);
+        // (the swell must read at a glance from the plane: dark troughs, lit crests, each crest rimmed in gold, and the slopes
+        // that face the eye lit from behind it)
+        float hn = smoothstep(-34.0, 34.0, h);
+        base *= 0.3 + 1.7 * hn * hn;
+        float facing = max(dot(n, normalize(vec3(0.25, 0.75, 0.6))), 0.0);
+        base *= 0.55 + 0.9 * facing;
+        base += vec3(0.03, 0.09, 0.09) * pow(facing, 2.0) * 2.5;
         // the light that lies on the sea toward the pyramid: a slope turned to it takes the gold
         vec3 toL = normalize(vec3(uLight.x - p.x, 320.0, uLight.z - p.y));
         float nl = max(dot(n, toL), 0.0);
@@ -52,7 +58,7 @@ export function makeWaveSea(light: V3, reflect = "vec4 worldReflect(vec3 P, vec3
         float reach = exp(-dl / 2600.0);
         vec3 gold = vec3(1.0, 0.78, 0.4);
         vec3 col = base * (uSkyCol * 2.2 + 0.18);
-        col += gold * (pow(nl, 2.0) * 0.08 + nl * 0.02 + 0.01 + 0.1 * smoothstep(-2.0, 24.0, h)) * reach * glowK() * 2.0;
+        col += gold * (pow(nl, 2.0) * 0.08 + nl * 0.02 + 0.01 + 0.1 * smoothstep(-2.0, 24.0, h) + 0.34 * pow(smoothstep(0.62, 1.0, hn), 2.0)) * (0.35 + 0.65 * reach) * glowK() * 2.0;
         col += gold * exp(-dl * dl / (uLight.y * uLight.y * 1.6)) * 0.05 * glowK() * 2.0;
         // its road across the waves toward the eye, broken into glints on the crests
         vec2 dL = p - uLight.xz;
