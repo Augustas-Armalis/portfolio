@@ -2,7 +2,7 @@
 
 import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransform, type AnimationPlaybackControls, type MotionValue } from "motion/react";
 import { flushSync } from "react-dom";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { apps, bookCall, dockApps, gallery, gameApps, mainWork, owner, playableTracks, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
 import { flightMusicPrime } from "@/lib/flightMusic";
 import { handoff } from "@/lib/handoff";
@@ -85,7 +85,7 @@ function Island({ real }: { real: boolean }) {
             </motion.div>
           )}
           {mode === "big" && track && (
-            <motion.div key="b" initial={{ opacity: 0, filter: "blur(6px)" }} animate={{ opacity: 1, filter: "blur(0px)" }} exit={{ opacity: 0 }} transition={{ duration: 0.25, delay: 0.08 }} className="absolute inset-0 flex flex-col px-5 pb-4 pt-5">
+            <motion.div key="b" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25, delay: 0.08 }} className="absolute inset-0 flex flex-col px-5 pb-4 pt-5">
               <div className="flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={track.cover} alt="" className="h-[52px] w-[52px] rounded-[16px] object-cover" />
@@ -313,6 +313,21 @@ function HomeIcon({ id, label, onOpen }: { id: AppId; label?: string; onOpen: (i
 
 // ---------- home: pages of widgets and apps ----------
 
+// true while an app covers the home screen: its clocks and slideshows stop ticking, and it is not drawn at all
+const HomeCovered = createContext(false);
+// an interval that only runs while the home screen is in sight
+function useHomeInterval(fn: () => void, ms: number, atOnce = false) {
+  const covered = useContext(HomeCovered);
+  const f = useRef(fn);
+  f.current = fn;
+  useEffect(() => {
+    if (covered) return;
+    if (atOnce) f.current();
+    const iv = window.setInterval(() => document.visibilityState === "visible" && f.current(), ms);
+    return () => window.clearInterval(iv);
+  }, [covered, ms, atOnce]);
+}
+
 // A tap on anything that opens grows the app out of that thing's own rectangle.
 type Open = (id: AppId, o: Origin) => void;
 const rectOf = (el: Element): Origin => {
@@ -371,16 +386,11 @@ function PlayingWidget({ onOpen }: { onOpen: Open }) {
 // The time where he is: a plain clock face, Kaunas under it.
 function ClockWidget({ onOpen }: { onOpen: Open }) {
   const [now, setNow] = useState<{ h: number; m: number; s: number; label: string } | null>(null);
-  useEffect(() => {
-    const tick = () => {
-      const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Vilnius", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).formatToParts(new Date());
-      const n = (t: string) => +(parts.find((x) => x.type === t)?.value ?? 0);
-      setNow({ h: n("hour") % 24, m: n("minute"), s: n("second"), label: `${String(n("hour") % 24).padStart(2, "0")}:${String(n("minute")).padStart(2, "0")}` });
-    };
-    tick();
-    const iv = window.setInterval(tick, 1000);
-    return () => window.clearInterval(iv);
-  }, []);
+  useHomeInterval(() => {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Vilnius", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).formatToParts(new Date());
+    const n = (t: string) => +(parts.find((x) => x.type === t)?.value ?? 0);
+    setNow({ h: n("hour") % 24, m: n("minute"), s: n("second"), label: `${String(n("hour") % 24).padStart(2, "0")}:${String(n("minute")).padStart(2, "0")}` });
+  }, 1000, true);
   const hand = (deg: number, len: number, w: number, col: string) => <line x1="50" y1="50" x2={50 + Math.sin((deg * Math.PI) / 180) * len} y2={50 - Math.cos((deg * Math.PI) / 180) * len} stroke={col} strokeWidth={w} strokeLinecap="round" />;
   return (
     <Widget app="about" onOpen={onOpen} className={`flex ${WIDGET_H} flex-col items-center justify-between p-3`}>
@@ -410,10 +420,7 @@ function ClockWidget({ onOpen }: { onOpen: Open }) {
 const STACK: AppId[] = projectGroups.slice(0, 2).flatMap((g) => g.apps).filter((id) => projects[id]);
 function ProjectsWidget({ onOpen }: { onOpen: Open }) {
   const [i, setI] = useState(0);
-  useEffect(() => {
-    const iv = window.setInterval(() => setI((n) => (n + 1) % STACK.length), 3600);
-    return () => window.clearInterval(iv);
-  }, []);
+  useHomeInterval(() => setI((n) => (n + 1) % STACK.length), 3600);
   const id = STACK[i];
   const p = projects[id]!;
   return (
@@ -421,7 +428,7 @@ function ProjectsWidget({ onOpen }: { onOpen: Open }) {
       <span className={kicker}>Projects</span>
       <span className="relative mt-2 block flex-1">
         <AnimatePresence initial={false} mode="popLayout">
-          <motion.span key={id} className="absolute inset-0 flex flex-col justify-between" initial={{ opacity: 0, y: 10, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -8, filter: "blur(4px)" }} transition={{ duration: 0.45, ease: EASE_OUT }}>
+          <motion.span key={id} className="absolute inset-0 flex flex-col justify-between" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.45, ease: EASE_OUT }}>
             <AppIcon id={id} size={46} />
             <span>
               <span className="block truncate text-[17px] font-semibold leading-[21px] tracking-[-0.022em]">{p.name}</span>
@@ -439,10 +446,7 @@ function PhotoWidget({ onOpen }: { onOpen: Open }) {
   // a few of his photographs: the Gallery's Best of, one after another
   const best = useMemo(() => (gallery.albums.find((x) => x.id === "best")?.items ?? []).map((id) => gallery.media.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m && m.kind === "photo"), []);
   const [i, setI] = useState(0);
-  useEffect(() => {
-    const iv = window.setInterval(() => setI((n) => (n + 1) % best.length), 6000);
-    return () => window.clearInterval(iv);
-  }, [best.length]);
+  useHomeInterval(() => setI((n) => (n + 1) % Math.max(1, best.length)), 6000);
   const s = best[i];
   if (!s) return null;
   return (
@@ -821,8 +825,10 @@ type WindowProps = {
   onClosed: () => void;
   onPop: () => void;
   onLeaving?: (leaving: boolean) => void;
+  // whether the home screen is fully hidden under this app (so it can stop drawing)
+  onCover?: (covered: boolean) => void;
 };
-function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, onPop, onLeaving }: WindowProps) {
+function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, onPop, onLeaving, onCover }: WindowProps) {
   const [vw] = useState(() => window.innerWidth);
   const [vh] = useState(() => window.innerHeight);
   const o = origin ?? { x: vw / 2 - 31, y: vh / 2 - 31, w: 62, h: 62 };
@@ -852,11 +858,13 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
     anim.current?.stop();
     // on its way back to its icon the app no longer covers the home screen: the icons take taps again at once
     onLeaving?.(target === 0);
+    if (target === 0) onCover?.(false);
     anim.current = animate(p, target, {
       ...(target === 1 ? M.sheet : M.ui),
       velocity,
       onComplete: () => {
         if (target === 0) onClosed();
+        else onCover?.(true);
       },
     });
     animate(lift, 0, M.ui);
@@ -869,7 +877,10 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
   useEffect(() => {
     if (enter === "push" && !reducedMotion()) {
       topX.set(vw);
-      slide.current = animate(topX, 0, M.ui);
+      slide.current = animate(topX, 0, { ...M.ui, onComplete: () => onCover?.(true) });
+    } else if (enter === "push") {
+      topX.set(0);
+      onCover?.(true);
     } else {
       topX.set(0);
       to(1);
@@ -878,6 +889,8 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const under = useTransform(topX, (v) => (Math.min(v, vw) - vw) * 0.3);
+  // the app under is only drawn while the one in front is moving off it
+  const underShown = useTransform(topX, (v) => (v > 0.5 ? "visible" : "hidden"));
   const dim = useTransform(topX, [0, vw], [0.16, 0]);
   const top = depth === 0;
 
@@ -901,10 +914,12 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
       bounce: 0,
       duration: 0.32,
       velocity,
-      onComplete: () => {
-        flushSync(onPop);
-        topX.set(0);
-      },
+      // a frame later: the animation writes its last value after onComplete, which would undo the reset
+      onComplete: () =>
+        requestAnimationFrame(() => {
+          flushSync(onPop);
+          topX.set(0);
+        }),
     });
   };
   const mode = useRef<"nested" | "pop" | "close">("close");
@@ -914,6 +929,7 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
     start: () => {
       slide.current?.stop();
       mode.current = backs.current.length ? "nested" : canPop ? "pop" : "close";
+      if (mode.current === "close") onCover?.(false);
       base.current = mv().get();
     },
     move: (dx) => mv().set(Math.max(0, base.current + dx)),
@@ -922,7 +938,8 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
       const at = m.get();
       const go = v > 500 || (at > vw * 0.4 && v > -150);
       if (!go) {
-        slide.current = animate(m, 0, { ...M.fling, velocity: v });
+        const close = mode.current === "close";
+        slide.current = animate(m, 0, { ...M.fling, velocity: v, onComplete: () => close && onCover?.(true) });
         return;
       }
       if (mode.current === "pop") return pop(v);
@@ -934,15 +951,18 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
         velocity: v,
         onComplete: () => {
           if (mode.current === "close") return onClosed();
-          // the screen under comes back in from a little to the left, as the one under a push does
-          const back = backs.current[backs.current.length - 1];
-          instantly(
-            () => back?.(),
-            () => {
-              slide.current = animate(navX, 0, M.ui);
-            },
-          );
-          navX.set(-vw * 0.3);
+          // (a frame later, for the same reason as pop)
+          requestAnimationFrame(() => {
+            // the screen under comes back in from a little to the left, as the one under a push does
+            const back = backs.current[backs.current.length - 1];
+            instantly(
+              () => back?.(),
+              () => {
+                slide.current = animate(navX, 0, M.ui);
+              },
+            );
+            navX.set(-vw * 0.3);
+          });
         },
       });
     },
@@ -954,6 +974,7 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
     // one finger owns the gesture: a second touch does not restart it from somewhere else
     if (drag.current) return;
     anim.current?.stop();
+    onCover?.(false);
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     } catch {
@@ -991,7 +1012,7 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
   return (
     <motion.div
       className={`absolute inset-0 ${top ? "shadow-[-12px_0_32px_rgb(0_0_0/0.2)]" : ""}`}
-      style={{ x: top ? topX : depth === 1 ? under : 0, zIndex: 60 - depth, visibility: depth > 1 || (!top && hidden) ? "hidden" : undefined }}
+      style={{ x: top ? topX : depth === 1 ? under : 0, zIndex: 60 - depth, visibility: depth > 1 || (!top && hidden) ? "hidden" : depth === 1 ? underShown : undefined }}
       inert={!top}
       data-phone-window={id}
       data-depth={depth}
@@ -1040,6 +1061,10 @@ export default function PhoneOS() {
   const phoneBack = useOS((s) => s.phoneBack);
   const stack = useMemo(() => (phoneApp ? [...below, phoneApp] : []), [below, phoneApp]);
   const topX = useMotionValue(0);
+  const [covered, setCovered] = useState(false);
+  useEffect(() => {
+    if (!phoneApp) setCovered(false);
+  }, [phoneApp]);
   const lightBar = !(up) || !phoneApp || phoneApp === "terminal" || phoneApp === "doom" || phoneApp === "blocks" || (!!phoneApp && heroDark);
   const shutdown = useOS((s) => s.shutdown);
   const [power, setPower] = useState(false);
@@ -1090,7 +1115,11 @@ export default function PhoneOS() {
             exit={{ scale: 1, transition: { duration: 0.01 } }}
             transition={M.sheet}
           >
-            <Home onOpen={(id, o) => openPhoneApp(id, o)} onFly={fly} />
+            <HomeCovered.Provider value={covered && !!phoneApp}>
+              <div className="absolute inset-0" style={covered && phoneApp ? { visibility: "hidden" } : undefined}>
+                <Home onOpen={(id, o) => openPhoneApp(id, o)} onFly={fly} />
+              </div>
+            </HomeCovered.Provider>
           </motion.div>
         ) : (
           <motion.div
@@ -1121,6 +1150,7 @@ export default function PhoneOS() {
               onClosed={() => openPhoneApp(null)}
               onPop={phoneBack}
               onLeaving={setLeaving}
+              onCover={depth === 0 ? setCovered : undefined}
             />
           );
         })}
