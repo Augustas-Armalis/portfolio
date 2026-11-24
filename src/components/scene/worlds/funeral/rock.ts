@@ -577,7 +577,7 @@ const ROCK_GLSL = /* glsl */ `
   // planes as he drew them: the side toward the moon a teal-lit ultramarine, the side away near-black indigo
   vec3 rockLight(vec3 alb, vec3 n, float keyK){
     float lit = pow(clamp(dot(n, uKeyDir) * 0.8 + 0.2, 0.0, 1.0), 1.6);
-    return alb * (uSkyCol * (0.4 + 0.22 * n.y) * 1.1 + uKeyCol * (lit * 1.35 * keyK + 0.04));
+    return alb * (uSkyCol * (0.3 + 0.2 * n.y) * 1.0 + uKeyCol * (lit * 1.25 * keyK + 0.03));
   }
   const vec3 TEAL = vec3(0.05, 0.36, 0.33);
   const vec3 GOLD = vec3(1.0, 0.74, 0.3);
@@ -716,9 +716,9 @@ export function makeLedgeMaterial() {
           col += mix(vec3(1.0, 0.8, 0.45), vec3(0.45, 0.8, 0.7), 0.35 + 0.3 * vnoise(vec2(vK.z * 30.0, uTime * 0.2))) * (lip * 0.55 + exp(-vK.y * 2.2) * 0.12) * (0.85 + 0.15 * sin(uTime * 0.5)) * glowK() * 2.0;
         } else if (kind > 4.5) {
           // the scree under the cliff: the mountain's own rock
+          // (the scree's own facets are not shown: its normal is mostly the slope it lies on, for the paint as for the light)
+          n = normalize(mix(n, vec3(0.0, 1.0, 0.0), 0.8));
           vec3 alb = rockAlb(vLocal.xz, vLocal.y, n) * chalk(vLocal, dist);
-          // (the scree's own facets are not shown: its normal is half the slope it lies on)
-          n = normalize(mix(n, vec3(0.0, 1.0, 0.0), 0.45));
           col = rockLight(alb, n, 0.8);
           col += GOLD * exp(-max(vLocal.y, 0.0) * 0.0) * 0.0;
         } else if (kind < 2.5) {
