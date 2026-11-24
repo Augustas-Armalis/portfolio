@@ -957,8 +957,9 @@ export function Post({ level }: { level: number }) {
     p.cocU.uFocus.value = focusM;
     // far: at most a circle of about a pixel and a half at 700 lines; near: about three times that
     p.cocU.uFly.value.set(fly ? F.k : 0, 0.13, 0.4);
-    // (at the desk the field behind the subject falls away softly, never to a smear; the photo mode's lens is the visitor's own)
-    p.cocU.uBack.value = postCtl.photo || out ? 1 : 0.4;
+    // (the whole of the lens's blur behind the subject, at the desk too: let through at 0.4 it was a circle of two
+    // pixels on the far field, no depth of field anyone could see. The aperture Room sets keeps it a soft field, not a smear)
+    p.cocU.uBack.value = 1;
     p.cocU.uCocK.value = cocK;
     p.cocU.uBand.value = band;
     p.toneU.uExposure.value = gl.toneMappingExposure * postCtl.exposure;

@@ -1313,7 +1313,10 @@ function Scene({
     let focus = cam.position.distanceTo(v.tmp.set(...cfg.target));
     // after dark the lens stops down: the stars stay points of light
     let dof = 1 - 0.85 * SKY_U.uNight.value;
-    let aperture = 2.8;
+    // (f/2 at the desk: a 36 mm lens focused on the desk two metres off throws a circle of about seven pixels in nine
+    // hundred lines onto the far wood and the mountains, a field that is plainly soft behind a sharp desk. At f/2.8
+    // and a part of it, as it was, the circle was under two pixels and he could not see any depth of field at all.)
+    let aperture = 2;
     let band = 0.3;
     let sensor = 24;
     let look = 1;
