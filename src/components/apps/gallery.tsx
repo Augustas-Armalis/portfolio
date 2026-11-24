@@ -187,7 +187,8 @@ function Viewer({ list, index, setIndex, close }: { list: Media[]; index: number
     >
       <motion.div aria-hidden className={`absolute inset-0 ${compact ? "bg-black" : "bg-black/95"}`} style={{ opacity: bg }} />
       <motion.div style={{ opacity: bg }} className={`relative flex shrink-0 items-center gap-3 px-4 ${compact ? "pt-[calc(var(--phone-top)+4px)]" : "pt-3"}`}>
-        <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={close} icon={<Sym icon={X} size={17} weight="semibold" />} className="!h-10 !w-10" />
+        {/* on the Mac the window's traffic lights hold the top left: Close goes to the right */}
+        <Btn variant="glass-dark" capsule iconOnly size="md" label="Close" onClick={close} icon={<Sym icon={X} size={17} weight="semibold" />} className={`!h-10 !w-10 ${compact ? "" : "order-last"}`} />
         <div className="min-w-0 flex-1 text-center">
           <div className="truncate text-[15px] font-semibold">{m.title}</div>
           {many && <div className="text-[12px] text-white/50">{`${index + 1} of ${list.length}`}</div>}
