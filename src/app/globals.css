@@ -1609,3 +1609,12 @@ html:not(.dark) .win[data-win="settings"] aside[data-drag] {
     height: 26px;
   }
 }
+
+/* the dark apps' windows are dark from the first frame: while the app's code is still arriving the window is its
+   ground, not a white card that snaps to black (the login used to flash it on the Music window) */
+.win[data-win="records"],
+.win[data-win="terminal"],
+.win[data-win="doom"],
+.win[data-win="blocks"] {
+  background-color: #1c1c1e;
+}

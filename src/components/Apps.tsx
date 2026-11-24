@@ -24,6 +24,9 @@ const loaders = {
   notes: () => import("./apps/notes"),
   browser: () => import("./apps/browser"),
 };
+// The desktop opens with Music up: its code is fetched as soon as the lock screen shows, so the first window has
+// its content the moment it opens.
+export const warmFirstWindow = () => void loaders.records().catch(() => undefined);
 // Fetch every app's code once the machine is idle (not on a data-saver connection), so the first open is instant.
 let warmed = false;
 export function warmApps() {
