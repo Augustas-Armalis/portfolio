@@ -901,6 +901,12 @@ export function Post({ level }: { level: number }) {
     if (w !== p.w || h !== p.h) {
       p.w = w;
       p.h = h;
+      // (four samples an edge up to three million pixels; over that the pixels are small enough, and the frame dear enough, for two)
+      const want = COARSE || w * h > 3e6 ? 2 : 4;
+      if (p.full.samples !== want) {
+        p.full.samples = want;
+        p.full.dispose();
+      }
       p.full.setSize(w, h);
       p.ldr.setSize(w, h);
       p.sheet.setSize(w, h);

@@ -29,8 +29,8 @@ export type Quality = {
 export const PRESETS: Record<Preset, Quality> = {
   low: { preset: "low", dpr: 1, grass: 0.3, trees: 0.5, shadows: 512, effects: 0.3, far: 0.6, post: 0, budget: 1.2, fps: 0 },
   medium: { preset: "medium", dpr: 1.25, grass: 0.6, trees: 0.75, shadows: 1024, effects: 0.6, far: 0.8, post: 1, budget: 2.2, fps: 0 },
-  high: { preset: "high", dpr: 1.5, grass: 1, trees: 1, shadows: 2048, effects: 1, far: 1, post: 2, budget: 3, fps: 0 },
-  ultra: { preset: "ultra", dpr: 2, grass: 1.5, trees: 1, shadows: 4096, effects: 1, far: 1.25, post: 3, budget: 5, fps: 0 },
+  high: { preset: "high", dpr: 1.5, grass: 1, trees: 1, shadows: 2048, effects: 1, far: 1, post: 2, budget: 2.6, fps: 0 },
+  ultra: { preset: "ultra", dpr: 2, grass: 1.5, trees: 1, shadows: 4096, effects: 1, far: 1.25, post: 3, budget: 4.2, fps: 0 },
 };
 // The settings beyond the preset. Choosing a preset sets them to its own; changing any of them makes the choice
 // "custom" (the preset row then shows none lit). Resolution caps the pixels drawn (the render scale under it);
@@ -352,7 +352,7 @@ export function reportFrame(dt: number, up = true) {
 // every pixel; on a big screen the lower gears draw fewer and the picture is laid on the screen smoothly (the
 // steadying keeps edges calm): a 2560 x 1440 window is 3.7 million pixels, which at Medium is a third more work in
 // every pass than the gear is meant for.
-export const PIXEL_BUDGET: Record<Preset, number> = { low: 1.2, medium: 2.2, high: 3, ultra: 5 };
+export const PIXEL_BUDGET: Record<Preset, number> = { low: 1.2, medium: 2.2, high: 2.6, ultra: 4.2 };
 // Under that, a dynamic scale: a fallback for a view the gear cannot hold. Changing it resizes every target of the
 // lens (a long frame), so it moves rarely and never in flight: a step down after four seconds of frames slower than
 // 45 a second, a step up after eight seconds faster than 75, at least six seconds between steps, and while the
