@@ -10,6 +10,7 @@ import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common
 import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { GLSL_GROUND_LIFE, Kindling, archGeometry, Procession, RayedSun, RisingFlock, SunShafts, Walkers, boulderGeometry, heapBlobs, heapMesh, makeHeapMaterial, useDeepLens, type Beam, type Heap, type Lamp } from "./fairy/shared";
+import { archBand } from "./offering/arch";
 import { GATE, buildMassif, massifPoint, needleGeometry } from "./offering/rock";
 import { GoldStars, type Star } from "./offering/stars";
 import { Wings, seraph } from "./paradise/isle";
@@ -262,6 +263,18 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     seraph(k, wings, [ax, top, az], AS, Math.PI / 2, { robe: [0.8, 0.77, 0.7], wing: [0.74, 0.72, 0.7], pose: 5, glow: 0.14, open: 0.55, wide: 2.7, phase: 1.2 });
     const hand = new THREE.Vector3(ax + 0.52 * AS, top + 1.5 * AS, az - 0.13 * AS);
     glows.push({ p: [ax, top + AS * 1.7, az], size: 110, col: [1, 0.92, 0.74], k: 0.3 });
+    // the way on, at the far end of the gorge, as a great pointed arch: two thick piers and the arch over them, in the
+    // same dark rock as the needles that stood here, a lit thread along its inner edge, its opening exactly the
+    // window's (worlds/portal.tsx cuts the picture to the same line)
+    {
+      const gy = g(GT.x, GT.z) + GT.above;
+      const half = 35 * 1.04;
+      const rise = 93 * 1.03 - 2;
+      k.add(archBand(half, rise, -72, 15, 20), [GT.x, gy + 2, GT.z], [0.1, 0.075, 0.12], { top: [0.6, 0.38, 0.2] });
+      k.add(archBand(half, rise, -72, 22, 12), [GT.x, gy + 2, GT.z - 3], [0.07, 0.055, 0.09], { top: [0.4, 0.28, 0.16] });
+      // (the thread stands 0.4 m inside the opening, so its faces never lie in one plane with the stone's)
+      k.add(archBand(half - 0.4, rise - 0.4, -72, 2.2, 20.6), [GT.x, gy + 2, GT.z], [1, 0.84, 0.52], { glow: 1.6 });
+    }
     // the way on, at the far end of the gorge: a great soft light about it (from the valley it is the one bright thing in the pass), and a lesser one in its point
     glows.push({ p: [GT.x, g(GT.x, GT.z) + GT.above + 40, GT.z], size: 340, col: [1, 0.86, 0.52], k: 0.5 });
     glows.push({ p: [GT.x, g(GT.x, GT.z) + GT.above + 110, GT.z], size: 120, col: [1, 0.95, 0.78], k: 0.45 });
@@ -390,17 +403,6 @@ export default function GateWorld({ props }: { props: WorldProps }) {
       if (Math.abs(x) < 60 || nearPath(x, z, 46) || inCitadel(x, z) || Math.hypot(x - GT.x, z - GT.z) < 70) continue;
       needle(x, z, h);
       i++;
-    }
-    // the way on stands in the narrow of the gorge: the light between two tall needles that lean together like the mountains
-    {
-      const gt = gateOf("gate")!;
-      for (const sd of [-1, 1]) {
-        const h = 150;
-        const geo = needleGeometry(h, 9, sd > 0 ? 7.3 : 2.1, [0.1, 0.075, 0.12], [0.6, 0.38, 0.2]);
-        geo.rotateZ(sd * 0.17);
-        geo.translate(sd * 37, g(sd * 37, gt.pos.z) + h / 2 - 6, gt.pos.z);
-        needles.push(geo);
-      }
     }
     const needleGeo = mergeGeometries(needles)!;
     needles.forEach((q) => q.dispose());
