@@ -225,6 +225,11 @@ vec3 landN(vec2 p){
   float h0 = landH(p);
   return normalize(vec3(h0 - landH(p + vec2(e, 0.0)), e, h0 - landH(p + vec2(0.0, e))));
 }
+// (the same, given landH(p) already worked out)
+vec3 landNh(vec2 p, float h0){
+  float e = 1.5;
+  return normalize(vec3(h0 - landH(p + vec2(e, 0.0)), e, h0 - landH(p + vec2(0.0, e))));
+}
 `;
 
 // ---------- the maps ----------

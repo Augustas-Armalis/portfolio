@@ -89,7 +89,7 @@ export function makeLandMaterial() {
         vCav = ((landH(p + vec2(e, 0.0)) + landH(p - vec2(e, 0.0)) + landH(p + vec2(0.0, e)) + landH(p - vec2(0.0, e))) * 0.25 - h) / e;
         float level = max(hLakeK(p) < 1.15 ? LAKE_Y : SEA, riverLevel(p));
         vWorld = vec3(p.x, max(h, level), p.y);
-        vN = landN(p);
+        vN = landNh(p, h);
         gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
       }`,
     fragmentShader: /* glsl */ `
@@ -147,7 +147,7 @@ export function makeLandMaterial() {
         // ----- the land -----
         // (found here, at the pixel: the mesh rides with the eye, and a normal carried by its sliding vertices makes the
         // light crawl over the hills in flight)
-        vec3 N = landN(p);
+        vec3 N = landNh(p, h);
         vec2 fm = fieldMix(p);
         vec3 alb = fieldAlbK(fm);
         float fw = max(fwidth(p.x), fwidth(p.y));
