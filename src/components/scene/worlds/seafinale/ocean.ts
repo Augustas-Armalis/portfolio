@@ -38,7 +38,8 @@ const WAVE_GLSL = /* glsl */ `
 // foam as he painted it: a lace of cells, slowly working
 const LACE_GLSL = /* glsl */ `
   // x: how near a wall of the lace (1 on it), y: this cell's own number, z: how near the cell's heart
-  vec3 lace(vec2 p, float t){
+  // (w: the pixel's footprint in the lace's own units, length(fwidth(p)); taken outside any branch)
+  vec3 laceW(vec2 p, float t, float w){
     vec2 i = floor(p); vec2 f = fract(p);
     float f1 = 9.0; float f2 = 9.0; float id = 0.0;
     for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
@@ -51,17 +52,18 @@ const LACE_GLSL = /* glsl */ `
     float e = sqrt(f2) - sqrt(f1);
     // (a wall is never thinner than the pixel that must draw it, and where a pixel covers a whole cell the lace
     // is only its own mean paleness: nothing crawls as the eye or the water moves)
-    float w = length(fwidth(p));
     float wall = 1.0 - smoothstep(0.03, 0.15 + w * 1.7, e);
     wall = mix(wall, 0.3, smoothstep(0.16, 0.6, w));
     return vec3(wall, id, 1.0 - smoothstep(0.0, 0.5, sqrt(f1)));
   }
-  // a string of beads along the lace's walls
-  float beads(vec2 p, float wall){
+  vec3 lace(vec2 p, float t){ return laceW(p, t, length(fwidth(p))); }
+  // a string of beads along the lace's walls (w: length(fwidth(p)) * 46)
+  float beadsW(vec2 p, float wall, float w){
     vec2 c = fract(p * 46.0) - 0.5;
-    float w = length(fwidth(p)) * 46.0;
     return smoothstep(0.8, 0.96, wall) * mix(1.0 - smoothstep(0.2, 0.34 + w, length(c)), 0.22, smoothstep(0.3, 0.9, w));
   }
+  float beads(vec2 p, float wall){ return beadsW(p, wall, length(fwidth(p)) * 46.0); }
+
   uniform float uStorm; uniform float uFlash;
   const vec3 W_DEEP = vec3(0.012, 0.03, 0.034);
   const vec3 W_GREEN = vec3(0.035, 0.15, 0.115);
@@ -203,7 +205,7 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         // only looking down into it, never at a distance
         {
           float deepLook = smoothstep(0.25, 0.7, V.y) * (1.0 - onWave);
-          for (int i = 0; i < 5; i++) {
+          if (deepLook > 0.0) for (int i = 0; i < 5; i++) {
             float fi = float(i);
             vec2 c = vec2(210.0 - fi * 46.0 + 30.0 * sin(fi * 2.3), 560.0 - fi * 92.0);
             vec2 d = (p - c) + V.xz / max(V.y, 0.2) * 14.0;
@@ -214,27 +216,32 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         // ---- foam ----
         // (the net lies almost rigid on the water and is carried slowly: its cells do not boil)
         vec2 drift = vec2(uTime * 0.15, -uTime * 0.6);
-        vec3 l1 = lace((p + drift) * 0.19, uTime * 0.05);
-        vec3 l2 = lace((p + drift * 0.6) * 0.52 + 7.0, uTime * 0.07);
+        // (each lace is only worked out where it can show: past 700 m the foam is its own mean paleness)
+        bool laceOn = dist < 700.0;
+        float fwP = length(fwidth(p));
+        float fwSB = length(fwidth(vec2(s, body)));
+        vec3 l1 = vec3(0.0), l2 = vec3(0.0);
+        if (laceOn) { l1 = laceW((p + drift) * 0.19, uTime * 0.05, fwP * 0.19); l2 = laceW((p + drift * 0.6) * 0.52 + 7.0, uTime * 0.07, fwP * 0.52); }
         float ragged = smoothstep(0.35, 0.65, fbm((p + drift * 0.8) * 0.018 + 3.0));
         // on the swell: on the crests and streaming down their backs
         float crest = smoothstep(1.6, 4.8, sw + (c0 - 0.8) * 2.4) * (1.0 - onWave) * (0.35 + 0.65 * ragged);
         // the broad band of lace at the wave's foot, where the ships ride
         float band = smoothstep(2.9, 2.3, f) * smoothstep(1.35, 1.9, f) * smoothstep(${(1050 * WK).toFixed(1)}, ${(600 * WK).toFixed(1)}, abs(s)) * front * (0.45 + 0.55 * ragged);
         // drawn up the face in long ragged tongues, thinning as they climb
-        vec3 l3 = lace(vec2(s * 0.24, body * 0.24 - uTime * 0.15), uTime * 0.05);
         float tongue = smoothstep(0.52, 0.76, vnoise(vec2(s * 0.02 + up * 2.6 + 2.0, up * 3.4 - uTime * 0.03)) * 0.7 + vnoise(vec2(s * 0.07 - up * 3.0, up * 8.0 - uTime * 0.05)) * 0.3) * smoothstep(0.02, 0.2, up) * (1.0 - smoothstep(0.5, 0.86, up)) * onWave * front;
         // and where the crest leaves the face it is all foam
         // (only at the very lip: under it the hollow stays dark)
         float shoulder = smoothstep(0.9, 0.985, up) * onWave * front;
+        vec3 l3 = vec3(0.0);
+        if (laceOn && tongue > 0.0) l3 = laceW(vec2(s * 0.24, body * 0.24 - uTime * 0.15), uTime * 0.05, fwSB * 0.24);
         // (foam is a paleness with the lace's cells standing open in it, most open at its edges)
         float foam = crest * (0.4 + 0.6 * l1.x) * (0.6 + 0.4 * l2.x) + band * mix(0.3 + 0.6 * max(l1.x * 0.9, l2.x * 0.6), 0.66 + 0.34 * l2.x, smoothstep(0.5, 0.8, ragged)) + tongue * (0.42 + 0.58 * l3.x) + shoulder * (0.6 + 0.4 * l2.x);
         // (far off the lace is only a paleness)
         foam = mix(foam, (crest * 0.5 + band * 0.5 + tongue * 0.3 + shoulder * 0.8), smoothstep(160.0, 700.0, dist));
         // ---- strings of beads: amber, on the green of the face ----
         vec2 bp = vec2(s * 0.052, body * 0.052 - uTime * 0.03) + 3.0;
-        vec3 l4 = lace(bp, uTime * 0.1);
-        float bead = beads(bp, l4.x) * smoothstep(0.1, 0.26, up) * (1.0 - smoothstep(0.62, 0.84, up)) * onWave * front * (1.0 - smoothstep(90.0, 520.0, dist) * 0.85) * smoothstep(8.0, 36.0, dist);
+        float bead = 0.0;
+        if (onWave * front > 0.0 && up > 0.1 && up < 0.84 && dist > 8.0) bead = beadsW(bp, laceW(bp, uTime * 0.1, fwSB * 0.052).x, fwSB * 0.052 * 46.0) * smoothstep(0.1, 0.26, up) * (1.0 - smoothstep(0.62, 0.84, up)) * onWave * front * (1.0 - smoothstep(90.0, 520.0, dist) * 0.85) * smoothstep(8.0, 36.0, dist);
         // ---- his initials, in beads, on the face (as on the picture) ----
         vec2 sg = vec2((s - 150.0) / 150.0, (up - 0.3) / 0.11);
         float sign = 0.0;
