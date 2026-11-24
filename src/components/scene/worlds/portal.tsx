@@ -34,7 +34,7 @@ export const portalRig = { stand: null as THREE.Object3D | null, warm: null as T
 
 // (uPortalGain: the picture is that world's light, but the frame is still exposed for this one until the plane is
 // through: it is shown at the brightness it will have on the far side)
-export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPortalK: { value: 0 }, uPortalRes: { value: new THREE.Vector2(1, 1) }, uPortalGain: { value: 1 } };
+export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPortalK: { value: 0 }, uPortalRes: { value: new THREE.Vector2(1, 1) }, uPortalGain: { value: 1 }, uPortalFar: { value: 0 } };
 // From afar the window shows a still: one sharp picture of the next world taken from its entry, made once when that
 // world is warm, and looked up by the direction from the eye through each point of the opening (carried by the same
 // turn), so it turns with the eye as the live picture does and costs nothing a frame. Close in (from 130 m to 90 m)
@@ -218,7 +218,9 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     const able = !mobile && postCtl.level >= 1 && !!target && (portalRig.windows.get(cur) ?? 0) > 0 && voyage.flying && voyage.phase === "open" && !!gate && !!next && next !== "home" && voyage.ready === next && portalRig.warmId === next && !!portalRig.warm;
     if (able) {
       d = rig.gate.copy(gate!.pos).add(originOf(cur)).distanceTo(voyage.planePos);
-      want = d < 320 ? 1 - THREE.MathUtils.smoothstep(d, 200, 300) : 0;
+      // (from far away too: the still stands in the opening from about 1.5 km, faded in by distance, never popping)
+      want = d < 1600 ? 1 - THREE.MathUtils.smoothstep(d, 900, 1550) : 0;
+      PORTAL_U.uPortalFar.value = THREE.MathUtils.smoothstep(d, 100, 500);
       // only from the approach side, within a cone of the gate's way: from behind it or far to one side it is no window
       {
         const gp = gate!.pos;
@@ -256,7 +258,7 @@ export function PortalView({ mobile }: { mobile: boolean }) {
       PORTAL_U.uPortalGain.value = skyOf(next!).exposure / Math.max(voyage.lastSky?.exposure ?? 1, 0.05);
     }
     if (!able || d >= 45) portalRig.close = 0;
-    if (!able || d >= 320) {
+    if (!able || d >= 1600) {
       state.k = Math.max(0, state.k - dt * 3);
       if (state.k <= 0) {
         state.next = null;
@@ -398,7 +400,7 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
       uniforms: { ...PORTAL_U, ...STILL_U, ...SKY_U, ...(id === "home" ? HOME_U : WORLD_U), uSpring: { value: spring } },
       vertexShader: /* glsl */ `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
       fragmentShader: /* glsl */ `
-        uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes; uniform float uPortalGain; uniform float uSpring; varying vec2 vUv;
+        uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes; uniform float uPortalGain; uniform float uSpring; uniform float uPortalFar; varying vec2 vUv;
         uniform sampler2D tStill; uniform mat4 uStillMat; uniform float uStillOn; uniform float uLiveK; varying vec3 vW;
         ${GLSL_SKY}
         ${id === "home" ? GLSL_HOME_AIR : GLSL_AIR}
@@ -418,17 +420,45 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
             col = mix(texture2D(tStill, su).rgb, col, uLiveK);
           }
           col *= uPortalGain;
-          // (seen from afar the opening stands in this side's air like the gate round it: no bright cut-out in the haze)
-          ${id === "home" ? "col = homeAir(col, vW);" : "col = applyAir(col, vW);"}
+          // (from far it must read as a doorway: brighter, a little more contrast, a slow pulse, and a lit rim; the air
+          // of this side lies over it only lightly, or the haze would swallow it)
+          float pulse = 1.0 + 0.07 * sin(uTime * 1.7) * uPortalFar;
+          float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+          col = mix(vec3(lum), col, 1.0 + 0.3 * uPortalFar) * (1.0 + 0.45 * uPortalFar) * pulse;
+          vec3 aired = ${id === "home" ? "homeAir(col, vW)" : "applyAir(col, vW)"};
+          col = mix(aired, col, 0.7 * uPortalFar);
+          float rim = smoothstep(0.62, 0.9, edge) * (1.0 - smoothstep(0.93, 1.0, edge));
+          col += rim * vec3(1.0, 0.86, 0.6) * (0.35 + 0.9 * uPortalFar) * pulse;
+          a = max(a, rim * 0.55 * uPortalK);
           gl_FragColor = vec4(col, a);
         }`,
     });
-    return { geo, mat };
+    // a thin shaft of light standing up from the arch, so a doorway reads through haze and fog from far away
+    const sg = new THREE.PlaneGeometry(1, 1);
+    sg.translate(0, 0.5, 0);
+    const shaft = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      uniforms: { ...PORTAL_U, ...SKY_U, uW: { value: Math.max(2.5, half * 0.16) } },
+      vertexShader: /* glsl */ `varying vec2 vUv; uniform float uW;
+        void main(){ vUv = uv; vec3 c = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; vec3 r = normalize(vec3(cameraPosition.z - c.z, 0.0, c.x - cameraPosition.x) + vec3(1e-4));
+          vec3 w = c + r * position.x * uW * 2.0 + vec3(0.0, position.y * ${(rise * 5).toFixed(1)}, 0.0); gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0); }`,
+      fragmentShader: /* glsl */ `varying vec2 vUv; uniform float uPortalK; uniform float uPortalFar; uniform float uTime;
+        void main(){ float x = abs(vUv.x - 0.5) * 2.0; float core = exp(-x * x * 5.0); float up = pow(1.0 - vUv.y, 1.6) * smoothstep(0.0, 0.04, vUv.y);
+          float a = core * up * uPortalK * uPortalFar * (0.5 + 0.08 * sin(uTime * 1.3));
+          gl_FragColor = vec4(vec3(1.0, 0.86, 0.6) * a * 1.6, a); }`,
+    });
+    const sp = new THREE.Vector3(gate.pos.x, hi * 0.97, gate.pos.z);
+    return { geo, mat, sg, shaft, sp };
   }, [id, def, half, rise]);
   useEffect(
     () => () => {
       b?.geo.dispose();
       b?.mat.dispose();
+      b?.sg.dispose();
+      b?.shaft.dispose();
     },
     [b],
   );
@@ -441,5 +471,10 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
   if (!b || !shown) return null;
   // (after the gate's own sheet of light, glow and lamps: as the picture comes up they are left as a halo round it
   // and no longer wash it out; over the last stretch, after everything: see PortalView)
-  return <mesh geometry={b.geo} material={b.mat} renderOrder={7} frustumCulled={false} ref={mesh} />;
+  return (
+    <>
+      <mesh geometry={b.geo} material={b.mat} renderOrder={7} frustumCulled={false} ref={mesh} />
+      <mesh geometry={b.sg} material={b.shaft} position={b.sp} renderOrder={8} frustumCulled={false} />
+    </>
+  );
 }
