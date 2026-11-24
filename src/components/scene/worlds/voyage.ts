@@ -925,7 +925,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 200],
     radius: 620,
     ceil: 150,
-    entry: { x: 0, z: 700, above: 14, yaw: 0 },
+    entry: { x: 0, z: 700, above: 22, yaw: 0 },
     gate: null,
     // a long way in: the path winds wide between the great trunks, so that from the entry the kings are hidden and
     // their light is only glimpsed through the wood, now on one side, now on the other;
@@ -933,15 +933,17 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     // hills as it comes and it is already at the height of their hands well before them: the last hundred and fifty
     // metres are level, straight at the light, and the plane goes into it without turning its eye up or down
     path: [
-      [0, 700, 14],
-      [-30, 632, 14],
-      [-66, 560, 15],
-      [-62, 490, 15],
-      [-22, 420, 16],
-      [36, 350, 17],
-      [52, 285, 19],
-      [30, 222, 23],
-      [6, 156, 29],
+      [0, 700, 24],
+      [16, 640, 32],
+      [14, 590, 38],
+      [-14, 548, 40],
+      [-48, 520, 40],
+      [-62, 490, 40],
+      [-22, 420, 44],
+      [36, 350, 48],
+      [52, 285, 50],
+      [30, 222, 52],
+      [6, 156, 54],
       [0, 80, 38],
       [0, 20, 50],
       [0, -30, 62],
@@ -982,7 +984,7 @@ export const kingsDome = () => {
 };
 // It goes slowly here, and slowest where the whole picture stands in the frame.
 // (briskly through the outer wood, easing as the light grows, slowest of all under the kings; the last of it a glide)
-export const kingsPace = (ahead: number) => 0.42 + 0.3 * smooth01((ahead - 270) / 170) + 0.38 * smooth01((ahead - 520) / 220) + 0.08 * smooth01((90 - ahead) / 60);
+export const kingsPace = (ahead: number) => (0.6 + 0.4 * smooth01((730 - ahead) / 120)) * (0.42 + 0.3 * smooth01((ahead - 270) / 170) + 0.38 * smooth01((ahead - 520) / 220) + 0.08 * smooth01((90 - ahead) / 60));
 // the level of the still water that lies in the wood's hollows
 export const KINGS_WATER = -1.3;
 // The eye is raised from the plane's own line toward the middle of the picture (between the dome and the
