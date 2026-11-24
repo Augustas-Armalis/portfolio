@@ -15,7 +15,6 @@ import { FUNERAL_U } from "./funeral/air";
 import { ROAD_W, funeralLand } from "./funeral/land";
 import { CAVE, buildFuneralRock, dropFuneralRock, makeLedgeMaterial, makeRockMaterial, prepareFuneralRock } from "./funeral/rock";
 import { buildSouls } from "./funeral/souls";
-import { buildTree, makeTreeMaterial } from "./funeral/tree";
 import { buildWatchers } from "./funeral/ledges";
 import { buildAngels } from "../home/Angels";
 import { GLSL_AIR, WORLD_U } from "./kit";
@@ -392,8 +391,6 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       watchers: watch.geo,
       watcherMat: makeTempera({ amb: 0.9, key: 0.3, grain: 1.0 }),
       angels: buildAngels(watch.angels, { glsl: `${GLSL_AIR}\n${GLSL_FUNERAL_AIR}`, apply: "funeralAir(col, vWorld)", amount: "max(airAmt(vWorld), valleyAmt(vWorld))", uniforms: { ...WORLD_U, ...FUNERAL_U }, night: { value: 1 } }),
-      tree: buildTree(props.mobile),
-      treeMat: makeTreeMaterial(),
       spiritRoad,
       auroraMat: makeAuroraMaterial(),
       veil,
@@ -446,7 +443,6 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       <primitive object={b.souls.lampMesh} />
       <mesh geometry={b.shrines} material={b.shrineMat} />
       <mesh geometry={b.watchers} material={b.watcherMat} />
-      <mesh geometry={b.tree} material={b.treeMat} />
       <mesh geometry={b.angels.glow} material={b.angels.glowMat} renderOrder={2} frustumCulled={false} />
       <mesh geometry={b.angels.geo} material={b.angels.mat} renderOrder={3} />
       {/* spirit lights going up the road above the crowd toward the cave, slowly, each bobbing a little */}
