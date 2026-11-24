@@ -1080,6 +1080,8 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
   // p: 0 = the icon, 1 = full screen. lift: finger offset during the home gesture.
   const p = useMotionValue(enter === "push" ? 1 : 0);
   const lift = useMotionValue(0);
+  // the whole window's opacity: only moved when less motion is asked for (it fades instead of growing)
+  const veil = useMotionValue(1);
   const anim = useRef<AnimationPlaybackControls | null>(null);
   const scale = useTransform(p, (v) => s0 + (1 - s0) * v);
   const x = useTransform(p, (v) => icx * (1 - v));
@@ -1101,6 +1103,17 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
     // on its way back to its icon the app no longer covers the home screen: the icons take taps again at once
     onLeaving?.(target === 0);
     if (target === 0) onCover?.(false);
+    // asked for less motion: the app does not grow out of its icon or shrink back into it; it is simply there,
+    // faded in (or out) where it stands
+    if (reducedMotion()) {
+      p.set(1);
+      lift.set(0);
+      if (target === 1) {
+        veil.set(0);
+        anim.current = animate(veil, 1, { duration: 0.2, ease: EASE_OUT, onComplete: () => onCover?.(true) });
+      } else anim.current = animate(veil, 0, { duration: 0.16, ease: EASE_OUT, onComplete: onClosed });
+      return;
+    }
     anim.current = animate(p, target, {
       ...(target === 1 ? M.sheet : M.ui),
       velocity,
@@ -1265,7 +1278,7 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
   return (
     <motion.div
       className={`absolute inset-0 ${top ? "shadow-[-12px_0_32px_rgb(0_0_0/0.2)]" : ""}`}
-      style={{ x: top ? topX : depth === 1 ? under : 0, zIndex: 60 - depth, visibility: depth > 1 || (!top && hidden) ? "hidden" : depth === 1 ? underShown : undefined }}
+      style={{ x: top ? topX : depth === 1 ? under : 0, opacity: veil, zIndex: 60 - depth, visibility: depth > 1 || (!top && hidden) ? "hidden" : depth === 1 ? underShown : undefined }}
       inert={!top}
       data-phone-window={id}
       data-depth={depth}
