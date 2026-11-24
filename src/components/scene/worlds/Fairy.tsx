@@ -4,13 +4,14 @@ import * as THREE from "three";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { buildTree, makeLeafTexture } from "../home/trees";
 import { Halos, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
-import { Kit, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
+import { GLSL_AIR, Kit, WORLD_U, makePoints, makeTempera, pointsGeometry, rng, type GroundPalette, type Halo, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { buildCastle } from "./fairy/castle";
+import { buildAngels, type AngelSpot } from "../home/Angels";
 import { MT, PEAKS, WARDS, buildMountain, buildPeaks, buildRamp, mountainCrowns, peakRadius, rampLine, roadLine, surfaceY } from "./fairy/mountain";
 import { GLSL_GROUND_LIFE, Kindling, SunShafts, type Beam, archGeometry, leafyMesh, makeLeafyMaterial, Procession, RayedSun, RisingFlock, Walkers, crownMesh, cypressMesh, heapBlobs, heapMesh, makeCrownMaterial, makeHeapMaterial, makeMasonry, useDeepLens, type Crown, type Heap, type Lamp, type Wood } from "./fairy/shared";
 import { WORLDS, gateOf, groundAt, pathOf } from "./voyage";
-import { GLSL_ROAD_AX, GLSL_WAYS, RAMP_FOOT, ROAD_AX, clearOfWays, makeWayField, roadAxAt, wayA, wayB, wayDist } from "./fairy/track";
+import { GATE, GLSL_ROAD_AX, GLSL_WAYS, RAMP_FOOT, ROAD_AX, clearOfWays, makeWayField, roadAxAt, wayA, wayB, wayDist } from "./fairy/track";
 
 // Fairy Tale (Castle Fairy Tale, 1909), after the painting and after the way the film "Angelų takais" built it
 // in the round. A wide plain of woods and small fields under a whole sky of gilded cloud; out of it one great
@@ -778,6 +779,40 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
     const wayOut: THREE.Vector3[] = wayB.pts.filter((_, i) => i % 2 === 0).map((q) => new THREE.Vector3(q.x, g(q.x, q.y), q.y));
     const nM = props.mobile ? 260 : Math.round(1300 * props.effects);
     // the castle's lamps: dark from far off, they kindle ward by ward as the plane comes on, the summit last
+    // the angels (the home forest's, home/Angels.tsx): on the castle's terraces and bridge (standing with the mountain), and
+    // at the way out: one great one either side of the gate, and a pair at every stride of the last reach of road before it,
+    // each looking in at the road the souls walk
+    const air = { glsl: GLSL_AIR, apply: "applyAir(col, vWorld)", amount: "airAmt(vWorld)", uniforms: WORLD_U, night: { value: 0.3 } };
+    const roadAngels: AngelSpot[] = [];
+    {
+      const gax = -Math.sin(GATE.yaw);
+      const gaz = -Math.cos(GATE.yaw);
+      // (across the gate: its own right-hand side, the same as the piers)
+      const cx = Math.cos(GATE.yaw);
+      const cz = -Math.sin(GATE.yaw);
+      for (const sd of [-1, 1]) {
+        const x = GATE.x + cx * sd * 56 - gax * 6;
+        const z = GATE.z + cz * sd * 56 - gaz * 6;
+        roadAngels.push({ x, z, y: g(x, z) - 0.2, yaw: Math.atan2(-sd * cx * 0.7 - gax * 0.7, -sd * cz * 0.7 - gaz * 0.7), s: 4, robe: sd > 0 ? 0 : 1 });
+      }
+      let last = -1e9;
+      let n = 0;
+      for (let i = 2; i < wayB.pts.length - 2; i++) {
+        const p = wayB.pts[i];
+        const dg = Math.hypot(p.x - GATE.x, p.y - GATE.z);
+        if (dg > 470 || dg < 110 || p.y < GATE.z) continue;
+        const along = i * 4;
+        if (along - last < 64) continue;
+        last = along;
+        const t = new THREE.Vector2(wayB.pts[i + 1].x - wayB.pts[i - 1].x, wayB.pts[i + 1].y - wayB.pts[i - 1].y).normalize();
+        for (const sd of [-1, 1]) {
+          const x = p.x + -t.y * sd * 13;
+          const z = p.y + t.x * sd * 13;
+          roadAngels.push({ x, z, y: g(x, z) - 0.2, yaw: Math.atan2(t.y * sd * 0.8 - t.x * 0.4, -t.x * sd * 0.8 - t.y * 0.4), s: 2.6, robe: (n + (sd > 0 ? 1 : 0)) % 4 });
+        }
+        n++;
+      }
+    }
     const lamps2: Lamp[] = castle.windows.map((w) => ({ p: w.p, size: w.size * 1.25, col: w.col, k: (w.k ?? 0.5) * 1.5, at: 1560 - ((w.p[1] - 400) / 380) * 1050 + (r() - 0.5) * 150 }));
     return {
       y0,
@@ -792,6 +827,8 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       castle: castle.geo,
       windows: lamps2,
       castleHalos: castle.halos,
+      castleAngels: buildAngels(castle.angels, air),
+      roadAngels: buildAngels(roadAngels, air),
       castleGlows: castle.glows,
       tips: castle.tips.filter((_, i) => i % (props.mobile ? 5 : 2) === 0),
       slopes,
@@ -840,6 +877,8 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
         <Pennants tips={b.tips} />
         <Kindling list={b.windows} centre={[0, 520, 60]} />
         <Procession road={b.road} n={props.mobile ? 30 : 90} speed={1.3} scale={2.6} robe={[0.5, 0.36, 0.3]} wing={[0.36, 0.26, 0.3]} glow={0.04} seed={5} />
+        <mesh geometry={b.castleAngels.glow} material={b.castleAngels.glowMat} renderOrder={2} frustumCulled={false} />
+        <mesh geometry={b.castleAngels.geo} material={b.castleAngels.mat} renderOrder={3} />
         <Halos list={b.castleGlows} kind={2} />
         <Halos list={b.castleHalos} />
         <Walkers road={b.road} n={props.mobile ? 60 : 150} speed={1.5} size={1.1} />
@@ -851,6 +890,8 @@ export default function FairyWorld({ props }: { props: WorldProps }) {
       <primitive object={b.cypress} />
       <mesh geometry={b.set} material={b.stone} />
       <Halos list={b.lamps} />
+      <mesh geometry={b.roadAngels.glow} material={b.roadAngels.glowMat} renderOrder={2} frustumCulled={false} />
+      <mesh geometry={b.roadAngels.geo} material={b.roadAngels.mat} renderOrder={3} />
       <Walkers road={b.way} n={props.mobile ? 20 : 46} speed={1.4} size={0.9} seed={8} />
       <Walkers road={b.wayOut} n={props.mobile ? 14 : 34} speed={1.4} size={0.9} seed={14} />
       <Procession road={b.wayOut} n={props.mobile ? 14 : 34} speed={1.4} scale={2.6} robe={[0.5, 0.36, 0.3]} wing={[0.36, 0.26, 0.3]} glow={0.04} seed={14} />

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Kit, type Halo, type V3 } from "../kit";
+import type { AngelSpot } from "../../home/Angels";
 import { MT, PEAKS, ROAD, WARDS, footOf, peakRadius, rhoOf, roadT, surfaceY, terraceAt, thOf, wallOf } from "./mountain";
 
 // The castle of the Fairy Tale. It climbs the front of the great peak in three wards, each a drum of pale
@@ -33,6 +34,7 @@ export function buildCastle(mobile: boolean, r: () => number) {
   const k = new Kit();
   const L: Lights = { windows: [], halos: [], glows: [] };
   const tips: V3[] = [];
+  const angels: AngelSpot[] = [];
   let nWin = 0;
 
   // a tower: a shaft drawn in toward its top, a gallery corbelled out, a steep hat with hollow sides, a needle
@@ -492,6 +494,121 @@ export function buildCastle(mobile: boolean, r: () => number) {
       k.box(3.8, 90, 5.4, [c.x, c.y - 46, c.z], DARK, { top: STONE, rot: [0, yaw, 0], glow: 0.02 });
     }
   }
+  // The west flank, the castle's left as the plane comes on: it answers the bridge on the right. A second bridge on two
+  // arches, hung with lamps, from the middle ward to the left-hand peak; and up the rock of the left-hand peaks a
+  // hillside town of little pavilions on corbels, each a few steps above the last, their windows lit, with a lantern at
+  // every stair-head, and the new angels standing on three of the terraces looking out over the plain.
+  {
+    const a0 = new THREE.Vector3(WARDS[1].x - 50, WARDS[1].y + 4, WARDS[1].z + 2);
+    const a1 = new THREE.Vector3(PEAKS[2].x + 17, WARDS[1].y + 4, PEAKS[2].z + 6);
+    const d = a1.clone().sub(a0);
+    const len = d.length();
+    const yaw = Math.atan2(-d.z, d.x);
+    const mid = a0.clone().add(a1).multiplyScalar(0.5);
+    k.box(len + 8, 3, 6.4, [mid.x, mid.y, mid.z], STONE, { top: STONE_LIT, rot: [0, yaw, 0], glow: 0.03 });
+    for (const sd of [-1, 1]) k.box(len + 8, 1.8, 0.8, [mid.x + sd * Math.sin(yaw) * 3.1, mid.y + 2.3, mid.z + sd * Math.cos(yaw) * 3.1], STONE_LIT, { rot: [0, yaw, 0], glow: 0.05 });
+    for (let i = 0; i < 2; i++) {
+      const c = a0.clone().addScaledVector(d, (i + 0.5) / 2);
+      const rad = len / 4 - 1.6;
+      k.add(new THREE.TorusGeometry(rad, 1.8, 6, 14, Math.PI), [c.x, c.y - 1.6, c.z], DARK, { top: STONE, rot: [0, yaw, 0], glow: 0.02, scale: [1, 1.6, 2.4] });
+    }
+    for (let i = 0; i <= 2; i++) {
+      const c = a0.clone().addScaledVector(d, i / 2);
+      k.box(3.8, 90, 5.4, [c.x, c.y - 46, c.z], DARK, { top: STONE, rot: [0, yaw, 0], glow: 0.02 });
+    }
+    // lamps along the deck, and a small lantern-house at the middle pier
+    for (let i = 0; i <= 6; i++) {
+      const c = a0.clone().addScaledVector(d, i / 6);
+      L.halos.push({ p: [c.x, c.y + 4.4, c.z], size: 2.6, col: [1, 0.78, 0.42], k: 0.55 });
+    }
+    {
+      const c = a0.clone().addScaledVector(d, 0.5);
+      k.box(5, 8, 5, [c.x, c.y + 5.5, c.z], STONE, { top: STONE_LIT, rot: [0, yaw, 0], glow: 0.08 });
+      k.add(new THREE.ConeGeometry(4.4, 8, 4), [c.x, c.y + 13.5, c.z], ROOFS[1][0], { top: ROOFS[1][1], rot: [0, yaw + Math.PI / 4, 0], glow: 0.12 });
+      L.windows.push({ p: [c.x, c.y + 6, c.z + 3.2], size: 5, col: [1, 0.72, 0.36], k: 0.5 });
+    }
+    // two angels on the deck, either side of the lantern-house, looking out to the west
+    for (const f of [0.28, 0.72]) {
+      const c = a0.clone().addScaledVector(d, f);
+      angels.push({ x: c.x, y: c.y + 1.5, z: c.z, yaw: Math.atan2(-0.8, 0.45 * (f < 0.5 ? 1 : -1)), s: 3.2, robe: f < 0.5 ? 0 : 1 });
+    }
+  }
+  {
+    // pavilions up the west rock: [peak, bearing (0 = +x, pi/2 = +z the front, pi = west), height, width, height of the house]
+    type Pv = [pk: (typeof PEAKS)[number], a: number, y: number, w: number, h: number];
+    const west = Math.PI;
+    const list: Pv[] = [
+      [PEAKS[2], west - 0.85, 368, 9, 11],
+      [PEAKS[2], west + 0.55, 392, 8, 12],
+      [PEAKS[2], west - 0.2, 418, 10, 10],
+      [PEAKS[2], west - 0.95, 446, 8, 12],
+      [PEAKS[2], west + 0.35, 472, 7, 11],
+      [PEAKS[2], west - 0.55, 500, 7, 10],
+      [PEAKS[0], west - 0.5, 452, 10, 13],
+      [PEAKS[0], west + 0.3, 486, 9, 12],
+      [PEAKS[0], west - 0.15, 524, 9, 14],
+      [PEAKS[0], west + 0.62, 560, 8, 12],
+      [PEAKS[0], west - 0.62, 586, 8, 12],
+      [PEAKS[0], west + 0.1, 620, 7, 11],
+      [PEAKS[3], west + 0.2, 430, 8, 11],
+      [PEAKS[3], west - 0.4, 480, 7, 11],
+      [PEAKS[2], west + 0.95, 356, 9, 11],
+      [PEAKS[2], west + 0.05, 440, 8, 12],
+      [PEAKS[2], west - 0.7, 524, 6, 10],
+      [PEAKS[0], west - 0.95, 470, 9, 12],
+      [PEAKS[0], west + 0.9, 505, 9, 12],
+      [PEAKS[0], west - 0.4, 560, 8, 13],
+      [PEAKS[0], west + 0.45, 640, 7, 11],
+    ];
+    const seats: V3[] = [];
+    list.forEach(([pk, a, y, w0, h0], i) => {
+      const w = w0 * 1.45;
+      const h = h0 * 1.35;
+      const kk = (y - pk.y0) / (pk.y1 - pk.y0);
+      const cx = pk.x + (pk.lean?.[0] ?? 0) * kk * kk;
+      const cz = pk.z + (pk.lean?.[1] ?? 0) * kk * kk;
+      const rr = peakRadius(pk, y);
+      const ox = Math.cos(a);
+      const oz = Math.sin(a);
+      const px = cx + ox * rr * 0.94;
+      const pz = cz + oz * rr * 0.94;
+      const yw = Math.atan2(ox, oz);
+      const dp = w * 0.9;
+      // the terrace under it: a corbelled slab with a low parapet, so it stands on something
+      k.add(new THREE.CylinderGeometry(w * 0.95, 0.6, 16, 6), [px + ox * 1.5, y - 9, pz + oz * 1.5], DARK, { top: STONE, rot: [0, yw, 0], glow: 0.02 });
+      k.add(new THREE.CylinderGeometry(w * 0.98, w * 0.98, 1.2, 8), [px + ox * 1.5, y - 0.4, pz + oz * 1.5], STONE, { top: STONE_LIT, glow: 0.04 });
+      if (i % 5 === 3) {
+        // every few, a slim tower instead of a house
+        tower(px + ox * 0.5, y - 12, pz + oz * 0.5, 3.2 + r() * 0.8, 30 + r() * 14, { roof: (i + 1) % 3 });
+      } else {
+        k.box(w, h, dp, [px + ox * 1.2, y + h / 2, pz + oz * 1.2], mixc(STONE, [0.5, 0.36, 0.34], r()), { top: mixc(STONE_LIT, [0.98, 0.8, 0.6], r()), rot: [0, yw, 0], glow: 0.04 });
+        const [lo, hi] = ROOFS[i % 3];
+        k.add(new THREE.CylinderGeometry(0.001, 1, 1, 4, 1), [px + ox * 1.2, y + h + h * 0.36, pz + oz * 1.2], lo, { top: hi, scale: [w * 0.82, h * 0.72, dp * 0.82], rot: [0, yw + Math.PI / 4, 0], glow: 0.12 });
+        const rows = Math.max(1, Math.floor(h / 5));
+        for (let q = 0; q < rows; q++)
+          for (const sx of [-1, 1]) k.box(1.0, 2.1, 0.8, [px + ox * 1.2 + ox * (dp / 2) + oz * sx * w * 0.24, y + 3.2 + q * 4.4, pz + oz * 1.2 + oz * (dp / 2) - ox * sx * w * 0.24], LAMP, { glow: 0.9, rot: [0, yw, 0] });
+        if (i % 2 === 0) L.windows.push({ p: [px + ox * (dp / 2 + 2.8), y + h * 0.55, pz + oz * (dp / 2 + 2.8)], size: 5.5, col: [1, 0.7, 0.34], k: 0.5 });
+      }
+      L.halos.push({ p: [px + ox * (w * 0.9), y + 2.8, pz + oz * (w * 0.9) - 0], size: 2.4, col: [1, 0.78, 0.42], k: 0.55 });
+      seats.push([px + ox * (w * 0.5), y + 0.2, pz + oz * (w * 0.5)]);
+      // an angel on three of the terraces, in front of the house, looking out
+      if (i === 2 || i === 8 || i === 12 || i === 16) angels.push({ x: px + ox * (w * 0.8), y: y + 0.2, z: pz + oz * (w * 0.8), yaw: yw, s: 3.2, robe: (i >> 2) % 4 });
+    });
+    // flights of steps from terrace to terrace along each peak, a lantern at every head
+    for (const pk of [PEAKS[2], PEAKS[0], PEAKS[3]]) {
+      const own = list.map((e, i) => [e, i] as const).filter(([e]) => e[0] === pk).map(([, i]) => i);
+      for (let j = 1; j < own.length; j++) {
+        const A = seats[own[j - 1]];
+        const B = seats[own[j]];
+        if (Math.hypot(B[0] - A[0], B[2] - A[2]) > 70) continue;
+        stair(A[0], A[1], A[2], B[0], B[1], B[2], 3);
+        L.halos.push({ p: [B[0], B[1] + 3.2, B[2]], size: 2.2, col: [1, 0.76, 0.4], k: 0.5 });
+      }
+    }
+    // a warm light over the whole flank, so it is read from far
+    L.glows.push({ p: [-120, 480, -30], size: 150, col: [1, 0.68, 0.32], k: 0.28 });
+    L.glows.push({ p: [-70, 560, -80], size: 120, col: [1, 0.7, 0.34], k: 0.25 });
+  }
   // behind the peaks: a postern wall with its own few towers, so the castle has no blind side
   for (let i = 0; i < 7; i++) {
     const a = Math.PI + 0.4 + (i / 6) * (Math.PI - 0.8);
@@ -542,6 +659,6 @@ export function buildCastle(mobile: boolean, r: () => number) {
     }
   }
   L.glows.push({ p: [0, 560, 70], size: 380, col: [1, 0.66, 0.3], k: 0.3 });
-  return { geo: k.build(), ...L, tips };
+  return { geo: k.build(), ...L, tips, angels };
 }
 const mixc = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
