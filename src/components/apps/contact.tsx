@@ -3,7 +3,7 @@
 // Get in Touch.
 
 import { AnimatePresence, motion } from "motion/react";
-import { Aperture, CalendarDays, Check, Copy, Github, Instagram, Linkedin, Mail, MessageCircle, Music2, Send, Youtube } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Globe, Check, Copy, Github, Instagram, Linkedin, Mail, MessageCircle, Music2, Send, Youtube } from "lucide-react";
 import { Sym } from "../symbols";
 import { useState } from "react";
 import { bookCall, CONTACT_EMAIL, CONTACTS, contactList, type Channel, owner } from "@/content";
@@ -16,9 +16,8 @@ const channelIcon: Record<Channel["id"], React.ReactNode> = {
   email: <Sym icon={Mail} size={16} weight="medium" />,
   x: <XMark size={13} />,
   linkedin: <Sym icon={Linkedin} size={16} weight="medium" />,
-  larpo: <Sym icon={Aperture} size={16} weight="medium" />,
   instagram: <Sym icon={Instagram} size={16} weight="medium" />,
-  instagramStudio: <Sym icon={Instagram} size={16} weight="medium" />,
+  website: <Sym icon={Globe} size={16} weight="medium" />,
   github: <Sym icon={Github} size={16} weight="medium" />,
   spotify: <Sym icon={Music2} size={16} weight="medium" />,
   youtube: <Sym icon={Youtube} size={16} weight="medium" />,
@@ -64,9 +63,10 @@ export function Contact() {
 
   if (compact) {
     const actions = [
-      { k: "call", label: "Call", icon: <Sym icon={CalendarDays} size={20} weight="medium" />, href: bookCall.href },
-      { k: "x", label: "X", icon: <XMark size={17} />, href: hrefOf(contactList.find((c) => c.id === "x")!) },
       { k: "mail", label: "Mail", icon: <Sym icon={Mail} size={20} weight="medium" />, href: hrefOf(email) },
+      { k: "x", label: "X", icon: <XMark size={17} />, href: hrefOf(CONTACTS.x) },
+      { k: "instagram", label: "Instagram", icon: <Sym icon={Instagram} size={20} weight="medium" />, href: hrefOf(CONTACTS.instagram) },
+      { k: "call", label: "Call", icon: <Sym icon={CalendarDays} size={20} weight="medium" />, href: bookCall.href },
     ];
     return (
       <div className="pb-10">
@@ -75,17 +75,20 @@ export function Contact() {
           <div className="mt-3 text-[22px] font-semibold tracking-[-0.02em] text-ink">{owner.name}</div>
           <div className="text-[15px] text-ink-2">{owner.role}</div>
         </div>
-        <div className="mt-5 grid grid-cols-4 gap-2 px-4">
+        {/* his studio's site is the main thing: the one filled button */}
+        <div className="mt-5 px-4">
+          <a href={CONTACTS.website.href!} target="_blank" rel="noopener noreferrer" className="press flex h-[50px] items-center justify-center gap-1.5 rounded-[14px] bg-[var(--accent)] text-[17px] font-semibold tracking-[-0.02em] text-white">
+            Visit webstern.co
+            <Sym icon={ArrowUpRight} size={18} weight="semibold" />
+          </a>
+        </div>
+        <div className="mt-2 grid grid-cols-4 gap-2 px-4">
           {actions.map((a) => (
-            <a key={a.k} href={a.href} target={a.href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[12px] bg-white text-[var(--accent-text)]">
+            <a key={a.k} href={a.href} target={a.href.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer" className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[12px] bg-white text-[var(--accent-text)]">
               {a.icon}
               <span className="text-[11px] font-medium">{a.label}</span>
             </a>
           ))}
-          <button type="button" onClick={() => copy("handle", owner.x.label)} className="press flex h-[60px] flex-col items-center justify-center gap-1 rounded-[12px] bg-white text-[var(--accent-text)]">
-            {copied === "handle" ? <Sym icon={Check} size={20} weight="bold" /> : <Sym icon={Copy} size={20} weight="medium" />}
-            <span className="text-[11px] font-medium">{copied === "handle" ? "Copied" : "Copy"}</span>
-          </button>
         </div>
         <div className="mx-4 mt-6 sq-list overflow-hidden rounded-[12px] bg-white">
           {contactList.map((c, j) => (
@@ -142,18 +145,21 @@ export function Contact() {
             <div className="m-title truncate text-ink">{owner.name}</div>
             <div className="m-body truncate text-ink-2">{owner.role}</div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex items-start gap-3">
             {[
               { label: "message", icon: <Sym icon={MessageCircle} size={16} weight="medium" />, run: () => document.getElementById("contact-body")?.focus() },
-              { label: "call", icon: <Sym icon={CalendarDays} size={16} weight="medium" />, href: bookCall.href },
               { label: "mail", icon: <Sym icon={Mail} size={16} weight="medium" />, href: hrefOf(email) },
               { label: "X", icon: <XMark size={13} />, href: owner.x.href },
+              { label: "Instagram", icon: <Sym icon={Instagram} size={16} weight="medium" />, href: hrefOf(CONTACTS.instagram) },
             ].map((a) => (
               <div key={a.label} className="flex flex-col items-center gap-1">
                 <Btn variant="tinted" capsule iconOnly size="md" label={a.label} href={a.href} onClick={a.run} icon={a.icon} className="!h-9 !w-9" />
                 <span className="m-sub text-[var(--accent-text)]">{a.label}</span>
               </div>
             ))}
+            <Btn variant="prominent" size="md" href={CONTACTS.website.href!} label="Visit webstern.co" icon={<Sym icon={ArrowUpRight} size={14} weight="semibold" />} className="ml-1 self-center">
+              webstern.co
+            </Btn>
           </div>
         </div>
         <div className={field}>
@@ -195,7 +201,7 @@ export function Contact() {
           </div>
           <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 @max-[459px]/contact:grid-cols-1">
             {contactList
-              .filter((c) => c.id !== "x" && (CONTACT_EMAIL ? true : c.id !== "linkedin"))
+              .filter((c) => c.id !== "x" && c.id !== "email" && (CONTACT_EMAIL ? true : c.id !== "linkedin"))
               .map((c) => (
                 <a
                   key={c.id}
@@ -229,7 +235,7 @@ function QuickAction({ href, onClick, icon, label, sub }: { href?: string; onCli
   );
   if (href)
     return (
-      <a href={href} target="_blank" rel="noreferrer" className={cls}>
+      <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
         {inner}
       </a>
     );

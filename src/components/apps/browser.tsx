@@ -79,12 +79,11 @@ export function favourites(): Fav[] {
 const GLYPH: Partial<Record<Channel["id"], ReactNode>> = {
   x: <XMark size={24} />,
   linkedin: <Sym icon={Linkedin} size={26} weight="medium" />,
-  instagramStudio: <Sym icon={Instagram} size={26} weight="medium" />,
   instagram: <Sym icon={Instagram} size={26} weight="medium" />,
   github: <Sym icon={Github} size={26} weight="medium" />,
 };
 export function elsewhere(): Fav[] {
-  const links = contactList.filter((c) => c.href && c.id !== "larpo" && c.id !== "email").map((c) => ({ name: c.label, url: c.href!, sub: c.value, glyph: GLYPH[c.id] ?? <Sym icon={Globe} size={26} weight="medium" /> }));
+  const links = contactList.filter((c) => c.href && c.id !== "website" && c.id !== "email").map((c) => ({ name: c.label, url: c.href!, sub: c.value, glyph: GLYPH[c.id] ?? <Sym icon={Globe} size={26} weight="medium" /> }));
   return [...links, { name: bookCall.label, url: bookCall.href, sub: bookCall.sub, glyph: <Sym icon={CalendarDays} size={26} weight="medium" /> }];
 }
 // one tile: a project's own icon, or a glyph on a quiet squircle of the same size

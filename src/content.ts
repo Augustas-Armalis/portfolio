@@ -809,31 +809,30 @@ export const gallery = {
 
 // ---------- Contact ----------
 
-// The one email address. null until it's decided: the UI shows a placeholder.
-export const CONTACT_EMAIL: string | null = null;
+// The one email address: mail goes straight to it.
+export const CONTACT_EMAIL: string | null = "augustasarmalis@gmail.com";
 
-// Every channel. href null means "not filled in yet": the UI still shows the row,
-// pointing at "#" so it looks finished, and the real link drops in here later.
+// Every channel, in the order he gave them: email, X, Instagram, then his studio's site (the main thing), then the
+// rest. href null would mean "not filled in yet" (the row points at "#").
 export type Channel = {
-  id: "email" | "x" | "linkedin" | "larpo" | "instagram" | "instagramStudio" | "github" | "spotify" | "youtube";
+  id: "email" | "x" | "instagram" | "website" | "linkedin" | "github" | "spotify" | "youtube";
   label: string;
   value: string;
   href: string | null;
 };
 export const CONTACTS: Record<Channel["id"], Channel> = {
-  x: { id: "x", label: "X", value: "@augustasdesign", href: "https://x.com/augustasdesign" },
-  linkedin: { id: "linkedin", label: "LinkedIn", value: "armaugustas", href: "https://www.linkedin.com/in/armaugustas" },
-  larpo: { id: "larpo", label: "Larpo", value: "larpo.studio", href: "https://larpo.studio" },
-  instagramStudio: { id: "instagramStudio", label: "Instagram", value: "@larpo.studio", href: "https://instagram.com/larpo.studio" },
-  // placeholders until he confirms them (value is display only, href stays null)
   email: { id: "email", label: "Email", value: CONTACT_EMAIL ?? "Email", href: CONTACT_EMAIL ? `mailto:${CONTACT_EMAIL}` : null },
-  instagram: { id: "instagram", label: "Instagram", value: "Personal", href: null },
+  x: { id: "x", label: "X", value: "@augustasdesign", href: "https://x.com/augustasdesign" },
+  instagram: { id: "instagram", label: "Instagram", value: "@augustas_armalis", href: "https://www.instagram.com/augustas_armalis" },
+  website: { id: "website", label: "Website", value: "webstern.co", href: "https://webstern.co/" },
+  linkedin: { id: "linkedin", label: "LinkedIn", value: "armaugustas", href: "https://www.linkedin.com/in/armaugustas" },
   github: { id: "github", label: "GitHub", value: "Augustas-Armalis", href: "https://github.com/Augustas-Armalis" },
   spotify: { id: "spotify", label: "Spotify", value: "Augustas Armalis", href: "https://open.spotify.com/artist/1caZzY2xlQW23Xe1DWtw6H" },
   youtube: { id: "youtube", label: "YouTube", value: "hollow kid", href: "https://www.youtube.com/@hollowkidsongs" },
 };
 export const contactList: Channel[] = Object.values(CONTACTS);
-export const bookCall = { label: "Book a call", href: "https://cal.com/larpo/15min", sub: "15 min on Cal.com" };
+// a call: booked on the studio's own site
+export const bookCall = { label: "Book a call", href: "https://webstern.co/intro/#book", sub: "On webstern.co" };
 
 // ---------- Desktop items (right-hand column, like files on a Mac desktop) ----------
 
