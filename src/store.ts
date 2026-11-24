@@ -26,6 +26,11 @@ type OS = {
   phoneBelow: AppId[];
   // how the open app came in: grown out of a home screen icon, or pushed in from the right
   phoneEnter: "icon" | "push";
+  // apps opened this visit, the latest first: the app switcher's cards
+  phoneRecents: AppId[];
+  phoneSwitcher: boolean;
+  setPhoneSwitcher: (on: boolean) => void;
+  closeRecent: (id: AppId) => void;
   // last dock launch, so the dock icon can bounce
   launch: { id: AppId; t: number } | null;
   // whether the first OS frame should appear without its own entrance (the 3D screen already showed it)
@@ -180,18 +185,18 @@ export const useOS = create<OS>((set, get) => ({
     const entry = phase === "login" ? "lock" : "boot";
     // unlocking brings the windows back as they were
     if (locked && user) return set({ phase: "login", locked: false, entry });
-    set({ user: "engineer", phase: "login", locked: false, entry, phoneApp: null, phoneBelow: [], topZ: 11, windows: firstWindows() });
+    set({ user: "engineer", phase: "login", locked: false, entry, phoneApp: null, phoneBelow: [], phoneSwitcher: false, topZ: 11, windows: firstWindows() });
   },
-  lockScreen: () => set({ phase: "login", locked: true, palette: false, overlay: null, phoneApp: null, phoneBelow: [], seamless: false }),
+  lockScreen: () => set({ phase: "login", locked: true, palette: false, overlay: null, phoneApp: null, phoneBelow: [], phoneSwitcher: false, seamless: false }),
   sleep: (on) => set({ sleeping: on }),
   restart: () => {
     // black first (250ms), then the session ends under it; the windows are only dropped once nothing can be seen
     set({ restarting: true, restartAt: Date.now(), palette: false, playing: null, overlay: null });
-    window.setTimeout(() => set({ user: null, windows: [], phoneApp: null, phoneBelow: [], locked: false, seamless: false, phase: "login" }), 500);
+    window.setTimeout(() => set({ user: null, windows: [], phoneApp: null, phoneBelow: [], phoneSwitcher: false, locked: false, seamless: false, phase: "login" }), 500);
     window.setTimeout(() => set({ restarting: false }), 3300);
   },
   shutdown: () =>
-    set({ user: null, phase: "room", windows: [], phoneApp: null, phoneBelow: [], palette: false, playing: null, seamless: false, locked: false, introOff: true }),
+    set({ user: null, phase: "room", windows: [], phoneApp: null, phoneBelow: [], phoneSwitcher: false, palette: false, playing: null, seamless: false, locked: false, introOff: true }),
   open: (id) => {
     const { windows, topZ } = get();
     const z = topZ + 1;
@@ -232,15 +237,21 @@ export const useOS = create<OS>((set, get) => ({
   openPhoneApp: (id, origin) =>
     set((s) => {
       if (!id) return { phoneApp: null, phoneBelow: [] };
-      // from a home screen icon (or a widget): a fresh start, grown out of it
-      if (origin) return { phoneApp: id, phoneOrigin: origin, phoneBelow: [], phoneEnter: "icon" };
-      if (s.phoneApp === id) return {};
-      if (!s.phoneApp) return { phoneApp: id, phoneBelow: [], phoneEnter: "push" };
+      // every app opened is the switcher's latest card
+      const seen = { phoneRecents: [id, ...s.phoneRecents.filter((x) => x !== id)].slice(0, 8), phoneSwitcher: false };
+      // from a home screen icon (or a widget, or a switcher card): a fresh start, grown out of it
+      if (origin) return { ...seen, phoneApp: id, phoneOrigin: origin, phoneBelow: [], phoneEnter: "icon" };
+      if (s.phoneApp === id) return seen;
+      if (!s.phoneApp) return { ...seen, phoneApp: id, phoneBelow: [], phoneEnter: "push" };
       // already further down: go back to it rather than open it twice
       const at = s.phoneBelow.indexOf(id);
-      if (at >= 0) return { phoneApp: id, phoneBelow: s.phoneBelow.slice(0, at) };
-      return { phoneApp: id, phoneBelow: [...s.phoneBelow, s.phoneApp], phoneEnter: "push" };
+      if (at >= 0) return { ...seen, phoneApp: id, phoneBelow: s.phoneBelow.slice(0, at) };
+      return { ...seen, phoneApp: id, phoneBelow: [...s.phoneBelow, s.phoneApp], phoneEnter: "push" };
     }),
+  phoneRecents: [],
+  phoneSwitcher: false,
+  setPhoneSwitcher: (on) => set({ phoneSwitcher: on }),
+  closeRecent: (id) => set((s) => ({ phoneRecents: s.phoneRecents.filter((x) => x !== id) })),
   phoneBack: () => set((s) => (s.phoneBelow.length ? { phoneApp: s.phoneBelow[s.phoneBelow.length - 1], phoneBelow: s.phoneBelow.slice(0, -1) } : { phoneApp: null })),
   browserUrl: null,
   openUrl: (url) => {
