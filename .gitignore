@@ -45,3 +45,6 @@ next-env.d.ts
 /.next
 *.tsbuildinfo
 .claude/
+
+# originals dropped in for `npm run media` (only the web copies in public/gallery/own are published)
+/media/inbox/

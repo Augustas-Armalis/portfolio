@@ -1,0 +1,245 @@
+{
+  "photos": [
+    {
+      "id": "img-6315",
+      "kind": "photo",
+      "title": "11 July 2025",
+      "date": "2025-07-11",
+      "w": 3200,
+      "h": 2133,
+      "placeholder": "data:image/webp;base64,UklGRpoAAABXRUJQVlA4II4AAABwBACdASoYABAAPu1iqU2ppaQiMAgBMB2JYgCdMoMh1EZjLQYlaYgS2I6sAAD+rBJCu9FfQWQl2jTntfj9cuBl1LW+yuK59+oAMla03chzbVpbkiB+9Z5o3Rl7beHPHjyf4vzAa6y2jxMQdhKL+TeLSDu35Ym8zKB0yPjxg71frAGnFOmexhIdZJMs4AAA",
+      "srcs": {
+        "grid": "/gallery/own/img-6315-800.webp",
+        "viewer": "/gallery/own/img-6315-1920.webp",
+        "zoom": "/gallery/own/img-6315-3200.webp"
+      },
+      "stamp": "7852087:1752238214000"
+    },
+    {
+      "id": "img-6609",
+      "kind": "photo",
+      "title": "11 July 2025",
+      "date": "2025-07-11",
+      "w": 3200,
+      "h": 2133,
+      "placeholder": "data:image/webp;base64,UklGRngAAABXRUJQVlA4IGwAAABQBACdASoYABAAPu1kqk4ppaQiMAgBMB2JQBOl65A6p92iPbAm97O5TS8AAP7q7GrjEFjWK8OWw0NhCvuWRrJrYAnaXBCXOKEP0/oXbI+F9j0ZQr4gRdCYj9Vbf+K7EsXTAiDkMJphUpZuAAA=",
+      "srcs": {
+        "grid": "/gallery/own/img-6609-800.webp",
+        "viewer": "/gallery/own/img-6609-1920.webp",
+        "zoom": "/gallery/own/img-6609-3200.webp"
+      },
+      "stamp": "9537943:1752239828000"
+    },
+    {
+      "id": "img-0600",
+      "kind": "photo",
+      "title": "15 July 2024",
+      "date": "2024-07-15",
+      "w": 3200,
+      "h": 2135,
+      "placeholder": "data:image/webp;base64,UklGRoYAAABXRUJQVlA4IHoAAADwAwCdASoYABAAPu1iqU2ppaOiMAgBMB2JYgC/OB58Cw3MOgxM6h1AAP4IqVHPeC4VWkynUAkn3yjlRT2O9qRP7L9u732hiK/lT82V2EWoajkwqh86B58Lrqu+wcu+YzVWjiBFf4lFFW5C/dxP70/8HFqSr3wHRMAAAA==",
+      "srcs": {
+        "grid": "/gallery/own/img-0600-800.webp",
+        "viewer": "/gallery/own/img-0600-1920.webp",
+        "zoom": "/gallery/own/img-0600-3200.webp"
+      },
+      "stamp": "32625694:1721034180000"
+    },
+    {
+      "id": "img-1163",
+      "kind": "photo",
+      "title": "15 July 2024",
+      "date": "2024-07-15",
+      "w": 3200,
+      "h": 2135,
+      "placeholder": "data:image/webp;base64,UklGRpYAAABXRUJQVlA4IIoAAABwBACdASoYABAAPu1iqU2ppaOiMAgBMB2JYgC7ACB/xVXlxrSbxqzmw6tpgAD+THqmIK418MdTnXg7zrg7j6KvKPY2XFDp1chY/a2s8rDesIhCSh1NP7maD5LcLp+mV4P848VAaE028JEMUSLQHT2MszVFjP1B8PHkAvg8gW85cr7sRy+RvESAAAA=",
+      "srcs": {
+        "grid": "/gallery/own/img-1163-800.webp",
+        "viewer": "/gallery/own/img-1163-1920.webp",
+        "zoom": "/gallery/own/img-1163-3200.webp"
+      },
+      "stamp": "34189490:1721037060000"
+    },
+    {
+      "id": "img-4587",
+      "kind": "photo",
+      "title": "6 April 2024",
+      "date": "2024-04-06",
+      "w": 1796,
+      "h": 3200,
+      "placeholder": "data:image/webp;base64,UklGRoAAAABXRUJQVlA4IHQAAAAQBACdASoNABgAPu1krU6ppaSiMAgBMB2JZwDG9CIj1mEeIJfqM7MNkAD+51+FGB0ghosdLIQQrCPfmKWyKEQy/alcSb2WzLpDr2lVxbj+u5nnt18YJPqGjElazWuXrv21OVdUpO85fHs5crrs9z2q9OEkAA==",
+      "srcs": {
+        "grid": "/gallery/own/img-4587-800.webp",
+        "viewer": "/gallery/own/img-4587-1920.webp",
+        "zoom": "/gallery/own/img-4587-3200.webp"
+      },
+      "stamp": "6293203:1712399870000"
+    },
+    {
+      "id": "porshe",
+      "kind": "photo",
+      "title": "Porsche",
+      "date": "2024-02-09",
+      "w": 2133,
+      "h": 3200,
+      "placeholder": "data:image/webp;base64,UklGRoYAAABXRUJQVlA4IHoAAADwAwCdASoQABgAPu1iqU2ppaOiMAgBMB2JaQAAVGNJdIir/f1KMrTAAP26ELuZNmyr4xKfNAXb/kvx6Nb37Q/PJOxQKh0PEtEDtioBA+wdwxkvRflNzDVuLG4eqgXh+am1AnlzIubuKI2okuSkLfLh0xACL4dCdsgAAA==",
+      "srcs": {
+        "grid": "/gallery/own/porshe-800.webp",
+        "viewer": "/gallery/own/porshe-1920.webp",
+        "zoom": "/gallery/own/porshe-3200.webp"
+      },
+      "stamp": "9582584:1707507572000"
+    },
+    {
+      "id": "img-0667",
+      "kind": "photo",
+      "title": "31 December 2023",
+      "date": "2023-12-31",
+      "w": 2133,
+      "h": 3200,
+      "placeholder": "data:image/webp;base64,UklGRoAAAABXRUJQVlA4IHQAAADwAwCdASoQABgAPu1iqU2ppaOiMAgBMB2JZwDG9B6Ec3N3qEgJfogcAP7PbrA9UYk+XLgcjIkHghQGxcjhtLj8nywViogKyilR/DR9/wY6FtjAw4YqlTKb1XTGTOnM9velYuIQJIq4IhDkLgIOeddBIzAAAA==",
+      "srcs": {
+        "grid": "/gallery/own/img-0667-800.webp",
+        "viewer": "/gallery/own/img-0667-1920.webp",
+        "zoom": "/gallery/own/img-0667-3200.webp"
+      },
+      "stamp": "9084246:1704025092000"
+    },
+    {
+      "id": "img-6129",
+      "kind": "photo",
+      "title": "1 November 2023",
+      "date": "2023-11-01",
+      "w": 3200,
+      "h": 2133,
+      "placeholder": "data:image/webp;base64,UklGRn4AAABXRUJQVlA4IHIAAABwAwCdASoYABAAPu1iqU2ppaOiMAgBMB2JZwAAO/82cGaBtEAA/o4XmHgr8pbIF0rQoFapAUUPUIZ1hDj+3SmlpszoKCSHi48zoJMrHqrgoTQ9ziFEebQ1c3AAdeCNQazc0VP6xjb0O+ASUI5ZoHMVAAA=",
+      "srcs": {
+        "grid": "/gallery/own/img-6129-800.webp",
+        "viewer": "/gallery/own/img-6129-1920.webp",
+        "zoom": "/gallery/own/img-6129-3200.webp"
+      },
+      "stamp": "4237454:1698871024000"
+    },
+    {
+      "id": "img-1437",
+      "kind": "photo",
+      "title": "14 October 2023",
+      "date": "2023-10-14",
+      "w": 3200,
+      "h": 2133,
+      "placeholder": "data:image/webp;base64,UklGRqoAAABXRUJQVlA4IJ4AAAAwBACdASoYABAAPu1iqU2ppaOiMAgBMB2JZwDE2BiuerwWyCKB95YtrFAA/tJiP0qMBgg9gywcHj49nwIAwfwGOZsA3SMYMlSa0snMxPfaX3F3EuyryjP9LLBYCPc2sbS66Yusad2/4ME9iBAbR2JPHe63RW3xN2Q56ufFMBJMP8g49P1YuOm6Gz4uh0/49x2WOWHcAeBBYNwtcJ4AAA==",
+      "srcs": {
+        "grid": "/gallery/own/img-1437-800.webp",
+        "viewer": "/gallery/own/img-1437-1920.webp",
+        "zoom": "/gallery/own/img-1437-3200.webp"
+      },
+      "stamp": "3251554:1698522058000"
+    },
+    {
+      "id": "img-7107",
+      "kind": "photo",
+      "title": "13 October 2023",
+      "date": "2023-10-13",
+      "w": 2133,
+      "h": 3200,
+      "placeholder": "data:image/webp;base64,UklGRqYAAABXRUJQVlA4IJoAAADQAwCdASoQABgAPu1iqU2ppaOiMAgBMB2JZQAAWpo/u7r8rbYTArQA+GPtKO6EaEuVtBNAfeQV/pxHyVVNFAv16A3N1uxH+94xayBvPUktZt/8JijnxUvs1djUHUZ4IdhuJrQgAAHFMUz3fSOT/jUfsnVV/l0rTZT1X7QrxBNigi2FjLZ7p4Y/KbL/cweuHviQbDgI95EvDMAA",
+      "srcs": {
+        "grid": "/gallery/own/img-7107-800.webp",
+        "viewer": "/gallery/own/img-7107-1920.webp",
+        "zoom": "/gallery/own/img-7107-3200.webp"
+      },
+      "stamp": "5423862:1698495582000"
+    },
+    {
+      "id": "img-9604",
+      "kind": "photo",
+      "title": "13 October 2023",
+      "date": "2023-10-13",
+      "w": 2133,
+      "h": 3200,
+      "placeholder": "data:image/webp;base64,UklGRs4AAABXRUJQVlA4IMIAAACwBACdASoQABgAPu1iqU2ppaOiMAgBMB2JbACdL1ArgPbYdno5XgaZNbFY/FawAP6l7lj2nZzg7wqjABBMbxGrOut4sXm75DLADSazOc1Sjf3OGJNkaHmgAsf0Rbp7m/d/kmWsm6dmfu0nQniCz1F/DEKV1+C73IAK4ESHpB+ykjZMIoB7U8ducWYuZlyc/X8IGT1bsV60ntOY0zLgqLY8lzB78Y1dvZt57c5huuAI4d9cGgDUHCUBO0RF2ax1egAAAA==",
+      "srcs": {
+        "grid": "/gallery/own/img-9604-800.webp",
+        "viewer": "/gallery/own/img-9604-1920.webp",
+        "zoom": "/gallery/own/img-9604-3200.webp"
+      },
+      "stamp": "4796064:1698519996000"
+    },
+    {
+      "id": "img-4029",
+      "kind": "photo",
+      "title": "24 September 2023",
+      "date": "2023-09-24",
+      "w": 3200,
+      "h": 2133,
+      "placeholder": "data:image/webp;base64,UklGRmAAAABXRUJQVlA4IFQAAACwAwCdASoYABAAPu1kq04ppaQiMAgBMB2JZwCw7CHaT6NiSDCYQAD9UkcnwA57tzPMxQQFDhTJWuRgWv2pGjhkoByo/AwblQRzc0cxh2b4ygr/AAA=",
+      "srcs": {
+        "grid": "/gallery/own/img-4029-800.webp",
+        "viewer": "/gallery/own/img-4029-1920.webp",
+        "zoom": "/gallery/own/img-4029-3200.webp"
+      },
+      "stamp": "6212597:1695919680000"
+    },
+    {
+      "id": "img-2635",
+      "kind": "photo",
+      "title": "21 September 2023",
+      "date": "2023-09-21",
+      "w": 2134,
+      "h": 3200,
+      "placeholder": "data:image/webp;base64,UklGRo4AAABXRUJQVlA4IIIAAADwAwCdASoQABgAPu1iqU2ppaQiMAgBMB2JYwAAW+/ebssdLtdY7qcAAP7zDY/YYoWarP2yMHlcfNQXDoHvqOAcPhY4HIaSmzE1X/NbRIVrqg62JWZwom7sKdaaVp/f4bHwmmtrFZWxjIA2YUOi+wFPHmXH5cIigDL85tD+tcpyRDQA",
+      "srcs": {
+        "grid": "/gallery/own/img-2635-800.webp",
+        "viewer": "/gallery/own/img-2635-1920.webp",
+        "zoom": "/gallery/own/img-2635-3200.webp"
+      },
+      "stamp": "5499098:1695315658000"
+    },
+    {
+      "id": "img-2620",
+      "kind": "photo",
+      "title": "10 September 2023",
+      "date": "2023-09-10",
+      "w": 2133,
+      "h": 3200,
+      "placeholder": "data:image/webp;base64,UklGRrgAAABXRUJQVlA4IKwAAABQBACdASoQABgAPu1iqU2ppaOiMAgBMB2JZgCw7dwLfcU/2hzWU0gTOSQAAPlYwoR9lNj2zcC5/Y6vj8EbulGub/vPOn+Q3m/p6HQDR7wJ3eWrAA7z6yLfW8Rrjwad/KqpiulcCGjMR2KQGcoXV47CuNkkqpefVD369ALOZDeYNJ2GETqqiijxPtXOrC9vqacrTTOSmAWMbZfm/oprT4tmKT1AVx4cSLJQAAAA",
+      "srcs": {
+        "grid": "/gallery/own/img-2620-800.webp",
+        "viewer": "/gallery/own/img-2620-1920.webp",
+        "zoom": "/gallery/own/img-2620-3200.webp"
+      },
+      "stamp": "3322611:1694364604000"
+    },
+    {
+      "id": "img-1635",
+      "kind": "photo",
+      "title": "23 August 2023",
+      "date": "2023-08-23",
+      "w": 3200,
+      "h": 2133,
+      "placeholder": "data:image/webp;base64,UklGRp4AAABXRUJQVlA4IJIAAABwBACdASoYABAAPu1iqU2ppaOiMAgBMB2JagCdMoADTritKYIe2ogo22MFMAD+8rkkFIUKEmmZgZbNRnmu6/QksCwxCCN/FcWvZW3Aj4UtQTEDwB22q6tuJ8ELJho96qj6Ut3RzlSzD/zIyRpCgTSpt6DTlyigWyb84uEOciKaL0IhMyTZxfxrbMMXO4DWlHAAAA==",
+      "srcs": {
+        "grid": "/gallery/own/img-1635-800.webp",
+        "viewer": "/gallery/own/img-1635-1920.webp",
+        "zoom": "/gallery/own/img-1635-3200.webp"
+      },
+      "stamp": "3934625:1692819588000"
+    }
+  ],
+  "films": [
+    {
+      "id": "kelione-palei-nemuna",
+      "kind": "video",
+      "title": "Kelionė palei Nemuną",
+      "date": "2026-08-16",
+      "w": 1920,
+      "h": 1080,
+      "duration": 53,
+      "placeholder": "data:image/webp;base64,UklGRpIAAABXRUJQVlA4IIYAAADwAwCdASoYAA4APu1iqU2ppaQiMAgBMB2JQBOgA9W7u4JI458ffz8AAPtuycrfx/uVHk96DKH27FBS19rgGM+JIeTJjpaqp59oDTLzC95YNrzXCm5EDVlCymnOfEO0wtZnpFVuUpLkldFp+G6/fGlOdH0kW8iQt6ZySGh37Wjcg85zIcZwAA==",
+      "src": "/gallery/own/kelione-palei-nemuna.mp4",
+      "preview": "/gallery/own/kelione-palei-nemuna-preview.mp4",
+      "poster": "/gallery/own/kelione-palei-nemuna-poster.webp",
+      "stamp": "395240469:1786899288310"
+    }
+  ]
+}
