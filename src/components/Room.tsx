@@ -1436,7 +1436,11 @@ function Scene({
     CALM.frame++;
     CALM.on = stage.current === "idle" && !voyage.flying && at !== null && now - at > ARR + 3;
     gl.shadowMap.autoUpdate = false;
-    gl.shadowMap.needsUpdate = !CALM.on || (CALM.frame & 1) === 1;
+    // (the sun's shadow map covers only the desk, two metres across, and what casts into it does not move while the plane
+    // is away: in flight beyond the field round the desk, or in another world, it is not drawn again; it is drawn every
+    // frame again as the plane comes back within forty metres)
+    const deskAway = voyage.flying && (voyage.cur !== "home" || Math.hypot(cam.position.x, cam.position.z) > 40);
+    gl.shadowMap.needsUpdate = !deskAway && (!CALM.on || (CALM.frame & 1) === 1);
     if (!voyage.flying) {
       const dd = Math.hypot(cam.position.x, cam.position.y - 1, cam.position.z);
       const near = dd < 6 ? 0.01 : Math.min(8, 0.01 + (dd - 6) * 0.01);
