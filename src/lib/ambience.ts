@@ -67,7 +67,6 @@ const BEDS: Record<string, Bed> = {
   avenue: bed({ wind: 0 }), // the wood: the same air, a little more of it
   // the painted worlds
   sun: bed({ wind: 1.6, hp: 150, lp: 950 }), // high open air
-  stars: bed({ wind: 0.78, hp: 80, lp: 620 }), // a low breath in the dark: -40
   rex: bed({ wind: 0.5, hp: 110, lp: 900, waves: 0.72, wavesLp: 1900 }), // surf a long way off under a dim sky: -36
   fairy: bed({ wind: 0 }), // the castle's world is silent but for the music: he heard a noise there and asked for none
   paradise: bed({ wind: 1.3, hp: 140, lp: 1000, waves: 0.16, wavesLp: 2600, birds: 0.22 }), // still noon, the lake lapping, his white birds, far and few

@@ -942,7 +942,6 @@ const WORLD_NAMES: Partial<Record<WorldId, string>> = {
   home: "Home",
   friendship: "Friendship",
   sun: "Sonata of the Sun",
-  stars: "Sonata of the Stars",
   rex: "Rex",
   fairy: "Castle Fairy Tale",
   paradise: "Paradise",

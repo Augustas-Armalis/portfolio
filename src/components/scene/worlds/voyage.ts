@@ -25,11 +25,11 @@ import { flightPlan } from "./fairy/track";
 // that neither can see the other (the camera's far plane is 3000 m), near
 // enough that 32-bit floats still resolve a quarter of a millimetre.
 
-export type WorldId = "home" | "friendship" | "sun" | "stars" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "seafinale" | "funeral" | "kings";
+export type WorldId = "home" | "friendship" | "sun" | "rex" | "fairy" | "paradise" | "gate" | "sea" | "seafinale" | "funeral" | "kings";
 // (after the gate of Offering: the storm wave of the Finale, out of its curl into the calm of Tranquility, through the
 // grotto between the island's eyes and out of a cave mouth into the night of the Funeral Symphony)
 // (Friendship first: out of the home cave into hers, and through the orb she holds into the Sun)
-export const WORLD_ORDER: WorldId[] = ["home", "friendship", "sun", "stars", "rex", "fairy", "paradise", "gate", "seafinale", "sea", "funeral", "kings"];
+export const WORLD_ORDER: WorldId[] = ["home", "friendship", "sun", "rex", "fairy", "paradise", "gate", "seafinale", "sea", "funeral", "kings"];
 // Fairy Tale of the Kings: where the two kings stand, and the small lit world they hold between their hands
 export const KINGS = { z: -170, domeY: 70, domeR: 30 };
 export const ORIGIN = new THREE.Vector3(-2500, 0, -2700);
@@ -151,26 +151,6 @@ const AIR: Record<Exclude<WorldId, "home">, Air> = {
     night: 0,
     exposure: 0.8,
     fx: [0.0, 0.55, 0.0, 0],
-  },
-  // Sonata of the Stars: a deep blue-green night; the light is gold and white, and comes from the pyramid's point
-  stars: {
-    label: "Sonata of the Stars",
-    zenith: [0.003, 0.011, 0.03],
-    upper: [0.01, 0.034, 0.05],
-    horizon: [0.07, 0.078, 0.062],
-    glow: [0.9, 0.62, 0.28],
-    amb: [0.17, 0.22, 0.24],
-    key: [1.0, 0.9, 0.66],
-    keyI: 0.95,
-    sunAz: 0,
-    sunEl: -30,
-    keyAz: 0,
-    keyEl: 46,
-    cloudLit: [0.1, 0.2, 0.2],
-    cloudShade: [0.01, 0.03, 0.05],
-    night: 1,
-    exposure: 1.3,
-    fx: [0.0, 0.0, 0.0, 1],
   },
   // Rex: umber dusk with amber low in it and a green-gold cast in the shade
   rex: {
@@ -404,68 +384,6 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     path: SUN_PATH,
     obstacles: [...SUN_OBSTACLES],
     canvases: [{ painting: "sun-allegro", x: SUN_CANVAS.x, z: SUN_CANVAS.z, yaw: SUN_CANVAS.yaw }],
-  },
-  stars: {
-    id: "stars",
-    title: "Sonata of the Stars",
-    year: "1908",
-    music: "stars",
-    place: "sea",
-    air: AIR.stars,
-    // (clear air: the pyramids stand kilometres off, their feet in haze and their points in the stars)
-    fog: [0.00014, 0.0032],
-    // a great rolling swell: long seas the way rides up and over, seventy metres from trough to crest (the sea is calmed
-    // flat where the door stands, so the greatest pyramid's foot meets it level)
-    terrain: {
-      base: 0,
-      sines: [
-        [0.005, 0.0066, 1.98, 22],
-        [-0.0034, 0.0092, 2.2, 12],
-        [0.0105, 0.0042, 1.1, 5],
-        [0.02, -0.05, 4.0, 2.4],
-        [0.05, 0.03, 1.0, 1.0],
-      ],
-      bumps: [],
-      rim: [1, 2, 0],
-    },
-    water: null,
-    centre: [0, -300],
-    radius: 4300,
-    ceil: 2800,
-    pace: 2.5,
-    entry: { x: 0, z: 3300, above: 30, yaw: 0 },
-    // the door at the foot of the greatest pyramid (stars/pyramids.ts DOOR_Z): the way runs straight into it
-    gate: { x: 0, z: 586, above: 30, yaw: 0 },
-    // in low over the swell, a long way: through the glass globe (it stands in the sea and the plane goes in and out
-    // through it), over the top of the golden world that lies half sunk in the sea, then down toward the foot of the
-    // greatest pyramid and straight in at its door (the heights here are above the swell, which runs -40..+40 m)
-    path: [
-      [0, 3300, 30],
-      [-80, 3050, 34],
-      [-300, 2750, 36],
-      [-560, 2450, 50],
-      [-640, 2350, 70],
-      [-640, 2150, 56],
-      [-520, 1800, 40],
-      [-300, 1500, 60],
-      [-240, 1380, 112],
-      [-150, 1230, 142],
-      [-100, 1090, 152],
-      [-60, 960, 112],
-      [-20, 850, 66],
-      [0, 720, 38],
-      [0, 600, 30],
-      [0, 556, 30],
-    ],
-    obstacles: [
-      { x: -1750, z: 1900, r: 520, h: 1150 },
-      { x: 1850, z: 1500, r: 620, h: 1350 },
-    ],
-    canvases: [
-      // (hung early on the way in, over the open sea, with nothing between them and the pyramids)
-      { painting: "stars-allegro", x: -240, z: 2900, yaw: 1.2 },
-      { painting: "stars-andante", x: 250, z: 2400, yaw: -1.2 },
-    ],
   },
   rex: {
     id: "rex",

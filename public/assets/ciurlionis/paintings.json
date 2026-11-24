@@ -8,22 +8,6 @@
     "source": "https://commons.wikimedia.org/wiki/File:Saules_sonata.Allegro.jpg"
   },
   {
-    "id": "stars-allegro",
-    "file": "/assets/ciurlionis/stars-allegro.jpg",
-    "title": "Sonata of the Stars. Allegro (1908)",
-    "width": 1280,
-    "height": 1492,
-    "source": "https://commons.wikimedia.org/wiki/File:Sonata_No._6_(Sonata_of_the_Stars)._Allegro.jpeg"
-  },
-  {
-    "id": "stars-andante",
-    "file": "/assets/ciurlionis/stars-andante.jpg",
-    "title": "Sonata of the Stars. Andante (1908)",
-    "width": 1280,
-    "height": 1506,
-    "source": "https://commons.wikimedia.org/wiki/File:Sonata_No._6_(Sonata_of_the_Stars)._Andante.jpeg"
-  },
-  {
     "id": "rex",
     "file": "/assets/ciurlionis/rex.jpg",
     "title": "Rex (1909)",

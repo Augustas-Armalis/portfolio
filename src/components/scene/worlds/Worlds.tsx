@@ -21,7 +21,6 @@ import ParadiseWorld from "./Paradise";
 import RexWorld, { prepareRex } from "./Rex";
 import SeaWorld from "./Sea";
 import SeaFinaleWorld from "./SeaFinale";
-import StarsWorld, { prepareStars } from "./Stars";
 import SunWorld from "./Sun";
 import { ORIGIN, WORLDS, WORLD_ORDER, entryOf, gateOf, groundAt, originOf, pathOf, useWorld, voyage, type WorldId } from "./voyage";
 
@@ -103,7 +102,7 @@ const HOME_FLOCKS: Flock[] = [
   { c: [-3, 12, -150], r: 20, n: 7, size: 0.38, speed: 6.5, spread: 6 },
 ];
 
-const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { friendship: FriendshipWorld, sun: SunWorld, stars: StarsWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld, seafinale: SeaFinaleWorld, funeral: FuneralWorld, kings: KingsWorld };
+const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNode>> = { friendship: FriendshipWorld, sun: SunWorld, rex: RexWorld, fairy: FairyWorld, paradise: ParadiseWorld, gate: GateWorld, sea: SeaWorld, seafinale: SeaFinaleWorld, funeral: FuneralWorld, kings: KingsWorld };
 
 // While the plane flies through one world the next is made ready behind it, a little at a time, so that
 // passing the gate is only cloud closing and opening:
@@ -118,7 +117,7 @@ const COMPONENTS: Partial<Record<WorldId, (p: { props: WorldProps }) => ReactNod
 // one left behind is unmounted (and its geometry, materials and textures disposed) as the plane arrives.
 type Drawn = THREE.Mesh | THREE.Points | THREE.Line;
 // (step 0, for a world with something heavy in it: that is made first, a few milliseconds a frame)
-const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { friendship: (props) => prepareFriendship(props), kings: (props) => prepareKings(props), stars: (props) => prepareStars(props), funeral: (props) => prepareFuneral(props), rex: (props) => prepareRex(props) };
+const PREPARE: Partial<Record<WorldId, (props: WorldProps) => () => boolean>> = { friendship: (props) => prepareFriendship(props), kings: (props) => prepareKings(props), funeral: (props) => prepareFuneral(props), rex: (props) => prepareRex(props) };
 const tag = { v: "" };
 function useWarmWorld(cur: WorldId, props: WorldProps) {
   const { gl, camera, scene } = useThree();
