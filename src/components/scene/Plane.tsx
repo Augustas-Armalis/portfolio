@@ -10,6 +10,7 @@ import { bakeHomeSolids, homeGround } from "./homeGround";
 import { useTrails } from "./PlaneTrails";
 import { carryY, gateToEntry, openingReach, portalCapable, portalReady, portalSwap } from "./worlds/portal";
 import { arriveGolden } from "./sky";
+import { castleGlance } from "./worlds/fairy/track";
 import { GATE_REACH, KINGS, WORLDS, crossingStep, entryOf, gateOf, groundAt, kingsBloom, kingsPace, kingsView, noteAssist, originOf, pathOf, swapWorld, voyage, WORLD_ORDER, type WorldId } from "./worlds/voyage";
 
 // A folded paper plane that lives on the desk. Click it and it takes off down
@@ -333,9 +334,17 @@ export function Plane({
     // sees where it is going), and a few degrees under level once in the air: the plane rides low in the frame
     // with the world and the horizon before it, in a climb and in a dive alike. A turned eye looks down the boom.
     const rise = smooth01((st.t - 0.8) / 2.6);
-    const yawV = yawC + wrap(st.yaw - st.camYaw) * 0.45 * (1 - lw);
+    let yawV = yawC + wrap(st.yaw - st.camYaw) * 0.45 * (1 - lw);
     const under = Math.atan2(h, dist + 2.4) * (1 - rise) + 0.06 * rise + Math.atan2(Math.max(0, st.camLift), dist + 6);
     let pitV = pitC - under * (1 - lw);
+    // (Castle Fairy Tale: while the line goes round the castle the eye leans toward it, plane and castle both in the frame)
+    if (id === "fairy") {
+      const gl = castleGlance(st.pos.x - o.x, st.pos.y - o.y, st.pos.z - o.z);
+      if (gl.w > 0) {
+        yawV += wrap(gl.yaw - yawV) * 0.62 * gl.w * (1 - lw);
+        pitV += (gl.pitch - pitV) * 0.45 * gl.w * (1 - lw);
+      }
+    }
     // before the kings the eye is lifted to the whole picture, and the lens opens to hold it
     const kv = id === "kings" && !voyage.homing ? kingsView(st.pos.y, st.pos.z - o.z - KINGS.z) : null;
     if (kv) pitV += (kv.elev - pitV) * kv.w * (1 - lw);

@@ -24,6 +24,32 @@ export function pathX(z: number) {
   }
   return P[P.length - 1][0];
 }
+// The corridor the plane flies: the way's own curve (as worlds/voyage.ts reckons it) sampled every few metres. Nothing
+// solid may stand within a tube round it: a trunk, a limb, a root, the dome of a fungus. `blocks` asks it of a column
+// (its footprint's radius, from `y0` up to `y1`) and of a tube's width.
+let corridorPts: Float32Array | null = null;
+function corridor() {
+  if (corridorPts) return corridorPts;
+  const curve = new THREE.CatmullRomCurve3(
+    FRIEND_PATH.map(([x, z, a]) => new THREE.Vector3(x, floorAt(x, z) + a, z)),
+    false,
+    "centripetal",
+  );
+  const pts = curve.getSpacedPoints(Math.max(8, Math.round(curve.getLength() / 6)));
+  corridorPts = new Float32Array(pts.length * 3);
+  pts.forEach((q, i) => corridorPts!.set([q.x, q.y, q.z], i * 3));
+  return corridorPts;
+}
+export function blocksWay(x: number, z: number, r: number, y0: number, y1: number, tube: number) {
+  const c = corridor();
+  const t2 = tube * tube;
+  for (let i = 0; i < c.length; i += 3) {
+    const dh = Math.max(0, Math.hypot(c[i] - x, c[i + 2] - z) - r);
+    const dy = c[i + 1] < y0 ? y0 - c[i + 1] : c[i + 1] > y1 ? c[i + 1] - y1 : 0;
+    if (dh * dh + dy * dy < t2) return true;
+  }
+  return false;
+}
 // Mossed rocks, worn: a fine sphere pushed out by several scales of lumps (broad swellings, ledges of strata, small
 // pits), flattened below and sunk, dark at the foot and mossed on top. Big ones are finer.
 function mossRocks(list: { p: V3; r: number; seed: number; col?: V3 }[], mobile: boolean) {
@@ -162,6 +188,10 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     const kind = kindR < 0.5 ? "pine" : kindR < 0.86 ? "spruce" : "broad";
     const old = hall ? 1 : 1.75 + r() * 0.5;
     const sc = (kind === "broad" ? 2.2 + r() * 1.2 : 2.8 + r() * 1.8) * old;
+    // (a tree's reach, as the largest of its kinds is drawn: a broad crown is wide and low, a pine's narrow and tall;
+    // none within a good tube of the way the plane flies, hall or cavern, trunk, limb or crown: it was flown into)
+    const reach = kind === "broad" ? [8.4 * sc, 11 * sc] : [4.2 * sc, 17 * sc];
+    if (blocksWay(x, z, reach[0], g(x, z), g(x, z) + reach[1], hall ? 30 : 52)) continue;
     const rich = hall && Math.abs(x - pathX(z)) < 110 && !mobile ? "r" : "c";
     add(`${kind}${made % 2}${rich}`, { p: [x, g(x, z) - 0.6, z], r: sc * 5, h: 1 + r() * 0.15, seed: r() });
     made++;
@@ -254,7 +284,7 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     const top = c.top * (0.9 - 0.25 * Math.pow(Math.abs(x) / Math.max(c.w, 1), 2));
     const nearWay = Math.abs(x - pathX(z)) < 200 && top - len < 560;
     const overHer = x > herAt(-40, 0, 0)[0] && x < herAt(330, 0, 0)[0] && z > ORB.z - 520 && z < ORB.z + 420;
-    if (nearWay || overHer) continue;
+    if (nearWay || overHer || blocksWay(x, z, rad, top - len, top, 45)) continue;
     k.add(new THREE.ConeGeometry(rad, len, 7, 3), [x, top - len / 2 + 12, z], rockLo, { top: moss, rot: [Math.PI, r() * 6.283, 0] });
   }
   // (and in the hall of fog smaller ones, close overhead)
@@ -263,7 +293,7 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     const c = caveAt(z);
     const x = (r() * 2 - 1) * c.w * 0.7;
     const len = 16 + r() * 50;
-    if (Math.abs(x - pathX(z)) < 24 && c.top * 0.8 - len < 60) continue;
+    if ((Math.abs(x - pathX(z)) < 24 && c.top * 0.8 - len < 60) || blocksWay(x, z, len * 0.12, c.top * 0.86 - len, c.top * 0.86, 22)) continue;
     k.add(new THREE.ConeGeometry(len * 0.12, len, 6, 2), [x, c.top * 0.86 - len / 2, z], rockLo, { rot: [Math.PI, r() * 6.283, 0] });
   }
   // (and in the tunnel a few small ones, dark, along the roof)
@@ -322,6 +352,7 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     }
     // (never down into the way, and none through her, her crown, or the air before her face and the orb)
     if (top - len < (hall ? 60 : 620) && Math.abs(x - pathX(z)) < (hall ? 30 : 240)) continue;
+    if (blocksWay(x, z, hall ? 4 + rad : 30 + rad, top - len, top, hall ? 26 : 50)) continue;
     if (x > herAt(-90, 0, 0)[0] && x < herAt(420, 0, 0)[0] && z > ORB.z - 700 && z < ORB.z + 560) continue;
     rk.tube(pts, rad, [0.03, 0.035, 0.025], { seg: 12, sides: 5, top: [0.05, 0.06, 0.04] });
   }
@@ -394,7 +425,8 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
   for (let c = 0; c < groves; c++) {
     const z = -2100 + r() * (HALL.z1 + 2000);
     const x = (r() * 2 - 1) * 1100;
-    if (!inside(x, z, 80) || clear(x, z, pathX)) continue;
+    // (the domes, to sixty metres across and as high, none within reach of the way)
+    if (!inside(x, z, 80) || clear(x, z, pathX) || blocksWay(x, z, 105, g(x, z), g(x, z) + 70, 40)) continue;
     const teal = r() < 0.62;
     const col: V3 = teal ? [0.25, 0.8, 0.68] : [0.95, 0.66, 0.26];
     const n = 3 + Math.floor(r() * 5);

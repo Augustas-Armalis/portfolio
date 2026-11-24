@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { noise2, rng, type Halo, type V3 } from "../kit";
 import { KINGS, KINGS_WATER, WORLDS, groundAt } from "../voyage";
 import { BY, GLSL_END, GLSL_KINGS, KINGS_UNIFORMS, R } from "./light";
+import { inGlade } from "./procession";
 
 // The wood. Old trunks thick as towers, fluted and buttressed at the foot, that lean and turn as they rise
 // and break into heavy boughs; the boughs arch over and fork and close a vault over the aisle and the kings.
@@ -269,6 +270,8 @@ export function* woodGeometry(o: { mobile: boolean; trees: number }, budget: num
   const tryTrunk = (x: number, z: number, rad: number, H: number, o2: Partial<Trunk> = {}) => {
     if (Math.abs(x - aisleX(z)) < clear(z) + rad && ahead(z) > -70) return false;
     if (Math.abs(ahead(z)) < 80 && Math.abs(x) < 228) return false;
+    // (the road the souls walk and the clearing of the white tree)
+    if (inGlade(x, z, rad)) return false;
     for (const c of def.canvases) if (Math.hypot(x - c.x, z - c.z) < 44) return false;
     for (const t of trunks) if (Math.hypot(t.x - x, t.z - z) < (t.R + rad) * 2.4) return false;
     trunks.push({ x, z, R: rad, H, ...o2 });

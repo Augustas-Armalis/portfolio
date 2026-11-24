@@ -99,25 +99,25 @@ export const onFace = (s: number, f: number): [number, number] => {
 };
 
 // The way: in low over the swell toward the middle of the wave, the ships ahead on its lower slope; then round
-// to the left and along its face, climbing, the crest curling overhead; and at its far end out to the left
-// through the hanging lace of the crest, into calm.
+// to the left and along its face, climbing into the hollow under the crest, the roof of water curling overhead;
+// and along that tube, level and straight, to its far end, where the way on is carved into the water: a pointed
+// doorway standing in the wave's end, its sides in the water and the curl over its head. The last half
+// kilometre is one straight line, through the middle of the doorway and on.
 const FACE: [number, number, number][] = (
   [
     [20, 1.9, 16],
     [-50, 1.6, 16],
     [-130, 1.32, 16],
     [-220, 1.1, 16],
-    [-310, 0.96, 16],
-    [-400, 0.9, 17],
-    [-480, 0.9, 20],
-    [-550, 0.92, 28],
-    [-602, 0.97, 40],
+    [-310, 0.98, 16],
   ] as [number, number, number][]
 ).map(([s, f, a]) => [s * WK, f, a]);
-// (the way runs straight through the end: at the pace this world is flown a turn there would carry the plane wide)
-export const EXIT = { s: -640 * WK, f: 1.03, above: 48 };
-// the gate is the whole curl of the wave's end: a lancet as wide as the curl and as tall (half width, height above the way)
-export const FINALE_OPENING: [half: number, rise: number] = [430, 640];
+// the doorway: at the far end of the tube (where the roof of the curl is still high over it), at the height the way flies in the tube
+export const EXIT = { s: -640 * WK, f: 1.25, y: 345 };
+// the doorway, as a pointed arch: half its width, how far its point stands over the way, how far its sides go down
+// (under the water: it is carved into the wave, its feet in the sea and in the face)
+export const FINALE_OPENING: [half: number, rise: number, reach: number] = [230, 440, 300];
+const terrainY = (x: number, z: number) => FINALE_TERRAIN.base + bodyAt(x, z);
 function buildPath() {
   // (a long way in over a quiet sea before the water begins to stand up)
   const path: [number, number, number][] = [
@@ -134,17 +134,25 @@ function buildPath() {
   ];
   for (const [s, f, a] of FACE) path.push([...onFace(s, f), a]);
   const g = onFace(EXIT.s, EXIT.f);
-  const last = FACE[FACE.length - 1];
-  const from = onFace(last[0], last[1]);
-  // (the last stretch is one straight line, through the gate's middle and on: the gate stands square to it)
-  const dx = g[0] - from[0];
-  const dz = g[1] - from[1];
-  const dl = Math.hypot(dx, dz);
-  path.push([from[0] + (dx / dl) * (dl - 400), from[1] + (dz / dl) * (dl - 400), EXIT.above * 0.7 + last[2] * 0.3]);
-  path.push([g[0], g[1], EXIT.above]);
-  path.push([g[0] + (dx / dl) * 160, g[1] + (dz / dl) * 160, EXIT.above]);
+  // the tube's own direction at the doorway (along the crest toward its end)
+  const a0 = onFace(EXIT.s + 40, EXIT.f);
+  const a1 = onFace(EXIT.s - 40, EXIT.f);
+  const tl = Math.hypot(a1[0] - a0[0], a1[1] - a0[1]);
+  const dx = (a1[0] - a0[0]) / tl;
+  const dz = (a1[1] - a0[1]) / tl;
+  // from the end of the climb the way settles down to the doorway's height without a bend: the last kilometre is a
+  // line straight through its middle (heights as metres over the water drawn there)
+  for (const back of [900, 640, 400, 190]) {
+    const x = g[0] - dx * back;
+    const z = g[1] - dz * back;
+    const t = Math.min(1, back / 950);
+    const e = t * t * (3 - 2 * t);
+    path.push([x, z, Math.max(18, EXIT.y + 230 * e - terrainY(x, z))]);
+  }
+  path.push([g[0], g[1], EXIT.y - terrainY(g[0], g[1])]);
+  path.push([g[0] + dx * 200, g[1] + dz * 200, EXIT.y - terrainY(g[0] + dx * 200, g[1] + dz * 200)]);
   const yaw = Math.atan2(-dx, -dz);
-  return { path, gate: { x: g[0], z: g[1], above: EXIT.above, yaw } };
+  return { path, gate: { x: g[0], z: g[1], above: EXIT.y - terrainY(g[0], g[1]), yaw } };
 }
 const P = buildPath();
 export const FINALE_PATH = P.path;

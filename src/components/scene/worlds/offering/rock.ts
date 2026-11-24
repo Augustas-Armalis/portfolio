@@ -1,10 +1,28 @@
 import * as THREE from "three";
-import { noise2, ridge2, type V3 } from "../kit";
+import { noise2, type V3 } from "../kit";
 
 // The gate of the Offering: two mountains, each a long wall of rock, that lean toward one another as they
 // climb until their crests cross far over the pass. Between their feet is a gorge, and the way on stands at
 // its far end. Measured from the middle of the pass (x = 0, z = GATE.z).
 export const GATE = { z: -650, off: 430, rx: 300, rz: 540, h: 1020, lean: 600 };
+// Ridged noise with its crests rounded off. (kit's ridge2 comes to a point on every crest: drawn as a skin, each of those
+// is a knife-edge crease the light runs along as one thin bright thread, jagged like a bolt of lightning, at some angles.)
+function ridge2(x: number, y: number, oct = 4) {
+  let v = 0;
+  let amp = 0.5;
+  let f = 1;
+  let w = 1;
+  for (let i = 0; i < oct; i++) {
+    const t = noise2(x * f, y * f) * 2 - 1;
+    let n = 1.1 - Math.sqrt(t * t + 0.09) * 0.95;
+    n = Math.max(0, n * n * w);
+    w = Math.min(1, n * 2);
+    v += n * amp;
+    f *= 2.03;
+    amp *= 0.5;
+  }
+  return v;
+}
 const mix3 = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 // a point of one mountain's skin: a is round it, k up it (0 at the foot, 1 at the crest)
@@ -20,7 +38,8 @@ export function massifPoint(side: number, seed: number, a: number, k: number, ou
   const fine = ridge2(ca * 6.1 - seed, sa * 6.1 + k * 4.0 + seed, 3);
   const bed = noise2(k * 30 + seed, a * 0.7);
   // cliffs: the beds step in and out as they climb
-  const step = Math.pow(Math.abs(Math.sin(k * 26 + bed * 3 + seed)), 6) * 0.07;
+  // (soft ledges: sharp ones, at the rows this is drawn in, fold the skin over itself into torn sheets and bright threads)
+  const step = Math.pow(Math.abs(Math.sin(k * 26 + bed * 3 + seed)), 2) * 0.032;
   const cut = 1 + 0.4 * (rib - 0.42) + 0.14 * (fine - 0.4) + 0.08 * (bed - 0.5) + step;
   const end = k >= 1 ? 0.02 : 1;
   out.set(cx + ca * GATE.rx * Math.pow(1 - k, 0.82) * cut * end, y, cz + sa * GATE.rz * Math.pow(1 - k, 0.55) * cut * end);
@@ -28,8 +47,8 @@ export function massifPoint(side: number, seed: number, a: number, k: number, ou
 }
 
 export function buildMassif(side: number, seed: number, mobile: boolean) {
-  const nA = mobile ? 96 : 176;
-  const nH = mobile ? 56 : 112;
+  const nA = mobile ? 112 : 192;
+  const nH = mobile ? 90 : 170;
   const pos: number[] = [];
   const col: number[] = [];
   const idx: number[] = [];
@@ -56,6 +75,20 @@ export function buildMassif(side: number, seed: number, mobile: boolean) {
     }
   }
   const row = nA + 1;
+  // (two light passes of smoothing over the grid, round the ring and up it: whatever small fold the parametrisation
+  // still makes where the lean carries one row over another is rounded off, and the shading of the skin runs on)
+  for (let pass = 0; pass < 2; pass++) {
+    const src = pos.slice();
+    for (let j = 1; j < nH; j++)
+      for (let i = 0; i <= nA; i++) {
+        const il = i === 0 ? nA - 1 : i - 1;
+        const ir = i === nA ? 1 : i + 1;
+        for (let c = 0; c < 3; c++) {
+          const mean = (src[(j * row + il) * 3 + c] + src[(j * row + ir) * 3 + c] + src[((j - 1) * row + i) * 3 + c] + src[((j + 1) * row + i) * 3 + c]) * 0.25;
+          pos[(j * row + i) * 3 + c] = src[(j * row + i) * 3 + c] * 0.5 + mean * 0.5;
+        }
+      }
+  }
   for (let j = 0; j < nH; j++)
     for (let i = 0; i < nA; i++) {
       const a = j * row + i;
@@ -66,6 +99,22 @@ export function buildMassif(side: number, seed: number, mobile: boolean) {
   g.setAttribute("aCol", new THREE.Float32BufferAttribute(col, 4));
   g.setIndex(idx);
   g.computeVertexNormals();
+  // The skin is a ring of rows whose first and last columns lie on one line (a = 0 and 2 pi), each with a normal of
+  // its own: on the left mountain that line runs up the face that looks into the gorge, a seam of shading, a bright
+  // crease like a bolt of lightning at some angles. One normal for the two, and the foot and the crest likewise.
+  const nrm = g.attributes.normal as THREE.BufferAttribute;
+  for (let j = 0; j <= nH; j++) {
+    const a = j * row;
+    const b = a + nA;
+    const x = nrm.getX(a) + nrm.getX(b);
+    const y = nrm.getY(a) + nrm.getY(b);
+    const z = nrm.getZ(a) + nrm.getZ(b);
+    const l = Math.hypot(x, y, z) || 1;
+    nrm.setXYZ(a, x / l, y / l, z / l);
+    nrm.setXYZ(b, x / l, y / l, z / l);
+  }
+  // (the crest's ring is one point: every normal on it the same, straight up)
+  for (let i = 0; i <= nA; i++) nrm.setXYZ(nH * row + i, 0, 1, 0);
   g.computeBoundingSphere();
   return g;
 }

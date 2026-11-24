@@ -13,6 +13,8 @@ export const FUNERAL_U = {
   uValley: { value: new THREE.Vector3(1.25, 44, 100) },
   // metres along the road at which the souls come into being (inside the cave they walk out of)
   uBorn: { value: 0 },
+  // metres along the road at which the souls reach the portal at the cave's end and are gone into it
+  uEnd: { value: 1e5 },
   // the bell-light that passes up the procession: where its middle is (metres along the road; far below 0: none)
   uBell: { value: -1e5 },
   // how brightly the cave at the pass burns (1: as ever; it flares when the bell-light reaches it)

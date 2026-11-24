@@ -320,6 +320,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
     };
   }, []);
   // she stands in clay now, and stands still; far off in the haze she is drawn in her coarse form
+  const orbMesh = useRef<THREE.Mesh>(null);
   const herNear = useRef<THREE.Mesh>(null);
   const herFar = useRef<THREE.Mesh>(null);
   const lod = useRef({ near: true });
@@ -352,7 +353,10 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
     // the orb opens as the plane comes to it
     const d = camera.position.distanceTo(FRIEND_U.uOrb.value);
     // (the Sun is seen in its heart from the first sight of it; it opens wide as the plane comes)
-    b.orbMat.uniforms.uOpen.value = Math.max(0.6, 1 - THREE.MathUtils.smoothstep(d, 80, 1000));
+    b.orbMat.uniforms.uOpen.value = Math.max(0.85, 1 - THREE.MathUtils.smoothstep(d, 80, 1000));
+    // (and over the last stretch it is drawn after everything of this world, as the gates' windows are: no mote, mist or
+    // glow of this side lies over the Sun in the frames before the worlds change places and is gone the frame after)
+    if (orbMesh.current) orbMesh.current.renderOrder = d < 100 ? 1e4 : 3.5;
     // (the orb is wider than the gate's own catch: entering it anywhere is going through; through its heart the
     // plane's own gate takes it, through the window, and this is only for the rest of it)
     const o = FRIEND_U.uOrb.value;
@@ -394,7 +398,7 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
       {/* the orb's rays in the haze: long soft spokes of its light, standing in the cavern's air all round it */}
       <mesh geometry={b.glory} material={b.gloryMat} position={[ORB.x, ORB.y, ORB.z]} renderOrder={3.4} frustumCulled={false} />
       {/* (drawn after the mist: it is a light, and the veil before her never greys it) */}
-      <mesh geometry={b.orb} material={b.orbMat} position={[ORB.x, ORB.y, ORB.z]} renderOrder={3.5} />
+      <mesh ref={orbMesh} geometry={b.orb} material={b.orbMat} position={[ORB.x, ORB.y, ORB.z]} renderOrder={3.5} />
       <LightPath id="friendship" def={def} tint={[1, 0.86, 0.56]} gain={0.3} angels={false} marks={false} effects={props.effects} />
       <Gallery def={def} />
       <SunShafts list={forest.beams} tint={[0.8, 0.95, 0.6]} dir={[0.22, 1, -0.18]} />

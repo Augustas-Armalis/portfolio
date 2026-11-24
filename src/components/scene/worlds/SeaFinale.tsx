@@ -3,7 +3,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { LightGate, Mist, WorldBase, useDisposable, type WorldProps } from "./common";
+import { Mist, WorldBase, useDisposable, type WorldProps } from "./common";
 import { Kit, WORLD_U, makeTempera, rng, type GroundPalette, type Puff, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { greatSunMaterial } from "./sun/life";
@@ -14,6 +14,7 @@ import { SKY_U, airState, mixSky, type SkyState } from "../sky";
 import { ORIGIN, WORLDS, pathOf, voyage } from "./voyage";
 import { useDeepLens } from "./fairy/shared";
 import { FINALE_U, buildCrest, buildSea, buildSpray, makeBoltMaterial, makeCrashMaterial, makeCrestMaterial, makeRainMaterial, rainGeometry, makeSeaMaterial, makeSprayMaterial, signTexture } from "./seafinale/ocean";
+import FinaleDoorway from "./seafinale/doorway";
 import { FINALE_OPENING, SHIPS, bodyAt, onFace, swellAt, swellDamp } from "./seafinale/shape";
 
 // Sonata of the Sea. Finale (Jūros sonata. Finale, 1908). One colossal green wave rearing over the whole
@@ -379,9 +380,9 @@ export default function SeaFinaleWorld({ props }: { props: WorldProps }) {
   });
   return (
     <>
-      <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[0.9, 0.96, 0.8]} pathGain={0.3} angels={false} marks={false} gateSize={FINALE_OPENING} />
+      <WorldBase id="seafinale" def={def} pal={FINALE_PAL} props={props} grass={false} ground={false} arch={false} pathTint={[0.9, 0.96, 0.8]} pathGain={0.3} angels={false} marks={false} gate="none" />
       {/* the way on: the whole curl of the wave's end, a lancet of light as wide as the curl and as tall */}
-      <LightGate id="seafinale" def={def} tint={[1, 0.96, 0.8]} gain={1.3} look="veil" half={FINALE_OPENING[0]} rise={FINALE_OPENING[1]} />
+      <FinaleDoorway def={def} />
       {/* (hung beyond the wave, which is further off than the shared sun stands) */}
       <mesh material={b.sunMat} frustumCulled={false} renderOrder={-4}>
         <planeGeometry args={[2, 2]} />

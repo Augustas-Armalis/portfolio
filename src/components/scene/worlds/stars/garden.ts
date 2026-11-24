@@ -23,7 +23,6 @@ export function buildGarden(mobile: boolean, effects: number) {
   const path = pathOf("stars").pts;
   const halos: Halo[] = [];
   const glows: Halo[] = [];
-  const k = new Kit();
   const gy = GLOBE.r * 0.44;
   // ----- the globe, its halo, its girdle of lamps (they wake as the plane comes near) -----
   glows.push({ p: [GLOBE.x, gy + 10, GLOBE.z], size: GLOBE.r * 2.5, col: [0.5, 0.9, 0.64], k: 0.3 });
@@ -44,30 +43,7 @@ export function buildGarden(mobile: boolean, effects: number) {
     globeLamps.push({ p: [GLOBE.x + Math.cos(a) * GLOBE.r * 1.02, gy + Math.sin(a * 2) * 6, GLOBE.z + Math.sin(a) * GLOBE.r * 1.02], size: 8, col: [1, 0.9, 0.6], k: 0.8, at: 820 - i * 16 });
   }
 
-  // ----- the river of stars across the sky ahead, and the angel who walks on it -----
-  const river = riverGeometry(RIVER.x0, RIVER.x1, bandY, RIVER.z, RIVER.top, RIVER.fall, mobile ? 60 : 110);
-  const riverDust = pointsGeometry(
-    mobile ? 500 : Math.round(900 + 700 * effects),
-    (_, q) => {
-      const x = RIVER.x0 + q() * (RIVER.x1 - RIVER.x0);
-      const sp = q() + q() + q() - 1.5;
-      const fall = q() < 0.3 ? q() * q() * 150 : 0;
-      return [x, RIVER.y + 3 + Math.abs(sp) * 16 - fall, RIVER.z + sp * 22 + (fall > 0 ? RIVER.top / 2 + q() * 5 : 0), 0.5 + q() * q() * 2.6];
-    },
-    515,
-  );
-  const wk = new Kit();
-  angel(wk, [0, 0, 0], 30, Math.PI / 2, [0.22, 0.4, 0.8], { glow: 1.3, wing: [0.5, 0.74, 1], open: 0.26 });
-  const file = mobile ? 8 : 18;
-  for (let i = 0; i < file; i++) {
-    const x = RIVER.x0 + 60 + (i / (file - 1)) * (RIVER.x1 - RIVER.x0 - 120) + (r() - 0.5) * 30;
-    if (Math.abs(x) < 140) continue;
-    const s = 5 + r() * 3.5;
-    angel(k, [x, RIVER.y + 0.2, RIVER.z + (r() - 0.5) * 22], s, Math.PI / 2 + (r() - 0.5) * 0.3, r() < 0.5 ? [0.3, 0.5, 0.8] : [0.95, 0.66, 0.3], { glow: 1.5, wing: r() < 0.5 ? [0.6, 0.8, 1] : [1, 0.8, 0.5] });
-    glows.push({ p: [x, RIVER.y + s * 1.7, RIVER.z], size: s * 2.4, col: [0.8, 0.9, 1], k: 0.3 });
-  }
-
-  // ----- gold strings from the river, and the worlds threaded on them (a loose row beyond the globe) -----
+  // ----- worlds hanging in the air in a loose row beyond the globe (no strings: they hang of themselves) -----
   const threads: Seg[] = [];
   const orbs: Soft[] = [];
   const rings: { p: V3; rad: number; tilt: number }[] = [];
@@ -77,7 +53,6 @@ export function buildGarden(mobile: boolean, effects: number) {
     if (Math.abs(x) < 220) continue;
     const z = RIVER.z + RIVER.top / 2 + 1;
     const y1 = RIVER.y - RIVER.fall * 0.5;
-    threads.push({ a: [x, y1, z], b: [x, 4, z], w: 1.3, col: GOLD });
     const n = 2 + Math.floor(r() * 3);
     for (let j = 0; j < n; j++) {
       const y = 50 + r() * (y1 - 110);
@@ -149,13 +124,7 @@ export function buildGarden(mobile: boolean, effects: number) {
     4242,
   );
 
-  const setGeo = k.build();
   return {
-    set: setGeo,
-    walker: wk.build(),
-    river: river.geo,
-    riverMat: makeStarRiver({ width: river.width, top: river.top, base: [0.006, 0.012, 0.045], warm: 0.7, flow: 2.2, alpha: 0.84 }),
-    riverDust,
     threads: linesGeometry(threads),
     orbs: softGeometry(orbs, mobile ? 1 : 2),
     rings,

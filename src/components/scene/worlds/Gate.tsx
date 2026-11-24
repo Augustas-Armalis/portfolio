@@ -262,6 +262,9 @@ export default function GateWorld({ props }: { props: WorldProps }) {
     seraph(k, wings, [ax, top, az], AS, Math.PI / 2, { robe: [0.8, 0.77, 0.7], wing: [0.74, 0.72, 0.7], pose: 5, glow: 0.14, open: 0.55, wide: 2.7, phase: 1.2 });
     const hand = new THREE.Vector3(ax + 0.52 * AS, top + 1.5 * AS, az - 0.13 * AS);
     glows.push({ p: [ax, top + AS * 1.7, az], size: 110, col: [1, 0.92, 0.74], k: 0.3 });
+    // the way on, at the far end of the gorge: a great soft light about it (from the valley it is the one bright thing in the pass), and a lesser one in its point
+    glows.push({ p: [GT.x, g(GT.x, GT.z) + GT.above + 40, GT.z], size: 340, col: [1, 0.86, 0.52], k: 0.5 });
+    glows.push({ p: [GT.x, g(GT.x, GT.z) + GT.above + 110, GT.z], size: 120, col: [1, 0.95, 0.78], k: 0.45 });
 
     // ---- the ring of pearls that crosses the whole sky, through the angel's hand
     const RING = 900;
@@ -507,6 +510,8 @@ export default function GateWorld({ props }: { props: WorldProps }) {
       left: buildMassif(-1, SEEDS[0], props.mobile),
       right: buildMassif(1, SEEDS[1], props.mobile),
       rock: makeTempera({ amb: 0.74, key: 0.6, strata: 1.1, dab: 1.4, grain: 1.2, wrap: 0.5, rim: [0.3, 0.17, 0.07], rimPow: 4 }),
+      // (the two great mountains: their rim of light is gentler, so no fold of the skin is ever drawn as a thin bright thread)
+      massif: makeTempera({ amb: 0.74, key: 0.6, strata: 1.1, dab: 1.4, grain: 1.2, wrap: 0.5, rim: [0.1, 0.06, 0.03], rimPow: 5 }),
       // (the stones are one mesh with the needles: the same rock, one draw)
       rocks: (() => {
         const st = boulderGeometry(stones);
@@ -559,12 +564,12 @@ export default function GateWorld({ props }: { props: WorldProps }) {
   });
   return (
     <>
-      <WorldBase id="gate" def={def} pal={GATE_PAL} props={b.base} tip={[0.4, 0.36, 0.14]} pathTint={[1, 0.86, 0.6]} groundSize={12000} angels={false} mask={GRASS_MASK} gate="veil" gateSize={[17, 27]} />
+      <WorldBase id="gate" def={def} pal={GATE_PAL} props={b.base} tip={[0.4, 0.36, 0.14]} pathTint={[1, 0.86, 0.6]} groundSize={12000} angels={false} mask={GRASS_MASK} gate="arch" gateSize={[35, 93]} />
       <RayedSun size={0.5} gain={0.9} />
       <CloudDeck y={1500} size={20000} alpha={0.45} />
       <group position={[0, 0, GATE.z]}>
-        <mesh geometry={b.left} material={b.rock} />
-        <mesh geometry={b.right} material={b.rock} />
+        <mesh geometry={b.left} material={b.massif} />
+        <mesh geometry={b.right} material={b.massif} />
       </group>
       <mesh geometry={b.rocks} material={b.rock} />
       <mesh geometry={b.set} material={b.tempera} />

@@ -298,7 +298,28 @@ const lowY = (z: number) => {
   const t3 = t2 * t;
   return (2 * t3 - 3 * t2 + 1) * a[1] + (t3 - 2 * t2 + t) * h * slope(i) + (-2 * t3 + 3 * t2) * b[1] + (t3 - t2) * h * slope(i + 1);
 };
-export const FLIGHT = { top: 446, level: 75, gateRise: 70 };
+export const FLIGHT = { gateRise: 70, low: 17 };
+// The castle's orbit: the plane comes on to the front of the mountain, swings left (west) round it in a wide spiral that
+// shows its left flank, its back and its far right, and peels off to the way out where that begins behind it, going
+// down all the while, until it is low over the road the souls walk to the gate. Compass bearings from the castle's
+// middle, clockwise as seen from above (0 = the front, 270 = west, 180 = behind); the radius gives the plane room
+// over the drums of the mountain (worlds/voyage.ts obstacles) and every ward, tower and peak.
+const ORB: P2 = [0, -230];
+// [bearing (deg), radius (m)], coming round from the front (the plane is close to 0 as it comes on)
+const RING: [number, number][] = [
+  [352, 520],
+  [340, 430],
+  [320, 350],
+  [300, 305],
+  [280, 280],
+  [258, 268],
+  [235, 262],
+  [210, 266],
+  [185, 282],
+  [162, 318],
+  [150, 360],
+];
+const ring = ([b, r]: [number, number]): P2 => [ORB[0] + Math.sin((b * Math.PI) / 180) * r, ORB[1] + Math.cos((b * Math.PI) / 180) * r];
 export function flightPlan(ground: (x: number, z: number) => number): [x: number, z: number, above: number][] {
   const pick = (w: THREE.Vector2[], step: number, from = 0, to = w.length) => {
     const o: P2[] = [];
@@ -316,11 +337,17 @@ export function flightPlan(ground: (x: number, z: number) => number): [x: number
   const rideA = wayA.pts.filter((p) => p.y <= 1900 && p.y >= 1450);
   // (leaving the entry on its own heading, so a plane arriving from Rex, turned to it, flies straight on)
   fly.push([-45, 1840], [-38.8, 1800.5], ...pick(rideA, 58).filter((p) => p[1] < 1775 && p[1] > 1450));
-  // then straight at the castle and easing out to its right flank (a long, gentle bend)
-  fly.push([-1, 1385], [4, 1290], [11, 1190], [20, 1075], [32, 940], [47, 790], [66, 630], [89, 460], [114, 290], [141, 120], [168, -40], [194, -190], [219, -330]);
-  // and along the way out, road B, to the gate and a little beyond it
-  const bw = wayB.pts.filter((p) => p.y <= -523);
-  fly.push(...pick(bw, 76).filter((p) => p[1] < -430 && p[1] > GATE.z + 60));
+  // then straight at the castle's front, over the plain
+  fly.push([-1, 1385], [4, 1290], [11, 1190], [20, 1075], [14, 905], [9, 705], [3, 520]);
+  // the orbit (the first point of the ring is just left of the front, where the line is already bending)
+  const iRing = fly.length;
+  for (const q of RING) fly.push(ring(q));
+  // and on, out over the way out's first reach, and along road B to the gate and a little beyond it
+  const iOut = fly.length;
+  fly.push([262, -586], [330, -664]);
+  const bw = wayB.pts.filter((p) => p.y <= -700);
+  fly.push(...pick(bw, 76).filter((p) => p[1] < -716 && p[1] > GATE.z + 60));
+  const iGate = fly.length;
   fly.push([GATE.x - Math.sin(GATE.yaw) * 0, GATE.z], [GATE.x - Math.sin(GATE.yaw) * 52, GATE.z - Math.cos(GATE.yaw) * 52]);
   const s: number[] = [0];
   for (let i = 1; i < fly.length; i++) s.push(s[i - 1] + Math.hypot(fly[i][0] - fly[i - 1][0], fly[i][1] - fly[i - 1][1]));
@@ -329,28 +356,70 @@ export function flightPlan(ground: (x: number, z: number) => number): [x: number
     return s[s.length - 1];
   };
   const sLevel = sAt(1150);
-  const sTop = sAt(-300);
-  const sGate = sAt(GATE.z);
-  const gateY = ground(GATE.x, GATE.z) + FLIGHT.gateRise;
-  const yLevel = FLIGHT.level;
-  const rise = FLIGHT.top - yLevel;
-  const L1 = sTop - sLevel;
-  const drop = gateY - FLIGHT.top;
-  const L2 = sGate - sTop;
+  // The height. The plain's level glide, then a long even climb that meets the castle's own level as the plane turns on
+  // to its flank (a monotone cubic through stations: distance along, height), held a little round the back; then ONE long
+  // fall, eased in and out with a steady run between, that is low as the way out reaches its middle; level there; and
+  // eased up again to the gate's own height. Once it is down, the height is a height above the ground, which rises with
+  // the hill, so the plane stays low over the road all the way up to the gate.
+  const iDown = iRing + 5;
+  const sDown = s[iDown];
+  const sRoadLow = s[iOut + 2 + Math.round((iGate - iOut - 2) * 0.5)];
+  const sGate = s[iGate];
+  const ORBIT_Y = 452;
+  const air: [s: number, y: number][] = [
+    [sLevel, 75],
+    [s[iRing], 330],
+    [s[iRing + 2], 415],
+    [s[iRing + 4], 448],
+    [sDown, ORBIT_Y],
+  ];
+  const ys = air.map((q) => q[1]);
+  const xs = air.map((q) => q[0]);
+  const sl = ys.map((_, i) => {
+    if (i === 0 || i === ys.length - 1) return 0;
+    const a = (ys[i] - ys[i - 1]) / (xs[i] - xs[i - 1]);
+    const b = (ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]);
+    return a * b <= 0 ? 0 : (2 * a * b) / (a + b);
+  });
+  const yAir = (si: number) => {
+    let i = 0;
+    while (i < air.length - 2 && xs[i + 1] < si) i++;
+    const h = xs[i + 1] - xs[i];
+    const t = Math.min(1, Math.max(0, (si - xs[i]) / h));
+    const t2 = t * t;
+    const t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h * sl[i] + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h * sl[i + 1];
+  };
+  // 0 to 1 with a quarter of it spent easing in and a quarter easing out: the steepest part is a third more than the mean
+  const trap = (t: number) => {
+    const e = 0.25;
+    const v = 1 / (1 - e);
+    const u = Math.min(1, Math.max(0, t));
+    if (u < e) return (v * u * u) / (2 * e);
+    if (u > 1 - e) return 1 - (v * (1 - u) * (1 - u)) / (2 * e);
+    return (v * e) / 2 + v * (u - e);
+  };
+  const above0 = ORBIT_Y - ground(...fly[iDown]);
   return fly.map(([x, z], i) => {
     const si = s[i];
-    let y: number;
-    if (si < sLevel) {
-      y = lowY(z);
-    } else if (si < sTop) {
-      // the long even climb: a cubic that begins level-ish and ends level
-      y = yLevel + rise * herm((si - sLevel) / L1, (-0.012 * L1) / rise, 0);
-    } else {
-      // the descent: begins level, ends gently falling, and runs on level a little past the gate
-      const t = Math.min(1, (si - sTop) / L2);
-      y = FLIGHT.top + drop * herm(t, 0, (-0.07 * L2) / drop);
-    }
-    return [x, z, y - ground(x, z)] as [number, number, number];
+    if (si < sLevel) return [x, z, lowY(z) - ground(x, z)] as [number, number, number];
+    if (si <= sDown) return [x, z, yAir(si) - ground(x, z)] as [number, number, number];
+    let a: number;
+    if (si < sRoadLow) a = above0 + (FLIGHT.low - above0) * trap((si - sDown) / (sRoadLow - sDown));
+    else a = FLIGHT.low + (FLIGHT.gateRise - FLIGHT.low) * S3((si - (sGate - 380)) / 380);
+    return [x, z, a] as [number, number, number];
   });
+}
+// While the plane goes round the castle its eye turns toward it, as a camera on a boom would: the plane flies its own
+// line (the eye leads it by a little), and the castle stays in the frame. Where the plane is (the world's own
+// coordinates), how much of the turn to take (0 off the orbit, easing in and out) and the bearing and elevation of the
+// castle's body from there; Plane.tsx chase() reads it for this world only.
+export function castleGlance(x: number, y: number, z: number) {
+  const dx = x - ORB[0];
+  const dz = z - ORB[1];
+  const rho = Math.hypot(dx, dz);
+  const psi = ((Math.atan2(dx, dz) * 180) / Math.PI + 360) % 360;
+  const w = rho > 500 || rho < 120 ? 0 : S3((358 - psi) / 36) * S3((psi - 152) / 26) * S3((500 - rho) / 60);
+  return { w, yaw: Math.atan2(dx, dz), pitch: Math.atan2(560 - y, rho) };
 }
 const lerpY = (a: number, b: number, t: number) => a + (b - a) * t;
