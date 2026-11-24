@@ -1311,8 +1311,10 @@ function Scene({
   const lens = (dt: number) => {
     const s = stage.current;
     let focus = cam.position.distanceTo(v.tmp.set(...cfg.target));
-    // after dark the lens stops down: the stars stay points of light
-    let dof = 1 - 0.85 * SKY_U.uNight.value;
+    // (the depth of field is the same by night as by day. It used to stop down after dark, to keep the stars points of
+    // light, and the sky leans to night while music plays: so after a flight, which plays music all the way, the desk
+    // was at night and the blur behind it was gone. A star blurred at f/2 is only a softer, dimmer star.)
+    let dof = 1;
     // (f/2 at the desk: a 36 mm lens focused on the desk two metres off throws a circle of about seven pixels in nine
     // hundred lines onto the far wood and the mountains, a field that is plainly soft behind a sharp desk. At f/2.8
     // and a part of it, as it was, the circle was under two pixels and he could not see any depth of field at all.)
