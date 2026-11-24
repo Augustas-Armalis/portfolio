@@ -12,7 +12,7 @@ import { GLSL_AIR, WORLD_U } from "../kit";
 export type Pyr = { x: number; z: number; w: number; h: number; seed: number };
 // (w: half the base; h: height to the point; all metres. The first is the greatest; the next two flank the way in.)
 export const PYRS: Pyr[] = [
-  { x: 0, z: -300, w: 900, h: 2300, seed: 1.3 },
+  { x: 0, z: -300, w: 900, h: 2600, seed: 1.3 },
   { x: -1750, z: 1900, w: 470, h: 1150, seed: 4.1 },
   { x: 1850, z: 1500, w: 560, h: 1350, seed: 7.7 },
   { x: -3000, z: -1200, w: 900, h: 2200, seed: 2.2 },
@@ -139,8 +139,8 @@ vec4 worldReflect(vec3 P, vec3 r){
   ).join("\n")}
   if (best > 1e8) return vec4(0.0);
   float yk = clamp(hit.y / hH, 0.0, 1.0);
-  vec3 body = mix(vec3(0.011, 0.027, 0.042), vec3(0.03, 0.066, 0.088), pow(yk, 0.55));
-  body += vec3(0.07, 0.1, 0.09) * smoothstep(0.55, 0.9, sin(yk * 75.0 + hs));
+  vec3 body = mix(vec3(0.05, 0.1, 0.1), vec3(0.34, 0.3, 0.18), pow(yk, 0.6));
+  body += vec3(0.16, 0.14, 0.08) * smoothstep(0.55, 0.9, sin(yk * 75.0 + hs));
   vec3 col = body * (uSkyCol * 1.5 + 0.1);
   col = mix(col, skyBase(r) * 0.9, 1.0 - exp(-best * 0.00024));
   return vec4(col, 1.0);
@@ -155,7 +155,8 @@ export function makeStarBand() {
     transparent: true,
     depthWrite: false,
     uniforms: { ...SKY_U },
-    vertexShader: /* glsl */ `varying vec2 vUv; varying vec3 vP; void main(){ vUv = uv; vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    // (sweeping arcs, not a level strip: the band rises and falls round the sky)
+    vertexShader: /* glsl */ `varying vec2 vUv; varying vec3 vP; void main(){ vUv = uv; vec3 q = position; float az = atan(q.x, q.z); q.y += sin(az * 2.0 + 0.6) * 520.0 + sin(az * 3.0) * 160.0; vP = q; gl_Position = projectionMatrix * modelViewMatrix * vec4(q, 1.0); }`,
     fragmentShader: /* glsl */ `
       varying vec2 vUv; varying vec3 vP;
       ${GLSL_NOISE}
@@ -170,7 +171,7 @@ export function makeStarBand() {
       }
       void main(){
         float u = vUv.x * 260.0; float v = (vUv.y - 0.5) * 2.0;
-        float edge = 1.0 - smoothstep(0.78, 1.0, abs(v + (vnoise(vec2(u * 0.11, 2.0)) - 0.5) * 0.12));
+        float edge = pow(1.0 - smoothstep(0.1, 1.0, abs(v + (vnoise(vec2(u * 0.11, 2.0)) - 0.5) * 0.2)), 1.6) * smoothstep(0.0, 0.5, 0.5 + 0.5 * sin(vUv.x * 6.2832 * 2.0 + 1.0));
         vec3 col = vec3(0.012, 0.008, 0.012);
         vec3 gold = vec3(1.0, 0.8, 0.44);
         float st = 0.0;
@@ -183,9 +184,7 @@ export function makeStarBand() {
         }
         col += gold * st * 1.5;
         // a thin gold line along each edge
-        float ln = 1.0 - smoothstep(0.0, 0.025, abs(abs(v) - 0.92));
-        col += gold * ln * 0.45;
-        float a = edge * (0.82 + 0.18 * fbm(vec2(u * 0.4, v)));
+        float a = edge * (0.6 + 0.3 * fbm(vec2(u * 0.4, v))) * 0.85;
         gl_FragColor = vec4(col * mix(1.0, 0.36, uNight) * 1.2, a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

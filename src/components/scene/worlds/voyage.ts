@@ -412,9 +412,20 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     air: AIR.stars,
     // (clear air: the pyramids stand kilometres off, their feet in haze and their points in the stars)
     fog: [0.00012, 0.0032],
-    terrain: null,
-    // a calm night sea: its pyramids, door and sky are worlds/stars/pyramids.ts and worlds/Stars.tsx
-    water: 0,
+    // a rolling swell: long seas the way rises and falls over, a few metres, and smaller ripples laid on them
+    terrain: {
+      base: 0,
+      sines: [
+        [0.0035, 0.026, 0.3, 5],
+        [0.008, 0.015, 2.2, 3.5],
+        [-0.012, 0.006, 1.1, 2],
+        [0.02, -0.05, 4.0, 0.8],
+        [0.05, 0.03, 1.0, 0.4],
+      ],
+      bumps: [],
+      rim: [1, 2, 0],
+    },
+    water: null,
     centre: [0, -300],
     radius: 4300,
     ceil: 2800,

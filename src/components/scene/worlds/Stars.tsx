@@ -5,10 +5,10 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { SKY_U } from "../sky";
 import { FarGround, Gallery, Halos, LightGate, LightPath, useDisposable, type WorldProps } from "./common";
-import { Kit, makePoints, makeTempera, makeWater, pointsGeometry, rng, type Halo, type V3 } from "./kit";
+import { Kit, makePoints, makeTempera, pointsGeometry, terrainGeometry, rng, type Halo, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { linesGeometry, makeCloudPaint, makeLineMaterial, makeRayDiscMaterial, makeSoftMaterial, paintedCloudGeometry, softGeometry, type PCloud, type Seg, type Soft } from "./stars/forms";
-import { heroAngel, makePyramidVeil, wingFan } from "./stars/parts";
+import { heroAngel, makePyramidVeil, makeWaveSea, wingFan } from "./stars/parts";
 import { GLOBE, RIVER, buildGarden } from "./stars/garden";
 import { Kindling } from "./fairy/shared";
 import { useMoment } from "./moments";
@@ -55,7 +55,7 @@ function* starsSteps(props: WorldProps) {
 
   yield;
   // ----- the pyramids -----
-  const pyr = [{ p: GREAT, geo: pyramidGeometry(GREAT), mat: makePyramidMaterial(GREAT, true) }];
+  const pyr: { p: (typeof PYRS)[number]; geo: THREE.BufferGeometry; mat: THREE.ShaderMaterial }[] = [];
   // the others as the first look had them: veils of pale scalloped cloud, one inside another, each with its edge drawn
   const cone = (p: (typeof PYRS)[number], k2: number) => {
     const c = new THREE.ConeGeometry(p.w * k2 * Math.SQRT2, p.h * k2, 4, 40, true);
@@ -64,10 +64,13 @@ function* starsSteps(props: WorldProps) {
     return c;
   };
   const veilPyr: { p: (typeof PYRS)[number]; geo: THREE.BufferGeometry; mat: THREE.ShaderMaterial }[] = [];
-  PYRS.slice(1).forEach((p, i) => {
-    const near = i < 2;
-    for (const s2 of near ? [0.76, 1] : [1])
-      veilPyr.push({ p, geo: cone(p, s2), mat: makePyramidVeil({ h: p.h * s2, half: p.w * s2, alpha: near ? (s2 < 1 ? 0.34 : 0.46) : 0.6, seed: p.seed, freq: 0.017 * (1000 / p.w) ** 0.5, edge: s2 === 1 ? (near ? 1 : 0.8) : 0.12 }) });
+  // (the greatest too: three veils one inside another, taller and brighter than the rest; the door stands at its foot,
+  // where the veils are thin)
+  PYRS.forEach((p, i) => {
+    const near = i < 3;
+    const great = i === 0;
+    for (const s2 of near ? [0.5, 0.76, 1] : [1])
+      veilPyr.push({ p, geo: cone(p, s2), mat: makePyramidVeil({ h: p.h * s2, half: p.w * s2, alpha: great ? (s2 < 1 ? 0.42 : 0.6) : near ? (s2 < 1 ? 0.34 : 0.46) : 0.6, seed: p.seed, freq: 0.017 * (1000 / p.w) ** 0.5, edge: s2 === 1 ? (near ? 1 : 0.8) : 0.12 }) });
   });
 
   yield;
@@ -232,16 +235,8 @@ function* starsSteps(props: WorldProps) {
     wingR: wingFan(1, AS),
     AS,
     disc: makeRayDiscMaterial({ col: [1, 0.66, 0.26], hot: [1, 0.86, 0.56], rays: 120, gain: 0.42, disc: 0.2, near: [20, 60] }),
-    water: makeWater({
-      def,
-      lights: [new THREE.Vector3(0, 0, DOOR_Z + 20), new THREE.Vector3(GLOBE.x, 0, GLOBE.z), new THREE.Vector3(0, 0, RIVER.z)],
-      lightCol: [1.0, 0.78, 0.44],
-      lightLen: 3400,
-      lightW: 1.5,
-      deep: [0.007, 0.024, 0.036],
-      calm: 0.7,
-      reflect: pyramidReflectGLSL(),
-    }),
+    sea: terrainGeometry(def.terrain!, 9000, props.mobile ? 170 : 280),
+    seaMat: makeWaveSea([0, 420, DOOR_Z + 20], pyramidReflectGLSL()),
     band: makeStarBand(),
     orbs: softGeometry(orbs, props.mobile ? 2 : 3),
     orbMat: makeSoftMaterial({ shade: [0.3, 0.38, 0.62], under: [0.3, 0.32, 0.5], rim: 1.3, dab: 0.8, amb: 1.2, key: 0.9, air: 0.2, fade: [9000, 12000] }),
@@ -336,10 +331,8 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
   const sh: V3 = [GREAT.x, tip - 10 + b.AS * 1.34, GREAT.z - b.AS * 0.1];
   return (
     <>
-      <mesh material={b.water} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-4}>
-        <planeGeometry args={[9000, 9000]} />
-      </mesh>
-      <FarGround id="stars" def={def} pal={{ a: [0, 0, 0], b: [0, 0, 0], c: [0, 0, 0] }} />
+      <mesh geometry={b.sea} material={b.seaMat} renderOrder={-5} />
+      <FarGround id="stars" def={def} pal={{ a: [0.006, 0.022, 0.034], b: [0.006, 0.022, 0.034], c: [0.006, 0.022, 0.034] }} />
       <LightPath id="stars" def={def} tint={[1, 0.92, 0.7]} gain={1.4} effects={props.effects} angels={false} />
       {/* the way on: the door's own sheet of light, and the next world seen in it */}
       <LightGate id="stars" def={def} tint={[1, 0.86, 0.6]} gain={1.1} look="veil" half={DOOR.half} rise={DOOR.top - 32} />
