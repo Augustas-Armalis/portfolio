@@ -47,7 +47,7 @@ const DOOR_GLOW: Halo[] = [
 // to see the small angels who stand there (path in voyage.ts runs over (-120, 1150) at the height of its crown); the
 // rest hang or rest nearer and further along, each with its ring of gold.
 const SEA_H = (x: number, z: number) => heightAt(def.terrain!, x, z);
-const GOLDEN = { x: -120, z: 1150, r: 125 };
+const GOLDEN = { x: -120, z: 1150, r: 125, lift: -32 }; // (lift: its centre above the sea there)
 const WORLD_SET: { x: number; z: number; r: number; up: number; col: V3; ring?: number; tilt?: number }[] = [
   { x: 520, z: 1750, r: 92, up: 40, col: [0.4, 0.74, 0.62], ring: 1.9, tilt: 0.4 },
   { x: -980, z: 1300, r: 64, up: 130, col: [0.92, 0.5, 0.4], ring: 0, tilt: 0 },
@@ -213,19 +213,26 @@ function* starsSteps(props: WorldProps) {
   yield;
   // ----- the worlds of the way, with their rings, and the angels on the golden one -----
   const near: Soft[] = [];
-  const gy0 = SEA_H(GOLDEN.x, GOLDEN.z) - 32 - 0;
+  const gy0 = SEA_H(GOLDEN.x, GOLDEN.z) + GOLDEN.lift;
   const gc: V3 = [GOLDEN.x, gy0, GOLDEN.z];
   glows.push({ p: [GOLDEN.x, gy0 + GOLDEN.r * 0.6, GOLDEN.z], size: GOLDEN.r * 3.2, col: [1, 0.7, 0.32], k: 0.34 });
   for (const [rk, rr] of [[2.15, 0.012], [2.35, 0.008]] as const) k.add(new THREE.TorusGeometry(GOLDEN.r * rk, GOLDEN.r * rr, 5, 140), gc, GOLD, { glow: 0.9, rot: [Math.PI / 2 - 0.72, 0, 0.12], scale: [1, 1, 0.4] });
   // the angels of the home forest, large and graceful, standing on the crown of the golden world, facing the way the
   // plane comes (and a few turned to one another)
   const spots: AngelSpot[] = [];
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * Math.PI * 2 + r() * 0.5;
-    const d = 22 + r() * 48;
-    const x = GOLDEN.x + Math.cos(a) * d;
-    const z = GOLDEN.z + Math.sin(a) * d;
-    spots.push({ x, z, y: gy0 + Math.sqrt(GOLDEN.r * GOLDEN.r - d * d) - 0.5, yaw: i % 3 === 0 ? Math.atan2(GOLDEN.x - x, GOLDEN.z - z) : Math.PI + (r() - 0.5) * 1.1, s: 8 + r() * 4.5, robe: i % 4 });
+  // (two groups, one either side of the line the plane flies over the crown, clear of it and of its height; each
+  // stands forty metres tall, with a glow behind it, so they read as angels from half a kilometre)
+  for (let i = 0; i < 8; i++) {
+    const side = i % 2 ? 1 : -1;
+    const dx = side * (55 + r() * 45);
+    const dz = (Math.floor(i / 2) - 1.5) * 52 + (r() - 0.5) * 20;
+    const d = Math.hypot(dx, dz);
+    const x = GOLDEN.x + dx;
+    const z = GOLDEN.z + dz;
+    const sc = 14 + r() * 4;
+    const y = gy0 + Math.sqrt(GOLDEN.r * GOLDEN.r - d * d) - 0.5;
+    spots.push({ x, z, y, yaw: Math.PI + (r() - 0.5) * 0.8 - side * 0.25, s: sc, robe: i % 4 });
+    glows.push({ p: [x, y + sc * 1.5, z], size: sc * 7, col: i % 2 ? [1, 0.82, 0.5] : [0.7, 0.85, 1], k: 0.38 });
   }
   for (const w of WORLD_SET) {
     const wy = SEA_H(w.x, w.z) + w.up + w.r * 0.3;
@@ -371,15 +378,14 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       ))}
       <mesh geometry={b.garden.globeGeo} material={b.garden.globeMat} position={[GLOBE.x, b.garden.gy, GLOBE.z]} renderOrder={3} />
       <group position={[GLOBE.x, b.garden.gy, GLOBE.z]}>
-        <mesh geometry={b.garden.starRing} material={b.garden.starRingMat} renderOrder={3.2} />
-        <mesh geometry={b.garden.haloRing} material={b.garden.haloRingMat} renderOrder={4} />
+                <mesh geometry={b.garden.haloRing} material={b.garden.haloRingMat} renderOrder={4} />
       </group>
       <Kindling list={b.garden.globeLamps} centre={b.garden.globeCentre} />
       <group ref={globeGlow} position={[GLOBE.x, b.garden.gy, GLOBE.z]}>
         <Halos list={GLOBE_GLOW} kind={2} />
       </group>
       <mesh geometry={b.garden.threads} material={b.gardenMats.thread} renderOrder={5} frustumCulled={false} />
-      <mesh geometry={b.goldGeo} material={b.goldMat} position={[GOLDEN.x, SEA_H(GOLDEN.x, GOLDEN.z) - 32, GOLDEN.z]} renderOrder={1} />
+      <mesh geometry={b.goldGeo} material={b.goldMat} position={[GOLDEN.x, SEA_H(GOLDEN.x, GOLDEN.z) + GOLDEN.lift, GOLDEN.z]} renderOrder={1} />
       <mesh geometry={b.goldAngels.glow} material={b.goldAngels.glowMat} renderOrder={2} frustumCulled={false} />
       <mesh geometry={b.goldAngels.geo} material={b.goldAngels.mat} renderOrder={3} frustumCulled={false} />
       <mesh geometry={b.nearWorlds} material={b.nearMat} frustumCulled={false} />

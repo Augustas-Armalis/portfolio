@@ -36,7 +36,6 @@ export function buildGarden(mobile: boolean, effects: number) {
     return pts;
   };
   const haloRing = ribbonGeometry(ring(GLOBE.r * 1.75, new THREE.Euler(0.16, 0, 0.1), 0), 80, { closed: true, seg: 160 });
-  const starRing = ribbonGeometry(ring(GLOBE.r * 1.07, new THREE.Euler(0.62, 0.3, 0.5), 9), 30, { closed: true, seg: 160, roll: () => Math.PI / 2 });
   const globeLamps: Lamp[] = [{ p: [GLOBE.x, gy, GLOBE.z], size: GLOBE.r * 1.5, col: [0.5, 0.95, 0.8], k: 0.22, at: 900 }];
   for (let i = 0; i < 24; i++) {
     const a = (i / 24) * Math.PI * 2;
@@ -133,8 +132,6 @@ export function buildGarden(mobile: boolean, effects: number) {
     globeMat: makeGlobeGlass(GLOBE.r),
     haloRing: haloRing.geo,
     haloRingMat: makeWaveBand({ a: [0.1, 0.4, 0.3], b: [0.5, 0.8, 0.5], thread: [1, 0.9, 0.55], lines: 9, seed: 4.2, gain: 1.3 }),
-    starRing: starRing.geo,
-    starRingMat: makeStarRiver({ width: 30, top: 1, base: [0.06, 0.03, 0.015], warm: 0.1, flow: 0.8, alpha: 0.85 }),
     bands,
     lines: linesGeometry(segs),
     figs,
