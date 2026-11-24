@@ -139,6 +139,19 @@ export function makeRangeMaterial(rg: Range, tri = 0) {
       ${GLSL_NOISE}
       ${GLSL_SKY}
       ${GLSL_HOME_AIR}
+      // fbm whose octaves finer than about two pixels are their own mean (and are not worked out at all): what the
+      // pixel cannot hold would only alias, and the far ranges skip a third of their noise
+      float fbmL(vec2 p, float fw){
+        float v = 0.0; float a = 0.5; float f = 1.0;
+        mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+        for (int i = 0; i < 5; i++) {
+          float k = smoothstep(0.25, 0.6, fw * f);
+          if (k >= 1.0) { v += a * 0.5; }
+          else v += a * mix(vnoise(p), 0.5, k);
+          p = m * p; a *= 0.5; f *= 2.0;
+        }
+        return v;
+      }
       void main(){
         vec3 n = dot(vN, vN) > 1e-10 ? normalize(vN) : vec3(0.0, 1.0, 0.0);
         // (a range's slopes all face up; a mountain with sheer faces may be built with any winding, so there the normal is
