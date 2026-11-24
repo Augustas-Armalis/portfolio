@@ -2,7 +2,37 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
 import { GLSL_AIR, WORLD_U, noise2, ridge2 } from "../kit";
-import { CAVE_Z, HALL, HER_K, ORB, TUNNEL, caveAt, floorAt } from "./shape";
+import { CAVE_Z, HALL, HER_K, ORB, TUNNEL, caveAt, floorAt, tunnelX } from "./shape";
+
+// the bays that go off the tunnel's sides: where along it, which side, how deep, how long, how high up, how tall
+const BAYS: [number, number, number, number, number, number][] = [
+  [1000, 1, 15, 15, 9, 9],
+  [946, -1, 19, 18, 10, 11],
+  [889, 1, 13, 13, 8, 8],
+  [838, -1, 16, 16, 11, 12],
+];
+// one number for each cell of a broken paving of the plane (the cell a point falls in: the nearest of a scatter)
+const hsh = (a: number, b: number) => {
+  const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+function cellVal(px: number, pz: number) {
+  const ix = Math.floor(px);
+  const iz = Math.floor(pz);
+  let best = 9;
+  let v = 0;
+  for (let dz = -1; dz <= 1; dz++)
+    for (let dx = -1; dx <= 1; dx++) {
+      const cx = ix + dx + hsh(ix + dx, iz + dz);
+      const cz = iz + dz + hsh(iz + dz + 7.3, ix + dx + 1.9);
+      const d = (px - cx) ** 2 + (pz - cz) ** 2;
+      if (d < best) {
+        best = d;
+        v = hsh(ix + dx + 13.1, iz + dz + 5.7);
+      }
+    }
+  return v;
+}
 
 const sst = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -70,16 +100,17 @@ vec3 orbScatter(vec3 p){
 // the ring pressed down onto the ground, so wall and floor are one surface with no seam). The rock is pushed in by
 // long upright folds (the curtains of stone a cave hangs) and broad swellings.
 export function caveGeometry(mobile: boolean) {
-  const NZ = mobile ? 150 : 250;
+  const NZ = mobile ? 190 : 340;
   const NA = mobile ? 120 : 190;
   const pos = new Float32Array((NZ + 1) * (NA + 1) * 3);
   const wallK = new Float32Array((NZ + 1) * (NA + 1));
   const [z0, z1] = CAVE_Z;
   for (let j = 0; j <= NZ; j++) {
-    // (two fifths of the rings are spent on the tunnel and the hall of fog, which are flown close along; the cavern
-    // has the rest, closer together toward its far end where the dome closes)
+    // (a third of the rings are spent on the tunnel, which is flown close along and whose rock is worked small: one
+    // every two and a half metres; a fifth on the hall of fog; the cavern has the rest, closer together toward its
+    // far end where the dome closes)
     const s = j / NZ;
-    const z = s < 0.6 ? z0 + (HALL.z1 - z0) * Math.pow(s / 0.6, 0.85) : HALL.z1 + (z1 - HALL.z1) * ((s - 0.6) / 0.4);
+    const z = s < 0.46 ? z0 + (HALL.z1 - z0) * Math.pow(s / 0.46, 0.85) : s < 0.68 ? HALL.z1 + (TUNNEL.z0 - HALL.z1) * ((s - 0.46) / 0.22) : TUNNEL.z0 + (z1 - TUNNEL.z0) * ((s - 0.68) / 0.32);
     const { w, top } = caveAt(z);
     const yc = top * 0.34;
     const hy = top - yc;
@@ -90,7 +121,7 @@ export function caveGeometry(mobile: boolean) {
       const sn = Math.sin(th);
       const ex = Math.sign(c) * Math.pow(Math.abs(c), 0.78);
       const ey = Math.sign(sn) * Math.pow(Math.abs(sn), 0.78);
-      let x = w * ex;
+      let x = tunnelX(z) + w * ex;
       let y = yc + hy * ey;
       // the rock pressed in: upright folds and broad swellings, less near the floor and at the vault's crown
       const arc = th * Math.max(520, w * 0.74);
@@ -102,7 +133,23 @@ export function caveGeometry(mobile: boolean) {
       const bay = noise2(arc * 0.0011 + 9.2, z * 0.0012 + 4.4) - 0.5;
       const curtain = ridge2(arc * 0.0042 + 2.0, z * 0.0019, 3);
       const k = Math.min(1, w / 160) * (0.25 + 0.75 * Math.sin(Math.min(1, up * 1.4) * Math.PI * 0.5));
-      const push = ((fold * 34 + swell * 46 - 16) * (1 + 1.2 * big) + (bay * 520 + curtain * 150) * big) * k;
+      // (the long upright folds are the hall's and the cavern's: in the tunnel and round its mouth they would lie
+      // along the way like hung cloth, so there are none there)
+      const tunnelK = 1 - sst(34, 120, w);
+      let push = ((fold * 34 + swell * 46 - 16) * (1 + 1.2 * big) * (1 - tunnelK) + (bay * 520 + curtain * 150) * big) * k;
+      // The tunnel: a passage in bedded rock. Its walls are great slabs, each standing a little forward of its
+      // neighbour or a little back, with plain faces and an edge between them; low on the walls, here and there, a
+      // bench of rock; and in four places a bay goes off into the side of it. Nothing small.
+      const tk = tunnelK;
+      if (tk > 0) {
+        const at = th * w;
+        const slab = cellVal(at / 11, z / 15);
+        const swell2 = noise2(at * 0.045 + 7, z * 0.03 + 3) - 0.5;
+        const bench = sst(2, 4, y) * (1 - sst(8, 10.5, y)) * sst(0.45, 0.6, noise2(z * 0.03 + (ex > 0 ? 0 : 9), 4.2));
+        let bay = 0;
+        for (const b of BAYS) if (Math.sign(ex) === b[1]) bay += b[2] * Math.exp(-(((z - b[0]) / b[3]) ** 2)) * Math.exp(-(((y - b[4]) / b[5]) ** 2));
+        push += ((slab - 0.4) * 2.6 + swell2 * 3.4 + bench * 2.4 - bay - 0.5) * tk * (0.2 + 0.8 * sst(0.02, 0.25, up));
+      }
       // pushed toward the middle of the section
       const nx = -ex;
       const ny = -(y - yc) / Math.max(hy, 1);
@@ -140,7 +187,7 @@ export function caveGeometry(mobile: boolean) {
 export function makeCaveMaterial() {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U },
+    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, uShroomP: { value: Array.from({ length: 9 }, () => new THREE.Vector3(0, -1e5, 0)) }, uShroomC: { value: Array.from({ length: 9 }, () => new THREE.Vector3()) } },
     vertexShader: /* glsl */ `
       attribute float aWall;
       varying vec3 vWorld; varying vec3 vN; varying vec3 vLocal; varying float vWall;
@@ -157,6 +204,27 @@ export function makeCaveMaterial() {
       ${GLSL_AIR}
       ${GLSL_ORB}
       // the picture's ground: long upright strokes, flecks, and rows of short dark wavy marks (h runs along the wall)
+      // a height drawn on a surface pushes its normal about (from the screen's own derivatives)
+      vec3 bumpN(vec3 n, vec3 P, float h, float k){
+        vec3 dpx = dFdx(P); vec3 dpy = dFdy(P);
+        float hx = dFdx(h); float hy = dFdy(h);
+        vec3 r1 = cross(dpy, n); vec3 r2 = cross(n, dpx);
+        float det = dot(dpx, r1);
+        vec3 g = (r1 * hx + r2 * hy) * sign(det) / max(abs(det), 1e-7);
+        return normalize(n - g * k);
+      }
+      // The tunnel's rock: plain, dark, matte. A near-black brown-grey that is a little lighter here and darker
+      // there over tens of metres, and a soft grain; laid on from three sides so nothing is drawn out along the way.
+      // Nothing else: no beds, no joints, no seams, no wet, no shine.
+      float tri(vec3 P, vec3 w, float f, float o){ return vnoise(P.zy * f + o) * w.x + vnoise(P.xz * f + o + 3.7) * w.y + vnoise(P.xy * f + o + 8.3) * w.z; }
+      vec3 tunnelRock(vec3 P, vec3 n, float fine){
+        vec3 w = pow(abs(n), vec3(4.0)); w /= w.x + w.y + w.z;
+        float broad = tri(P, w, 0.028, 0.0) * 0.65 + tri(P, w, 0.085, 5.0) * 0.35;
+        float grain = tri(P, w, 1.3, 2.0);
+        vec3 col = mix(vec3(0.03, 0.027, 0.028), vec3(0.078, 0.068, 0.06), smoothstep(0.2, 0.8, broad));
+        return col * (0.93 + 0.14 * grain * fine);
+      }
+      uniform vec3 uShroomP[9]; uniform vec3 uShroomC[9];
       vec3 ground(float h, float y, float fw){
         float s1 = vnoise(vec2(h * 0.16, y * 0.011));
         float s2 = vnoise(vec2(h * 0.55 + 7.0, y * 0.035));
@@ -213,13 +281,17 @@ export function makeCaveMaterial() {
         float c2 = abs(vnoise(vec2((P.x + P.z) * 0.035, P.y * 0.01)) - 0.5);
         float crack = (1.0 - smoothstep(0.0, 0.02 + fwh * 0.01, c1)) * 0.7 + (1.0 - smoothstep(0.0, 0.015 + fwh * 0.008, c2)) * 0.6;
         rock *= 1.0 - 0.55 * crack * fine;
+        // (in the tunnel none of that: its rock is its own, plain and dark)
+        vec3 tRock = tunnelRock(P, n, fine);
+        rock = mix(tRock, rock, inC);
         // the picture's own strokes still in it, faintly: upright, green and gold
         float st = vnoise(vec2((P.x + P.z) * 0.14, P.y * 0.012));
         rock = mix(rock, vec3(0.15, 0.18, 0.06), smoothstep(0.7, 0.85, st) * 0.35 * inC);
         // moss: on every ledge that faces up, thicker low down and toward the light
         float ledge = smoothstep(0.15, 0.6, n.y);
         float mossN = vnoise(P.xz * 0.08) * 0.6 + vnoise(P.xz * 0.31 + 3.0) * 0.4;
-        float moss = ledge * smoothstep(0.35, 0.6, mossN + 0.2 * inC) * mix(0.4, 1.0, inC);
+        // (none in the tunnel: its rock is bare)
+        float moss = ledge * smoothstep(0.35, 0.6, mossN + 0.2 * inC) * inC;
         vec3 mossC = mix(vec3(0.04, 0.075, 0.03), vec3(0.11, 0.15, 0.04), vnoise(P.xz * 0.6) * fine + 0.3 * (1.0 - fine));
         vec3 wall = mix(rock, mossC, moss);
         // ---- the floor: moss, leaf litter, the dark of roots, still pools
@@ -231,8 +303,9 @@ export function makeCaveMaterial() {
         floorC = mix(floorC, vec3(0.14, 0.09, 0.04), lit * 0.5);
         // roots: long dark winding lines
         float rt = abs(vnoise(vec2(P.x * 0.06 + vnoise(P.xz * 0.02) * 3.0, P.z * 0.012)) - 0.5);
-        floorC *= 1.0 - 0.6 * (1.0 - smoothstep(0.0, 0.03 + fwh * 0.01, rt)) * fine;
-        floorC = mix(floorC, homeRock * 0.8, (1.0 - inC) * 0.7);
+        // (roots are of the wood: there are none on the tunnel's stone)
+        floorC *= 1.0 - 0.6 * (1.0 - smoothstep(0.0, 0.03 + fwh * 0.01, rt)) * fine * inC;
+        floorC = mix(floorC, tRock * 0.85, 1.0 - inC);
         // pools: still dark water in the hollows, the orb and the air in them
         float poolN = vnoise(P.xz * 0.018 + 7.0) * 0.7 + vnoise(P.xz * 0.06) * 0.3;
         float aa = max(fwidth(poolN), 0.002);
@@ -241,19 +314,27 @@ export function makeCaveMaterial() {
         // the light of the orb, and the dim air's own light in the shade
         vec4 o = orbLight(vWorld, n, 0.35, 1150.0);
         // (the tunnel is dark: what light there is in it is ahead)
-        vec3 amb = uSkyCol * (0.55 + 0.45 * n.y) * 1.1 * mix(0.5, 1.0, inC);
+        vec3 amb = mix(vec3(0.17, 0.155, 0.14), uSkyCol * (0.55 + 0.45 * n.y) * 1.1, inC);
         vec3 col = alb * (amb + o.rgb * 2.3);
-        // in the tunnel: the cavern's light coming in at its far mouth, green-gold, along the wet walls
+        // in the tunnel: the light that comes in at its far mouth
         vec3 mouth = vec3(0.0, 22.0, ${(TUNNEL.z0 - 30).toFixed(1)});
         vec3 toM = mouth - P;
         float dm = length(toM);
-        float mouthL = (0.25 + 0.75 * max(dot(n, toM / dm), 0.0)) / (1.0 + pow(dm / 110.0, 2.0)) * (1.0 - inC * 0.6);
-        col += alb * vec3(0.9, 0.8, 0.45) * mouthL * 1.5;
+        // (warm and soft, and falling off along the walls: they stay dark, and the mouth is what the eye goes to)
+        float mouthL = (0.3 + 0.7 * max(dot(n, toM / dm), 0.0)) * (1.0 / (1.0 + pow(dm / 75.0, 2.0)) + 0.012) * (1.0 - inC * 0.6);
+        col += alb * vec3(1.0, 0.72, 0.38) * mouthL * 2.2;
+        // and the small light of the mushrooms at the walls' feet, each on the rock near it
+        if (inC < 0.999) {
+          for (int i = 0; i < 9; i++) {
+            vec3 dv = uShroomP[i] - vWorld;
+            float dd = length(dv);
+            col += alb * uShroomC[i] * (0.35 + 0.65 * max(dot(n, dv / max(dd, 0.01)), 0.0)) * 2.4 / (1.0 + pow(dd / 6.0, 2.0)) * (1.0 - inC);
+          }
+        }
         // damp: a sheen on the wet rock where it faces the orb
         vec3 toO = normalize(uOrb - vWorld);
         float spec = pow(max(dot(reflect(-V, n), toO), 0.0), 24.0);
-        col += orbCol() * spec * length(o.rgb) * 0.35 * (1.0 - moss) * fine;
-        col += vec3(0.7, 0.85, 0.45) * pow(max(dot(reflect(-V, n), toM / dm), 0.0), 16.0) * mouthL * 0.5 * fine;
+        col += orbCol() * spec * length(o.rgb) * 0.35 * (1.0 - moss) * fine * inC;
         // the pools: a mirror of the air, and the orb's own light lying in them
         if (pool > 0.0) {
           vec3 R = reflect(-V, vec3(0.0, 1.0, 0.0));

@@ -173,13 +173,17 @@ export function makeRangeMaterial(rg: Range) {
   });
 }
 
+// the range itself (the second of the three): its measure is also the cave's mountain's (Cave.tsx), so that one is
+// shaded as one of them, the same rock, strata, snow line and haze in the same world units
+export const MAIN_RANGE: Range = { r0: 950, r1: 1900, height: 330, freq: 0.0027, seed: 11.7, haze: 0.0, snow: 0.9, pass: [-1, -0.5], span: [1.25, 1.95], massif: 0.45 };
+
 export function HomeMountains({ mobile }: { mobile: boolean }) {
   const layers = useMemo(() => {
     const ranges: Range[] = [
       // foothills, wooded and green, close enough to read as land you could walk to
       { r0: 430, r1: 900, height: 120, freq: 0.0058, seed: 3.1, haze: 0.0, snow: 0, pass: [-1, -0.5], span: [1.5, 2.2], massif: 0.15, valley: true },
       // the range itself: snow on its heads, standing full in the view
-      { r0: 950, r1: 1900, height: 330, freq: 0.0027, seed: 11.7, haze: 0.0, snow: 0.9, pass: [-1, -0.5], span: [1.25, 1.95], massif: 0.45 },
+      MAIN_RANGE,
       // and the giants behind it
       { r0: 2100, r1: 4300, height: 760, freq: 0.00125, seed: 27.3, haze: 0.16, snow: 1, pass: [-1, -0.5], span: [1.0, 1.7], massif: 0.5 },
     ];

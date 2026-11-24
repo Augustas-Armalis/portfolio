@@ -164,7 +164,9 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
           float wave = 0.5 + 0.5 * sin(vUv.x * 0.21 - uTime * 1.35);
           wave = wave * wave;
           float grain = vnoise(vec2(vUv.x * 2.3 - uTime * 0.8, vUv.y * 3.0));
-          float a = across * (0.05 + 0.13 * wave) + core * (0.11 + 0.3 * wave) * (0.5 + 0.9 * grain);
+          // (the flower path's thread is only a soft glow: a bright hairline seen from above breaks into a sawtooth)
+          float coreK = uStyle > 1.5 && uStyle < 2.5 ? 0.0 : 1.0;
+          float a = across * (0.05 + 0.13 * wave) * (coreK > 0.5 ? 1.0 : 0.7) + core * coreK * (0.11 + 0.3 * wave) * (0.5 + 0.9 * grain);
           vec3 extra = vec3(0.0);
           float edge = 1.0 - smoothstep(0.6, 1.0, abs(vUv.y));
           if (uStyle > 0.5 && uStyle < 1.5) {
@@ -187,7 +189,7 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
             float d = length((fract(g) - 0.5 - o) * vec2(1.0, 1.25));
             float petal = step(0.36, h) * smoothstep(0.2 + 0.1 * h, 0.03, d) * (0.75 + 0.25 * sin(uTime * 0.7 + h * 30.0));
             vec3 pc = h < 0.58 ? vec3(1.0, 0.95, 0.82) : h < 0.8 ? vec3(1.0, 0.72, 0.78) : vec3(1.0, 0.86, 0.42);
-            extra = pc * petal * edge * 0.42;
+            extra = pc * petal * edge * 0.3;
             a *= 0.75;
           } else if (uStyle > 2.5) {
             // a causeway on the water: broken glints that travel, brightest down the middle
@@ -207,6 +209,8 @@ export function LightPath({ id, def, tint = [1, 0.9, 0.68], gain = 1, angels = t
           fade *= (1.0 - airAmt(vWorld) * 0.7) * exp(-dist * uMist * 1.5);
           // (the fine things on it are for the near and middle distance: far off only the thread is left)
           extra *= 1.0 - smoothstep(110.0, 260.0, dist);
+          // (the flower trail is a soft strew close under the plane only: seen from a distance its petals read as a bright zigzag)
+          if (uStyle > 1.5 && uStyle < 2.5) fade *= 1.0 - smoothstep(30.0, 110.0, dist);
           gl_FragColor = vec4((uTint * a + extra) * fade * uGain * glowK() * (1.0 + uPulse * 0.6), 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>

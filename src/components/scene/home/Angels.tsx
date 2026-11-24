@@ -197,8 +197,17 @@ function figure(): Piece[] {
   return pieces;
 }
 
+export type AngelSpot = { x: number; z: number; y: number; yaw: number; s: number; robe: number };
+// The air a set of angels stands in: its GLSL (with the sky's and noise already before it), the calls that apply it
+// to a colour and give how much of it lies on a point, and its uniforms. The forest's own by default.
+export type AngelAir = { glsl: string; apply: string; amount: string; uniforms: Record<string, THREE.IUniform>; night?: THREE.IUniform };
+const HOME_ANGEL_AIR: AngelAir = { glsl: GLSL_HOME_AIR, apply: "homeAir(col, vWorld)", amount: "homeAirAmt(vWorld)", uniforms: HOME_U };
 export function makeAngels(amount: number) {
-  const list = placeAngels(amount);
+  return buildAngels(placeAngels(amount));
+}
+// Any set of angels, anywhere (the Funeral Symphony's watchers use this): `list` says where, how large (s: metres
+// of scale, a figure stands 2.7 s tall), which way it faces and which robe.
+export function buildAngels(list: AngelSpot[], air: AngelAir = HOME_ANGEL_AIR) {
   const pieces = figure();
   const geos: THREE.BufferGeometry[] = [];
   const m = new THREE.Matrix4();
@@ -235,7 +244,7 @@ export function makeAngels(amount: number) {
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     side: THREE.DoubleSide,
-    uniforms: { ...SKY_U, ...HOME_U, uNightK: FOREST_K.night },
+    uniforms: { ...SKY_U, ...air.uniforms, uNightK: air.night ?? FOREST_K.night },
     vertexShader: /* glsl */ `
       attribute vec4 aM; attribute vec3 aCol;
       uniform float uTime;
@@ -248,15 +257,17 @@ export function makeAngels(amount: number) {
         wp += lean * h * h;
         wp.y += 0.04 * sin(uTime * 0.6 + seed * 2.3) * h;
         wp += normal * aM.z * aM.z * 0.07 * sin(uTime * 0.8 + seed) * step(2.5, aM.y);
-        vWorld = wp; vN = normal; vCol = aCol; vM = aM; vUv = uv;
-        gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+        // (the model matrix is the identity in the forest; elsewhere the figures stand with their world)
+        vec4 w4 = modelMatrix * vec4(wp, 1.0);
+        vWorld = w4.xyz; vN = normal; vCol = aCol; vM = aM; vUv = uv;
+        gl_Position = projectionMatrix * viewMatrix * w4;
       }`,
     fragmentShader: /* glsl */ `
       uniform float uNightK;
       varying vec3 vN; varying vec3 vWorld; varying vec3 vCol; varying vec4 vM; varying vec2 vUv;
       ${GLSL_NOISE}
       ${GLSL_SKY}
-      ${GLSL_HOME_AIR}
+      ${air.glsl}
       void main(){
         float part = vM.y;
         vec3 eye = normalize(cameraPosition - vWorld);
@@ -296,7 +307,7 @@ export function makeAngels(amount: number) {
         // (and as it thins it pales, into the light of the mist it stands in)
         col = mix(col, glowC * mix(vec3(0.62, 0.68, 0.8), vec3(1.0), 0.4) * (0.55 + 0.35 * uNightK), (1.0 - fade) * 0.7);
         if (a < 0.01) discard;
-        col = homeAir(col, vWorld);
+        col = ${air.apply};
         gl_FragColor = vec4(col, a);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -328,27 +339,28 @@ export function makeAngels(amount: number) {
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { ...SKY_U, ...HOME_U, uNightK: FOREST_K.night },
+    uniforms: { ...SKY_U, ...air.uniforms, uNightK: air.night ?? FOREST_K.night },
     vertexShader: /* glsl */ `
       attribute vec4 aAt; attribute vec2 aKind;
-      varying vec2 vUv; varying float vKind; varying vec3 vWorld; varying float vDist;
+      varying vec2 vUv; varying float vKind; varying vec3 vWorld; varying float vDist; varying float vSz;
       void main(){
+        vSz = aAt.w;
         vec3 R = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
         vec3 U = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
         vec2 sz = vec2(1.0, aKind.y);
         // (the aura stands tall and narrow, the mist lies wide and low)
         if (aKind.x > 1.5) sz = vec2(aKind.y, 0.45);
-        vec3 c = aAt.xyz;
+        vec3 c = (modelMatrix * vec4(aAt.xyz, 1.0)).xyz;
         vWorld = c + (R * position.x * sz.x + U * position.y * sz.y) * aAt.w;
         vUv = position.xy; vKind = aKind.x; vDist = length(c - cameraPosition);
         gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
       }`,
     fragmentShader: /* glsl */ `
       uniform float uNightK;
-      varying vec2 vUv; varying float vKind; varying vec3 vWorld; varying float vDist;
+      varying vec2 vUv; varying float vKind; varying vec3 vWorld; varying float vDist; varying float vSz;
       ${GLSL_NOISE}
       ${GLSL_SKY}
-      ${GLSL_HOME_AIR}
+      ${air.glsl}
       void main(){
         float r = length(vUv);
         float a;
@@ -364,15 +376,15 @@ export function makeAngels(amount: number) {
           a = k * k * k * 0.16;
           c = vec3(1.0, 0.92, 0.78);
         } else {
-          float n = vnoise(vWorld.xz * 0.9 + uTime * 0.08) * 0.5 + 0.5;
+          float n = vnoise(vWorld.xz * 0.9 / max(vSz * 0.6, 1.0) + uTime * 0.08) * 0.5 + 0.5;
           float k = max(0.0, 1.0 - r * r);
           a = k * k * 0.22 * n;
           // (thinning toward the ground it lies on, so the land never cuts it off in a line)
           a *= smoothstep(-0.9, 0.1, vUv.y);
           c = mix(vec3(0.75, 0.82, 0.92), vec3(1.0, 0.9, 0.75), 0.4);
         }
-        a *= (0.35 + 0.65 * uNightK) * smoothstep(1.5, 5.0, vDist) * (1.0 - smoothstep(110.0, 200.0, vDist));
-        a *= 1.0 - homeAirAmt(vWorld) * 0.8;
+        a *= (0.35 + 0.65 * uNightK) * smoothstep(1.5, 5.0, vDist) * (1.0 - smoothstep(110.0 + vSz * 60.0, 200.0 + vSz * 90.0, vDist));
+        a *= 1.0 - ${air.amount} * 0.8;
         // (light added to what is behind: nothing where there is none, and no tone curve to lift its black into a
         // pale square)
         if (a < 0.002) discard;

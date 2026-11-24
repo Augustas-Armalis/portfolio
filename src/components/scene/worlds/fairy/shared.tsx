@@ -686,14 +686,23 @@ vec3 groundLife(vec3 col, vec2 p, float gd, float px, vec3 light, float amount, 
   // broad strokes of darker and lighter turf, laid along a slowly turning hand
   float turf = vnoise(p * vec2(0.05, 0.016) + vnoise(p * 0.004) * 4.0);
   col *= 1.0 + (turf - 0.5) * 0.3 * amount;
-  float nearF = (1.0 - smoothstep(90.0, 320.0, gd)) * amount * (1.0 - smoothstep(0.3, 1.1, px * 2.4));
+  float nearF = (1.0 - smoothstep(25.0, 150.0, gd)) * amount * (1.0 - smoothstep(0.3, 1.1, px * 2.4));
   if (nearF > 0.0) {
-    vec2 fc = p * 0.42; vec2 fi = floor(fc); float fh = hash12(fi + 17.0);
-    vec2 fo = vec2(hash12(fi + 3.1), hash12(fi + 7.7));
-    float fd = length(fract(fc) - 0.2 - 0.6 * fo);
-    float speck = (1.0 - smoothstep(0.09, 0.16, fd)) * step(0.5, fh);
-    vec3 fcol = fh < 0.72 ? vec3(1.0, 0.97, 0.88) : fh < 0.88 ? tintA : tintB;
-    col = mix(col, fcol * light * 1.1, speck * nearF);
+    // flowers: small, in drifts (thick in some places, none in others), each cell its own size, tone and shade
+    float bloomDrift = smoothstep(0.35, 0.7, vnoise(p * 0.045 + 21.0));
+    vec3 pal0 = vec3(1.0, 0.96, 0.86);
+    for (int L = 0; L < 2; L++) {
+      float sc = L == 0 ? 0.62 : 1.15;
+      vec2 fc = p * sc; vec2 fi = floor(fc); float fh = hash12(fi + 17.0 + float(L) * 31.0);
+      vec2 fo = vec2(hash12(fi + 3.1), hash12(fi + 7.7));
+      float fd = length(fract(fc) - 0.2 - 0.6 * fo);
+      float rr = (0.035 + 0.06 * fract(fh * 13.7)) * (L == 0 ? 1.0 : 0.7);
+      float speck = (1.0 - smoothstep(rr * 0.6, rr * 1.5, fd)) * step(0.55 - 0.25 * bloomDrift, fh);
+      float k = fract(fh * 7.9);
+      vec3 fcol = k < 0.35 ? pal0 : k < 0.5 ? tintA : k < 0.65 ? tintB : k < 0.82 ? vec3(0.62, 0.55, 0.9) : vec3(0.95, 0.62, 0.7);
+      fcol *= 0.78 + 0.4 * fract(fh * 3.3);
+      col = mix(col, fcol * light, speck * nearF * (0.55 + 0.4 * bloomDrift));
+    }
     // stones: a few pale ones with a dark side
     vec2 sc = p * 0.13; vec2 si = floor(sc); float shh = hash12(si + 41.0);
     vec2 so = vec2(hash12(si + 5.3), hash12(si + 9.1));
@@ -1005,13 +1014,13 @@ export function makeLeafyMaterial(leaves: THREE.Texture, o: { lit?: V3; shade?: 
           float k1 = fract(vSeed * 7.31);
           float k2 = fract(vSeed * 23.17);
           vec3 mid = mix(${v3(o.wood.a)}, ${v3(o.wood.b)}, k1);
-          mid = mix(mid, mid * vec3(1.9, 1.35, 0.5), smoothstep(0.84, 0.97, k2) * ${(o.wood.gold ?? 1).toFixed(2)});
+          mid = mix(mid, mid * vec3(1.55, 1.25, 0.6), smoothstep(0.84, 0.97, k2) * ${(o.wood.gold ?? 1).toFixed(2)} * 0.6);
           mid = mix(mid, mid * vec3(0.5, 0.74, 1.0), smoothstep(0.24, 0.06, k2) * 0.8);
           vec3 base = mix(${v3(o.wood.shade)}, mid, smoothstep(0.2, 0.85, up + (dab - 0.5) * 0.4 * nearK));
           col = base * uSkyCol * (0.34 + 0.5 * up);
-          col += mix(mid, mid * vec3(2.1, 1.55, 0.5) + vec3(0.06, 0.04, 0.0), 0.7) * uKeyCol * litK * 0.5;
+          col += mix(mid, mid * vec3(1.7, 1.45, 0.62) + vec3(0.03, 0.03, 0.0), 0.6) * uKeyCol * litK * 0.5;
           float backW = pow(max(dot(-V, uKeyDir), 0.0), 2.0) * pow(clamp(1.0 - dot(n, V), 0.0, 1.0), 1.4);
-          col += mid * vec3(2.4, 1.8, 0.5) * uKeyCol * backW * 0.42 * sunUp;
+          col += mid * vec3(1.9, 1.55, 0.55) * uKeyCol * backW * 0.3 * sunUp;
           col *= mix(0.5, 1.0, ao);
         }`
             : ""

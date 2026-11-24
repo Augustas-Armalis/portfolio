@@ -8,7 +8,10 @@ import { FarGround, Gallery, Halos, LightGate, LightPath, useDisposable, type Wo
 import { Kit, makePoints, makeTempera, makeWater, pointsGeometry, rng, type Halo, type V3 } from "./kit";
 import { Birds, type Flock } from "./life";
 import { linesGeometry, makeCloudPaint, makeLineMaterial, makeRayDiscMaterial, makeSoftMaterial, paintedCloudGeometry, softGeometry, type PCloud, type Seg, type Soft } from "./stars/forms";
-import { heroAngel, wingFan } from "./stars/parts";
+import { heroAngel, makePyramidVeil, wingFan } from "./stars/parts";
+import { GLOBE, RIVER, buildGarden } from "./stars/garden";
+import { Kindling } from "./fairy/shared";
+import { useMoment } from "./moments";
 import { DOOR, DOOR_Z, GREAT, PYRS, SKY_RING, makePyramidMaterial, makeStarBand, pyramidGeometry, pyramidReflectGLSL, skyAt } from "./stars/pyramids";
 import { ORIGIN, WORLDS } from "./voyage";
 import { Comet } from "./stars/comet";
@@ -32,6 +35,13 @@ import { useDeepLens } from "./fairy/shared";
 
 const def = WORLDS.stars;
 const GOLD: V3 = [1.0, 0.8, 0.44];
+// the glow that grows toward the way out, and the one that wakes round the globe (drawn about their own centres)
+const DOOR_GLOW: Halo[] = [
+  { p: [0, 0, -4], size: 520, col: [1, 0.72, 0.36], k: 0.55 },
+  { p: [0, 60, 120], size: 1100, col: [1, 0.78, 0.45], k: 0.2 },
+  { p: [0, 120, 400], size: 1800, col: [0.9, 0.75, 0.5], k: 0.09 },
+];
+const GLOBE_GLOW: Halo[] = [{ p: [0, 0, 0], size: 700, col: [0.5, 0.95, 0.75], k: 0.2 }];
 
 // The whole of it, made part by part with a pause after each, so that it can be made a little a frame under the
 // closed cloud (worlds/Worlds.tsx hands prepareStars to the plane) instead of all at once in one long frame.
@@ -45,7 +55,20 @@ function* starsSteps(props: WorldProps) {
 
   yield;
   // ----- the pyramids -----
-  const pyr = PYRS.map((p) => ({ p, geo: pyramidGeometry(p), mat: makePyramidMaterial(p, p === GREAT) }));
+  const pyr = [{ p: GREAT, geo: pyramidGeometry(GREAT), mat: makePyramidMaterial(GREAT, true) }];
+  // the others as the first look had them: veils of pale scalloped cloud, one inside another, each with its edge drawn
+  const cone = (p: (typeof PYRS)[number], k2: number) => {
+    const c = new THREE.ConeGeometry(p.w * k2 * Math.SQRT2, p.h * k2, 4, 40, true);
+    c.translate(0, (p.h * k2) / 2, 0);
+    c.rotateY(Math.PI / 4);
+    return c;
+  };
+  const veilPyr: { p: (typeof PYRS)[number]; geo: THREE.BufferGeometry; mat: THREE.ShaderMaterial }[] = [];
+  PYRS.slice(1).forEach((p, i) => {
+    const near = i < 2;
+    for (const s2 of near ? [0.76, 1] : [1])
+      veilPyr.push({ p, geo: cone(p, s2), mat: makePyramidVeil({ h: p.h * s2, half: p.w * s2, alpha: near ? (s2 < 1 ? 0.34 : 0.46) : 0.6, seed: p.seed, freq: 0.017 * (1000 / p.w) ** 0.5, edge: s2 === 1 ? (near ? 1 : 0.8) : 0.12 }) });
+  });
 
   yield;
   // ----- what stands on and at the greatest: the angel, the door's moulding, the steps -----
@@ -184,11 +207,22 @@ function* starsSteps(props: WorldProps) {
   ];
 
   yield;
+  const garden = buildGarden(props.mobile, props.effects);
+  yield;
   const setGeo = k.build();
   const skySet = sky.build();
   yield;
   return {
     pyr,
+    veilPyr,
+    garden,
+    gardenMats: {
+      orb: makeSoftMaterial({ shade: [0.35, 0.4, 0.7], under: [0.4, 0.4, 0.6], rim: 1.4, dab: 0.8, amb: 1.2, key: 0.9, sway: 0.4 }),
+      thread: makeLineMaterial({ gain: 1.3, minW: 0.0022, flow: 0.6 }),
+      figs: makeLineMaterial({ figs: garden.figs.length, gain: 1.6, minW: 0.0018 }),
+      dust: makePoints({ a: [1.0, 0.92, 0.7], b: [0.7, 0.84, 1.0], scale: 420, gain: 0.9, max: 30, drift: 1.2 }),
+      motes: makePoints({ a: [1.0, 0.9, 0.62], b: [0.74, 0.88, 1.0], scale: 500, gain: 0, max: 26, drift: 1.8 }),
+    },
     wisps,
     wispMat: makeWispMaterial(),
     set: setGeo,
@@ -200,7 +234,7 @@ function* starsSteps(props: WorldProps) {
     disc: makeRayDiscMaterial({ col: [1, 0.66, 0.26], hot: [1, 0.86, 0.56], rays: 120, gain: 0.42, disc: 0.2, near: [20, 60] }),
     water: makeWater({
       def,
-      lights: [new THREE.Vector3(0, 0, DOOR_Z + 20)],
+      lights: [new THREE.Vector3(0, 0, DOOR_Z + 20), new THREE.Vector3(GLOBE.x, 0, GLOBE.z), new THREE.Vector3(0, 0, RIVER.z)],
       lightCol: [1.0, 0.78, 0.44],
       lightLen: 3400,
       lightW: 1.5,
@@ -252,6 +286,16 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
   useDeepLens("stars");
   const wings = useRef<(THREE.Group | null)[]>([]);
   const sky = useRef<THREE.Group>(null);
+  const rings = useRef<(THREE.Mesh | null)[]>([]);
+  const walker = useRef<THREE.Group>(null);
+  const doorGlow = useRef<THREE.Group>(null);
+  const globeGlow = useRef<THREE.Group>(null);
+  const clock = useRef(0);
+  // the beats of the journey: star-motes begin to stream along the way; the globe wakes as the plane comes to it;
+  // a soft glow grows toward the door as the way out comes near
+  const motes = useMoment("stars", { id: "motes", after: 2, ease: 6 });
+  const globeM = useMoment("stars", { id: "globe", at: [GLOBE.x, 60, GLOBE.z], within: 800, ease: 5 });
+  const welcome = useMoment("stars", { id: "welcome", at: [0, 30, DOOR_Z], within: 1800, ease: 9 });
   const b = useDisposable(() => buildStars(props), [props.mobile, props.effects > 0.5]);
   useEffect(
     () => () => {
@@ -261,6 +305,29 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
   );
   useFrame(({ camera }) => {
     const t = SKY_U.uTime.value;
+    const g = b.garden;
+    const dt = Math.min(0.25, Math.max(0, t - clock.current));
+    clock.current = t;
+    b.gardenMats.motes.uniforms.uGain.value = 1.1 * motes.k.value;
+    if (doorGlow.current) doorGlow.current.scale.setScalar(0.25 + 1.05 * welcome.k.value);
+    if (globeGlow.current) globeGlow.current.scale.setScalar(0.4 + 0.9 * globeM.k.value);
+    // the hanging worlds' rings turn slowly, each its own way
+    g.rings.forEach((rg, i) => {
+      const m = rings.current[i];
+      if (m) m.rotation.set(rg.tilt, t * 0.05 * (i % 2 ? 1 : -1) + i, 0);
+    });
+    if (walker.current) {
+      const x = Math.sin(t * 0.04) * 60;
+      walker.current.position.set(x, RIVER.y + Math.abs(Math.sin(t * 1.3)) * 0.5, RIVER.z);
+    }
+    // a figure draws itself when the plane comes within sight of it, and once drawn it stays
+    const prog = b.gardenMats.figs.uniforms.uProg.value as Float32Array;
+    const cx = camera.position.x - ORIGIN.x;
+    const cy = camera.position.y - ORIGIN.y;
+    const cz = camera.position.z - ORIGIN.z;
+    g.figs.forEach((f, i) => {
+      if (prog[i] > 0 || Math.hypot(f.c.x - cx, f.c.y - cy, f.c.z - cz) < 900 + f.size) prog[i] = Math.min(1, prog[i] + dt / 5 + 1e-4);
+    });
     wings.current.forEach((w, i) => w && (w.rotation.z = (i ? -1 : 1) * (0.05 + 0.06 * Math.sin(t * 0.33))));
     // (the ring of sky goes with the eye, as a sky does)
     if (sky.current) sky.current.position.set(camera.position.x - ORIGIN.x, 0, camera.position.z - ORIGIN.z);
@@ -277,6 +344,39 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
       {/* the way on: the door's own sheet of light, and the next world seen in it */}
       <LightGate id="stars" def={def} tint={[1, 0.86, 0.6]} gain={1.1} look="veil" half={DOOR.half} rise={DOOR.top - 32} />
       <Gallery def={def} />
+      {b.veilPyr.map((v, i) => (
+        <mesh key={`v${i}`} geometry={v.geo} material={v.mat} position={[v.p.x, 0, v.p.z]} renderOrder={2 + (i % 2) * 0.1} />
+      ))}
+      <mesh geometry={b.garden.set} material={b.tempera} />
+      <mesh geometry={b.garden.globeGeo} material={b.garden.globeMat} position={[GLOBE.x, b.garden.gy, GLOBE.z]} renderOrder={3} />
+      <group position={[GLOBE.x, b.garden.gy, GLOBE.z]}>
+        <mesh geometry={b.garden.starRing} material={b.garden.starRingMat} renderOrder={3.2} />
+        <mesh geometry={b.garden.haloRing} material={b.garden.haloRingMat} renderOrder={4} />
+      </group>
+      <Kindling list={b.garden.globeLamps} centre={b.garden.globeCentre} />
+      <group ref={globeGlow} position={[GLOBE.x, b.garden.gy, GLOBE.z]}>
+        <Halos list={GLOBE_GLOW} kind={2} />
+      </group>
+      <mesh geometry={b.garden.river} material={b.garden.riverMat} renderOrder={3} />
+      <points geometry={b.garden.riverDust} material={b.gardenMats.dust} renderOrder={4} />
+      <group ref={walker}>
+        <mesh geometry={b.garden.walker} material={b.tempera} />
+      </group>
+      <mesh geometry={b.garden.threads} material={b.gardenMats.thread} renderOrder={5} frustumCulled={false} />
+      <mesh geometry={b.garden.orbs} material={b.gardenMats.orb} frustumCulled={false} />
+      {b.garden.rings.map((rg, i) => (
+        <mesh key={`r${i}`} ref={(el) => void (rings.current[i] = el)} geometry={b.garden.ringGeo} material={b.tempera} position={rg.p} scale={[rg.rad, rg.rad, rg.rad * 0.3]} />
+      ))}
+      {b.garden.bands.map((w, i) => (
+        <mesh key={`b${i}`} geometry={w.geo} material={w.mat} renderOrder={4} />
+      ))}
+      <mesh geometry={b.garden.lines} material={b.gardenMats.figs} renderOrder={5} frustumCulled={false} />
+      <points geometry={b.garden.motes} material={b.gardenMats.motes} renderOrder={5} />
+      <Halos list={b.garden.glows} kind={2} />
+      <Halos list={b.garden.halos} />
+      <group ref={doorGlow} position={[0, 40, DOOR_Z]}>
+        <Halos list={DOOR_GLOW} kind={2} />
+      </group>
       {b.pyr.map((p, i) => (
         <mesh key={i} geometry={p.geo} material={p.mat} position={[p.p.x, 0, p.p.z]} />
       ))}
@@ -300,6 +400,7 @@ export default function StarsWorld({ props }: { props: WorldProps }) {
         <Halos list={b.skyGlows} kind={2} />
         <Halos list={b.skyHalos} />
       </group>
+      <Comet world="stars" id="stars-comet-2" from={[3200, 1100, -900]} to={[-2800, 600, -1700]} seconds={46} after={60} again={90} tail={800} width={40} tint={[0.8, 0.9, 1]} />
       <Comet world="stars" id="stars-comet" from={[-3200, 1500, -1400]} to={[3000, 800, -2000]} seconds={44} after={24} again={80} tail={900} width={44} />
       <Birds flocks={b.flocks} tint={[2.6, 2.3, 1.5]} lit />
       <points geometry={b.dust} material={b.dustMat} />

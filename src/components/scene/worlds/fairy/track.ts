@@ -212,12 +212,16 @@ export function makeWayField() {
       }
     }
   }
-  const data = new Uint8Array(W * H);
-  for (let k = 0; k < data.length; k++) {
-    const v = best[k] > 1e8 ? FIELD.range : Math.max(-FIELD.range, Math.min(FIELD.range, sd[k]));
-    data[k] = Math.round((0.5 + v / (2 * FIELD.range)) * 255);
+  // two channels: R the signed distance (exact near a way's middle), G the plain distance (never flips sign far from a
+  // way, where the nearest-segment sign changes along lines that must not be seen as ways)
+  const data = new Uint8Array(W * H * 2);
+  for (let k = 0; k < W * H; k++) {
+    const far = best[k] > 1e8;
+    const v = far ? FIELD.range : Math.max(-FIELD.range, Math.min(FIELD.range, sd[k]));
+    data[k * 2] = Math.round((0.5 + v / (2 * FIELD.range)) * 255);
+    data[k * 2 + 1] = Math.round(Math.min(1, (far ? 1e3 : best[k]) / FIELD.range) * 255);
   }
-  const tex = new THREE.DataTexture(data, W, H, THREE.RedFormat, THREE.UnsignedByteType);
+  const tex = new THREE.DataTexture(data, W, H, THREE.RGFormat, THREE.UnsignedByteType);
   tex.minFilter = tex.magFilter = THREE.LinearFilter;
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.generateMipmaps = false;
@@ -231,7 +235,11 @@ uniform sampler2D tWays;
 float waySD(vec2 p){
   vec2 uv = (p - vec2(${FIELD.x0.toFixed(1)}, ${FIELD.z0.toFixed(1)})) / vec2(${FIELD.w.toFixed(1)}, ${FIELD.h.toFixed(1)});
   if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return ${FIELD.range.toFixed(1)};
-  return (texture2D(tWays, uv).r - 0.5) * ${(2 * FIELD.range).toFixed(1)};
+  vec2 t = texture2D(tWays, uv).rg;
+  float ad = t.g * ${FIELD.range.toFixed(1)};
+  float sg = (t.r - 0.5) * ${(2 * FIELD.range).toFixed(1)};
+  // (the signed value only close to a way's middle; farther off the plain distance, whose sign is never read)
+  return ad > 4.0 ? ad : sg;
 }`;
 
 // ---- the plane's line of flight

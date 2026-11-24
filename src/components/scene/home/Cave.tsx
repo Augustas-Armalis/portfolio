@@ -7,7 +7,7 @@ import { GLSL_NOISE } from "../shared";
 import { GLSL_SKY, SKY_U } from "../sky";
 import { ARCH, CAVE, GATE_NARROW, MOUTH, PEAK, archHW, caveAt, sst } from "./journey";
 import { GLSL_HOME_AIR, HOME_U, landH, rng, timed } from "./land";
-import { makeRangeMaterial } from "./Mountains";
+import { MAIN_RANGE, makeRangeMaterial } from "./Mountains";
 import { FOREST_K } from "./Woods";
 
 // The mountain at the forest's end, and the cave in it (journey.ts).
@@ -181,9 +181,10 @@ function buildCliff() {
 function buildMass() {
   const pos: number[] = [];
   const idx: number[] = [];
-  const us = lines(-330, 330, -30, 30, 1.0, 1.13).filter((_, i, a) => i % 2 === 0 || i === a.length - 1);
+  // (fine enough over the whole of the mountain that its outline against the sky is a ridge, not a row of facets)
+  const us = lines(-330, 330, -30, 30, 1.0, 1.035).filter((_, i, a) => i % 2 === 0 || i === a.length - 1);
   const as: number[] = [];
-  for (let a = 0, s = 3; a < 600; a += s, s = Math.min(14, s * 1.08)) as.push(a);
+  for (let a = 0, s = 2; a < 600; a += s, s = Math.min(5, s * 1.03)) as.push(a);
   for (let j = 0; j < as.length; j++)
     for (const u of us) {
       const t = Math.max(faceTop(u), -14);
@@ -458,7 +459,8 @@ function makeStoneMaterial() {
         float sunUp = smoothstep(-0.02, 0.08, uKeyDir.y);
         // the rock: the ranges' colours (dark lilac-grey, ochre beds), cracked and grained
         vec3 P = vWorld * vec3(1.0, 1.0, 1.0);
-        float strata = vnoise(vec2(P.y * 0.06 + fbm(P.xz * 0.02) * 2.0, P.x * 0.004 + P.z * 0.003));
+        // (the ranges' strata, in the same world units: their beds 9 / 330 to the metre)
+        float strata = vnoise(vec2(P.y * ${(9 / MAIN_RANGE.height).toFixed(5)} + fbm(P.xz * ${(14 / MAIN_RANGE.height).toFixed(5)}) * 2.0, P.x * 0.004));
         float grain = fbm(P.xz * 0.15 + P.y * 0.12) * 0.6 + fbm(vec2(P.x + P.z, P.y) * 0.5) * 0.4 * mix(0.5, 1.0, fine);
         vec3 rock = mix(vec3(0.075, 0.07, 0.085), vec3(0.2, 0.165, 0.135), strata) * (0.75 + 0.5 * grain);
         // out in the daylight the cliff is the pale weathered rock of the ranges seen across the land (as a sheer
@@ -467,7 +469,7 @@ function makeStoneMaterial() {
         // back the rock leans; only the cave's own walls, floor and carving are inside)
         float caveIn = kind < 0.5 ? 0.0 : smoothstep(-2.0, 6.0, L.z);
         // (pale weathered rock by day; by night the face is dark, only the portal's glow on it)
-        rock *= mix(mix(1.15, 2.4, sunUp), 1.0, caveIn);
+        // (out in the land the rock is the ranges' own rock, lit and hazed as they are, below)
         vec3 alb = rock;
         if (kind > 1.5 && kind < 2.95) {
           // the carved orders: pale stone, cut clean, a little paler outward, worn
@@ -512,6 +514,24 @@ function makeStoneMaterial() {
         // with the mountain, and once in, it is clear and lit by the way on)
         vec2 cq = cameraPosition.xz - vec2(${CAVE.x.toFixed(1)}, ${CAVE.z.toFixed(1)});
         float camIn = smoothstep(-4.0, 8.0, -sin(${CAVE.yaw.toFixed(3)}) * cq.x - cos(${CAVE.yaw.toFixed(3)}) * cq.y);
+        // out in the land: lit as the ranges are lit, and in their haze (the feet of the mountain in the low haze,
+        // as theirs), so the cliff, the mountain over it and the ranges behind read as one
+        // (a sheer face is broken up the way the ranges' slopes are: ribs and gullies in the normal, strata and
+        // streaks in the colour, and it takes the sun at a slant, so it never reads as one flat pale slab)
+        vec3 nR = n;
+        float rib = fbm(vec2((vWorld.x + vWorld.z) * 0.09, vWorld.y * 0.012));
+        float rib2 = fbm(vec2((vWorld.x - vWorld.z) * 0.21, vWorld.y * 0.03) + 5.1);
+        nR = normalize(nR + vec3(rib - 0.5, 0.0, rib2 - 0.5) * 1.4 * (1.0 - abs(n.y)));
+        vec3 albR = alb * mix(0.45, 1.05, smoothstep(0.25, 0.75, rib)) * mix(0.8, 1.1, rib2);
+        float steepR = 1.0 - abs(n.y);
+        float ndlR = clamp(dot(nR, uKeyDir) * 0.75 + 0.25, 0.0, 1.0);
+        vec3 outCol = albR * (uSkyCol * (0.55 + 0.45 * nR.y) + uKeyCol * ndlR * ndlR * 1.25 * mix(1.0, 0.5, steepR) * sunUp * mix(1.0, cloudShade(vWorld), 0.7)) + albR * uLead * spill * 0.22 * (0.4 + night);
+        vec3 dR = normalize(vWorld - cameraPosition);
+        float top = ${f2(MAIN_RANGE.height)};
+        float lowR = (1.0 - smoothstep(0.0, top * 0.5, vWorld.y)) * 0.3;
+        float amtR = max(homeAirAmt(vWorld) * mix(0.62, 0.9, smoothstep(0.5, 0.0, vWorld.y / top)), clamp(lowR, 0.0, 0.96));
+        outCol = mix(outCol, homeAirCol(dR), amtR);
+        col = mix(outCol, col, inside);
         col = mix(homeAir(col, vWorld), col, inside * camIn);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -532,8 +552,8 @@ export function Cave() {
         beyondMat: makeBeyondMaterial(),
         motes: buildMotes(70),
         mat: makeStoneMaterial(),
-        // (no snow: a mountain this low, close in front of the snowy ranges, read at night as a pale flat cut-out)
-        massMat: makeRangeMaterial({ r0: 0, r1: 0, height: PEAK.h, freq: 0, seed: 0, haze: 0, snow: 0, pass: [0, 0], span: [0, 0], massif: 0 }),
+        // (the range's own material and measure: one of them, not a mountain pasted in front)
+        massMat: makeRangeMaterial(MAIN_RANGE),
       })),
     [],
   );
