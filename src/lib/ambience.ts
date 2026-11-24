@@ -69,10 +69,13 @@ const BEDS: Record<string, Bed> = {
   sun: bed({ wind: 1.6, hp: 150, lp: 950 }), // high open air
   stars: bed({ wind: 0.78, hp: 80, lp: 620 }), // a low breath in the dark: -40
   rex: bed({ wind: 0.5, hp: 110, lp: 900, waves: 0.72, wavesLp: 1900 }), // surf a long way off under a dim sky: -36
-  fairy: bed({ wind: 1.6, hp: 140, lp: 1000 }), // light air round the mountain
+  fairy: bed({ wind: 0 }), // the castle's world is silent but for the music: he heard a noise there and asked for none
   paradise: bed({ wind: 1.3, hp: 140, lp: 1000, waves: 0.16, wavesLp: 2600, birds: 0.22 }), // still noon, the lake lapping, his white birds, far and few
   gate: bed({ wind: 1.6, hp: 120, lp: 1000 }), // wind through the pass
-  sea: bed({ wind: 0, waves: 1.3, wavesLp: 6500 }), // the waves, nothing else: -32
+  // Tranquility, the island with the two eyes: no air, no surf, nothing under the music (he asked for it quiet)
+  sea: bed({ wind: 0 }),
+  // the storm wave of the Finale keeps the sea: the waves, nothing else: -32
+  seafinale: bed({ wind: 0, waves: 1.3, wavesLp: 6500 }),
   funeral: bed({ wind: 0.6, hp: 70, lp: 480 }), // almost silence: the air of a great night: -42
   kings: bed({ wind: 1.9, hp: 90, lp: 1000 }), // the night wood
   // a place without a world of its own

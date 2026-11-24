@@ -1215,6 +1215,6 @@ export function crossingStep(dt: number, warm = false) {
     xing.hold += dt;
   } else xing.open += dt;
 }
-if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __crossings: crossings });
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __crossings: crossings, __pathOf: (id: WorldId) => { const p = pathOf(id); return { len: p.len, pts: p.pts.map((v) => [v.x, v.y, v.z]) }; } });
 
 export const voyageBusy = () => voyage.cur !== "home" || voyage.skyFrom !== null || voyage.phase !== "open" || arrivalHours() !== null;
