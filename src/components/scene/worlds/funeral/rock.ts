@@ -616,6 +616,9 @@ export function makeRockMaterial() {
         float bed = smoothstep(0.0, 0.25, bedN) * (1.0 - smoothstep(0.85, 1.0, bedN));
         float relief = (rib * 1.5 + bed * 0.45) * steep;
         float rk = (1.0 - smoothstep(900.0, 2600.0, dist)) * (1.0 - smoothstep(0.2, 0.6, fwidth(relief)));
+        // (near, the slope of the ribs is not worked out per pixel from the surface's own derivatives: on a cell as wide as a
+        // hillside that draws every triangle as a flat facet of its own brightness; it comes in with distance, where a pixel spans many)
+        rk *= smoothstep(90.0, 420.0, dist);
         if (rk > 0.01) {
           vec3 sx = dFdx(vWorld); vec3 sy = dFdy(vWorld);
           vec3 r1 = cross(sy, n); vec3 r2 = cross(n, sx);
