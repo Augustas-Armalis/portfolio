@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLSL_NOISE } from "../../shared";
 import { GLSL_SKY, SKY_U } from "../../sky";
 import { GLSL_AIR, WORLD_U, rng } from "../kit";
-import { PORTAL_U } from "../portal";
+import { PORTAL_U, STILL_U } from "../portal";
 import { FRIEND_U } from "./cave";
 import { ORB, PAINT } from "./shape";
 
@@ -24,7 +24,7 @@ export function makeOrbMaterial(map: THREE.Texture) {
   return new THREE.ShaderMaterial({
     side: THREE.DoubleSide,
     transparent: true,
-    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, ...PORTAL_U, uSunD: { value: SUN_D }, uOpen: { value: 0 }, tMap: { value: map } },
+    uniforms: { ...SKY_U, ...WORLD_U, ...FRIEND_U, ...PORTAL_U, ...STILL_U, uSunD: { value: SUN_D }, uOpen: { value: 0 }, tMap: { value: map } },
     vertexShader: /* glsl */ `
       varying vec3 vWorld; varying vec3 vN;
       void main(){
@@ -34,7 +34,8 @@ export function makeOrbMaterial(map: THREE.Texture) {
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uSunD; uniform float uOpen; uniform sampler2D tMap;
-      uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes; uniform float uPortalGain;
+      uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes; uniform float uPortalGain; uniform float uPortalFar;
+      uniform sampler2D tStill; uniform mat4 uStillMat; uniform float uStillOn; uniform float uLiveK;
       varying vec3 vWorld; varying vec3 vN;
       ${GLSL_NOISE}
       ${GLSL_SKY}
@@ -103,12 +104,31 @@ export function makeOrbMaterial(map: THREE.Texture) {
         col *= 1.0 - 0.72 * smoothstep(0.955, 0.995, r) * (1.0 - inside);
         // the opening: the next world, through the orb's heart
         float open = max(uOpen, inside);
-        // (open in its heart, widening as the plane comes)
-        float hole = (1.0 - smoothstep(mix(0.14, 0.8, uOpen * uOpen), mix(0.46, 1.02, uOpen * uOpen), r)) * open;
+        // (open in its heart from the first sight of it, widening as the plane comes)
+        float hole = (1.0 - smoothstep(mix(0.3, 0.8, uOpen * uOpen), mix(0.58, 1.02, uOpen * uOpen), r)) * open;
         hole = max(hole, inside);
         vec3 dir = -V;
         vec3 beyond = painted(dir) * 1.15;
-        if (uPortalK > 0.003) beyond = mix(beyond, texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb * uPortalGain, clamp(uPortalK * 1.4, 0.0, 1.0));
+        // (the Sun as the gates' windows show it, worlds/portal.tsx: from afar its still, looked up by the direction from the
+        // eye through each point of the orb, carried by the same turn; from about 130 m the live picture comes over it, and
+        // the last stretch is the live picture alone. The live target is never read until it has been drawn: before that its
+        // sampler is empty, which is black.)
+        if (uPortalK > 0.003) {
+          vec3 pic = vec3(0.0);
+          if (uLiveK > 0.0) pic = texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb;
+          if (uStillOn > 0.5 && uLiveK < 1.0) {
+            vec4 sc = uStillMat * vec4(normalize(vWorld - cameraPosition), 0.0);
+            vec2 su = clamp(sc.xy / max(sc.w, 1e-4) * 0.5 + 0.5, 0.0, 1.0);
+            pic = mix(texture2D(tStill, su).rgb, pic, uLiveK);
+          }
+          float have = max(uStillOn, uLiveK);
+          pic *= uPortalGain;
+          // (from far it must read as a doorway on a golden world in the cream of the orb: its gold deepened, a little
+          // darker; gone by the time the picture is live, where it is shown exactly as it will be)
+          float pl = dot(pic, vec3(0.2126, 0.7152, 0.0722));
+          pic = mix(vec3(pl), pic, 1.0 + 0.9 * uPortalFar) * (1.0 - 0.18 * uPortalFar);
+          beyond = mix(beyond, pic, clamp(uPortalK * 1.4, 0.0, 1.0) * have);
+        }
         // the lip of the opening, where the orb's light runs round it
         float lip = hole * (1.0 - hole) * 4.0;
         // (the picture is the Sun at the exposure it will have: its gain, as the gates' windows give it, and no more: it was
