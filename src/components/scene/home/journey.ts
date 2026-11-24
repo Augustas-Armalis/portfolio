@@ -130,7 +130,7 @@ export const riverLevel = (x: number, z: number) => (riverD(x, z) < riverW(x) + 
 // The cave: its mouth's middle on the ground, and the way it faces (the plane flies in toward -z, yaw as the gates')
 export const CAVE = { x: -366, z: -668, yaw: 0.06, half: 12.5, rise: 25, above: 9, floor: 1.2, gateIn: 10 };
 // the mountain the cave is cut into: its heart, how high its head stands over the cave's floor
-export const PEAK = { x: -392, z: -812, h: 185 };
+export const PEAK = { x: -392, z: -812, h: 235 };
 // The cave's mouth IS the gate's arch: a rough natural lancet in the cliff (half-width at its legs, the height of its
 // point over the land at the mouth), the passage behind it narrowing a little straight into the gate, which stands
 // CAVE.gateIn in, a few metres behind the lip, its window as large as the opening: what is seen through the mouth is
