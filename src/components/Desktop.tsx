@@ -1450,7 +1450,8 @@ function Welcome() {
   const dark = useWallpaper().dark;
   const [gone, setGone] = useState(false);
   return (
-    <div className="pointer-events-none absolute left-6 top-6 flex flex-col gap-2.5" style={{ width: NOTE_W }}>
+    // z-[1]: over the desktop icons' full-screen selection layer (which took its clicks), under every window
+    <div className="pointer-events-none absolute left-6 top-6 z-[1] flex flex-col gap-2.5" style={{ width: NOTE_W }}>
     <AnimatePresence>
       {!gone && (
         <motion.aside
