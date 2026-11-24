@@ -19,6 +19,9 @@ import { makeRangesMaterial } from "./funeral/far";
 import { buildWatchers } from "./funeral/ledges";
 import { channelGeometry, dockS, funeralBoats, makeChannelMaterial } from "./funeral/water";
 import { makeBoatMaterial } from "./sea/boat";
+import { buildAngels } from "../home/Angels";
+import { GLSL_AIR, WORLD_U } from "./kit";
+import { GLSL_FUNERAL_AIR } from "./funeral/air";
 
 // Funeral Symphony VI (Laidotuvių simfonija, 1903). Deep ultramarine pastel: a steep, dark, sculpted mountain,
 // every crest edged in green-blue light; and up it, in tight switchbacks along the very edge of the rock, a
@@ -397,6 +400,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       clouds,
       shrines: shrines.build(),
       watchers: watch.geo,
+      angels: buildAngels(watch.angels, { glsl: `${GLSL_AIR}\n${GLSL_FUNERAL_AIR}`, apply: "funeralAir(col, vWorld)", amount: "max(airAmt(vWorld), valleyAmt(vWorld))", uniforms: { ...WORLD_U, ...FUNERAL_U }, night: { value: 1 } }),
       watcherMat: makeTempera({ amb: 1.0, key: 0.6, rim: [0.1, 0.4, 0.42], rimPow: 2.6, wrap: 0.6, grain: 1.0 }),
       spiritRoad,
       auroraMat: makeAuroraMaterial(),
@@ -456,6 +460,8 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       <primitive object={b.souls.lampMesh} />
       <mesh geometry={b.shrines} material={b.shrineMat} />
       <mesh geometry={b.watchers} material={b.watcherMat} />
+      <mesh geometry={b.angels.glow} material={b.angels.glowMat} renderOrder={2} frustumCulled={false} />
+      <mesh geometry={b.angels.geo} material={b.angels.mat} renderOrder={3} />
       {/* spirit lights going up the road above the crowd toward the cave, slowly, each bobbing a little */}
       <Walkers road={b.spiritRoad} n={props.mobile ? 26 : 60} speed={7} size={2.6} col={[0.8, 0.9, 1]} seed={13} lift={11} />
       <PaintedClouds list={b.clouds} warm={[0.16, 0.24, 0.5]} shade={[0.03, 0.05, 0.16]} hi={[0.42, 0.56, 0.8]} order={1} />
