@@ -801,7 +801,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [200, 180],
     radius: 1900,
     ceil: 260,
-    pace: 1.4,
+    pace: 2.0,
     // (it comes in a kilometre and a half from the island's head: a long while over the glass with the whole of it in view)
     // (the way in is laid toward the island's head, not its middle: on a tall narrow screen the head and its two
     // eyes are then in the frame from the first, the long back running off to the left)
@@ -887,7 +887,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 180],
     radius: 1320,
     ceil: 430,
-    pace: 1.7,
+    pace: 2.2,
     entry: FUNERAL.entry,
     // inside the cave's mouth, where the procession goes into the mountain (no arch of light: worlds/Funeral.tsx)
     gate: FUNERAL.gate,
@@ -933,6 +933,8 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 200],
     radius: 620,
     ceil: 150,
+    // (the kings are flown at this pace at the top step; the wood is still gone through gently at the slow ones: kingsPace)
+    pace: 1.5,
     entry: { x: 0, z: 700, above: 22, yaw: 0 },
     gate: null,
     // a long way in: the path winds wide between the great trunks, so that from the entry the kings are hidden and
