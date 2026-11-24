@@ -5,7 +5,7 @@
 // silently in the grid while they are in sight; anything opens into a viewer that steps through the set (arrows,
 // keys, a swipe or the filmstrip) and starts a film at once.
 
-import { AnimatePresence, animate, motion, useMotionValue, useTransform, type AnimationPlaybackControls } from "motion/react";
+import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useTransform, type AnimationPlaybackControls } from "motion/react";
 import { flushSync } from "react-dom";
 import { ArrowUpRight, ChevronLeft, ChevronRight, Drone, Film, Image as ImageIcon, Play, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -26,15 +26,20 @@ const typeSets: (Collection & { icon: typeof Film })[] = [
 ];
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 // a tiny copy of the same picture, shown blurred while the full one loads (Unsplash sizes on request)
-const lowRes = (m: Media) => (m.kind === "photo" ? m.src.replace(/w=\d+/, "w=48") : m.poster);
+// a tiny copy of the same picture, shown blurred while the full one loads: his own carry one inline (24 px), the
+// Unsplash ones are asked for at 48 px
+const lowRes = (m: Media) => m.placeholder ?? (m.kind === "photo" ? m.src.replace(/w=\d+/, "w=48") : m.poster);
+const dayOf = (iso?: string) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "");
 
-function Tile({ m, onOpen }: { m: Media; onOpen: () => void }) {
+function Tile({ m, onOpen, wide }: { m: Media; onOpen: () => void; wide?: boolean }) {
   return (
     <button
       type="button"
       onClick={onOpen}
       aria-label={m.kind === "video" ? `${m.title}, film, ${clock(m.duration ?? 0)}` : m.title}
-      className="group relative block aspect-square overflow-hidden bg-[var(--fill-2)] outline-none focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
+      className={`group relative block aspect-square overflow-hidden bg-[var(--fill-2)] bg-cover bg-center outline-none focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${wide ? "col-span-2 row-span-2" : ""}`}
+      // his own carry a 24 px copy: the tile is that, blurred by the scale-up, until the picture is in
+      style={m.placeholder ? { backgroundImage: `url(${m.placeholder})` } : undefined}
     >
       {m.kind === "video" ? (
         <TilePreview m={m} />
@@ -43,6 +48,7 @@ function Tile({ m, onOpen }: { m: Media; onOpen: () => void }) {
       )}
       {m.kind === "video" && (
         <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-end gap-1 bg-gradient-to-t from-black/50 to-transparent px-2 pb-1.5 pt-5 text-[11px] font-semibold tabular-nums text-white">
+          {wide && <span className="mr-auto truncate pr-2 text-left text-[13px] font-semibold">{m.title}</span>}
           <Sym icon={Play} size={10} fill />
           {clock(m.duration ?? 0)}
         </span>
@@ -73,26 +79,49 @@ function TilePreview({ m }: { m: Media }) {
     io.observe(v);
     return () => io.disconnect();
   }, []);
-  return <video ref={ref} src={m.src} poster={m.thumb} muted loop playsInline preload="none" disablePictureInPicture className="h-full w-full object-cover" aria-hidden />;
+  // his own films loop a small silent cut of themselves (about half a megabyte); the film itself loads only when opened
+  return <video ref={ref} src={m.preview ?? m.src} poster={m.thumb} muted loop playsInline preload="none" disablePictureInPicture className="h-full w-full object-cover" aria-hidden />;
 }
 
 function Grid({ items, open, compact }: { items: Media[]; open: (i: number) => void; compact: boolean }) {
   return (
     <div className={`grid gap-[2px] ${compact ? "grid-cols-3" : "grid-cols-[repeat(auto-fill,minmax(150px,1fr))]"}`}>
+      {/* his own film leads its set as a large tile */}
       {items.map((m, i) => (
-        <Tile key={m.id} m={m} onOpen={() => open(i)} />
+        <Tile key={m.id} m={m} wide={m.own && m.kind === "video"} onOpen={() => open(i)} />
       ))}
     </div>
   );
 }
 
 // One picture or film in the viewer. Only the one in view plays: its neighbours wait as their posters.
-function Slide({ m, current, loaded, onLoad }: { m: Media; current: boolean; loaded: boolean; onLoad: () => void }) {
-  if (m.kind === "video" && current)
-    // muted, so it starts at once everywhere (a browser holds back a film with sound until it is asked); the sound
-    // is one tap away in its controls
-    return <video src={m.src} poster={m.poster} controls autoPlay muted playsInline className="max-h-full max-w-full rounded-[10px] bg-black object-contain" />;
-  const src = m.kind === "video" ? m.poster : m.src;
+// A film in the viewer. The stock ones start muted at once; his own starts with its sound where the browser allows it
+// (the tap that opened it counts), muted otherwise. Any of them stops when the tab is hidden, and goes with the viewer.
+function FilmPlayer({ m }: { m: Media }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (m.own) v.play().catch(() => ((v.muted = true), v.play().catch(() => {})));
+    const hide = () => document.visibilityState !== "visible" && v.pause();
+    document.addEventListener("visibilitychange", hide);
+    return () => document.removeEventListener("visibilitychange", hide);
+  }, [m.own]);
+  return <video ref={ref} src={m.src} poster={m.poster} controls autoPlay={!m.own} muted={!m.own} playsInline className="max-h-full max-w-full rounded-[10px] bg-black object-contain" />;
+}
+
+function Slide({ m, current, loaded, onLoad, zoomed = false }: { m: Media; current: boolean; loaded: boolean; onLoad: () => void; zoomed?: boolean }) {
+  // zoomed in on one of his own: the full-size copy is fetched, and swapped in once it has arrived
+  const [sharp, setSharp] = useState<string | null>(null);
+  useEffect(() => {
+    if (!zoomed || !m.zoom || sharp) return;
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => setSharp(m.zoom!);
+    img.src = m.zoom;
+  }, [zoomed, m.zoom, sharp]);
+  if (m.kind === "video" && current) return <FilmPlayer m={m} />;
+  const src = m.kind === "video" ? m.poster : (sharp ?? m.src);
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -205,6 +234,10 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
     zx.set(Math.max(-mx, Math.min(mx, zx.get())));
     zy.set(Math.max(-my, Math.min(my, zy.get())));
   };
+  // past 1.3x the sharper copy is worth fetching
+  const [zoomed, setZoomed] = useState(false);
+  useMotionValueEvent(z, "change", (v) => v > 1.3 && setZoomed(true));
+  useEffect(() => setZoomed(false), [index]);
   const zoomAt = (cx: number, cy: number) => {
     const r = stage.current?.getBoundingClientRect();
     if (!r || !zoomable) return;
@@ -366,7 +399,7 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
               <div key={it.id + (many && list.length < 3 && d ? `:${d}` : "")} className="absolute inset-0 flex items-center justify-center px-2 py-3" style={{ transform: `translateX(calc(${d * 100}% + ${d * GAP}px))` }} aria-hidden={d !== 0}>
                 {d === 0 ? (
                   <motion.div className="flex h-full w-full items-center justify-center" style={{ scale: z, x: zx, y: zy }}>
-                    <Slide m={it} current loaded={!!loaded[it.id]} onLoad={() => setLoaded((l) => (l[it.id] ? l : { ...l, [it.id]: true }))} />
+                    <Slide m={it} current zoomed={zoomed} loaded={!!loaded[it.id]} onLoad={() => setLoaded((l) => (l[it.id] ? l : { ...l, [it.id]: true }))} />
                   </motion.div>
                 ) : (
                   <Slide m={it} current={false} loaded={!!loaded[it.id]} onLoad={() => setLoaded((l) => (l[it.id] ? l : { ...l, [it.id]: true }))} />
@@ -384,12 +417,19 @@ function Viewer({ list, index, setIndex, close, label }: { list: Media[]; index:
       </div>
       {many && <Strip list={list} index={index} pick={(i) => (anim.current?.stop(), tok.current++, (pending.current = 0), x.set(0), setIndex(i))} opacity={bg} />}
       <motion.div style={{ opacity: bg }} className={`relative shrink-0 px-4 pt-2 text-center text-[12px] text-white/50 ${compact ? "pb-[calc(var(--phone-bottom)+8px)]" : "pb-3"}`}>
-        {m.kind === "video" ? "Film" : "Photo"} by{" "}
-        <a href={m.credit.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-white/75 hover:text-white">
-          {m.credit.by}
-          {m.credit.by !== m.credit.site && ` on ${m.credit.site}`}
-          <Sym icon={ArrowUpRight} size={11} weight="medium" />
-        </a>
+        {m.own ? (
+          // his own: the day it was taken
+          <span className="tabular-nums text-white/70">{dayOf(m.date)}</span>
+        ) : (
+          <>
+            {m.kind === "video" ? "Film" : "Photo"} by{" "}
+            <a href={m.credit.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-white/75 hover:text-white">
+              {m.credit.by}
+              {m.credit.by !== m.credit.site && ` on ${m.credit.site}`}
+              <Sym icon={ArrowUpRight} size={11} weight="medium" />
+            </a>
+          </>
+        )}
       </motion.div>
     </motion.div>
   );

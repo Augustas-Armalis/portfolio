@@ -229,41 +229,47 @@ function build() {
   const iGate = iMouth + 9; // 36 m inside
   const iEnd = Math.min(N - 1, iMouth + 62);
 
-  // The cave at the pass. The crest hills only level the road across its middle: against the north wall the land under
-  // the road's middle stands 20 m above the road's lowest edge, and the plane's ground (this same field) would sit
-  // above the vault's floor. A row of hollows along the cave, solved the same way as the crest, brings the field down
-  // to a little over the road's floor all the way in, so the plane can fly the cave at its own height above it.
+  // the cave it comes out of: as far along the road as the mountain still stands high enough over it to be a roof
+  let iOut = 0;
+  while (iOut < N - 1 && baseAt(pts[iOut + 1].x, pts[iOut + 1].z) - ys[iOut + 1] > 62) iOut++;
+
+  // The land under the road, as the plane reads it. The crest hills only level the road across its middle: against the
+  // mountain's walls the land under the road's middle stands up to 25 m above the road's lowest edge, and a plane that
+  // flies the road (this same field is its ground) found itself under the ground, or lifted off the road to clear a
+  // rise that is not in its way. A row of hollows along the road, solved the same way as the crest, brings the field down
+  // to a little over the road's floor wherever it stood higher: all the way up, and through the cave at the pass, so the
+  // plane can fly the cave at its own height above its floor. (Only ever a cut; the mesh is cut to the road
+  // by its own rule, so it only follows where the field was higher than the mesh.)
   {
     const R2 = 30;
     const ST = 3;
     const stations: number[] = [];
-    for (let i = iMouth - 8; i <= Math.min(N - 1, iEnd + 12); i += ST) stations.push(i);
+    for (let i = iOut + 20; i <= Math.min(N - 1, iEnd + 12); i += ST) stations.push(i);
     const amp = new Float32Array(stations.length);
     const gain2 = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5].reduce((a, j) => a + Math.exp(-(((j * ST * STEP) / R2) ** 2)), 0);
-    const mk = () => stations.map((i, k): B => [pts[i].x, pts[i].z, R2, amp[k]]);
-    for (let it = 0; it < 30; it++) {
+    const mk = (): B[] => stations.map((i, k) => [pts[i].x, pts[i].z, R2, amp[k]] as B);
+    for (let it = 0; it < 24; it++) {
       const cb = mk();
       for (let k = 0; k < stations.length; k++) {
         const p = pts[stations[k]];
         const target = ys[stations[k]] + 2.5;
         const h = baseAt(p.x, p.z) + sum(chainB, p.x, p.z) + sum(cb, p.x, p.z);
-        amp[k] += ((target - h) / gain2) * 0.8;
+        amp[k] = Math.min(0, amp[k] + ((target - h) / gain2) * 0.8);
       }
     }
-    // (only ever a cut, and a soft start at the mouth)
-    notch.push(...mk().map((b, k): B => [b[0], b[1], b[2], Math.min(0, b[3]) * Math.min(1, (stations[k] - (iMouth - 8)) / 10 + 0.1)]));
+    // (a soft start where the first of them begins; and none that does not cut by at least a metre or two)
+    notch.push(...mk().map((b, k): B => [b[0], b[1], b[2], b[3] * Math.min(1, k / 3 + 0.2)]).filter((b) => b[3] < -1));
     all.push(...notch);
   }
 
-  // the cave it comes out of: as far along the road as the mountain still stands high enough over it to be a roof
-  let iOut = 0;
-  while (iOut < N - 1 && baseAt(pts[iOut + 1].x, pts[iOut + 1].z) - ys[iOut + 1] > 62) iOut++;
 
   // the path of light: out of the cave over the road's middle, rising as the valley opens so the whole climb is
   // seen at once; then down beside the road on its valley side, a little above the hoods; round each turn on the
   // outside, over the drop, looking back at the crowd on the edge; at the pass over their heads and in
   // (the plane arrives a little way inside the mouth: a few seconds of dark with the night's blue ahead, not a long tunnel)
   const iIn = Math.max(8, iOut - 36);
+  // the dock: where the souls step ashore (the water of the cave they come in by ends here)
+  const iDock = iOut - 16;
   const path: [number, number, number][] = [];
   const iFork = iPass - 14;
   for (let i = iIn; i <= iFork; i += 10) {
@@ -323,7 +329,7 @@ function build() {
     { x: -800, z: 120, r: 320, h: 840, bell: true },
   ];
 
-  return { terrain, pts, tan, y: ys, crest, N, STEP, len: (N - 1) * STEP, ground, baseAt, iPass, iMouth, iGate, iEnd, iOut, iIn, path, entry, gate, canvas, cyp, obstacles };
+  return { terrain, pts, tan, y: ys, crest, N, STEP, len: (N - 1) * STEP, ground, baseAt, iPass, iMouth, iGate, iEnd, iOut, iIn, iDock, path, entry, gate, canvas, cyp, obstacles };
 }
 
 let land: ReturnType<typeof build> | null = null;

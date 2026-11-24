@@ -1,3 +1,4 @@
+import ownMedia from "./media.json";
 // Everything visible on the site lives in this one file.
 // Real names and facts only; where something isn't known yet, leave it out.
 // Never put private details (email, phone, address) here.
@@ -693,6 +694,15 @@ export type Media = {
   credit: { by: string; href: string; site: string };
   // shot from the air: it shows in the Drone album too
   drone?: boolean;
+  // his own (from `npm run media`): the day it was taken, its size, a 24 px picture shown blurred while it loads,
+  // a larger copy fetched only when zoomed in, and a film's small silent loop for its tile
+  own?: boolean;
+  date?: string;
+  w?: number;
+  h?: number;
+  placeholder?: string;
+  zoom?: string;
+  preview?: string;
 };
 export type Album = { id: string; title: string; sub: string; items: string[] };
 const unsplash = (photo: string, id: string, title: string, by: string): Media => ({
@@ -752,12 +762,21 @@ const media: Media[] = [
   mixkit("2788", "Cabins in the forest", 19, "aerial-view-of-a-forest-with-cabins-2788"),
   mixkit("52436", "Road through dry hills", 19, "aerial-view-of-an-asphalt-road-surrounded-by-the-mountains-52436"),
 ];
+// His own photographs and films, made by scripts/optimize-media.mjs (npm run media) into public/gallery/own and listed
+// in src/media.json: newest first, the film leading.
+const mine: Media[] = [
+  ...ownMedia.films.map((f): Media => ({ id: f.id, kind: "video", title: f.title, src: f.src, thumb: f.poster, poster: f.poster, preview: f.preview, duration: f.duration, placeholder: f.placeholder, own: true, date: f.date, w: f.w, h: f.h, credit: { by: "Augustas Armalis", href: "", site: "" } })),
+  ...ownMedia.photos.map((p): Media => ({ id: p.id, kind: "photo", title: p.title, src: p.srcs.viewer, thumb: p.srcs.grid, zoom: p.srcs.zoom, placeholder: p.placeholder, own: true, date: p.date, w: p.w, h: p.h, credit: { by: "Augustas Armalis", href: "", site: "" } })),
+];
+media.unshift(...mine);
+
 export const gallery = {
   // shown over the Library: who took these, in his words
   intro:
     "I've been a photographer since fifth grade, eight years now. Cinematography pulled me in just as hard: shooting films, flying a drone for the shots from above, and then the edit, where the footage finally becomes something.",
   media,
   albums: [
+    ...(mine.length ? [{ id: "mine", title: "My travels", sub: "My own, with more on the way", items: mine.map((m) => m.id) }] : []),
     { id: "best", title: "Best of", sub: "The ones I keep coming back to", items: ["GiDqZkXMqVM", "film-52444", "W5ISGAqjAfg", "x1jAFA-T7GU", "wPKTJsihIYw", "uPwWP83BCeg", "uJIhAvqFJxg", "film-4998", "bINbcn3031o", "_-3P0X11GYI", "GU8CEZReKxs", "kQ0LkrVVuv0"] },
     { id: "iceland", title: "Iceland", sub: "Along the Ring Road", items: ["wPKTJsihIYw", "bINbcn3031o", "film-52436", "eKfEO0qM1aU", "YifNPOb4UhA", "PozYb57vV38", "hO4F6nYJ03w", "innb1UEpVZg"] },
     { id: "dolomites", title: "Dolomites", sub: "High up in the Alps", items: ["x1jAFA-T7GU", "uJIhAvqFJxg", "1oGFKEePOFQ", "film-2788", "kQ0LkrVVuv0", "UWP6ZzHrqfo", "ATzEluEgZpw", "RIhZ4zFYBCQ", "PWHEBQS0QXo"] },

@@ -1435,14 +1435,10 @@ function Scene({
     });
     // (going through a gate makes no sound of its own: the owner wants the crossing silent, only the music)
     if (flying && voyage.phase !== gatePhase.current) gatePhase.current = voyage.phase;
-    // the kings' wood grows quiet: the music sinks as the plane nears the light they hold
+    // (the music stays at its own level all the way through the kings' world: it used to sink to a tenth near the dome,
+    // and the owner heard it as the sound going missing)
     if (flying) {
-      let vol = 1;
-      if (voyage.cur === "kings" && !voyage.homing && planeApi.current) {
-        const pp = planeApi.current.pos;
-        const d = Math.hypot(pp.x - ORIGIN.x, pp.z - ORIGIN.z - KINGS.z);
-        vol = 0.1 + 0.6 * smooth(clamp01((d - 90) / 520));
-      }
+      const vol = 1;
       if (Math.abs(vol - musicVol.current) > 0.01) flightMusicVolume((musicVol.current = vol));
       flightMusicCrossing(voyage.phase);
       // at home, the field's music hands over to the forest's as the plane goes in among the trees or nears the cave

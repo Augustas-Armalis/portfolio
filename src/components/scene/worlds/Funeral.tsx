@@ -16,6 +16,7 @@ import { ROAD_W, funeralLand } from "./funeral/land";
 import { CAVE, PORTAL, buildFuneralRock, dropFuneralRock, makeLedgeMaterial, makeRockMaterial, prepareFuneralRock } from "./funeral/rock";
 import { buildSouls } from "./funeral/souls";
 import { buildWatchers } from "./funeral/ledges";
+import { buildBoats } from "./funeral/boats";
 import { buildAngels } from "../home/Angels";
 import { GLSL_AIR, WORLD_U } from "./kit";
 import { GLSL_FUNERAL_AIR } from "./funeral/air";
@@ -284,6 +285,8 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
     glows.push({ p: [m.x - mt[0] * 30, my + 26, m.z - mt[1] * 30], size: 230, col: [1, 0.66, 0.3], k: 0.05 });
     glows.push({ p: [m.x - mt[0] * 120, my - 20, m.z - mt[1] * 120], size: 190, col: [1, 0.62, 0.28], k: 0.03 });
     // the watchers: the home forest's angels on the rock above the road, two on needles of rock either side of the gate
+    const boats = buildBoats();
+    halos.push(...boats.halos);
     const watch = buildWatchers();
     halos.push(...watch.halos);
     // spirit lights: the road as the shader walks it, for the lights that go up it above the crowd
@@ -388,6 +391,8 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       flocks,
       clouds,
       shrines: shrines.build(),
+      boats: boats.geo,
+      boatMat: makeTempera({ amb: 1.0, key: 0.3, rim: [0.03, 0.1, 0.12], rimPow: 3.6 }),
       watchers: watch.geo,
       watcherMat: makeTempera({ amb: 0.9, key: 0.3, grain: 1.0 }),
       angels: buildAngels(watch.angels, { glsl: `${GLSL_AIR}\n${GLSL_FUNERAL_AIR}`, apply: "funeralAir(col, vWorld)", amount: "max(airAmt(vWorld), valleyAmt(vWorld))", uniforms: { ...WORLD_U, ...FUNERAL_U }, night: { value: 1 } }),
@@ -442,6 +447,7 @@ export default function FuneralWorld({ props }: { props: WorldProps }) {
       <primitive object={b.souls.bierMesh} />
       <primitive object={b.souls.lampMesh} />
       <mesh geometry={b.shrines} material={b.shrineMat} />
+      <mesh geometry={b.boats} material={b.boatMat} />
       <mesh geometry={b.watchers} material={b.watcherMat} />
       <mesh geometry={b.angels.glow} material={b.angels.glowMat} renderOrder={2} frustumCulled={false} />
       <mesh geometry={b.angels.geo} material={b.angels.mat} renderOrder={3} />
