@@ -2249,7 +2249,11 @@ export default function Room({
         dpr={1}
         shadows={{ type: THREE.PCFSoftShadowMap }}
         camera={{ fov: RIG[isMobile ? "mobile" : "desktop"].fov, near: 0.01, far: 12000, position: [0, 1.2, 2.2] }}
-        gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
+        // (the canvas itself is multisampled only where something is drawn straight to it: a phone, whose Low has no
+        // lens. Everywhere else the lens draws the scene into its own multisampled target and lays one finished
+        // picture on the canvas: a multisampled canvas under that only cost a resolve and four times the memory
+        // traffic of the last pass, every frame)
+        gl={{ antialias: isMobile || !!window.matchMedia?.("(pointer: coarse)").matches, powerPreference: "high-performance", stencil: false }}
         onCreated={({ gl }) => {
           // Outside development three is not asked to check every program it makes (the link status and three info
           // logs each): every one of those is a round trip to the GPU process that waits for it, and with some two
