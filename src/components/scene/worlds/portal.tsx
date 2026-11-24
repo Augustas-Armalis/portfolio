@@ -42,7 +42,19 @@ export const PORTAL_U = { tPortal: { value: null as THREE.Texture | null }, uPor
 // after the worlds change places is the frame before.
 const STILL_U = { tStill: { value: null as THREE.Texture | null }, uStillMat: { value: new THREE.Matrix4() }, uStillOn: { value: 0 }, uLiveK: { value: 0 } };
 const OPENING: Partial<Record<WorldId, [number, number, number?]>> = { sun: [23, 33], stars: [50, 80, 32], rex: [40, 72], fairy: [18, 27, 74], paradise: [14.5, 22.5], gate: [35, 93], seafinale: FINALE_OPENING, sea: [27, 27], funeral: [26, 40] };
+// How wide and how high above its middle a gate counts as gone through: the opening itself (a window the plane
+// is flying at must take it wherever the picture is, not only in the middle nineteen metres of it)
+export function openingReach(id: WorldId): [number, number] | undefined {
+  const o = OPENING[id];
+  return o ? [Math.max(19, o[0] * 0.92), Math.max(26, o[1] * 0.92)] : undefined;
+}
+// May a crossing here be made through a window at all (not on Low, not on a phone, a window mounted)? If so the plane
+// waits for it (Plane.tsx) instead of going under cloud.
+const cfg = { mobile: false };
+export const portalCapable = (id: WorldId) => !cfg.mobile && postCtl.level >= 1 && !!postCtl.sceneTarget && (portalRig.windows.get(id) ?? 0) > 0;
 const state = { next: null as WorldId | null, k: 0, fresh: 0, tick: 0, still: null as WorldId | null, live: 0 };
+
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") Object.assign(window, { __portal: { state, portalRig, STILL_U, PORTAL_U } });
 
 const E = new THREE.Vector3();
 const G = new THREE.Vector3();
@@ -109,6 +121,7 @@ export function PortalView({ mobile }: { mobile: boolean }) {
     const still = new THREE.WebGLRenderTarget(1440, 900, { type: THREE.HalfFloatType, depthBuffer: true, samples: 4 });
     return { rt, still, stillCam: new THREE.PerspectiveCamera(56, 1.6, 0.5, 12000), m: new THREE.Matrix4(), r: new THREE.Matrix4(), cam: new THREE.PerspectiveCamera(), buf: new THREE.Vector2(), gate: new THREE.Vector3(), scale: new THREE.Vector3() };
   }, []);
+  cfg.mobile = mobile;
   useEffect(() => {
     portalRig.gl = gl;
   }, [gl]);
@@ -197,7 +210,9 @@ export function PortalView({ mobile }: { mobile: boolean }) {
         sc.near = 0.5;
         sc.far = (st.camera as THREE.PerspectiveCamera).far;
         sc.updateProjectionMatrix();
+        const ts = performance.now();
         drawNext(cur, next!, sc, rig.still);
+        if (process.env.NODE_ENV !== "production") ((window as unknown as { __wlog?: unknown[] }).__wlog ??= []).push([Math.round(ts), "still " + next, Math.round(performance.now() - ts)]);
         state.still = next;
         STILL_U.tStill.value = rig.still.texture;
       }
