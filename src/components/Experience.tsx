@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { UserId } from "@/content";
@@ -85,12 +85,17 @@ export default function Experience() {
 
   if (isMobile === null || reduced === null)
     return (
-      <main className="fixed inset-0 bg-page">
-        <Preloader hideForReducedMotion />
-      </main>
+      // a visitor who asks for less motion gets it everywhere: movement and growth land at once, fades stay. Both
+      // returns have the same root, so the loader is never mounted twice.
+      <MotionConfig reducedMotion="user">
+        <main className="fixed inset-0 bg-page">
+          <Preloader hideForReducedMotion />
+        </main>
+      </MotionConfig>
     );
 
   return (
+    <MotionConfig reducedMotion="user">
     <main className="fixed inset-0 overflow-hidden bg-page">
       {/* first child here and in the pre-hydration markup above, so it is one element throughout */}
       {loaderOn && <Preloader hideForReducedMotion={!roomOn} />}
@@ -128,5 +133,6 @@ export default function Experience() {
       </AnimatePresence>
       {veil && <BootVeil onDone={() => setVeil(false)} />}
     </main>
+    </MotionConfig>
   );
 }
