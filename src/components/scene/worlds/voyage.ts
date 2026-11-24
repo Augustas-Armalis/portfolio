@@ -90,7 +90,9 @@ export type WorldDef = {
   centre: [number, number];
   radius: number; // beyond this the air turns the plane back
   ceil: number;
-  pace?: number; // a world built several times larger than the rest is flown this many times faster (default 1)
+  // The size of the world in the pace of flying it: every one of the six speed steps is this many times faster here than at
+  // home (default 1), so the top step feels as fast in a world of kilometres, flown high, as it does low over the desk's field.
+  pace?: number;
   entry: { x: number; z: number; above: number; yaw: number };
   gate: { x: number; z: number; above: number; yaw: number } | null; // the way onward; the last world has none
   path: [x: number, z: number, above: number][]; // the path of light, from the entry to the gate
@@ -372,7 +374,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     radius: 1720,
     ceil: 470,
     // (a world several times the size of the rest: flown the faster for it)
-    pace: 2.0,
+    pace: 1.65,
     entry: FRIEND_ENTRY,
     // in the heart of the orb she holds out: the plane flies into its light, and through it into the Sun
     gate: FRIEND_GATE,
@@ -396,7 +398,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, -40],
     radius: 2060,
     ceil: 520,
-    pace: 1.8,
+    pace: 2.35,
     entry: SUN_ENTRY,
     gate: SUN_GATE,
     path: SUN_PATH,
@@ -430,7 +432,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, -300],
     radius: 4300,
     ceil: 2800,
-    pace: 3.0,
+    pace: 2.5,
     entry: { x: 0, z: 3300, above: 30, yaw: 0 },
     // the door at the foot of the greatest pyramid (stars/pyramids.ts DOOR_Z): the way runs straight into it
     gate: { x: 0, z: 586, above: 30, yaw: 0 },
@@ -595,6 +597,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 50],
     radius: 1560,
     ceil: 660,
+    pace: 2.0,
     entry: { x: -45, z: 1840, above: 7.5, yaw: -0.155 },
     gate: { x: 646, z: -1335, above: 70, yaw: -0.363 },
     // in low under the trees of a wood, along a winding track, the castle only glimpsed through the leaves; up over
@@ -654,6 +657,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [-100, 0],
     radius: 1050,
     ceil: 300,
+    pace: 1.5,
     entry: { x: -1040, z: 150, above: 30, yaw: -1.39 },
     gate: { x: 0, z: 111, above: 131, yaw: Math.PI },
     // in over the sea straight at the isle, the whole mount ahead with its terraces and falling water; then left
@@ -735,6 +739,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 200],
     radius: 1450,
     ceil: 420,
+    pace: 1.6,
     entry: { x: 0, z: 1480, above: 36, yaw: 0 },
     gate: { x: 0, z: -720, above: 48, yaw: 0 },
     // up the valley, under the ring of pearls and the dark smoke, between the terrace and the altar, to the pass;
@@ -796,6 +801,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [200, 180],
     radius: 1900,
     ceil: 260,
+    pace: 1.4,
     // (it comes in a kilometre and a half from the island's head: a long while over the glass with the whole of it in view)
     // (the way in is laid toward the island's head, not its middle: on a tall narrow screen the head and its two
     // eyes are then in the frame from the first, the long back running off to the left)
@@ -856,7 +862,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [-500, 350],
     radius: 3900,
     ceil: 2300,
-    pace: 3.2,
+    pace: 2.8,
     entry: FINALE_ENTRY,
     // at the wave's far end, in the hanging lace of its crest: out through it, into calm (no arch of light)
     gate: FINALE_GATE,
@@ -881,6 +887,7 @@ export const WORLDS: Record<WorldId, WorldDef> = {
     centre: [0, 180],
     radius: 1320,
     ceil: 430,
+    pace: 1.7,
     entry: FUNERAL.entry,
     // inside the cave's mouth, where the procession goes into the mountain (no arch of light: worlds/Funeral.tsx)
     gate: FUNERAL.gate,
@@ -945,10 +952,10 @@ export const WORLDS: Record<WorldId, WorldDef> = {
       [52, 285, 50],
       [30, 222, 52],
       [6, 156, 54],
-      [0, 80, 38],
-      [0, 20, 50],
-      [0, -30, 62],
-      [0, -70, 72],
+      [0, 80, 50],
+      [0, 20, 58],
+      [0, -30, 66],
+      [0, -70, 73],
       [0, -105, 77.5],
       [0, KINGS.z + KINGS.domeR + 5, KINGS.domeY + KINGS.domeR * 0.3],
       [0, KINGS.z, KINGS.domeY + KINGS.domeR * 0.3],
@@ -1232,6 +1239,6 @@ export function crossingStep(dt: number, warm = false) {
     xing.hold += dt;
   } else xing.open += dt;
 }
-if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __crossings: crossings });
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") Object.assign(window, { __crossings: crossings, __pathOf: (id: WorldId) => { const p = pathOf(id); return { len: p.len, pts: p.pts.map((v) => [v.x, v.y, v.z]) }; } });
 
 export const voyageBusy = () => voyage.cur !== "home" || voyage.skyFrom !== null || voyage.phase !== "open" || arrivalHours() !== null;

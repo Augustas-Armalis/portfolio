@@ -438,9 +438,16 @@ export function musicForest(k: number) {
   note(inside ? "into the forest" : "out of the forest");
   if (st.place === "flight") apply(FADE.change);
 }
+// The flight's own quieting. The scene used to sink the music to a tenth as the plane neared the kings' light (and to
+// seven tenths in the whole outer wood), so Paplūdimys, which plays at its one level from The Offering to the end, went
+// nearly silent in the last world. He asked for it at the same level through the funeral and the kings: whatever the
+// scene asks, the level stays the visitor's own (the kings' light is told by the picture, and the crossing's own duck
+// still dips it softly into every cloud).
 export function musicFlightVolume(v: number) {
   if (typeof window === "undefined") return;
-  st.flightVol = v;
+  void v;
+  if (st.flightVol === 1) return;
+  st.flightVol = 1;
   if (st.place !== "flight" || !st.now) return;
   setBus(0.6);
 }
