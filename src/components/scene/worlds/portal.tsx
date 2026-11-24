@@ -413,10 +413,10 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
-      uniforms: { ...PORTAL_U, ...STILL_U, ...SKY_U, ...(id === "home" ? HOME_U : WORLD_U), uSpring: { value: spring } },
+      uniforms: { ...PORTAL_U, ...STILL_U, ...SKY_U, ...(id === "home" ? HOME_U : WORLD_U), uSpring: { value: spring }, uBottom: { value: hung && reach === undefined ? 0.3 : 0.04 } },
       vertexShader: /* glsl */ `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
       fragmentShader: /* glsl */ `
-        uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes; uniform float uPortalGain; uniform float uSpring; uniform float uPortalFar; varying vec2 vUv;
+        uniform sampler2D tPortal; uniform float uPortalK; uniform vec2 uPortalRes; uniform float uPortalGain; uniform float uSpring; uniform float uPortalFar; uniform float uBottom; varying vec2 vUv;
         uniform sampler2D tStill; uniform mat4 uStillMat; uniform float uStillOn; uniform float uLiveK; varying vec3 vW;
         ${GLSL_SKY}
         ${id === "home" ? GLSL_HOME_AIR : GLSL_AIR}
@@ -426,7 +426,10 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
           float head = clamp((vUv.y - uSpring) / max(1.0 - uSpring, 0.001), 0.0, 1.0);
           float wide = sqrt(max(1.0 - head * head, 0.0));
           float dx = abs(vUv.x) / max(wide, 0.001);
-          float edge = max(dx, max(head, 1.0 - smoothstep(0.0, 0.04, vUv.y)));
+          float edgeS = max(dx, head);
+          // (a gate hung in the air has no ground to end the picture on: it thins out over its lower part instead of
+          // ending in a flat line 15 m under the gate's middle, and carries no lit rim along that edge)
+          float edge = max(edgeS, 1.0 - smoothstep(0.0, uBottom, vUv.y));
           float a = (1.0 - smoothstep(0.9, 1.0, edge)) * uPortalK;
           // that world's own light, as it will be seen from inside it: nothing added, nothing laid over it
           vec3 col = uLiveK > 0.0 ? texture2D(tPortal, gl_FragCoord.xy / uPortalRes).rgb : vec3(0.0);
@@ -443,7 +446,7 @@ export function PortalWindow({ id, def, half = 15, rise = 23, fallback = false }
           col = mix(vec3(lum), col, 1.0 + 0.3 * uPortalFar) * (1.0 + 0.45 * uPortalFar) * pulse;
           vec3 aired = ${id === "home" ? "homeAir(col, vW)" : "applyAir(col, vW)"};
           col = mix(aired, col, 0.7 * uPortalFar);
-          float rim = smoothstep(0.84, 0.95, edge) * (1.0 - smoothstep(0.97, 1.0, edge));
+          float rim = smoothstep(0.84, 0.95, edgeS) * (1.0 - smoothstep(0.97, 1.0, edgeS));
           col += rim * vec3(1.0, 0.86, 0.6) * (0.35 + 0.9 * uPortalFar) * pulse;
           a = max(a, rim * 0.55 * uPortalK);
           gl_FragColor = vec4(col, a);
