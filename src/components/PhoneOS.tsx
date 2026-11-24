@@ -655,6 +655,7 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
   const [page, setPage] = useState(0);
   const [folder, setFolder] = useState<"projects" | "games" | null>(null);
   const x = useMotionValue(0);
+  const edgeY = useRef<number | null>(null);
   const slide = useRef<AnimationPlaybackControls | null>(null);
   // a swipe is not a tap: whatever was under the finger does not open
   const swiped = useRef(false);
@@ -784,8 +785,140 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
           ))}
         </div>
       </div>
+      {/* the bottom edge, under the Dock: a swipe up from here opens the app switcher, as it does inside an app */}
+      <div
+        aria-hidden
+        data-home-edge=""
+        className="absolute inset-x-0 bottom-0 z-[5] h-[18px] touch-none"
+        onPointerDown={(e) => {
+          edgeY.current = e.clientY;
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            // the strip spans the screen: the finger stays over it at the start
+          }
+        }}
+        onPointerUp={(e) => {
+          const y0 = edgeY.current;
+          edgeY.current = null;
+          if (y0 !== null && y0 - e.clientY > 60) useOS.getState().setPhoneSwitcher(true);
+        }}
+        onPointerCancel={() => (edgeY.current = null)}
+      />
       <AnimatePresence>{folder && <Folder key={folder} id={folder} onOpen={openFromFolder} onClose={() => setFolder(null)} />}</AnimatePresence>
     </div>
+  );
+}
+
+// ---------- app switcher ----------
+
+// One open app as a card. Sideways the row scrolls (the browser's own scroll, with its momentum); up, the card
+// follows the finger and, let go high enough or with a flick, flies off and the app is closed; a tap opens it,
+// grown out of the card.
+function SwitcherCard({ id, n, onOpen, onClose }: { id: AppId; n: number; onOpen: (id: AppId, o: Origin) => void; onClose: (id: AppId) => void }) {
+  const y = useMotionValue(0);
+  const fade = useTransform(y, [0, -320], [1, 0]);
+  const card = useRef<HTMLDivElement>(null);
+  const g = useRef<{ id: number; x0: number; y0: number; on: boolean; dead: boolean; hist: { y: number; t: number }[] } | null>(null);
+  const dark = id === "terminal" || id === "doom" || id === "blocks";
+  const finish = (e: React.PointerEvent<HTMLDivElement>) => {
+    const s = g.current;
+    if (!s || s.id !== e.pointerId) return;
+    g.current = null;
+    if (s.on) {
+      const a = s.hist[0];
+      const b = s.hist[s.hist.length - 1];
+      const v = e.type === "pointercancel" || b.t <= a.t ? 0 : ((b.y - a.y) / (b.t - a.t)) * 1000;
+      if (y.get() < -140 || v < -700) animate(y, -window.innerHeight, { type: "spring", bounce: 0, duration: 0.35, velocity: v, onComplete: () => onClose(id) });
+      else animate(y, 0, { ...M.fling, velocity: v });
+      return;
+    }
+    if (!s.dead && e.type === "pointerup" && card.current) onOpen(id, rectOf(card.current));
+  };
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9, y: 24 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9, transition: M.out }}
+      transition={{ ...M.ui, delay: n * 0.035 }}
+      className="shrink-0 snap-center"
+    >
+      <motion.div
+        style={{ y, opacity: fade }}
+        className="flex touch-pan-x flex-col items-start gap-2"
+        onPointerDown={(e) => {
+          if (g.current) return;
+          g.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, dead: false, hist: [{ y: e.clientY, t: e.timeStamp }] };
+        }}
+        onPointerMove={(e) => {
+          const s = g.current;
+          if (!s || s.id !== e.pointerId || s.dead) return;
+          const dx = e.clientX - s.x0;
+          const dy = e.clientY - s.y0;
+          if (!s.on) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+            if (Math.abs(dx) > Math.abs(dy) || dy > 0) {
+              s.dead = true;
+              return;
+            }
+            s.on = true;
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              // the card stays under the finger as it moves up
+            }
+          }
+          y.set(dy < 0 ? dy : dy * 0.2);
+          s.hist.push({ y: e.clientY, t: e.timeStamp });
+          if (s.hist.length > 5) s.hist.shift();
+        }}
+        onPointerUp={finish}
+        onPointerCancel={finish}
+        data-switcher-card={id}
+      >
+        <span className="flex items-center gap-2 pl-1 text-[15px] font-semibold tracking-[-0.015em] text-white [text-shadow:0_1px_6px_rgb(0_0_0/0.35)]">
+          <AppIcon id={id} size={28} />
+          {phoneTitle(id)}
+        </span>
+        <div
+          ref={card}
+          role="button"
+          tabIndex={0}
+          aria-label={`Open ${phoneTitle(id)}`}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && card.current && onOpen(id, rectOf(card.current))}
+          className={`relative h-[62dvh] w-[62vw] overflow-hidden rounded-[30px] shadow-[0_20px_50px_-20px_rgb(0_0_0/0.6)] ${dark ? "bg-[#1C1D20] text-white" : "bg-[#F2F2F7] text-ink"}`}
+        >
+          <span className="absolute left-4 top-5 text-[26px] font-bold leading-8 tracking-[0.01em]">{phoneTitle(id)}</span>
+          <span className="absolute inset-0 flex items-center justify-center">
+            <AppIcon id={id} size={76} />
+          </span>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function Switcher({ onOpen }: { onOpen: (id: AppId, o: Origin) => void }) {
+  const recents = useOS((s) => s.phoneRecents);
+  const close = () => useOS.getState().setPhoneSwitcher(false);
+  return (
+    // the scrim fades by itself and the cards come in on their own: nothing that blurs sits in a fading parent
+    <motion.div className="absolute inset-0 z-[70] flex flex-col justify-center" exit={{ opacity: 1, transition: M.out }} onClick={close} role="dialog" aria-label="Open apps" data-switcher="">
+      <motion.div aria-hidden className="absolute inset-0 bg-black/40 backdrop-blur-[20px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade} />
+      {recents.length ? (
+        <div onClick={(e) => e.stopPropagation()} className="relative flex snap-x snap-mandatory items-center gap-4 overflow-x-auto px-[19vw] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <AnimatePresence initial>
+            {recents.map((id, n) => (
+              <SwitcherCard key={id} id={id} n={n} onOpen={onOpen} onClose={(x) => useOS.getState().closeRecent(x)} />
+            ))}
+          </AnimatePresence>
+        </div>
+      ) : (
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="relative text-center text-[17px] font-medium text-white/80">
+          No apps open
+        </motion.p>
+      )}
+    </motion.div>
   );
 }
 
@@ -932,8 +1065,10 @@ type WindowProps = {
   onLeaving?: (leaving: boolean) => void;
   // whether the home screen is fully hidden under this app (so it can stop drawing)
   onCover?: (covered: boolean) => void;
+  // swipe up and hold: let go into the app switcher
+  onSwitcher?: () => void;
 };
-function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, onPop, onLeaving, onCover }: WindowProps) {
+function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, onPop, onLeaving, onCover, onSwitcher }: WindowProps) {
   const [vw] = useState(() => window.innerWidth);
   const [vh] = useState(() => window.innerHeight);
   const o = origin ?? { x: vw / 2 - 31, y: vh / 2 - 31, w: 62, h: 62 };
@@ -945,6 +1080,8 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
   // p: 0 = the icon, 1 = full screen. lift: finger offset during the home gesture.
   const p = useMotionValue(enter === "push" ? 1 : 0);
   const lift = useMotionValue(0);
+  // the whole window's opacity: only moved when less motion is asked for (it fades instead of growing)
+  const veil = useMotionValue(1);
   const anim = useRef<AnimationPlaybackControls | null>(null);
   const scale = useTransform(p, (v) => s0 + (1 - s0) * v);
   const x = useTransform(p, (v) => icx * (1 - v));
@@ -966,6 +1103,17 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
     // on its way back to its icon the app no longer covers the home screen: the icons take taps again at once
     onLeaving?.(target === 0);
     if (target === 0) onCover?.(false);
+    // asked for less motion: the app does not grow out of its icon or shrink back into it; it is simply there,
+    // faded in (or out) where it stands
+    if (reducedMotion()) {
+      p.set(1);
+      lift.set(0);
+      if (target === 1) {
+        veil.set(0);
+        anim.current = animate(veil, 1, { duration: 0.2, ease: EASE_OUT, onComplete: () => onCover?.(true) });
+      } else anim.current = animate(veil, 0, { duration: 0.16, ease: EASE_OUT, onComplete: onClosed });
+      return;
+    }
     anim.current = animate(p, target, {
       ...(target === 1 ? M.sheet : M.ui),
       velocity,
@@ -1076,7 +1224,8 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
   });
 
   // Home indicator: swipe up, the app follows the finger and shrinks toward its icon.
-  const drag = useRef<{ y0: number; p0: number; hist: { y: number; t: number }[] } | null>(null);
+  // ...and swipe up and hold: the app switcher, as on iOS (the finger rests a moment once the app has lifted)
+  const drag = useRef<{ y0: number; p0: number; hist: { y: number; t: number }[]; still?: number; hold?: boolean } | null>(null);
   const onDown = (e: React.PointerEvent) => {
     // one finger owns the gesture: a second touch does not restart it from somewhere else
     if (drag.current) return;
@@ -1095,6 +1244,13 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
     const dy = Math.min(0, e.clientY - d.y0);
     lift.set(dy);
     p.set(Math.max(0.25, d.p0 + dy / (vh * 0.85)));
+    // lifted well clear and resting (under 0.15 px/ms) for a fifth of a second: it will let go into the switcher
+    const last = d.hist[d.hist.length - 1];
+    const slow = Math.abs(e.clientY - last.y) / Math.max(1, e.timeStamp - last.t) < 0.15;
+    if (dy < -100 && slow) {
+      d.still ??= e.timeStamp;
+      if (e.timeStamp - d.still > 180) d.hold = true;
+    } else d.still = undefined;
     d.hist.push({ y: e.clientY, t: e.timeStamp });
     if (d.hist.length > 5) d.hist.shift();
   };
@@ -1106,6 +1262,9 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
     const b = d.hist[d.hist.length - 1];
     const v = b.t > a.t ? ((b.y - a.y) / (b.t - a.t)) * 1000 : 0; // px/s, negative = up
     const dy = e.clientY - d.y0;
+    // a finger that rests sends no moves: a pause before letting go counts as the hold too
+    const rested = e.timeStamp - b.t > 180 && dy < -100;
+    if ((d.hold || rested) && (rested || v > -550) && e.type !== "pointercancel") return onSwitcher?.();
     if (dy < -90 || v < -550) {
       to(0, v / (vh * 0.85));
     }
@@ -1119,7 +1278,7 @@ function AppWindow({ id, origin, enter, depth, hidden, canPop, topX, onClosed, o
   return (
     <motion.div
       className={`absolute inset-0 ${top ? "shadow-[-12px_0_32px_rgb(0_0_0/0.2)]" : ""}`}
-      style={{ x: top ? topX : depth === 1 ? under : 0, zIndex: 60 - depth, visibility: depth > 1 || (!top && hidden) ? "hidden" : depth === 1 ? underShown : undefined }}
+      style={{ x: top ? topX : depth === 1 ? under : 0, opacity: veil, zIndex: 60 - depth, visibility: depth > 1 || (!top && hidden) ? "hidden" : depth === 1 ? underShown : undefined }}
       inert={!top}
       data-phone-window={id}
       data-depth={depth}
@@ -1160,6 +1319,7 @@ export default function PhoneOS() {
   useEffect(warmApps, []);
   const up = useOS(isUp);
   const phoneApp = useOS((s) => s.phoneApp);
+  const switcher = useOS((s) => s.phoneSwitcher);
   const origin = useOS((s) => s.phoneOrigin);
   const openPhoneApp = useOS((s) => s.openPhoneApp);
   const heroDark = useOS((s) => s.heroDark);
@@ -1266,9 +1426,14 @@ export default function PhoneOS() {
               onPop={phoneBack}
               onLeaving={setLeaving}
               onCover={depth === 0 ? setCovered : undefined}
+              onSwitcher={() => {
+                openPhoneApp(null);
+                useOS.getState().setPhoneSwitcher(true);
+              }}
             />
           );
         })}
+      <AnimatePresence>{up && switcher && <Switcher key="switcher" onOpen={(id, o) => openPhoneApp(id, o)} />}</AnimatePresence>
       <AnimatePresence>{power && <PowerSheet key="power" onClose={() => setPower(false)} />}</AnimatePresence>
       <PowerOverlay />
     </div>
