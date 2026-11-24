@@ -231,7 +231,15 @@ export default function FriendshipWorld({ props }: { props: WorldProps }) {
     map.anisotropy = 8;
     return {
       cave: caveGeometry(m),
-      caveMat: makeCaveMaterial(),
+      caveMat: (() => {
+        const cm = makeCaveMaterial();
+        // (the tunnel's mushrooms, as the rock near them sees them)
+        forest.tunnelLights.slice(0, 9).forEach((t, i) => {
+          (cm.uniforms.uShroomP.value as THREE.Vector3[])[i].set(t.p[0], t.p[1], t.p[2]).add(ORIGIN);
+          (cm.uniforms.uShroomC.value as THREE.Vector3[])[i].set(t.col[0], t.col[1], t.col[2]);
+        });
+        return cm;
+      })(),
       map,
       herMat: makeHerMaterial(figure.near, map),
       rays: raysGeometry(figure.near, m ? 320 : 720),

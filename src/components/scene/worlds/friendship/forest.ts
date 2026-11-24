@@ -5,7 +5,7 @@ import { Kit, makeTempera, noise2, rng, type Halo, type V3 } from "../kit";
 import { leafyMesh, makeLeafyMaterial, type Beam, type Crown } from "../fairy/shared";
 import { FRIEND_U, GLSL_ORB } from "./cave";
 import type { Fern } from "./ferns";
-import { CAVE_Z, FRIEND_PATH, HALL, HER_K, ORB, PILLARS, TUNNEL, caveAt, clear, floorAt, herAt } from "./shape";
+import { CAVE_Z, FRIEND_PATH, HALL, HER_K, ORB, PILLARS, TUNNEL, caveAt, clear, floorAt, herAt, tunnelX } from "./shape";
 
 // The wood in her cave, in the picture's own green: the painting's ground is upright strokes of green and gold, so
 // the cave is full of tall dark trunks going up into the haze, roots hanging from the vault, ferns and mossy stones
@@ -66,7 +66,7 @@ function mossRocks(list: { p: V3; r: number; seed: number; col?: V3 }[], mobile:
 
 // One of the cavern's pillars: a column the water built, as thick as a hill, spreading wide at its foot and again
 // where it meets the vault, fluted and lumped all the way up.
-function pillarGeometry(r: number, h: number, seed: number, sides: number, rings: number) {
+function pillarGeometry(r: number, h: number, seed: number, sides: number, rings: number, drift = 1) {
   const pos: number[] = [];
   const idx: number[] = [];
   for (let j = 0; j <= rings; j++) {
@@ -80,7 +80,7 @@ function pillarGeometry(r: number, h: number, seed: number, sides: number, rings
       const flute = 0.1 * Math.sin(a * 9 + noise2(a * 1.3 + seed, y * 0.003) * 4);
       const lump = 0.3 * (noise2(a * 1.5 + seed * 3, y * 0.0045) - 0.5) * 2 + 0.1 * (noise2(a * 4 + seed, y * 0.014) - 0.5) * 2;
       const rad = rr * (1 + flute + lump);
-      pos.push(Math.cos(a) * rad + 40 * Math.sin(ty * 2.4 + seed) * ty, y, Math.sin(a) * rad + 30 * Math.cos(ty * 1.9 + seed * 2) * ty);
+      pos.push(Math.cos(a) * rad + 40 * drift * Math.sin(ty * 2.4 + seed) * ty, y, Math.sin(a) * rad + 30 * drift * Math.cos(ty * 1.9 + seed * 2) * ty);
     }
   }
   for (let j = 0; j < rings; j++)
@@ -128,6 +128,7 @@ function forestDone(o: {
   beams: Beam[];
   ferns: Fern[];
   falls: Fall[];
+  tunnelLights: { p: V3; col: V3 }[];
 }) {
   return o;
 }
@@ -265,14 +266,37 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     if (Math.abs(x - pathX(z)) < 24 && c.top * 0.8 - len < 60) continue;
     k.add(new THREE.ConeGeometry(len * 0.12, len, 6, 2), [x, c.top * 0.86 - len / 2, z], rockLo, { rot: [Math.PI, r() * 6.283, 0] });
   }
-  // (and in the tunnel small ones: a hand to a few metres, in clusters along the roof and down the tops of the walls)
-  for (let i = 0; i < Math.round(110 * few); i++) {
+  // (and in the tunnel a few small ones, dark, along the roof)
+  for (let i = 0; i < Math.round(34 * few); i++) {
     const z = TUNNEL.z0 + 8 + r() * (CAVE_Z[1] - 30 - TUNNEL.z0);
     const c = caveAt(z);
-    const x = (r() * 2 - 1) * c.w * 0.72;
-    const len = 0.8 + Math.pow(r(), 2) * 5.5;
-    const roof = c.top * 0.34 + c.top * 0.66 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(x) / c.w, 1.28)), 0.78);
-    k.add(new THREE.ConeGeometry(len * (0.1 + r() * 0.08), len, 6, 2), [x, roof - len / 2 + 0.9, z], [0.06, 0.055, 0.06], { rot: [Math.PI + (r() - 0.5) * 0.12, r() * 6.283, (r() - 0.5) * 0.12] });
+    const off = (r() * 2 - 1) * c.w * 0.72;
+    const x = tunnelX(z) + off;
+    // (short where the roof is low, and none right over the way)
+    const len = Math.min(0.8 + Math.pow(r(), 2) * 5.5, Math.max(0.8, (c.top - 22) * 0.45));
+    const roof = c.top * 0.34 + c.top * 0.66 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(off) / c.w, 1.28)), 0.78);
+    if (Math.abs(off) < 4.5) continue;
+    k.add(new THREE.ConeGeometry(len * (0.1 + r() * 0.08), len, 6, 2), [x, roof - len / 2 + 0.9, z], [0.022, 0.02, 0.021], { rot: [Math.PI + (r() - 0.5) * 0.12, r() * 6.283, (r() - 0.5) * 0.12] });
+  }
+  // (in the tunnel, too: a few columns where a stalactite has come down to the floor, close to the walls, and
+  // blocks fallen from the roof lying at the walls' feet; the middle of the passage is clear)
+  // (the owner finds the thin standing columns read as goblets or bones: none in the tunnel)
+  ([] as number[]).forEach((z, n) => {
+    const c = caveAt(z);
+    if (c.w < 17) return;
+    const sd = n % 2 ? 1 : -1;
+    const off = sd * (c.w - 5.5);
+    const x = tunnelX(z) + off;
+    const roof = c.top * 0.34 + c.top * 0.66 * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(off) / c.w, 1.28)), 0.78);
+    k.add(pillarGeometry(1.5 + (n % 3) * 0.45, roof + 5, n * 3.1 + 2, 12, 16, 0.03), [x, g(x, z) - 2, z], [0.03, 0.027, 0.027]);
+  });
+  for (let i = 0; i < 11; i++) {
+    const z = TUNNEL.z0 + 14 + ((i * 53.7) % (CAVE_Z[1] - 60 - TUNNEL.z0));
+    const c = caveAt(z);
+    const sd = i % 2 ? 1 : -1;
+    const sz = 1.5 + ((i * 7) % 5) * 0.55;
+    const x = tunnelX(z) + sd * Math.max(7.5, c.w - 3 - sz * 1.2);
+    k.add(new THREE.DodecahedronGeometry(1, 0), [x, g(x, z) + sz * 0.3, z], [0.034, 0.03, 0.03], { rot: [i * 1.3, i * 2.1, i * 0.7], scale: [sz * 1.35, sz * 0.8, sz], flat: true });
   }
   const rock = k.build();
   const rockMat = withOrb(makeTempera({ amb: 1.1, key: 0.35, strata: 0.8, grain: 1.0, ao: 0.6, aoH: 220, rim: [0.04, 0.07, 0.05], rimPow: 3 }), 1.0, 1100);
@@ -350,11 +374,13 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     }
     glows.push({ p: [x, g(x, z) + 1.6, z], size: 7, col, k: 0.18 });
   }
-  // (a few in the tunnel too, at the feet of its walls: the first light met on the way in)
+  // (a few in the tunnel too, at the feet of its walls: the first light met on the way in; the rock near each
+  // takes a little of it: see the cave's material)
+  const tunnelLights: { p: V3; col: V3 }[] = [];
   for (let c = 0; c < Math.round(9 * few); c++) {
     const z = TUNNEL.z0 + 20 + r() * (CAVE_Z[1] - 70 - TUNNEL.z0);
     const sd = r() < 0.5 ? -1 : 1;
-    const x = sd * (TUNNEL.half * (0.5 + r() * 0.28));
+    const x = tunnelX(z) + sd * (Math.min(caveAt(z).w, TUNNEL.half) * (0.5 + r() * 0.26));
     const col: V3 = r() < 0.6 ? [0.3, 0.9, 0.75] : [1.0, 0.72, 0.3];
     for (let j = 0; j < 3 + Math.floor(r() * 4); j++) {
       const mx = x + (r() - 0.5) * 3;
@@ -362,6 +388,7 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
       shroom([mx, g(mx, mz) - 0.05, mz], 0.4 + r() * 0.9, col, 1.3);
     }
     glows.push({ p: [x, g(x, z) + 1.0, z], size: 5, col, k: 0.2 });
+    tunnelLights.push({ p: [x, g(x, z) + 1.2, z], col });
   }
   const groves = Math.round(70 * few);
   for (let c = 0; c < groves; c++) {
@@ -430,5 +457,5 @@ export function* forestSteps(mobile: boolean, budget: number): Generator<void, F
     const x = p[0] + s * p[2] * 1.12;
     return { x, z: p[1] + p[2] * 0.3, top: 620 + ((n * 97) % 360), foot: g(x, p[1]) - 4, w: 26 + ((n * 13) % 30) };
   });
-  return forestDone({ trees, leafy, stone, far, rock, rockMat, roots, shrooms, glows, beams, ferns, falls });
+  return forestDone({ trees, leafy, stone, far, rock, rockMat, roots, shrooms, glows, beams, ferns, falls, tunnelLights });
 }

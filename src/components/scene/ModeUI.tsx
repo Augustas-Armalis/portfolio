@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, EyeOff, Grid3x3, Minus, Moon, Pause, PlaneLanding, Play, Plus, Settings2, SkipBack, SkipForward, Sun, Volume2, VolumeX, X, BookOpen, Move3d } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, EyeOff, Grid3x3, Minus, Moon, Pause, PlaneLanding, Play, Plus, Settings2, SkipBack, SkipForward, Sun, Volume2, VolumeX, X, BookOpen, Move3d, Route } from "lucide-react";
 import { mouseLook } from "./Plane";
 import { gyroStop } from "@/lib/gyro";
 import { getAnalyser, music, onMuteChange, sceneMuted, setSceneMuted, voice, voicePlayUrl, voiceStop } from "@/lib/audio";
@@ -10,7 +10,7 @@ import { FPS_CHOICES, FPS_LABELS, PRESET_LABELS, QUALITY_LABELS, RES_CHOICES, RE
 import { togglePause, usePaused } from "@/lib/pause";
 import { play } from "@/lib/sfx";
 import { setMusicMuted, setMusicVolume, useMusic } from "@/lib/musicDirector";
-import { SPEED_STEPS, WORLDS, WORLD_ORDER, markEntered, setFlight, setSpeedStep, travelStep, travelTo, useFlightFlags, useSpeedStep, useTravel, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
+import { SPEED_STEPS, WORLDS, WORLD_ORDER, markEntered, setFlight, setGuide, setSpeedStep, travelStep, travelTo, useFlightFlags, useSpeedStep, useTravel, useVoyageTick, useWorld, voyage, type WorldId } from "./worlds/voyage";
 import { GLASS_IN, GLASS_ON, GLASS_SPRING, Glass } from "./Glass";
 import { photoCtl, postCtl, type Capture } from "./Post";
 
@@ -1021,9 +1021,9 @@ function SpeedSteps({ size, mobile }: { size: number; mobile: boolean }) {
       <button type="button" aria-label="Slower (Shift)" data-tip={mobile ? undefined : "Slower  Shift"} className={`${side} lg-tip`} style={{ height: size, width: w }} disabled={step === 0} onClick={() => setSpeedStep(step - 1)}>
         <Minus size={mobile ? 15 : 13} strokeWidth={2.4} />
       </button>
-      <div className="flex items-end gap-[2px] px-0.5" style={{ height: size }} role="radiogroup" aria-label="Speed">
+      <div className={`flex items-end ${mobile ? "gap-px" : "gap-[2px] px-0.5"}`} style={{ height: size }} role="radiogroup" aria-label="Speed">
         {SPEED_STEPS.map((_, i) => (
-          <button key={i} type="button" role="radio" aria-checked={i === step} aria-label={SPEED_NAMES[i]} data-speed={i} className="pointer-events-auto flex h-full w-[9px] items-center justify-center" onClick={() => setSpeedStep(i)}>
+          <button key={i} type="button" role="radio" aria-checked={i === step} aria-label={SPEED_NAMES[i]} data-speed={i} className={`pointer-events-auto flex h-full items-center justify-center ${mobile ? "w-[6px]" : "w-[9px]"}`} onClick={() => setSpeedStep(i)}>
             <span className="w-[4px] rounded-full transition-[background-color,height,transform] duration-300 [transition-timing-function:var(--lg-spring)]" style={{ height: 6 + i * 3, backgroundColor: i <= step ? "#fff" : "rgb(255 255 255 / 0.3)", transform: i === step ? "scaleX(1.25)" : undefined }} />
           </button>
         ))}
@@ -1345,6 +1345,11 @@ export function FlightUI({ onLand, mobile, flying, onStick }: { onLand: () => vo
       {sep}
       <SpeedSteps size={mobile ? 44 : 32} mobile={mobile} />
       {sep}
+      {/* Follow the path (on by default, kept for the visit): with no key held the quiet hand flies the path of light;
+          off, the plane is only ever flown by you. A held key always wins either way. */}
+      <button type="button" aria-pressed={guide} aria-label="Follow the path" data-tip={guide ? "Following the path" : "Follow the path"} data-flight="follow" className={`${ib(guide)} transition-opacity disabled:opacity-40`} disabled={!flying} onClick={() => setGuide(!guide)}>
+        <Route size={isz} strokeWidth={sw} />
+      </button>
       <button type="button" aria-pressed={free} aria-label="Free view" data-tip={free ? "Free view on  M" : "Free view  M"} data-flight="free" className={`${ib(free)} transition-opacity disabled:opacity-40`} disabled={!flying} onClick={() => setFree(!free)}>
         <Move3d size={isz} strokeWidth={sw} />
       </button>
