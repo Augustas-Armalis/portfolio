@@ -3,7 +3,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { noteGpu } from "@/lib/quality";
+import { getQualityChoice, noteGpu, reportGpu } from "@/lib/quality";
 import { SKY_U } from "./sky";
 
 // (read once a frame: kept, not made anew)
@@ -101,11 +101,14 @@ export const postCtl = {
   rays: 1,
   // the steadying: how much of the frame before is kept under each new one where nothing moves (0 = none)
   steady: 0.86,
+  brush: true, // the painterly dabs worked out at half size (false: at full size, as first made)
   steadyClip: 1.25, // how many deviations of the colours round a pixel the past may lie from their middle
   // In flight: `k` 0..1 the strength of the flight's lens (Plane.tsx eases it in after take-off and out on landing),
   // `from` the distance in metres at which the far softness begins (it is full only at eight times that), `subject`
   // a point a world wants kept clear of it.
   flight: { k: 0, from: 420, subject: null as THREE.Vector3 | null },
+  // names of passes to leave out ('post:ao', 'post:rays', ...), for profiling: a skipped pass leaves its target as it was
+  skip: new Set<string>(),
   // where the scene itself is drawn (null: straight to the screen), for whoever warms shaders ahead of time
   sceneTarget: null as THREE.WebGLRenderTarget | null,
 };
@@ -405,27 +408,45 @@ void main(){
   gl_FragColor = vec4(acc / float(TAPS) * exp(-dot(q, q) * 1.4), 1.0);
 }`;
 
-const GLSL_FINISH = /* glsl */ `
-uniform float uTime; uniform float uLook; uniform vec2 uRes;
+// The sheet the picture is on (paper fibre and tooth, and the vignette) depends on the pixel's place alone, never on
+// the frame: it is worked out once a size, into a two-channel texture (r: the paper's lift, g: the vignette), and each
+// frame only reads it. (Worked out in the pass itself it was some twenty hashes and a dozen noise lookups per pixel.)
+const GLSL_SHEET = /* glsl */ `
+uniform vec2 uRes;
 float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f); return mix(mix(h12(i), h12(i + vec2(1.0, 0.0)), u.x), mix(h12(i + vec2(0.0, 1.0)), h12(i + vec2(1.0, 1.0)), u.x), u.y); }
-// The sheet the picture is on, as it was in the first build of the lens (19 Nov): long soft fibres and a fine
-// tooth, the same sheet every frame (nothing in it moves, so nothing swims); the tones gather a very little, as
-// mixed paint does; a soft vignette. He asked for exactly this back.
-vec3 finish(vec3 c, vec2 uv){
+// (long soft fibres and a fine tooth, the same sheet every frame; a soft vignette)
+vec2 sheet(vec2 uv){
   vec2 px = uv * uRes / max(uRes.y / 900.0, 1.0);
   float fibre = vn(px * vec2(0.035, 0.5)) * 0.5 + vn(px * vec2(0.6, 0.05) + 40.0) * 0.5;
   float tooth = h12(floor(px * 1.0)) * 0.6 + vn(px * 0.5) * 0.4;
   float paper = (fibre - 0.5) * 0.034 + (tooth - 0.5) * 0.026;
+  vec2 v = (uv - 0.5) * vec2(1.0, 0.94);
+  float vig = smoothstep(0.42, 0.98, length(v) * 1.28);
+  return vec2(paper / 0.06 + 0.5, vig);
+}
+`;
+const SHEET = /* glsl */ `
+varying vec2 vUv;
+${GLSL_SHEET}
+void main(){ gl_FragColor = vec4(sheet(vUv), 0.0, 1.0); }`;
+
+const GLSL_FINISH = /* glsl */ `
+uniform float uTime; uniform float uLook; uniform sampler2D tSheet;
+float h12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+// The sheet the picture is on, as it was in the first build of the lens (19 Nov): long soft fibres and a fine
+// tooth, the same sheet every frame (nothing in it moves, so nothing swims); the tones gather a very little, as
+// mixed paint does; a soft vignette. He asked for exactly this back.
+vec3 finish(vec3 c, vec2 uv){
+  vec2 sh = texelFetch(tSheet, ivec2(gl_FragCoord.xy), 0).rg;
+  float paper = (sh.r - 0.5) * 0.06;
   float lum = dot(c, vec3(0.299, 0.587, 0.114));
   c *= 1.0 + paper * uLook * (0.45 + 0.55 * smoothstep(0.02, 0.5, lum));
   // a soft quantise: the tones gather a little, as mixed paint does
   vec3 q = floor(c * 28.0 + 0.5) / 28.0;
   c = mix(c, q, 0.22 * uLook);
   // vignette
-  vec2 v = (uv - 0.5) * vec2(1.0, 0.94);
-  float vig = smoothstep(0.42, 0.98, length(v) * 1.28);
-  c *= 1.0 - vig * 0.34;
+  c *= 1.0 - sh.g * 0.34;
   c += (h12(gl_FragCoord.xy + fract(uTime) * 61.0) - 0.5) / 255.0;
   return c;
 }
@@ -435,7 +456,7 @@ vec3 encode(vec3 c){ c = clamp(c, 0.0, 1.0); return mix(c * 12.92, 1.055 * pow(c
 const COMPOSITE = /* glsl */ `
 varying vec2 vUv; uniform sampler2D tScene; uniform sampler2D tDof; uniform sampler2D tBloom; uniform sampler2D tRays;
 uniform float uBloom; uniform float uRays; uniform vec3 uRayCol; uniform float uNight; uniform float uWarm; uniform vec2 uPx;
-uniform sampler2D tAo; uniform float uAo;
+uniform sampler2D tAo; uniform float uAo; uniform sampler2D tTile; uniform float uTileT;
 ${GLSL_DEPTH}
 ${GLSL_COC}
 ${GLSL_TONE}
@@ -453,10 +474,17 @@ void main(){
   float keep = lit01(sc.a);
   vec3 hdr = sc.rgb;
   float soften = 0.0;
+  float z0 = viewZ(vUv);
   #ifdef USE_DOF
-  if (uCocK > 0.0) {
+  // (a tile of the frame in which no circle anywhere near is a third of a pixel has nothing to soften, to carry
+  // sharp over the blur, or to find the rim of: it is left alone without looking at its neighbours, to the very
+  // same result. The tiles are those of the depth of field's own gather: the largest circle either side of the
+  // plane, spread one tile on every side.)
+  bool blurHere = false;
+  if (uCocK > 0.0) { vec2 tl = texelFetch(tTile, ivec2(gl_FragCoord.xy / uTileT), 0).rg; blurHere = max(tl.r, tl.g) > 0.03; }
+  if (blurHere) {
     // What is in focus keeps its own pixels, at full resolution.
-    float c0 = cocAt(viewZ(vUv));
+    float c0 = cocAt(z0);
     float lo = abs(c0); vec2 toSharp = vec2(0.0);
     for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
       if (x == 0 && y == 0) continue;
@@ -491,7 +519,7 @@ void main(){
     // the contact shade: on what is lit by the scene (never a screen's own picture), thinning into the far air,
     // and leaning cool rather than grey so it reads as shade and not as dirt
     vec2 ao = texture2D(tAo, vUv).rg;
-    float z = viewZ(vUv);
+    float z = z0;
     float k = uAo * keep * (1.0 - smoothstep(700.0, 2600.0, z)) * (1.0 - soften * 0.6);
     float open = mix(1.0, ao.r, k);
     hdr *= mix(vec3(open), vec3(1.0), vec3(0.0, 0.04, 0.1) * (1.0 - open) * 4.0);
@@ -503,7 +531,7 @@ void main(){
   #ifdef USE_RAYS
     // (light in the AIR: it is seen against what is far, and thins to nothing over the ground at one's feet, where
     // a streak drawn in the frame would slide across the grass with every turn of the eye)
-    lit += texture2D(tRays, vUv).rgb * uRayCol * uRays * smoothstep(10.0, 160.0, viewZ(vUv));
+    lit += texture2D(tRays, vUv).rgb * uRayCol * uRays * smoothstep(10.0, 160.0, z0);
   #endif
   // Highlights keep their colour: past a certain brightness the light is compressed toward a ceiling without
   // changing its hue, so a sun, a lamp or the kings' dome is a bright coloured thing with form in it and never a
@@ -533,8 +561,43 @@ void main(){
 // overlapping 3x3 quarters) gathers the tones into flat dabs; the desk and
 // whatever is near stay as the lens drew them. A point of light (a star, a
 // firefly, a glint) is never painted over. Then the finish.
+// The dabs themselves, at half the frame's size: what is gathered is flat by design, and a half-size picture
+// (a six by six window of the frame's own pixels round each of its texels, in four quarters of three by three)
+// carries it as well as the full-size one did at a fifth of the taps a pixel. The paint pass lays it back, smoothly.
+const BRUSH = /* glsl */ `
+varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel; uniform float uStep; uniform vec2 uPaintZ;
+${GLSL_DEPTH}
+void main(){
+  vec3 c = texture2D(tMap, vUv).rgb;
+  // (near what is drawn here nothing is gathered; and where the picture is flat all round nothing would change)
+  if (viewZ(vUv) < uPaintZ.x * 0.6) { gl_FragColor = vec4(c, 1.0); return; }
+  vec2 e = uTexel * uStep * 1.5;
+  vec3 f0 = abs(texture2D(tMap, vUv + vec2(-e.x, -e.y)).rgb - c) + abs(texture2D(tMap, vUv + vec2(e.x, -e.y)).rgb - c)
+    + abs(texture2D(tMap, vUv + vec2(-e.x, e.y)).rgb - c) + abs(texture2D(tMap, vUv + vec2(e.x, e.y)).rgb - c);
+  if (f0.r + f0.g + f0.b < 0.02) { gl_FragColor = vec4(c, 1.0); return; }
+  vec3 m[4]; vec3 s2[4];
+  for (int k = 0; k < 4; k++) { m[k] = vec3(0.0); s2[k] = vec3(0.0); }
+  for (int y = 0; y < 6; y++) for (int x = 0; x < 6; x++) {
+    vec3 t = texture2D(tMap, vUv + (vec2(float(x), float(y)) - 2.5) * uTexel * uStep).rgb;
+    int q = (x >= 3 ? 1 : 0) + (y >= 3 ? 2 : 0);
+    vec3 tt = t * t;
+    if (q == 0) { m[0] += t; s2[0] += tt; }
+    else if (q == 1) { m[1] += t; s2[1] += tt; }
+    else if (q == 2) { m[2] += t; s2[2] += tt; }
+    else { m[3] += t; s2[3] += tt; }
+  }
+  vec3 acc = vec3(0.0); float wsum = 0.0;
+  for (int k = 0; k < 4; k++) {
+    vec3 mean = m[k] / 9.0;
+    float v = dot(abs(s2[k] / 9.0 - mean * mean), vec3(0.299, 0.587, 0.114));
+    float w = 1.0 / (1.0 + pow(v * 2000.0, 2.0));
+    acc += mean * w; wsum += w;
+  }
+  gl_FragColor = vec4(acc / wsum, 1.0);
+}`;
+
 const PAINT = /* glsl */ `
-varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel; uniform float uStep; uniform float uPaint; uniform vec2 uPaintZ;
+varying vec2 vUv; uniform sampler2D tMap; uniform sampler2D tBrush; uniform float uBrush; uniform vec2 uTexel; uniform float uStep; uniform float uPaint; uniform vec2 uPaintZ;
 ${GLSL_DEPTH}
 ${GLSL_FINISH}
 void main(){
@@ -542,6 +605,17 @@ void main(){
   vec3 c = c0.rgb;
   float amt = uPaint * uLook * c0.a * smoothstep(uPaintZ.x, uPaintZ.y, viewZ(vUv));
   if (amt > 0.004) {
+    // (where the picture is flat all round, the open sky and the smooth far haze, gathering it into dabs changes
+    // nothing: four soft looks at the corners of the window tell, and the twenty-five taps are spared)
+    vec2 e = uTexel * uStep * 1.5;
+    vec3 f0 = abs(texture2D(tMap, vUv + vec2(-e.x, -e.y)).rgb - c) + abs(texture2D(tMap, vUv + vec2(e.x, -e.y)).rgb - c)
+      + abs(texture2D(tMap, vUv + vec2(-e.x, e.y)).rgb - c) + abs(texture2D(tMap, vUv + vec2(e.x, e.y)).rgb - c);
+    if (f0.r + f0.g + f0.b < 0.02) amt = 0.0;
+  }
+  if (amt > 0.004) {
+    vec3 best;
+    if (uBrush > 0.5) best = texture2D(tBrush, vUv).rgb;
+    else {
     vec3 m[4]; vec3 s2[4];
     for (int k = 0; k < 4; k++) { m[k] = vec3(0.0); s2[k] = vec3(0.0); }
     for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) {
@@ -561,7 +635,8 @@ void main(){
       float w = 1.0 / (1.0 + pow(v * 2000.0, 2.0));
       acc += mean * w; wsum += w;
     }
-    vec3 best = acc / wsum;
+    best = acc / wsum;
+    }
     float spark = dot(c - best, vec3(0.299, 0.587, 0.114));
     c = mix(c, best, amt * (1.0 - smoothstep(0.03, 0.12, spark)));
   }
@@ -609,8 +684,9 @@ void main(){
   // (held to the middle of what is here now, a little over one deviation either way, and never outside its
   // extremes: tight enough that grass moving in the wind keeps its own blades, wide enough to still a flicker)
   vec3 mu = m1 / 9.0; vec3 sd = sqrt(max(m2 / 9.0 - mu * mu, 0.0)) * uClip;
-  vec3 h = clamp(past(uv), max(mn, mu - sd), min(mx, mu + sd));
   float speed = length((uv - vUv) / uTexel);
+  // (a point that has not moved is read where it was, in one tap: the cubic's five come to the same on a texel's middle)
+  vec3 h = clamp(speed < 0.002 ? texture2D(tHist, vUv).rgb : past(uv), max(mn, mu - sd), min(mx, mu + sd));
   // (a screen's own picture, marked by alpha 0, is never mixed with its past: it must stay exact)
   // (what rushes past near the lens, tens of pixels a frame, keeps little: there the clamp alone would smear)
   float k = uKeep * mix(1.0, 0.45, smoothstep(0.6, 7.0, speed)) * (1.0 - 0.6 * smoothstep(20.0, 80.0, speed)) * smoothstep(0.02, 0.3, c.a);
@@ -653,13 +729,17 @@ function build(level: number) {
   const ao = new THREE.WebGLRenderTarget(4, 4, hdr);
   const ao2 = new THREE.WebGLRenderTarget(4, 4, hdr);
   const ldr = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false });
+  const brush = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false });
+  // the sheet of paper and the vignette, worked out once a size (see GLSL_SHEET)
+  const sheet = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false, format: THREE.RGFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
   // the frame before, and the one being made (they change places every frame)
   const hist = [0, 1].map(() => new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false }));
   const pick = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
   const depthU = { tDepth: { value: full.depthTexture }, uNear: { value: 0.01 }, uFar: { value: 3000 } };
   const cocU = { uFocus: { value: 2 }, uCocK: { value: 0 }, uBand: { value: 0.3 }, uMaxC: { value: MAX_C }, uFly: { value: new THREE.Vector3(0, 0, 0) }, uBack: { value: 1 } };
   const toneU = { uExposure: { value: 1 } };
-  const finishU = { uTime: SKY_U.uTime, uLook: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) } };
+  const finishU = { uTime: SKY_U.uTime, uLook: { value: 1 }, tSheet: { value: sheet.texture } };
+  const sheetU = { uRes: { value: new THREE.Vector2(1, 1) } };
   const paint = level >= 2;
   // (the steadying needs two more passes over the frame: with a mouse at every level that has a lens; a phone's
   // pixels are too small for the flicker to be seen and its GPU has nothing to spare)
@@ -696,6 +776,8 @@ function build(level: number) {
         uPx: { value: new THREE.Vector2() },
         tAo: { value: ao2.texture },
         uAo: { value: 0 },
+        tTile: { value: tile2.texture },
+        uTileT: { value: 8 },
         ...depthU,
         ...cocU,
         ...toneU,
@@ -704,13 +786,17 @@ function build(level: number) {
       { USE_DOF: 1, USE_AO: 1, ...(level >= 2 ? { USE_RAYS: 1 } : {}), ...(tail ? {} : { FINISH: 1 }) },
     ),
     steady: pass(STEADY, { tMap: { value: ldr.texture }, tHist: { value: hist[0].texture }, tDepth: { value: full.depthTexture }, uReproj: { value: new THREE.Matrix4() }, uTexel: { value: new THREE.Vector2() }, uKeep: { value: 0 }, uClip: { value: 1.25 } }),
-    paint: pass(PAINT, { tMap: { value: ldr.texture }, uTexel: { value: new THREE.Vector2() }, uStep: { value: 1 }, uPaint: { value: paint ? 0.5 : 0 }, uPaintZ: { value: new THREE.Vector2(7, 30) }, ...depthU, ...finishU }),
+    brush: pass(BRUSH, { tMap: { value: ldr.texture }, uTexel: { value: new THREE.Vector2() }, uStep: { value: 1 }, uPaintZ: { value: new THREE.Vector2(7, 30) }, ...depthU }),
+    paint: pass(PAINT, { tMap: { value: ldr.texture }, tBrush: { value: brush.texture }, uBrush: { value: 0 }, uTexel: { value: new THREE.Vector2() }, uStep: { value: 1 }, uPaint: { value: paint ? 0.5 : 0 }, uPaintZ: { value: new THREE.Vector2(7, 30) }, ...depthU, ...finishU }),
+    sheet: pass(SHEET, sheetU),
     pick: pass(PICK, { uPoint: { value: new THREE.Vector2(0.5, 0.5) }, ...depthU }),
   };
-  const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ao, ao2, ldr, ...hist, pick];
+  // (named, so a profile can say which pass is which)
+  for (const [k, mat] of Object.entries(m)) mat.name = `post:${k}`;
+  const targets = [full, half, dof, dof2, tile, tile2, ...down, ...up, mask, rays, ao, ao2, ldr, brush, sheet, ...hist, pick];
   // (hist: which of the two holds the frame before, whether it holds one at all, and how the camera saw the world then)
   const past = { i: 0, ok: false, vp: new THREE.Matrix4(), eye: new THREE.Vector3(), q: new THREE.Quaternion(), at: 0, ray: 0 };
-  return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, hist, past, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, steady, tail, warmed: 0, w: 0, h: 0 };
+  return { quad, cam, full, half, dof, dof2, tile, tile2, down, up, mask, rays, ao, ao2, ldr, brush, sheet, sheetU, sheetOk: false, hist, past, pick, m, tri, targets, depthU, cocU, toneU, finishU, paint, steady, tail, warmed: 0, w: 0, h: 0 };
 }
 
 const sunV = new THREE.Vector3();
@@ -746,8 +832,27 @@ export function Post({ level }: { level: number }) {
   }, []);
   useEffect(() => () => over.tri.dispose(), [over]);
 
+  // (Auto's yardstick: one frame in twenty, and every fourth for the first seconds, is timed to the end of its work
+  // on the card by reading one pixel back; see reportGpu in quality.ts)
+  const probeN = useMemo(() => ({ n: 0, born: performance.now(), px: new Uint8Array(4) }), []);
+  const probe = (t0: number, out?: THREE.WebGLRenderTarget) => {
+    if (out) return;
+    // (while the loader is up the world is not drawn: the clock of the first seconds starts when it lifts)
+    if (postCtl.overlay) {
+      probeN.born = performance.now();
+      return;
+    }
+    probeN.n++;
+    const young = performance.now() - probeN.born < 9000;
+    if (probeN.n % (young ? 4 : 20) !== 0 || getQualityChoice() !== "auto") return;
+    const g = gl.getContext();
+    g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, probeN.px);
+    reportGpu(performance.now() - t0);
+  };
+
   // `out` set: the finished frame goes into that target at its size (a photograph) instead of to the screen
   const draw = (scene: THREE.Scene, camera: THREE.Camera, out?: THREE.WebGLRenderTarget) => {
+    const t0 = performance.now();
     const overlay = () => {
       if (!postCtl.overlay || out) return;
       over.q.material = postCtl.overlay;
@@ -796,8 +901,17 @@ export function Post({ level }: { level: number }) {
     if (w !== p.w || h !== p.h) {
       p.w = w;
       p.h = h;
+      // (four samples an edge up to three million pixels; over that the pixels are small enough, and the frame dear enough, for two)
+      const want = COARSE || w * h > 3e6 ? 2 : 4;
+      if (p.full.samples !== want) {
+        p.full.samples = want;
+        p.full.dispose();
+      }
       p.full.setSize(w, h);
       p.ldr.setSize(w, h);
+      p.sheet.setSize(w, h);
+      p.brush.setSize(w >> 1, h >> 1);
+      p.sheetOk = false;
       p.hist.forEach((t) => t.setSize(w, h));
       p.past.ok = false;
       p.half.setSize(w >> 1, h >> 1);
@@ -813,6 +927,7 @@ export function Post({ level }: { level: number }) {
       p.ao2.setSize(w >> 1, h >> 1);
     }
     const run = (mat: THREE.ShaderMaterial, target: THREE.WebGLRenderTarget | null) => {
+      if (postCtl.skip.size && postCtl.skip.has(mat.name)) return;
       p.quad.material = mat;
       gl.setRenderTarget(target);
       gl.render(p.quad, p.cam);
@@ -848,6 +963,12 @@ export function Post({ level }: { level: number }) {
     p.cocU.uBand.value = band;
     p.toneU.uExposure.value = gl.toneMappingExposure * postCtl.exposure;
 
+    if (!p.sheetOk) {
+      p.sheetU.uRes.value.set(w, h);
+      run(p.m.sheet, p.sheet);
+      p.sheetOk = true;
+    }
+
     // the scene, linear and unclipped
     POST_U.uLinearOut.value = 1;
     gl.setRenderTarget(p.full);
@@ -872,6 +993,7 @@ export function Post({ level }: { level: number }) {
       const ht = p.m.tile.uniforms;
       ht.uTexel.value.set(1 / p.half.width, 1 / p.half.height);
       ht.uT.value = T;
+      p.m.comp.uniforms.uTileT.value = T * 2;
       run(p.m.tile, p.tile);
       p.m.tile2.uniforms.uTexel.value.set(1 / p.tile.width, 1 / p.tile.height);
       run(p.m.tile2, p.tile2);
@@ -937,7 +1059,6 @@ export function Post({ level }: { level: number }) {
     if (SKY_U.uSunDir.value.y <= -0.06) (c.uRayCol.value as THREE.Color).set(0.6, 0.7, 1.0);
     c.uPx.value.set(1 / w, 1 / h);
     p.finishU.uLook.value = postCtl.look;
-    p.finishU.uRes.value.set(w, h);
     if (p.tail) {
       run(p.m.comp, p.ldr);
       let src = p.ldr;
@@ -972,12 +1093,24 @@ export function Post({ level }: { level: number }) {
         p.past.eye.copy(camera.position);
         src = p.hist[next];
       } else if (out) p.past.ok = false;
+      const stepPx = Math.max(1, h / 1100);
+      // (the dabs at half size, when there are any to lay: with the painterly pass on and the paint's strength above nothing)
+      const brushed = p.paint && postCtl.brush && postCtl.look > 0.01;
+      if (brushed) {
+        const bu = p.m.brush.uniforms;
+        bu.tMap.value = src.texture;
+        bu.uTexel.value.set(1 / w, 1 / h);
+        bu.uStep.value = stepPx;
+        run(p.m.brush, p.brush);
+      }
+      p.m.paint.uniforms.uBrush.value = brushed ? 1 : 0;
       p.m.paint.uniforms.tMap.value = src.texture;
       p.m.paint.uniforms.uTexel.value.set(1 / w, 1 / h);
-      p.m.paint.uniforms.uStep.value = Math.max(1, h / 1100);
+      p.m.paint.uniforms.uStep.value = stepPx;
       run(p.m.paint, out ?? null);
     } else run(p.m.comp, out ?? null);
     overlay();
+    probe(t0, out);
   };
 
   const state = useThree();

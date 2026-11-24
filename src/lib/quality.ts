@@ -29,8 +29,8 @@ export type Quality = {
 export const PRESETS: Record<Preset, Quality> = {
   low: { preset: "low", dpr: 1, grass: 0.3, trees: 0.5, shadows: 512, effects: 0.3, far: 0.6, post: 0, budget: 1.2, fps: 0 },
   medium: { preset: "medium", dpr: 1.25, grass: 0.6, trees: 0.75, shadows: 1024, effects: 0.6, far: 0.8, post: 1, budget: 2.2, fps: 0 },
-  high: { preset: "high", dpr: 1.5, grass: 1, trees: 1, shadows: 2048, effects: 1, far: 1, post: 2, budget: 3, fps: 0 },
-  ultra: { preset: "ultra", dpr: 2, grass: 1.5, trees: 1, shadows: 4096, effects: 1, far: 1.25, post: 3, budget: 5, fps: 0 },
+  high: { preset: "high", dpr: 1.5, grass: 1, trees: 1, shadows: 2048, effects: 1, far: 1, post: 2, budget: 2.6, fps: 0 },
+  ultra: { preset: "ultra", dpr: 2, grass: 1.5, trees: 1, shadows: 4096, effects: 1, far: 1.25, post: 3, budget: 4.2, fps: 0 },
 };
 // The settings beyond the preset. Choosing a preset sets them to its own; changing any of them makes the choice
 // "custom" (the preset row then shows none lit). Resolution caps the pixels drawn (the render scale under it);
@@ -279,6 +279,39 @@ function early(dt: number, t: number) {
   earlyN = 0;
   emit(false);
 }
+// ---- the card's own time (Auto only) ----
+// A frame's length on screen is the display's beat (16.7 ms at 60 Hz) however much room the card has, so the frame
+// loop alone cannot tell a gear that holds sixty with room to spare from one that only just does. The lens times
+// one frame in twenty to the end of its work on the card (and every fourth one for the first seconds of a visit,
+// which is the start-up benchmark behind the loader) and reports it here. Auto aims at 12 ms: over 12.5 it steps
+// down at once (two gears over 24), and it climbs only when the next gear up would still be under 12.
+const GPU: number[] = [];
+const gpuMed = () => {
+  if (GPU.length < 5) return 0;
+  const b = [...GPU].sort((x, y) => x - y);
+  return b[b.length >> 1];
+};
+export function reportGpu(ms: number) {
+  const s = get();
+  if (s.choice !== "auto" || ms <= 0 || ms > 250) return;
+  GPU.push(ms);
+  if (GPU.length > 9) GPU.shift();
+  const med = gpuMed();
+  const now = performance.now();
+  if (!med || now - lastStep < 2500) return;
+  const i = ORDER.indexOf(s.auto);
+  if (med > 12.5 && i > 0) {
+    s.auto = ORDER[Math.max(0, i - (med > 24 ? 2 : 1))];
+    s.ceiling = s.auto;
+    window.setTimeout(() => (get().ceiling = ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(get().auto) + 1)]), 60000);
+    lastStep = now;
+    slowFor = fastFor = 0;
+    GPU.length = 0;
+    remember(s.auto);
+    emit(false);
+  }
+}
+
 export function reportFrame(dt: number, up = true) {
   const s = get();
   const t = performance.now();
@@ -304,8 +337,10 @@ export function reportFrame(dt: number, up = true) {
     // a step down is remembered as the ceiling for a while: don't bounce
     s.ceiling = s.auto;
     window.setTimeout(() => (get().ceiling = ORDER[Math.min(ORDER.length - 1, ORDER.indexOf(get().auto) + 1)]), 60000);
-  } else if (up && fastFor >= 12 && i < ORDER.indexOf(s.ceiling)) s.auto = ORDER[i + 1];
-  else return;
+  } else if (up && fastFor >= 12 && i < ORDER.indexOf(s.ceiling) && (!gpuMed() || gpuMed() * 1.45 < 12)) {
+    s.auto = ORDER[i + 1];
+    GPU.length = 0;
+  } else return;
   lastStep = now;
   slowFor = fastFor = 0;
   remember(s.auto);
@@ -317,7 +352,7 @@ export function reportFrame(dt: number, up = true) {
 // every pixel; on a big screen the lower gears draw fewer and the picture is laid on the screen smoothly (the
 // steadying keeps edges calm): a 2560 x 1440 window is 3.7 million pixels, which at Medium is a third more work in
 // every pass than the gear is meant for.
-export const PIXEL_BUDGET: Record<Preset, number> = { low: 1.2, medium: 2.2, high: 3, ultra: 5 };
+export const PIXEL_BUDGET: Record<Preset, number> = { low: 1.2, medium: 2.2, high: 2.6, ultra: 4.2 };
 // Under that, a dynamic scale: a fallback for a view the gear cannot hold. Changing it resizes every target of the
 // lens (a long frame), so it moves rarely and never in flight: a step down after four seconds of frames slower than
 // 45 a second, a step up after eight seconds faster than 75, at least six seconds between steps, and while the
