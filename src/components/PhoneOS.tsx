@@ -3,14 +3,14 @@
 import { AnimatePresence, animate, motion, useMotionValue, useScroll, useTransform, type AnimationPlaybackControls, type MotionValue } from "motion/react";
 import { flushSync } from "react-dom";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { apps, bookCall, dockApps, gallery, gameApps, mainWork, owner, playableTracks, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
+import { apps, dockApps, gallery, gameApps, mainWork, playableTracks, projectApps, projectGroups, projects, sharedApps, shots, timeline, tracks, type AppId } from "@/content";
 import { flightMusicPrime } from "@/lib/flightMusic";
 import { handoff } from "@/lib/handoff";
 import { isUp, useOS, useWallpaper } from "@/store";
 import { AppIcon, AppView, LiveWallpaper, player, usePlayer, warmApps } from "./Apps";
-import { Bars, Monogram, PowerOverlay } from "./shell";
+import { Bars, PowerOverlay } from "./shell";
 import { IconFace } from "./icons";
-import { Check, ChevronLeft, Pause, Play, Power, Send, Wifi, X } from "lucide-react";
+import { BookOpen, Check, ChevronLeft, Folder as FolderSym, Images, Music, Pause, Play, Power, Send, Wifi, X } from "lucide-react";
 import { Sym } from "./symbols";
 import { Chrome, EASE_OUT, glass, instantly, M, PhoneBack, PhoneNav, reducedMotion, SPRING_GLASS, sfx, useEdgeSwipe, useGlassScope, type PhoneDetail } from "./ui";
 import { useClock, useDate } from "./useClock";
@@ -150,11 +150,24 @@ function StatusBar({ light }: { light?: boolean }) {
 
 // ---------- lock ----------
 
+// the round lock screen widgets: the places people come for
+const LOCK_WAYS: { id: AppId; icon: typeof Music }[] = [
+  { id: "projects", icon: FolderSym },
+  { id: "records", icon: Music },
+  { id: "gallery", icon: Images },
+  { id: "novel", icon: BookOpen },
+];
+
 function Lock({ onPower, lift, onPeek }: { onPower: () => void; lift: MotionValue<number>; onPeek: (on: boolean) => void }) {
   const login = useOS((s) => s.login);
   // swipe up to open: the lock screen follows the finger with the home screen settling in under it; let go high
   // enough (or with a flick) and it carries on up from where it is, otherwise it drops back
-  const lifting = useRef<{ id: number; y0: number; on: boolean; hist: { y: number; t: number }[] } | null>(null);
+  // a way in from the lock screen: open, then that app
+  const openFrom = (id: AppId) => {
+    login();
+    window.setTimeout(() => useOS.getState().openPhoneApp(id), 0);
+  };
+  const lifting = useRef<{ id: number; x0: number; y0: number; on: boolean; hist: { y: number; t: number }[] } | null>(null);
   // a long press anywhere on the lock screen asks about power, as holding the side button would
   const hold = useRef<number | undefined>(undefined);
   const held = useRef(false);
@@ -174,13 +187,15 @@ function Lock({ onPower, lift, onPeek }: { onPower: () => void; lift: MotionValu
           held.current = true;
           onPower();
         }, 600);
-        if (!lifting.current) lifting.current = { id: e.pointerId, y0: e.clientY, on: false, hist: [{ y: e.clientY, t: e.timeStamp }] };
+        if (!lifting.current) lifting.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, hist: [{ y: e.clientY, t: e.timeStamp }] };
       }}
       onPointerMove={(e) => {
         const d = lifting.current;
         if (!d || d.id !== e.pointerId) return;
         const dy = e.clientY - d.y0;
         if (!d.on) {
+          // a finger that moves is not holding: no power sheet
+          if (Math.hypot(e.clientX - d.x0, dy) > 8) window.clearTimeout(hold.current);
           if (dy > -10) return;
           d.on = true;
           held.current = true;
@@ -224,19 +239,42 @@ function Lock({ onPower, lift, onPeek }: { onPower: () => void; lift: MotionValu
         <div className="mt-1 min-h-[96px] text-[96px] font-light leading-none tracking-[-0.05em] tabular-nums text-white/95">{time}</div>
       </motion.div>
       <div className="relative mt-auto flex w-full flex-col items-center px-4 pb-[calc(var(--phone-bottom)-24px)]">
-        {/* lock screen widgets, at the bottom like iOS 26: what he's working on, and the studio */}
-        <motion.div initial={{ y: 8 }} animate={{ y: 0 }} transition={{ ...M.arrive, delay: 0.45 }} className="grid w-full grid-cols-2 gap-2.5">
-          {[
-            { k: "Working on", v: mainWork.name, s: mainWork.role ?? "" },
-            { k: "Studio", v: "Larpo", s: owner.city },
-          ].map((w) => (
-            // each widget fades itself: glass inside a fading parent sits flat until the fade ends, then snaps
-            <motion.div key={w.k} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ ...M.arrive, delay: 0.45 }} data-glass="" className={`${glass("widget-dark")} rounded-[26px] px-4 py-3 text-left`}>
-              <div className="text-[12px] font-medium leading-4 text-white/60">{w.k}</div>
-              <div className="t-headline mt-0.5 truncate text-white">{w.v}</div>
-              <div className="t-foot truncate text-white/65">{w.s}</div>
-            </motion.div>
-          ))}
+        {/* lock screen widgets, at the bottom like iOS 26: what he's working on, and four ways in. A tap on one
+            opens the phone straight into that app. Each widget fades itself: glass inside a fading parent sits flat
+            until the fade ends, then snaps. */}
+        <motion.div initial={{ y: 8 }} animate={{ y: 0 }} transition={{ ...M.arrive, delay: 0.45 }} className="flex w-full items-stretch gap-2.5">
+          <motion.button
+            type="button"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ ...M.arrive, delay: 0.45 }}
+            data-glass=""
+            onClick={(e) => (e.stopPropagation(), !held.current && openFrom(mainWork.id as AppId))}
+            className={`${glass("widget-dark")} glass-press flex min-w-0 flex-1 items-center gap-3 rounded-[26px] py-3 pl-3 pr-4 text-left`}
+          >
+            <AppIcon id={mainWork.id as AppId} size={40} />
+            <span className="min-w-0">
+              <span className="block text-[12px] font-medium leading-4 text-white/60">Working on</span>
+              <span className="t-headline block truncate text-white">{mainWork.name}</span>
+            </span>
+          </motion.button>
+          <span className="flex shrink-0 items-center gap-1.5">
+            {LOCK_WAYS.map((w, n) => (
+              <motion.button
+                key={w.id}
+                type="button"
+                aria-label={`Open ${phoneTitle(w.id)}`}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ ...M.pop, delay: 0.5 + n * 0.04 }}
+                data-glass=""
+                onClick={(e) => (e.stopPropagation(), !held.current && openFrom(w.id))}
+                className={`${glass("widget-dark")} glass-press flex h-11 w-11 items-center justify-center rounded-full text-white`}
+              >
+                <Sym icon={w.icon} size={18} weight="semibold" />
+              </motion.button>
+            ))}
+          </span>
         </motion.div>
         <motion.button
           type="button"
@@ -285,6 +323,7 @@ function HomeIcon({ id, label, onOpen }: { id: AppId; label?: string; onOpen: (i
   const ref = useRef<HTMLDivElement>(null);
   const [held, setHeld] = useState(false);
   const timer = useRef<number | undefined>(undefined);
+  const down = useRef<{ x: number; y: number } | null>(null);
   const openIt = () => {
     const r = ref.current!.getBoundingClientRect();
     onOpen(id, { x: r.x, y: r.y, w: r.width, h: r.height });
@@ -294,10 +333,17 @@ function HomeIcon({ id, label, onOpen }: { id: AppId; label?: string; onOpen: (i
       <motion.button
         type="button"
         aria-label={`Open ${apps[id].title}`}
-        onPointerDown={() => {
+        onPointerDown={(e) => {
+          down.current = { x: e.clientX, y: e.clientY };
           timer.current = window.setTimeout(() => setHeld(true), 450);
         }}
+        // a finger that moves is swiping the page, not holding the icon
+        onPointerMove={(e) => {
+          const d = down.current;
+          if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) window.clearTimeout(timer.current);
+        }}
         onPointerUp={() => window.clearTimeout(timer.current)}
+        onPointerCancel={() => window.clearTimeout(timer.current)}
         onPointerLeave={() => window.clearTimeout(timer.current)}
         onClick={() => !held && openIt()}
         whileTap={{ scale: 0.92, filter: "brightness(0.9)" }}
@@ -416,36 +462,37 @@ function PlayingWidget({ onOpen }: { onOpen: Open }) {
   );
 }
 
-// The time where he is: a plain clock face, Kaunas under it.
-function ClockWidget({ onOpen }: { onOpen: Open }) {
-  const [now, setNow] = useState<{ h: number; m: number; s: number; label: string } | null>(null);
-  useHomeInterval(() => {
-    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Vilnius", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).formatToParts(new Date());
-    const n = (t: string) => +(parts.find((x) => x.type === t)?.value ?? 0);
-    setNow({ h: n("hour") % 24, m: n("minute"), s: n("second"), label: `${String(n("hour") % 24).padStart(2, "0")}:${String(n("minute")).padStart(2, "0")}` });
-  }, 1000, true);
-  const hand = (deg: number, len: number, w: number, col: string) => <line x1="50" y1="50" x2={50 + Math.sin((deg * Math.PI) / 180) * len} y2={50 - Math.cos((deg * Math.PI) / 180) * len} stroke={col} strokeWidth={w} strokeLinecap="round" />;
+// Start here: where things are, four places a visitor came for, each with a line on what is inside.
+const GUIDE: { id: AppId; what: string }[] = [
+  { id: "projects", what: "What I've built" },
+  { id: "records", what: "My music" },
+  { id: "gallery", what: "Photos and films" },
+  { id: "novel", what: "My book" },
+];
+function GuideWidget({ onOpen }: { onOpen: Open }) {
   return (
-    <Widget app="about" onOpen={onOpen} className={`flex ${WIDGET_H} flex-col items-center justify-between p-3`}>
-      <svg viewBox="0 0 100 100" className="h-[98px] w-[98px]" aria-hidden>
-        <circle cx="50" cy="50" r="48" fill="rgb(255 255 255 / 0.94)" />
-        {Array.from({ length: 12 }, (_, i) => (
-          <line key={i} x1="50" y1={i % 3 === 0 ? 7 : 8} x2="50" y2={i % 3 === 0 ? 15 : 12} stroke="#1c1c1e" strokeWidth={i % 3 === 0 ? 2.4 : 1.4} strokeLinecap="round" opacity={i % 3 === 0 ? 0.9 : 0.45} transform={`rotate(${i * 30} 50 50)`} />
+    <div data-glass="" data-widget="guide" className={`relative overflow-hidden rounded-[26px] text-white ${glass("widget-dark")} flex ${WIDGET_H} flex-col px-3 pb-3 pt-3.5`}>
+      <span className={`${kicker} px-1`}>Start here</span>
+      <span className="mt-2 grid flex-1 grid-cols-2 gap-1.5">
+        {GUIDE.map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            aria-label={`Open ${apps[g.id].title}: ${g.what}`}
+            onClick={(e) => onOpen(g.id, rectOf(e.currentTarget.firstElementChild ?? e.currentTarget))}
+            className="press flex min-w-0 items-center gap-2.5 rounded-[16px] bg-white/[0.08] px-2 text-left"
+          >
+            <span className="block shrink-0">
+              <AppIcon id={g.id} size={32} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[13px] font-semibold leading-4 tracking-[-0.01em]">{phoneTitle(g.id)}</span>
+              <span className="block truncate text-[11px] leading-[14px] text-white/60">{g.what}</span>
+            </span>
+          </button>
         ))}
-        {now && (
-          <>
-            {hand((now.h % 12) * 30 + now.m * 0.5, 23, 4.4, "#1c1c1e")}
-            {hand(now.m * 6 + now.s * 0.1, 35, 3, "#1c1c1e")}
-            {hand(now.s * 6, 38, 1.1, "#ff9f0a")}
-            <circle cx="50" cy="50" r="2.6" fill="#ff9f0a" />
-          </>
-        )}
-      </svg>
-      <span className="flex w-full items-baseline justify-between px-1.5 pb-0.5">
-        <span className="text-[13px] font-semibold tracking-[-0.01em]">Kaunas</span>
-        <span className="text-[13px] tabular-nums text-white/65">{now?.label ?? " "}</span>
       </span>
-    </Widget>
+    </div>
   );
 }
 
@@ -525,21 +572,6 @@ function FlyWidget({ onFly }: { onFly: () => void }) {
         <span className="block text-[13px] leading-[17px] text-white/65">Out over the field, by paper plane</span>
       </span>
     </button>
-  );
-}
-
-function ContactWidget({ onOpen }: { onOpen: Open }) {
-  return (
-    <Widget app="contact" onOpen={onOpen} className={`flex ${WIDGET_H} flex-col justify-between p-4`}>
-      <span className="flex items-start justify-between">
-        <span className={kicker}>Get in Touch</span>
-        <Monogram size={34} />
-      </span>
-      <span>
-        <span className="block text-[17px] font-semibold leading-[21px] tracking-[-0.022em]">{bookCall.label}</span>
-        <span className="block truncate text-[13px] leading-[17px] text-white/65">{bookCall.sub}</span>
-      </span>
-    </Widget>
   );
 }
 
@@ -673,9 +705,8 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
       >
         <div className={pageCls} style={{ width: w }} aria-hidden={page !== 0} data-page="0">
           <PlayingWidget onOpen={open} />
-          <div className="grid grid-cols-2 gap-[14px] [@media(max-height:759px)]:hidden">
-            <ClockWidget onOpen={open} />
-            <ProjectsWidget onOpen={open} />
+          <div className="[@media(max-height:759px)]:hidden">
+            <GuideWidget onOpen={open} />
           </div>
           <div className={`${GRID} gap-y-[18px] pt-1`}>
             {HOME_APPS.map((id, i) => (
@@ -692,8 +723,8 @@ function Home({ onOpen, onFly }: { onOpen: Open; onFly: () => void }) {
             <FlyWidget onFly={() => !swiped.current && onFly()} />
           </div>
           <div className="grid grid-cols-2 gap-[14px] [@media(max-height:689px)]:hidden">
+            <ProjectsWidget onOpen={open} />
             <GamesWidget onOpen={open} />
-            <ContactWidget onOpen={open} />
           </div>
           <TimelineWidget onOpen={open} />
         </div>
