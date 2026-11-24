@@ -81,7 +81,8 @@ function makeArrivalVeil() {
         float drift = vnoise(vec2(q.x * 4.0, q.y * 3.0 - t * 0.12)) * 0.6 + vnoise(vec2(q.x * 9.0 + t * 0.08, q.y * 7.0)) * 0.4;
         col *= 0.75 + 0.5 * drift;
         col += vec3(0.5, 0.6, 0.44) * (1.0 - smoothstep(0.0, 2.2, edge)) * 0.45;
-        float a = (0.6 + 0.25 * drift) * smoothstep(0.0, 1.2, edge);
+        // (and soft at its foot too: it ended in a hard flat line at the road, a pale box seen from the dock)
+        float a = (0.6 + 0.25 * drift) * smoothstep(0.0, 4.0, edge) * smoothstep(0.0, 0.3, vUv.y);
         gl_FragColor = vec4(col * 0.42 * (0.9 + 0.1 * sin(t * 0.4)), a);
         ${END}
       }`,
