@@ -547,12 +547,19 @@ const FOLDERS: Record<"projects" | "games", { title: string; apps: AppId[]; all:
 };
 function Folder({ id, onOpen, onClose }: { id: "projects" | "games"; onOpen: Open; onClose: () => void }) {
   const f = FOLDERS[id];
+  // a swipe in from the left edge closes it too: the panel follows the finger
+  const fx = useMotionValue(0);
+  const edge = useEdgeSwipe({
+    move: (dx) => fx.set(dx),
+    end: (dx, v) => (dx > 90 || v > 500 ? onClose() : animate(fx, 0, { ...M.fling, velocity: v })),
+  });
   return (
     // Each layer fades by itself. A backdrop blur (the scrim, the glass panel) inside a parent that is fading has
     // nothing behind it to blur until the fade ends: it would sit flat and then snap to frosted.
     <motion.div className="absolute inset-0 z-[40] flex flex-col items-center justify-center px-6" exit={{ opacity: 1, transition: M.out }} onClick={onClose} role="dialog" aria-label={`${f.title} folder`} data-folder={id}>
       <motion.div aria-hidden className="absolute inset-0 bg-black/35 backdrop-blur-[26px] backdrop-saturate-150" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade} />
-      <motion.div className="relative w-full max-w-[340px]" initial={{ scale: 0.9, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, transition: M.out }} transition={M.ui} onClick={(e) => e.stopPropagation()}>
+      <div {...edge} aria-hidden onClick={(e) => e.stopPropagation()} className="absolute inset-y-0 left-0 z-10 w-4 touch-none" />
+      <motion.div style={{ x: fx }} className="relative w-full max-w-[340px]" initial={{ scale: 0.9, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, transition: M.out }} transition={M.ui} onClick={(e) => e.stopPropagation()}>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade} className="mb-4 px-2 text-[28px] font-semibold leading-8 tracking-[-0.028em] text-white [text-shadow:0_1px_10px_rgb(0_0_0/0.3)]">{f.title}</motion.div>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade} data-glass="" className={`${glass("widget-dark")} max-h-[72dvh] overflow-y-auto overscroll-contain rounded-[34px] px-4 py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}>
           <div className="grid grid-cols-3 justify-items-center gap-x-2 gap-y-5">

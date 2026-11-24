@@ -403,6 +403,7 @@ export function dragFile(title: string, src: string) {
 }
 export function QuickLook({ items, index, onIndex, onClose }: { items: LookItem[]; index: number | null; onIndex?: (i: number) => void; onClose: () => void }) {
   const { compact } = useChrome();
+  usePhoneBack(compact && index !== null, onClose);
   const it = index === null ? null : items[index];
   useEffect(() => {
     if (index === null) return;
