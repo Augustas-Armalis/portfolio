@@ -286,10 +286,12 @@ function buildCave() {
   for (let i = 0; i < last.length - 1; i++) b.idx.push(mid, last[i], last[i + 1]);
   // the floor: worn rock, a low threshold at the mouth
   const fa: number[] = [];
-  for (let a = -9; a <= MOUTH.depth; a += a < CAVE.gateIn + 16 ? 1.25 : 4) fa.push(a);
+  // (the threshold is a stone ramp the width of the doorway, its legs standing on it, and its front sinking into the
+  // ground, so wherever the land lies round it the two meet: it never floats on the grass or ends in a cut edge)
+  for (let a = -12; a <= MOUTH.depth; a += a < CAVE.gateIn + 16 ? 1.25 : 4) fa.push(a);
   const floor = fa.map((a) => {
-    const hw = (MOUTH.half + 2.5) * Math.max(0.3, caveScale(Math.max(a, 0)));
-    const y = a < 0 ? -0.6 + (FLOOR + 0.6) * sst(-9, 0, a) : FLOOR;
+    const hw = a < 0 ? MOUTH.half + 4.4 - 3.2 * sst(-12, -5, a) * 0 + 0 : (MOUTH.half + 2.5) * Math.max(0.3, caveScale(a));
+    const y = a < 0 ? -6 + (FLOOR + 6) * Math.pow(sst(-12, 0, a), 0.8) : FLOOR;
     return [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map((s) => vert(b, s * hw, y + (vn(s * 3 + 5, a * 0.15) - 0.5) * 0.2 * sst(-2, 4, a), a, 5));
   });
   for (let j = 0; j < floor.length - 1; j++) for (let i = 0; i < 8; i++) quad(floor[j][i], floor[j + 1][i], floor[j + 1][i + 1], floor[j][i + 1]);
