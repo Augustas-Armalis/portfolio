@@ -156,6 +156,17 @@ export function makeSeaMaterial(sign: THREE.Texture) {
       ${GLSL_AIR}
       ${WAVE_GLSL}
       ${LACE_GLSL}
+      float fbmL(vec2 p, float fw){
+        float v = 0.0; float a = 0.5; float f = 1.0;
+        mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+        for (int i = 0; i < 5; i++) {
+          float k = smoothstep(0.25, 0.6, fw * f);
+          v += a * (k >= 1.0 ? 0.5 : mix(vnoise(p), 0.5, k));
+          p = m * p; a *= 0.5; f *= 2.0;
+        }
+        return v;
+      }
+      float vnoiseL(vec2 p, float fw){ float k = smoothstep(0.25, 0.6, fw); return k >= 1.0 ? 0.5 : mix(vnoise(p), 0.5, k); }
       void main(){
         vec3 V = normalize(cameraPosition - vWorld);
         float dist = length(vWorld - cameraPosition);
@@ -169,11 +180,14 @@ export function makeSeaMaterial(sign: THREE.Texture) {
         float onWave = smoothstep(5.0, 46.0, body);
         float front = step(0.0, f);
         // the small work of the surface: chop that thins out with distance and smooths up the face
+        // (shader LOD: octaves finer than about two pixels are their own mean and are not worked out; the same for the
+        // three samples, so the slope they make keeps only what the pixel can hold)
         vec2 fl = vec2(uTime * 0.11, -uTime * 0.19);
         float e = 0.6;
-        float c0 = fbm(p * 0.07 + fl) + 0.5 * vnoise(p * 0.31 - fl * 2.3);
-        float cx = fbm((p + vec2(e, 0.0)) * 0.07 + fl) + 0.5 * vnoise((p + vec2(e, 0.0)) * 0.31 - fl * 2.3);
-        float cz = fbm((p + vec2(0.0, e)) * 0.07 + fl) + 0.5 * vnoise((p + vec2(0.0, e)) * 0.31 - fl * 2.3);
+        float fwC = length(fwidth(p));
+        float c0 = fbmL(p * 0.07 + fl, fwC * 0.07) + 0.5 * vnoiseL(p * 0.31 - fl * 2.3, fwC * 0.31);
+        float cx = fbmL((p + vec2(e, 0.0)) * 0.07 + fl, fwC * 0.07) + 0.5 * vnoiseL((p + vec2(e, 0.0)) * 0.31 - fl * 2.3, fwC * 0.31);
+        float cz = fbmL((p + vec2(0.0, e)) * 0.07 + fl, fwC * 0.07) + 0.5 * vnoiseL((p + vec2(0.0, e)) * 0.31 - fl * 2.3, fwC * 0.31);
         float chop = (1.1 - 0.75 * onWave) / (1.0 + dist * 0.006);
         vec3 n = normalize(normalize(vN) + vec3(c0 - cx, 0.0, c0 - cz) * chop);
         vec3 L = uSunDir;
