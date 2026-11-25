@@ -6,12 +6,12 @@ import { motion } from "motion/react";
 import { ArrowUpRight, Check, Gauge, Info, Power, Send, Trash2, Undo2, UserRound, Wallpaper, Contrast } from "lucide-react";
 import { Sym } from "../symbols";
 import { useEffect, useRef, useState } from "react";
-import { about, apps, desktopItems, allApps, owner, projectApps, timeline, wallpapers, webstern, type AppId } from "@/content";
+import { about, apps, CONTACTS, desktopItems, allApps, owner, projectApps, projects, timeline, wallpapers, webstern, type AppId } from "@/content";
 import MusicShader from "../scene/MusicShader";
 import { DeskArt, Monogram } from "../shell";
 import { useOS, useWallpaperIndex } from "@/store";
 import { FPS_CHOICES, FPS_LABELS, PRESET_LABELS, QUALITY_LABELS, RES_CHOICES, RES_LABELS, setFrameCap, setQualityChoice, setQualityLevel, setResolution, useQuality, useQualityChoice, useQualitySettings, type Preset, type QualityChoice, type Res } from "@/lib/quality";
-import { Btn, Button, IconTile, List, ListRow, M, SectionHeader, Squircle, sfx, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
+import { Btn, Button, IconTile, List, ListRow, M, reducedMotion, SectionHeader, Squircle, sfx, useContextMenu, SplitView, Switch, Toolbar, useChrome } from "../ui";
 import { Empty, useOpenApp } from "./shared";
 import { useSound } from "./sound";
 import { MUSIC_CREDITS } from "@/lib/musicCredits";
@@ -210,121 +210,235 @@ function AboutPane() {
 
 // ---------- shared ----------
 
+// ---------- Terminal ----------
+
+// His name, letter-spaced in a box drawn with line characters (36 columns: it fits a phone)
+const NAME = "A U G U S T A S   A R M A L I S";
+const MARK = [`╭${"─".repeat(NAME.length + 4)}╮`, `│  ${NAME}  │`, `╰${"─".repeat(NAME.length + 4)}╯`];
+
+type TermLine = { k: number; node: React.ReactNode };
+const KEY = "shrink-0 text-[#7AA2F7]";
+const A = ({ href, children }: { href: string; children: React.ReactNode }) => (
+  <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer" className="text-[#E4E6EA] underline decoration-white/25 underline-offset-2 hov:hover:decoration-white">
+    {children}
+  </a>
+);
+// a key and its value, the values in one column; a long value wraps under itself, never under the key
+const Row = ({ k, children }: { k: string; children: React.ReactNode }) => (
+  <div className="grid grid-cols-[10.5ch_minmax(0,1fr)]">
+    <span className={KEY}>{k}</span>
+    <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
+  </div>
+);
+// only what content.ts already says
+const contactRows = () => [
+  <Row key="email" k="email"><A href={CONTACTS.email.href ?? "#"}>{CONTACTS.email.value}</A></Row>,
+  <Row key="x" k="x"><A href={CONTACTS.x.href ?? "#"}>{CONTACTS.x.value}</A></Row>,
+  <Row key="ig" k="instagram"><A href={CONTACTS.instagram.href ?? "#"}>{CONTACTS.instagram.value}</A></Row>,
+  <Row key="web" k="web"><A href={CONTACTS.website.href ?? "#"}>{CONTACTS.website.value}</A></Row>,
+];
+const introRows = (): React.ReactNode[] => [
+  ...MARK.map((l, i) => (
+    <div key={`m${i}`} className={`whitespace-pre leading-[1.25] ${i === 1 ? "font-bold text-white" : "text-[#7AA2F7]"}`}>
+      {i === 1 ? (
+        <>
+          <span className="font-normal text-[#7AA2F7]">│</span>
+          {l.slice(1, -1)}
+          <span className="font-normal text-[#7AA2F7]">│</span>
+        </>
+      ) : (
+        l
+      )}
+    </div>
+  )),
+  <div key="gap" className="h-2" />,
+  <div key="who" className="text-white">augustas<span className="text-[#7AA2F7]">@</span>os</div>,
+  <div key="rule" className="text-white/25">───────────</div>,
+  <Row key="role" k="role">{owner.role}</Row>,
+  <Row key="studio" k="studio">{projects.larpo?.role} at {projects.larpo?.name}, <A href={webstern.href.replace(/work\/$/, "")}>webstern.co</A></Row>,
+  <Row key="based" k="based">{owner.city}</Row>,
+  <Row key="makes" k="makes">Websites, product UI, brands, code, music, a novel</Row>,
+  <Row key="lunor" k="lunor">{(projects.lunor?.what ?? "").replace(/\.$/, "")}</Row>,
+  <div key="gap2" className="h-2" />,
+  ...contactRows(),
+  <div key="gap3" className="h-2" />,
+  <div key="hint" className="text-[#A9ADB5]">
+    Type <span className="text-white">help</span> for the commands.
+  </div>,
+];
+
 export function Terminal() {
   const { open, setSound, sound, openPhoneApp, isMobile } = useOS();
-  const [lines, setLines] = useState<string[]>(() => [
-    `Last login: ${new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).replace(/,/g, "")} on ttys000`,
-    'Type "help" to see what you can do.',
-  ]);
-  const [v, setV] = useState("");
   const { compact } = useChrome();
+  const [lines, setLines] = useState<TermLine[]>([]);
+  const [v, setV] = useState("");
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const seq = useRef(0);
   // what was typed before, for the up and down arrows
   const past = useRef<string[]>([]);
   const at = useRef(0);
+  // the intro types itself out a line at a time; a key or a tap shows the rest at once, and with less motion it is
+  // all there from the start
+  const intro = useRef(introRows());
+  const [shown, setShown] = useState(() => (reducedMotion() ? intro.current.length : 0));
+  const typing = shown < intro.current.length;
+  useEffect(() => {
+    if (!typing) return;
+    const t = window.setTimeout(() => setShown((n) => n + 1), shown < MARK.length ? 70 : 45);
+    return () => window.clearTimeout(t);
+  }, [shown, typing]);
+  useEffect(() => {
+    if (!typing) return;
+    const skip = () => setShown(intro.current.length);
+    window.addEventListener("keydown", skip, { once: true });
+    return () => window.removeEventListener("keydown", skip);
+  }, [typing]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
-  }, [lines]);
+  }, [lines, shown]);
 
   const all: AppId[] = [...allApps, ...projectApps.filter((a) => !allApps.includes(a))];
+  const say = (...nodes: React.ReactNode[]) => nodes.map((node) => ({ k: ++seq.current, node }));
   const run = (raw: string) => {
-    const [cmd, arg] = raw.trim().split(/\s+/);
-    const out: string[] = [];
-    switch (cmd) {
+    const [cmd, ...rest] = raw.trim().split(/\s+/);
+    const arg = rest.join(" ").toLowerCase();
+    let out: React.ReactNode[] = [];
+    switch (cmd?.toLowerCase()) {
       case "":
+      case undefined:
         break;
       case "help":
-        out.push(
-          "whoami          who runs this machine",
-          "ls              apps on this machine",
-          "open <app>      open an app",
-          "sound on|off    toggle sound",
-          "clear           clear the screen",
-        );
+        out = [
+          ["projects", "what he has made"],
+          ["contact", "how to reach him"],
+          ["open <app>", "open an app (try: open gallery)"],
+          ["whoami", "the intro again"],
+          ["clear", "clear the screen"],
+        ].map(([c, d]) => (
+          <Row key={c} k={c}>
+            <span className="text-[#A9ADB5]">{d}</span>
+          </Row>
+        ));
+        break;
+      case "projects":
+        out = projectApps
+          .map((id) => projects[id] && { id, p: projects[id]! })
+          .filter((x): x is { id: AppId; p: NonNullable<(typeof projects)[AppId]> } => !!x)
+          .map(({ id, p }) => (
+            <Row key={id} k={p.name.toLowerCase()}>
+              <span className="text-[#A9ADB5]">{p.what}</span>
+            </Row>
+          ));
+        break;
+      case "contact":
+        out = contactRows();
         break;
       case "whoami":
-        out.push(`${owner.name}. ${owner.role}, ${owner.city}.`);
+        out = introRows().slice(MARK.length + 1, -2);
         break;
       case "ls":
-        out.push(all.map((a) => apps[a].title.toLowerCase().split(" ")[0]).join("   "));
+        out = [all.map((a) => apps[a].title.toLowerCase().split(" ")[0]).join("   ")];
         break;
       case "open": {
-        const id = all.find((a) => a === arg || apps[a].title.toLowerCase().startsWith(arg ?? "~"));
+        const id = all.find((a) => a === arg || apps[a].title.toLowerCase().startsWith(arg || "~"));
         if (id) {
           if (isMobile) openPhoneApp(id);
           else open(id);
-          out.push(`Opening ${apps[id].title}`);
-        } else out.push(`open: no app called "${arg ?? ""}". Try ls.`);
+          out = [`Opening ${apps[id].title}`];
+        } else out = [`open: no app called "${arg}". Try: open gallery, open projects, open records.`];
         break;
       }
       case "sound": {
         const next = arg ? arg === "on" : !sound;
         setSound(next);
-        out.push(`Sound ${next ? "on" : "off"}`);
+        out = [`Sound ${next ? "on" : "off"}`];
         break;
       }
       case "clear":
+        // the intro goes too
         setLines([]);
+        intro.current = [];
+        setShown(0);
         return;
       default:
-        out.push(`zsh: command not found: ${cmd}`);
+        out = [`zsh: command not found: ${cmd}. Try help.`];
     }
-    setLines((l) => [...l, `augustas@os ~ % ${raw}`, ...out]);
+    setLines((l) => [
+      ...l,
+      ...say(
+        <span className="text-white">
+          <span className="text-[#9ECE6A]">augustas@os</span> ~ % {raw}
+        </span>,
+        ...out,
+      ),
+    ]);
   };
 
   return (
-    <div onClick={() => !compact && input.current?.focus()} className={`terminal on-dark flex h-full min-h-[260px] flex-col bg-[#1C1D20] leading-[1.6] text-[#E4E6EA] ${compact ? "pb-24 text-[13px]" : "text-[12px]"}`}>
+    <div
+      onClick={() => {
+        if (typing) setShown(intro.current.length);
+        else if (!compact) input.current?.focus();
+      }}
+      className={`terminal on-dark flex h-full min-h-[260px] flex-col bg-[#1C1D20] leading-[1.6] text-[#E4E6EA] ${compact ? "pb-24 text-[13px]" : "text-[12px]"}`}
+    >
       <Toolbar title={<span className="text-white/80">Terminal</span>} sub={<span className="text-white/60">zsh</span>} />
-      <div className="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono">
-        {lines.map((l, i) => (
-          <div key={i} className={`whitespace-pre-wrap ${l.startsWith("augustas@os") ? "text-white" : "text-[#A9ADB5]"}`}>
-            {l}
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 font-mono">
+        {intro.current.slice(0, shown)}
+        {lines.map((l) => (
+          <div key={l.k} className="text-[#A9ADB5] [overflow-wrap:anywhere]">
+            {l.node}
           </div>
         ))}
-        <form
-          className="flex items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (v.trim()) past.current.push(v);
-            at.current = past.current.length;
-            run(v);
-            setV("");
-          }}
-        >
-          <span className="shrink-0 text-white">augustas@os ~ %</span>
-          <input
-            id="terminal-input"
-            ref={input}
-            autoFocus={!isMobile}
-            value={v}
-            onChange={(e) => setV(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+        {!typing && (
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
               e.preventDefault();
-              at.current = Math.max(0, Math.min(past.current.length, at.current + (e.key === "ArrowUp" ? -1 : 1)));
-              setV(past.current[at.current] ?? "");
+              if (v.trim()) past.current.push(v);
+              at.current = past.current.length;
+              run(v);
+              setV("");
             }}
-            aria-label="Command"
-            enterKeyHint="go"
-            autoCorrect="off"
-            className="min-w-0 flex-1 bg-transparent text-[16px] text-white caret-[#E4E6EA] outline-none sm:text-[12px]"
-            spellCheck={false}
-            autoComplete="off"
-            autoCapitalize="off"
-          />
-        </form>
+          >
+            <span className="shrink-0 text-white">
+              <span className="text-[#9ECE6A]">augustas@os</span> ~ %
+            </span>
+            <input
+              id="terminal-input"
+              ref={input}
+              autoFocus={!isMobile}
+              value={v}
+              onChange={(e) => setV(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                e.preventDefault();
+                at.current = Math.max(0, Math.min(past.current.length, at.current + (e.key === "ArrowUp" ? -1 : 1)));
+                setV(past.current[at.current] ?? "");
+              }}
+              aria-label="Command"
+              enterKeyHint="go"
+              autoCorrect="off"
+              className="min-w-0 flex-1 bg-transparent text-[16px] text-white caret-[#7AA2F7] outline-none sm:text-[12px]"
+              spellCheck={false}
+              autoComplete="off"
+              autoCapitalize="off"
+            />
+          </form>
+        )}
         <div ref={end} />
       </div>
       {/* on the phone the commands are one tap away, above the home indicator */}
       {compact && (
         <div data-glass="" className="glass glass-btn-dark no-scrollbar fixed inset-x-3 bottom-[calc(var(--phone-bottom)+2px)] z-[30] flex h-[52px] items-center gap-1.5 overflow-x-auto overscroll-contain rounded-full px-2">
-          {["help", "whoami", "ls", "open projects", "open records", "sound", "clear"].map((c) => (
+          {["help", "projects", "contact", "open gallery", "clear"].map((c) => (
             <button
               type="button"
               key={c}
               onClick={(e) => {
                 e.stopPropagation();
+                if (typing) setShown(intro.current.length);
                 run(c);
               }}
               className="glass-press h-9 shrink-0 rounded-full bg-white/[0.12] px-3.5 font-mono text-[13px] text-white"
