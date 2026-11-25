@@ -200,6 +200,16 @@ export const webstern = {
   })),
 };
 
+// Every copy the media pipeline made of a picture, found from any one of them: its grid, viewer and zoom sizes and
+// its 24 px blur-up. A page given the viewer copy shows the grid one in a thumbnail and the blur while it loads.
+export type Copies = { grid: string; viewer: string; zoom: string; placeholder: string };
+const copies = new Map<string, Copies>();
+for (const m of [...ownMedia.photos, ...workMedia.photos]) {
+  const c = { ...m.srcs, placeholder: m.placeholder };
+  for (const s of Object.values(m.srcs)) copies.set(s, c);
+}
+export const copiesOf = (src: string) => copies.get(src) ?? null;
+
 export const shots = {
   handle: "@augustasdesign",
   href: "https://x.com/augustasdesign",
@@ -241,8 +251,9 @@ const larpo: Project = {
   years: "2024 – now",
   status: "Open",
   stack: "Figma, React, Next.js, Motion, Three.js",
-  image: "/img/p/webstern-1.webp",
-  images: ["/img/p/webstern-2.webp"],
+  // its best work, from the case studies (the media pipeline's viewer copies; the page finds their smaller ones)
+  image: "/gallery/work/poof-02-landing-page-1920.webp",
+  images: ["/gallery/work/kaching-04-bundles-app-1920.webp", "/gallery/work/acquisity-01-home-page-1920.webp", "/gallery/work/god-of-prompt-02-home-page-1920.webp", "/gallery/work/kaching-01-home-1920.webp"],
   numbers: [
     { label: "Revenue", value: "6 figures" },
     { label: "Team", value: "3" },
