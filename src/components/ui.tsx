@@ -1592,13 +1592,14 @@ export function StatsRow({ stats }: { stats: { k: string; v: string; sub?: strin
   // four figures do not fit across a phone with their labels whole: there they stand two by two
   const cols = compact && stats.length > 3 ? 2 : stats.length;
   return (
-    <div className="grid gap-y-4" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+    <div className="grid gap-y-4 [container-type:inline-size]" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
       {stats.map((s, i) => (
         // a long label takes a second line instead of being cut; the figures still share one line (labels sit on it)
         <div key={s.k} className={`flex min-w-0 flex-col justify-end px-2 text-center ${i % cols ? "shadow-[inset_0.5px_0_0_var(--separator-opaque)]" : ""}`}>
           <div className="t-cap2 line-clamp-2 font-semibold uppercase text-[var(--label-2)] [text-wrap:balance]">{s.k}</div>
-          <div className="t-title3 mt-1 truncate font-bold text-[var(--label-2)]">{s.v}</div>
-          {s.sub && <div className="t-cap mt-0.5 truncate text-[var(--label-3)]">{s.sub}</div>}
+          {/* a figure is never cut: in a narrow column it takes a second line (and a step smaller type) instead */}
+          <div className="mt-1 text-[clamp(15px,5.4cqi,20px)] font-bold leading-[1.15] tracking-[-0.015em] text-[var(--label-2)] [overflow-wrap:anywhere] [text-wrap:balance]">{s.v}</div>
+          {s.sub && <div className="t-cap mt-0.5 text-[var(--label-3)] [text-wrap:balance]">{s.sub}</div>}
         </div>
       ))}
     </div>
