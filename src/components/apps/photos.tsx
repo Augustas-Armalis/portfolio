@@ -1,4 +1,4 @@
 "use client";
 
-// Shots is the Photos app (gallery.tsx) opened on the Design shots album.
+// Shots is the Gallery (gallery.tsx) opened on Design work.
 export { Shots } from "./gallery";

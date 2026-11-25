@@ -75,11 +75,10 @@ Wallpapers (Unsplash Licence), each with a portrait crop for the phone (`*-phone
 | public/wallpapers/sagres.webp | Bernd Dittrich | https://unsplash.com/photos/ELGDJBMKNMI |
 | public/wallpapers/dunes-night.webp | Tim de Groot | https://unsplash.com/photos/yNGQ830uFB4 |
 
-Gallery placeholders (until his own photos and films arrive): Unsplash photos are linked from images.unsplash.com and
-Mixkit films from assets.mixkit.co (Mixkit Stock Video Free License); every credit is in src/content.ts (gallery)
-and shown in the viewer. Only the film posters are stored: public/gallery/mixkit-*.webp.
+The Gallery holds only his own photographs and film (public/gallery/own, from `npm run media`) and his studio's
+work (public/gallery/work, captured from the case studies on webstern.co).
 
-His own: public/img/p/* (screenshots of his live sites larpo.studio, lunor.design, filzy.site, filzy.site/movie,
+His own: public/img/p/* (screenshots of his live sites webstern.co, lunor.design, filzy.site, filzy.site/movie,
 capto.video, armaugustas.github.io/slidepad; Contles photos from contles.com by the Contles team; Open Whip rendered
 from his own OpenWhip code), public/lab/rug/icon.webp (from his repository augustas-rug/road-rug), public/lab/rug/rug.mp4 and rug-poster.webp (his post on X, x.com/augustasdesign/status/2110439077384253885), public/content/music/kiss-me.webp
 (the cover of his "kiss me" video on YouTube, hollow kid).

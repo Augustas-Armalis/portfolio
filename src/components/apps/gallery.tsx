@@ -1,79 +1,37 @@
 "use client";
 
-// Photos: one app for his photographs, his films and his design shots, opened as the Gallery (on the Library) or as
-// Shots (on the Design shots album). On the Mac it is macOS Photos: a sidebar of the Library, the albums and the
-// media types, a grid whose size the toolbar's − and + (or a pinch on the trackpad) change, and Quick Look over it
-// (arrows, Space or Esc, a double click to zoom). On the phone it is iOS Photos: Library and Albums at the top, a
-// grid to the edges that two fingers pinch denser or larger, an album a screen of its own, and a full-screen viewer
-// that swipes between pictures, pinches and double-taps to zoom and is pulled down to put away.
-// The Library is his own work by month, from the day each was taken. Every picture blurs up from a tiny copy, the
-// viewer loads its own size with the neighbours either side, and the largest copy only when zoomed in.
+// Gallery: his photographs and his film first, and nothing that isn't his. It opens on My travels: a few words from
+// him, then the film as a large tile and his photos after it. Design work is a second, small tab: a few of his
+// studio's best screens, with the way to the rest (webstern.co) and to each case study. Shots opens on that tab.
+// On the Mac the two tabs sit in the toolbar with − and + for the grid's size (a trackpad pinch too) and Quick Look
+// over it (arrows, Space or Esc, a double click to zoom); on the phone they sit at the top of a grid that runs to the
+// edges, two fingers pinch it denser or larger, and the viewer swipes, zooms and is pulled down to put away. Every
+// picture blurs up from a tiny copy; the viewer loads its own size with its neighbours, the largest only when zoomed.
 
 import { AnimatePresence, animate, motion, useMotionValue, useMotionValueEvent, useTransform, type AnimationPlaybackControls } from "motion/react";
 import { flushSync } from "react-dom";
-import { ArrowUpRight, Briefcase, ChevronLeft, ChevronRight, Drone, Film, Image as ImageIcon, Images, Minus, Play, Plus, X } from "lucide-react";
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { gallery, shots, webstern, type Album, type Media } from "@/content";
+import { ArrowUpRight, ChevronLeft, ChevronRight, Minus, Play, Plus, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { gallery, webstern, type Media } from "@/content";
 import { useOS } from "@/store";
 import { Sym } from "../symbols";
-import { Btn, List, ListRow, M, PhoneNav, reducedMotion, SectionHeader, Segmented, SplitFrame, Toolbar, useChrome, usePhoneBack } from "../ui";
-import { XMark } from "./shared";
+import { Btn, M, reducedMotion, Segmented, Toolbar, useChrome, usePhoneBack } from "../ui";
 
-// a design shot is a picture too, from his X account; it keeps its 16:10 shape in the grid
-type Item = Media & { shot?: boolean; work?: boolean };
-const shotItems: Item[] = shots.items.map((s) => ({
-  id: `shot-${s.src.replace(/^.*shot-|\.webp$/g, "")}`,
-  kind: "photo",
-  title: s.title,
-  src: s.src,
-  thumb: s.src,
-  credit: { by: shots.handle, href: shots.href, site: "X" },
-  shot: true,
-}));
-const byId = new Map(gallery.media.map((m) => [m.id, m]));
-const itemsOf = (a: Album) => a.items.map((id) => byId.get(id)).filter((m): m is Media => !!m);
-// a set to look through: the Library, one of the albums, or everything of one kind
-type Collection = { id: string; title: string; sub: string; items: Item[]; wide?: boolean; icon?: typeof Film; link?: string };
-const own = gallery.media.filter((m) => m.own);
-const LIBRARY: Collection = { id: "library", title: "Library", sub: "", items: own.length ? own : gallery.media, icon: Images };
-const SHOTS: Collection = { id: "shots", title: "Design shots", sub: "Interface work, posted on X", items: shotItems, wide: true };
-const albumSets: Collection[] = (() => {
-  const sets = gallery.albums.map((a): Collection => ({ id: a.id, title: a.title, sub: a.sub, items: itemsOf(a) }));
-  // his own first, the design shots next, then the rest
-  sets.splice(sets.findIndex((s) => s.id === "mine") + 1, 0, SHOTS);
-  return sets;
-})();
-const typeSets: Collection[] = [
-  { id: "videos", title: "Videos", sub: "Every film", icon: Film, items: gallery.media.filter((m) => m.kind === "video") },
-  { id: "drone", title: "Drone", sub: "From the air", icon: Drone, items: gallery.media.filter((m) => m.drone) },
-  { id: "photos", title: "Photos", sub: "Every photograph", icon: ImageIcon, items: gallery.media.filter((m) => m.kind === "photo") },
-];
-// his studio's work: a set for each project (its case study's own pictures), and all of them together, first
-const workSets: Collection[] = webstern.projects.map((p) => ({ id: `w-${p.id}`, title: p.title, sub: p.tags, items: p.items.map((m) => ({ ...m, work: true })), wide: true, link: p.href }));
-const WORK: Collection = { id: "webstern", title: webstern.name, sub: "The latest from my studio", items: workSets.flatMap((w) => w.items), wide: true, icon: Briefcase, link: webstern.href };
-const isWork = (id: string) => id === WORK.id || id.startsWith("w-");
-const ALL = [LIBRARY, WORK, ...workSets, ...albumSets, ...typeSets];
-const setById = (id: string) => ALL.find((s) => s.id === id) ?? LIBRARY;
+// a screen of his studio's work carries its project's name
+type Item = Media & { work?: boolean; project?: string };
+// My travels: the film first, then the photos, newest first
+const byDate = (a: Item, b: Item) => ((a.date ?? "") < (b.date ?? "") ? 1 : (a.date ?? "") > (b.date ?? "") ? -1 : 0);
+const TRAVELS: Item[] = [...gallery.media.filter((m) => m.kind === "video").sort(byDate), ...gallery.media.filter((m) => m.kind === "photo").sort(byDate)];
+// Design work: the few screens chosen in content.ts, from the case studies
+const workById = new Map(webstern.projects.flatMap((p) => p.items.map((m): [string, Item] => [m.id, { ...m, work: true, project: p.title }])));
+const DESIGN: Item[] = gallery.design.map((id) => workById.get(id)).filter((m): m is Item => !!m);
+type Tab = "travels" | "design";
+const TITLES: Record<Tab, string> = { travels: "My travels", design: "Design work" };
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-// a tiny copy of the same picture, shown blurred while the full one loads: his own carry one inline (24 px), the
-// Unsplash ones are asked for at 48 px; a design shot has none (its tile shimmers until it is in)
-const lowRes = (m: Item) => m.placeholder ?? (m.shot ? undefined : m.kind === "photo" ? m.src.replace(/w=\d+/, "w=48") : m.poster);
+// a tiny copy of the same picture, shown blurred while the full one loads (24 px, inline)
+const lowRes = (m: Item) => m.placeholder ?? m.poster;
 const dayOf = (iso?: string) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "");
-const monthOf = (iso: string) => new Date(`${iso.slice(0, 7)}-15T12:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
-const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
-const countOf = (items: Item[]) => {
-  const v = items.filter((m) => m.kind === "video").length;
-  const p = items.length - v;
-  return [p && plural(p, items.every((m) => m.shot) ? "shot" : items.every((m) => m.work) ? "screen" : "photo"), v && plural(v, "film")].filter(Boolean).join(", ");
-};
-// the Library: everything newest first, by the day each was taken
-const LIBRARY_RUN = [...LIBRARY.items].sort((a, b) => ((a.date ?? "") < (b.date ?? "") ? 1 : (a.date ?? "") > (b.date ?? "") ? -1 : 0));
-const spanOf = (items: Item[]) => {
-  // only when every one of them carries its day
-  const ys = items.map((m) => m.date?.slice(0, 4)).filter(Boolean).sort();
-  return ys.length && ys.length === items.length ? (ys[0] === ys[ys.length - 1] ? ys[0]! : `${ys[0]}–${ys[ys.length - 1]}`) : "";
-};
 
 // how dense the grid is: the phone in columns (a pinch steps through them), the Mac in the smallest a tile may be
 const PHONE_COLS = { square: [1, 3, 5], wide: [1, 2, 3] };
@@ -101,9 +59,10 @@ function Tile({ m, onOpen, wide, feature }: { m: Item; onOpen: (el: HTMLElement)
           {clock(m.duration ?? 0)}
         </span>
       )}
-      {m.shot && (
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent px-2 pb-1.5 pt-6 text-left text-[11px] font-medium text-white opacity-0 transition-opacity duration-150 hov:group-hover:opacity-100">
-          {m.title}
+      {m.work && (
+        // the project it is from, always in sight
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent px-2.5 pb-2 pt-7 text-left text-[12px] font-semibold text-white">
+          {m.project}
         </span>
       )}
     </button>
@@ -531,12 +490,6 @@ function Viewer({ list, index, setIndex, close: put, label, originOf }: { list: 
             {m.credit.by} case study on webstern.co
             <Sym icon={ArrowUpRight} size={11} weight="medium" />
           </a>
-        ) : m.shot ? (
-          // a design shot: where it was posted
-          <a href={m.credit.href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-white/75 hover:text-white">
-            Posted on X as {m.credit.by}
-            <Sym icon={ArrowUpRight} size={11} weight="medium" />
-          </a>
         ) : (
           <>
             {m.kind === "video" ? "Film" : "Photo"} by{" "}
@@ -579,18 +532,13 @@ function usePinchSteps(step: (dir: 1 | -1, x: number, y: number) => void) {
 type View = { list: Item[]; index: number; label: string };
 type From = { k: number; x: string; y: string } | null;
 
-export function Photos({ start = "library" }: { start?: "library" | "webstern" }) {
+export function Photos({ start = "travels" }: { start?: Tab }) {
   const { compact } = useChrome();
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  // the phone: Library or Albums, and an album opened over Albums. The Mac: what the sidebar has chosen.
-  const [tab, setTab] = useState<"library" | "albums">(start === "library" ? "library" : "albums");
-  const [opened, setOpened] = useState<string | null>(start === "library" ? null : start);
-  const [picked, setPicked] = useState<string>(start);
-  const [side, setSide] = useState(false);
+  const [tab, setTab] = useState<Tab>(start);
   const [view, setView] = useState<View | null>(null);
-  const shown = compact ? (tab === "albums" && opened ? setById(opened) : tab === "library" ? LIBRARY : null) : setById(picked);
-  const wide = !!shown?.wide;
+  const wide = tab === "design";
 
   // density: a step along the phone's columns or the Mac's tile sizes; the change grows in from where it was made
   const [steps, setSteps] = useState({ square: 1, wide: 1, mac: 1 });
@@ -637,22 +585,12 @@ export function Photos({ start = "library" }: { start?: "library" | "webstern" }
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [compact, change]);
-
-  // the phone: an opened album is a screen of its own, named in the navigation bar, with Back (or the edge swipe)
-  const nav = useContext(PhoneNav);
-  const openedTitle = tab === "albums" && opened ? setById(opened).title : null;
-  useEffect(() => {
-    if (!compact || !nav) return;
-    nav(openedTitle ? { title: openedTitle, back: () => setOpened(null) } : null);
-    return () => nav(null);
-  }, [compact, nav, openedTitle]);
-  usePhoneBack(compact && !!openedTitle, () => setOpened(null));
-  // a new screen starts at its top
+  // the other tab starts at its top
   useEffect(() => {
     const el = compact ? root.current?.closest(".overflow-y-auto") : scroller.current;
     el?.scrollTo({ top: 0 });
     setFrom(null);
-  }, [compact, tab, opened, picked]);
+  }, [compact, tab]);
 
   // the viewer grows out of the tile it was opened from and goes back into the one it shows when put away
   const originOf = useCallback(
@@ -663,291 +601,89 @@ export function Photos({ start = "library" }: { start?: "library" | "webstern" }
       const r = el.getBoundingClientRect();
       const box = compact ? { left: 0, top: 0, height: window.innerHeight } : host.getBoundingClientRect();
       const y = r.top + r.height / 2 - box.top;
-      // a tile scrolled out of sight: from the middle instead
       if (y < 0 || y > box.height) return null;
       return { x: r.left + r.width / 2 - box.left, y };
     },
     [compact],
   );
-  const openAt = (set: Collection, list: Item[]) => (i: number) => setView({ list, index: i, label: set.title });
+  const openAt = (list: Item[], label: string) => (i: number) => setView({ list, index: i, label });
 
   const pad = compact ? "px-4" : "px-5";
+  const lede = `max-w-[60ch] text-ink-2 [text-wrap:pretty] ${compact ? "t-sub" : "m-body"}`;
+  const link = (href: string, label: string, primary = false) => (
+    <Btn key={href} size={compact ? "lg" : "sm"} variant={primary ? "prominent" : "bordered"} href={href} label={label} className="shrink-0" icon={<Sym icon={ArrowUpRight} size={compact ? 16 : 12} weight="semibold" />}>
+      {label}
+    </Btn>
+  );
 
-  // The Library: a few words from him, then his work a month at a time
-  const library = (
+  // My travels: a few words from him, then the film and the photos
+  const travels = (
     <div className="pb-8">
-      <p className={`${pad} max-w-[640px] pb-3 pt-2 text-ink-2 [text-wrap:pretty] ${compact ? "t-sub" : "m-body pt-4"}`}>{gallery.intro}</p>
-      <div className="relative">
-        <DateLabel compact={compact} />
-        <Grid items={LIBRARY_RUN} cols={cols} size={size} open={openAt(LIBRARY, LIBRARY_RUN)} />
-      </div>
+      <p className={`${pad} ${lede} pb-4 ${compact ? "pt-2" : "pt-4"}`}>{gallery.intro}</p>
+      <Grid items={TRAVELS} cols={cols} size={size} open={openAt(TRAVELS, TITLES.travels)} />
     </div>
   );
-
-  // his work's links: the project's case study, and the rest of the work on webstern.co (new tabs, like every link
-  // out of the OS)
-  const workLinks = (set: Collection, sz: "sm" | "lg") => (
-    <>
-      {set.id !== WORK.id && set.link && (
-        <Btn size={sz} href={set.link} label={`Open the ${set.title} case study`} icon={<Sym icon={ArrowUpRight} size={sz === "lg" ? 16 : 12} weight="semibold" />}>
-          Case study
-        </Btn>
-      )}
-      <Btn size={sz} variant={set.id === WORK.id ? "prominent" : "bordered"} href={webstern.href} label="View more work on webstern.co" icon={<Sym icon={ArrowUpRight} size={sz === "lg" ? 16 : 12} weight="semibold" />}>
-        View more work
-      </Btn>
-    </>
-  );
-
-  // An album, or a media type: what is in it, then the grid
-  const album = (set: Collection) => (
+  // Design work: a few screens from the studio, and the ways to the rest
+  const design = (
     <div className="pb-8">
-      <div className={`${pad} flex flex-wrap items-center gap-x-3 gap-y-2 pb-3 ${compact ? "pt-0" : "pt-4"}`}>
-        <p className={`min-w-0 flex-1 tabular-nums text-ink-3 ${compact ? "t-foot" : "m-sub"}`}>{/* the Mac's toolbar already counts them */}
-          {[set.sub, compact && countOf(set.items), spanOf(set.items)].filter(Boolean).join(" · ")}</p>
-        {set.id === "shots" && compact && (
-          <Btn size="lg" href={shots.href} label={`Open ${shots.handle} on X`} icon={<XMark size={14} />}>
-            {shots.handle}
-          </Btn>
-        )}
+      <div className={`${pad} pb-4 ${compact ? "pt-2" : "pt-4"}`}>
+        <p className={lede}>A few screens from {webstern.name}, my studio. The rest, and the whole story of each project, are on webstern.co.</p>
+        {/* on the phone one row that scrolls sideways, at a finger's size */}
+        <div className={`mt-3 flex gap-2 ${compact ? "-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : "flex-wrap"}`}>
+          {link(webstern.href, "View more work", true)}
+          {webstern.projects.map((p) => link(p.href, p.title))}
+        </div>
       </div>
-      {/* on the phone his work's links get a row of their own, at a finger's size */}
-      {compact && isWork(set.id) && <div className={`${pad} flex flex-wrap gap-2 pb-3`}>{workLinks(set, "lg")}</div>}
-      {set.id === WORK.id ? (
-        // all of it: project by project, each under its name and the site's own tags
-        workSets.map((w, k) => (
-          <section key={w.id} className="[contain-intrinsic-size:auto_600px] [content-visibility:auto]">
-            <div className={`${pad} flex items-baseline gap-2 pb-2 ${k ? "pt-6" : "pt-1"}`}>
-              <button type="button" onClick={() => (compact ? setOpened(w.id) : setPicked(w.id))} className={`press text-left font-bold tracking-[-0.01em] text-ink ${compact ? "text-[20px]" : "text-[17px]"}`}>
-                {w.title}
-              </button>
-              <span className={`min-w-0 flex-1 truncate text-ink-3 ${compact ? "text-[13px]" : "text-[12px]"}`}>{w.sub}</span>
-              <a href={w.link} target="_blank" rel="noopener noreferrer" className={`inline-flex shrink-0 items-center gap-0.5 text-[var(--accent-text)] ${compact ? "min-h-[44px] text-[15px]" : "text-[12px]"}`}>
-                Case study
-                <Sym icon={ArrowUpRight} size={compact ? 14 : 11} weight="medium" />
-              </a>
-            </div>
-            <Grid items={w.items} wide cols={cols} size={size} open={openAt(w, w.items)} more={k === workSets.length - 1} />
-          </section>
-        ))
-      ) : (
-        <Grid items={set.items} wide={set.wide} cols={cols} size={size} open={openAt(set, set.items)} more={isWork(set.id)} />
-      )}
+      <Grid items={DESIGN} wide cols={cols} size={size} open={openAt(DESIGN, TITLES.design)} more />
     </div>
   );
-
-  // The phone's Albums: his albums as covers, then the media types as a list
-  const albums = (
-    <div className={`${pad} pb-8 pt-3`}>
-      <div className="flex items-center justify-between pb-2">
-        <h2 className="t-title3 text-ink">{webstern.name}</h2>
-        <button type="button" onClick={() => setOpened(WORK.id)} className="press flex min-h-[44px] items-center text-[17px] tracking-[-0.02em] text-[var(--accent-text)]">
-          See all
-        </button>
-      </div>
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {workSets.map((w) => (
-          <button key={w.id} type="button" onClick={() => setOpened(w.id)} className="press group w-[72%] shrink-0 snap-start text-left outline-none">
-            <span className="sq-card relative block aspect-[16/10] overflow-hidden rounded-[14px] bg-[var(--fill-2)] bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.08)]" style={w.items[0]?.placeholder ? { backgroundImage: `url(${w.items[0].placeholder})` } : undefined} data-sq="">
-              {w.items[0] && <TileImage src={w.items[0].thumb} />}
-            </span>
-            <span className="mt-2 block truncate text-[15px] font-semibold text-ink">{w.title}</span>
-            <span className="block truncate text-[13px] text-ink-3">{w.sub}</span>
-          </button>
-        ))}
-      </div>
-      <h2 className="t-title3 pb-2 pt-7 text-ink">My Albums</h2>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-        {albumSets.map((a) => {
-          const cover = a.items[0];
-          return (
-            <button key={a.id} type="button" onClick={() => setOpened(a.id)} className="press group text-left outline-none">
-              <span
-                className="sq-card relative block aspect-square overflow-hidden rounded-[14px] bg-[var(--fill-2)] bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.08)] group-focus-visible:ring-[3px] group-focus-visible:ring-[var(--accent)]"
-                style={cover?.placeholder ? { backgroundImage: `url(${cover.placeholder})` } : undefined}
-                data-sq=""
-              >
-                {cover && <TileImage src={cover.thumb} />}
-              </span>
-              <span className="mt-2 block truncate text-[15px] font-semibold text-ink">{a.title}</span>
-              <span className="block tabular-nums text-[13px] text-ink-3">{a.items.length}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-7">
-        <SectionHeader>Media Types</SectionHeader>
-        <List>
-          {typeSets.map((t) => (
-            <ListRow key={t.id} onClick={() => setOpened(t.id)} icon={<Sym icon={t.icon!} size={22} weight="medium" className="text-[var(--accent-text)]" />} title={t.title} detail={<span className="tabular-nums text-ink-3">{t.items.length}</span>} chevron />
-          ))}
-        </List>
-      </div>
-    </div>
+  const tabs = (
+    <Segmented
+      id="photos-tab"
+      value={tab}
+      onChange={setTab}
+      options={[
+        { value: "travels", label: TITLES.travels },
+        { value: "design", label: TITLES.design },
+      ]}
+    />
   );
-
   const viewer = (
     <AnimatePresence>
       {view && <Viewer key="viewer" list={view.list} index={view.index} label={view.label} originOf={originOf} setIndex={(i) => setView((v) => (v ? { ...v, index: i } : v))} close={() => setView(null)} />}
     </AnimatePresence>
   );
+  const screen = (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div key={tab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade}>
+        <Dense k={`${cols ?? size}`} from={from}>
+          {tab === "travels" ? travels : design}
+        </Dense>
+      </motion.div>
+    </AnimatePresence>
+  );
 
-  if (compact) {
-    const screen = tab === "library" ? "library" : (opened ?? "albums");
-    const flat = screen === "library" || screen === "albums";
+  if (compact)
     return (
       <div ref={root} className="relative overflow-x-clip" {...pinch}>
-        {/* an opened album is its own screen: Library and Albums wait under it */}
-        <div className={`px-4 pb-1 ${flat ? "" : "hidden"}`}>
-          <Segmented
-            id="photos-tab"
-            value={tab}
-            onChange={(v) => {
-              setTab(v);
-              setOpened(null);
-            }}
-            options={[
-              { value: "library", label: "Library" },
-              { value: "albums", label: "Albums" },
-            ]}
-          />
-        </div>
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.div
-            key={screen}
-            // an album slides in from the right over Albums, and back out; Library and Albums cross-fade
-            initial={flat ? { opacity: 0 } : { x: "100%" }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={flat ? { opacity: 0, transition: M.out } : { x: "100%", transition: M.ui }}
-            transition={flat ? M.fade : M.ui}
-            className="bg-[var(--bg)]"
-          >
-            <Dense k={`${cols}`} from={from}>
-              {screen === "library" ? library : screen === "albums" ? albums : album(setById(screen))}
-            </Dense>
-          </motion.div>
-        </AnimatePresence>
+        <div className="px-4 pb-1">{tabs}</div>
+        {screen}
         {viewer}
       </div>
     );
-  }
-
-  // The Mac: the sidebar, then the chosen set under a toolbar with its size
-  const sideRow = (s: Collection) => {
-    const on = s.id === picked;
-    const cover = s.items[0];
-    return (
-      <button
-        type="button"
-        key={s.id}
-        data-id={s.id}
-        onClick={() => setPicked(s.id)}
-        className={`flex h-[28px] shrink-0 items-center gap-2 rounded-[8px] px-2 text-left text-[13px] tracking-[-0.003em] text-ink ${on ? "bg-black/[0.08]" : "hov:hover:bg-black/[0.035]"}`}
-      >
-        <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center text-[var(--accent-text)]">
-          {s.icon ? (
-            <Sym icon={s.icon} size={16} weight="medium" />
-          ) : (
-            // an album shows its cover, small
-            // eslint-disable-next-line @next/next/no-img-element
-            cover && <img src={cover.thumb} alt="" loading="lazy" decoding="async" className="h-[18px] w-[18px] rounded-[4px] object-cover" />
-          )}
-        </span>
-        <span className="min-w-0 flex-1 truncate">{s.title}</span>
-        <span className="text-[11px] tabular-nums text-ink-3">{s.items.length}</span>
-      </button>
-    );
-  };
-  const sideHead = (t: string) => <div className="mt-3 flex h-[22px] shrink-0 items-center px-2 text-[11px] font-semibold text-ink-3">{t}</div>;
-  const set = shown ?? LIBRARY;
   return (
-    <SplitFrame shown={side} setShown={setSide} className="flex h-full min-h-0">
-      <aside
-        data-drag
-        data-shown={side}
-        onClick={() => setSide(false)}
-        onKeyDown={(e) => {
-          // the arrow keys walk the sidebar like a real source list
-          if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-          const ids = ALL.map((s) => s.id);
-          const next = ids[Math.min(ids.length - 1, Math.max(0, ids.indexOf(picked) + (e.key === "ArrowDown" ? 1 : -1)))];
-          e.preventDefault();
-          setPicked(next);
-          (e.currentTarget.querySelector(`[data-id="${next}"]`) as HTMLElement | null)?.focus();
-        }}
-        className="split-side flex w-[210px] shrink-0 flex-col overflow-auto border-r border-black/[0.06] bg-[#F4F4F6] px-2.5 pb-3 pt-[52px]"
-      >
-        {sideRow(LIBRARY)}
-        {sideHead(webstern.name)}
-        {sideRow(WORK)}
-        {workSets.map(sideRow)}
-        {sideHead("Albums")}
-        {albumSets.map(sideRow)}
-        {sideHead("Media Types")}
-        {typeSets.map(sideRow)}
-      </aside>
-      <div ref={root} className="relative flex min-w-0 flex-1 flex-col bg-[var(--bg)]">
-        <Toolbar title={set.title} sub={set.id === "library" ? [countOf(set.items), spanOf(set.items)].filter(Boolean).join(" · ") : countOf(set.items)}>
-          <div className="flex items-center">
-            <Btn variant="plain" size="sm" iconOnly label="Smaller" disabled={steps.mac === 0} onClick={() => change(-1)} icon={<Sym icon={Minus} size={14} weight="semibold" />} />
-            <Btn variant="plain" size="sm" iconOnly label="Larger" disabled={steps.mac === MAC_SIZES.length - 1} onClick={() => change(1)} icon={<Sym icon={Plus} size={14} weight="semibold" />} />
-          </div>
-          {isWork(set.id) && workLinks(set, "sm")}
-          {set.id === "shots" && (
-            <Btn size="sm" href={shots.href} label={`Open ${shots.handle} on X`} icon={<XMark size={12} />}>
-              {shots.handle}
-            </Btn>
-          )}
-        </Toolbar>
-        <div ref={scroller} className="@container relative min-h-0 flex-1 overflow-auto">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={set.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: M.out }} transition={M.fade}>
-              <Dense k={`${size}`} from={from}>
-                {set.id === "library" ? library : album(set)}
-              </Dense>
-            </motion.div>
-          </AnimatePresence>
+    <div ref={root} className="relative flex h-full min-h-0 flex-col bg-[var(--bg)]">
+      <Toolbar title={TITLES[tab]}>
+        {tabs}
+        <div className="flex items-center">
+          <Btn variant="plain" size="sm" iconOnly label="Smaller" disabled={steps.mac === 0} onClick={() => change(-1)} icon={<Sym icon={Minus} size={14} weight="semibold" />} />
+          <Btn variant="plain" size="sm" iconOnly label="Larger" disabled={steps.mac === MAC_SIZES.length - 1} onClick={() => change(1)} icon={<Sym icon={Plus} size={14} weight="semibold" />} />
         </div>
-        {viewer}
+      </Toolbar>
+      <div ref={scroller} className="@container relative min-h-0 flex-1 overflow-auto">
+        {screen}
       </div>
-    </SplitFrame>
-  );
-}
-
-// Over the Library's grid, as in Photos: the month of the row at the top, which changes as it scrolls by. It is read
-// from the tiles under it (each carries its day), on a scroll anywhere, at most once a frame.
-function DateLabel({ compact }: { compact: boolean }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [text, setText] = useState(() => (LIBRARY_RUN[0]?.date ? monthOf(LIBRARY_RUN[0].date) : ""));
-  useEffect(() => {
-    const el = ref.current;
-    const grid = el?.nextElementSibling as HTMLElement | null;
-    if (!el || !grid) return;
-    let raf = 0;
-    const read = () => {
-      raf = 0;
-      const line = el.getBoundingClientRect().bottom;
-      for (const t of grid.children as unknown as HTMLElement[]) {
-        // the first row mostly below the line: one only peeking out under the label does not count
-        const r = t.getBoundingClientRect();
-        if (r.bottom - r.height / 2 > line) {
-          const d = t.dataset.date;
-          if (d) setText(monthOf(d));
-          return;
-        }
-      }
-    };
-    const on = () => void (raf ||= requestAnimationFrame(read));
-    window.addEventListener("scroll", on, { capture: true, passive: true });
-    return () => {
-      window.removeEventListener("scroll", on, true);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
-  if (!text) return null;
-  return (
-    <div ref={ref} className={`pointer-events-none sticky z-10 h-0 ${compact ? "top-[calc(var(--phone-top)+52px)]" : "top-0"}`}>
-      <span className="absolute left-2 top-2 rounded-full bg-black/45 px-2.5 py-1 text-[12px] font-semibold tabular-nums text-white shadow-[0_1px_8px_rgb(0_0_0/0.2)] backdrop-blur-md">{text}</span>
+      {viewer}
     </div>
   );
 }
@@ -962,8 +698,8 @@ function Dense({ k, from, children }: { k: string; from: From; children: React.R
 }
 
 export function Gallery() {
-  return <Photos start="library" />;
+  return <Photos start="travels" />;
 }
 export function Shots() {
-  return <Photos start="webstern" />;
+  return <Photos start="design" />;
 }

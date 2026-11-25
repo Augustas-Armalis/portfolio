@@ -712,23 +712,21 @@ export const notes: Note[] = [
 
 // ---------- Gallery ----------
 
-// Photos and films, by trip. PLACEHOLDERS until his own arrive: every item is an Unsplash photo or a Mixkit film,
-// credited in the viewer. To swap one, change its src (and thumb, poster) and credit; the albums stay as they are.
+// His own photographs and his film, and nothing else: made by scripts/optimize-media.mjs (npm run media) into
+// public/gallery/own and listed in src/media.json. The film leads, then the photos, newest first.
 export type Media = {
   id: string;
   kind: "photo" | "video";
   title: string;
-  // the full picture or film, and a small square for the grid
+  // the picture as the viewer shows it (or the film), and the smaller copy for the grid
   src: string;
   thumb: string;
   // films: the first frame and the length
   poster?: string;
   duration?: number;
   credit: { by: string; href: string; site: string };
-  // shot from the air: it shows in the Drone album too
-  drone?: boolean;
-  // his own (from `npm run media`): the day it was taken, its size, a 24 px picture shown blurred while it loads,
-  // a larger copy fetched only when zoomed in, and a film's small silent loop for its tile
+  // the day it was taken, its size, a 24 px picture shown blurred while it loads, a larger copy fetched only when
+  // zoomed in, and a film's small silent loop for its tile
   own?: boolean;
   date?: string;
   w?: number;
@@ -737,85 +735,18 @@ export type Media = {
   zoom?: string;
   preview?: string;
 };
-export type Album = { id: string; title: string; sub: string; items: string[] };
-const unsplash = (photo: string, id: string, title: string, by: string): Media => ({
-  id,
-  kind: "photo",
-  title,
-  src: `https://images.unsplash.com/${photo}?w=2400&q=80&auto=format`,
-  thumb: `https://images.unsplash.com/${photo}?w=480&h=480&fit=crop&q=70&auto=format`,
-  credit: { by, href: `https://unsplash.com/photos/${id}`, site: "Unsplash" },
-});
-const mixkit = (n: string, title: string, duration: number, page: string): Media => ({
-  id: `film-${n}`,
-  kind: "video",
-  title,
-  src: `https://assets.mixkit.co/videos/${n}/${n}-720.mp4`,
-  thumb: `/gallery/mixkit-${n}.webp`,
-  poster: `/gallery/mixkit-${n}.webp`,
-  duration,
-  credit: { by: "Mixkit", href: `https://mixkit.co/free-stock-video/${page}/`, site: "Mixkit" },
-  // every film here so far is from the air
-  drone: true,
-});
-const media: Media[] = [
-  unsplash("photo-1494565052307-1e66e072bca6", "wPKTJsihIYw", "Snow road near Mývatn", "Jeremy Bishop"),
-  unsplash("photo-1683668608403-bdac56a8abaa", "bINbcn3031o", "The east fjords", "Job Savelsberg"),
-  unsplash("photo-1485982353291-4f167f9dee32", "eKfEO0qM1aU", "Ring Road", "Nuno Antunes"),
-  unsplash("photo-1517765630897-8eccec28aaeb", "YifNPOb4UhA", "Meðalfell", "Einar H. Reynis"),
-  unsplash("photo-1503764833250-3aa553ba3f2b", "PozYb57vV38", "Fog on the pass", "Matthias Heil"),
-  unsplash("photo-1752490890976-dc8471357439", "hO4F6nYJ03w", "Highlands", "Stan Jacobs"),
-  unsplash("photo-1516833514026-5aa3dc6eeef3", "innb1UEpVZg", "Straight into the mountains", "redcharlie"),
-  unsplash("photo-1670331932795-0845cf7e20cb", "x1jAFA-T7GU", "Valley morning", "Kristine Varga"),
-  unsplash("photo-1559065188-2537766d864b", "uJIhAvqFJxg", "Peaks after sunset", "Massimiliano Morosinotto"),
-  unsplash("photo-1694630515448-344264b30507", "1oGFKEePOFQ", "Last light", "Marek Piwnicki"),
-  unsplash("photo-1724420964796-9d5a229728a1", "kQ0LkrVVuv0", "Lake and village", "Seongil Park"),
-  unsplash("photo-1738358459010-d9354dfa4769", "UWP6ZzHrqfo", "Snow ridge", "Marek Piwnicki"),
-  unsplash("photo-1478512611414-50d132a6dcd3", "ATzEluEgZpw", "Into the cloud", "Matt Sclarandis"),
-  unsplash("photo-1647430075466-fd32f97d1338", "RIhZ4zFYBCQ", "Switchbacks in snow", "Datingjungle"),
-  { ...unsplash("photo-1724420965567-2199e9d53f05", "PWHEBQS0QXo", "From above", "Seongil Park"), drone: true },
-  unsplash("photo-1701888281351-b9f44b3250bc", "W5ISGAqjAfg", "Shinjuku", "mos design"),
-  unsplash("photo-1780631347040-0c5df6053c2f", "2uuaV_fI4LU", "Crossing", "Jezael Melgoza"),
-  unsplash("photo-1758881606455-26cc1c2c8de4", "GU8CEZReKxs", "Side street", "Intrepid"),
-  unsplash("photo-1746150361967-7c20603d25cd", "XMAbH81gUbQ", "Ramen and neon", "mos design"),
-  unsplash("photo-1743328008258-9b995b22bb76", "kYlfHSJVZT4", "Walking home", "mos design"),
-  unsplash("photo-1710269954197-b138463df131", "xSJq_ivXjAc", "Back alley", "mos design"),
-  unsplash("photo-1758402320417-1a21489e86fa", "T11f_AGNKGg", "After the rain", "Intrepid"),
-  unsplash("photo-1494237311986-f5344a7bc2fa", "uPwWP83BCeg", "Grass at sunset", "Jamie Street"),
-  unsplash("photo-1752542361803-67aaed92a27f", "_-3P0X11GYI", "Long shadows", "Hyory Liu"),
-  unsplash("photo-1533401494430-4ab790a0600f", "P4AQFdHDNkQ", "Still water", "Jeffrey Hamilton"),
-  unsplash("photo-1568899240208-27430ba1cacd", "WAQ00FkbA7g", "Sun on the sea", "Dmytro Shchetynin"),
-  unsplash("photo-1487322971970-d7ab08ec80e9", "-mCWpK4aLgQ", "Winter sun", "Ales Krivec"),
-  unsplash("photo-1745528009908-aac87a43afb3", "GiDqZkXMqVM", "Nida lighthouse", "Nicolás Gutiérrez"),
-  unsplash("photo-1601884842017-bf608984963c", "ypA56XUc4dE", "Footprints, Nida", "Gantas Vaičiulėnas"),
-  unsplash("photo-1517393537986-7f11137e12c0", "RraKuk4JjEU", "After the sun", "Oliver Conway"),
-  unsplash("photo-1480004902249-cdb28d6a01a4", "niYTtTIR-u4", "Desert evening", "Robert Murray"),
-  mixkit("52444", "Mountain road at dusk", 13, "flying-over-a-rugged-landscape-with-a-w-highway-traversing-52444"),
-  mixkit("4998", "A lake from the air at sunset", 20, "landscape-of-a-large-lake-during-sunset-from-the-air-4998"),
-  mixkit("2788", "Cabins in the forest", 19, "aerial-view-of-a-forest-with-cabins-2788"),
-  mixkit("52436", "Road through dry hills", 19, "aerial-view-of-an-asphalt-road-surrounded-by-the-mountains-52436"),
-];
-// His own photographs and films, made by scripts/optimize-media.mjs (npm run media) into public/gallery/own and listed
-// in src/media.json: newest first, the film leading.
 const mine: Media[] = [
   ...ownMedia.films.map((f): Media => ({ id: f.id, kind: "video", title: f.title, src: f.src, thumb: f.poster, poster: f.poster, preview: f.preview, duration: f.duration, placeholder: f.placeholder, own: true, date: f.date, w: f.w, h: f.h, credit: { by: "Augustas Armalis", href: "", site: "" } })),
   ...ownMedia.photos.map((p): Media => ({ id: p.id, kind: "photo", title: p.title, src: p.srcs.viewer, thumb: p.srcs.grid, zoom: p.srcs.zoom, placeholder: p.placeholder, own: true, date: p.date, w: p.w, h: p.h, credit: { by: "Augustas Armalis", href: "", site: "" } })),
 ];
-media.unshift(...mine);
 
 export const gallery = {
-  // shown over the Library: who took these, in his words
+  // over My travels, in his words
   intro:
-    "I've been a photographer since fifth grade, eight years now. Cinematography pulled me in just as hard: shooting films, flying a drone for the shots from above, and then the edit, where the footage finally becomes something.",
-  media,
-  albums: [
-    ...(mine.length ? [{ id: "mine", title: "My travels", sub: "My own, with more on the way", items: mine.map((m) => m.id) }] : []),
-    { id: "best", title: "Best of", sub: "The ones I keep coming back to", items: ["GiDqZkXMqVM", "film-52444", "W5ISGAqjAfg", "x1jAFA-T7GU", "wPKTJsihIYw", "uPwWP83BCeg", "uJIhAvqFJxg", "film-4998", "bINbcn3031o", "_-3P0X11GYI", "GU8CEZReKxs", "kQ0LkrVVuv0"] },
-    { id: "iceland", title: "Iceland", sub: "Along the Ring Road", items: ["wPKTJsihIYw", "bINbcn3031o", "film-52436", "eKfEO0qM1aU", "YifNPOb4UhA", "PozYb57vV38", "hO4F6nYJ03w", "innb1UEpVZg"] },
-    { id: "dolomites", title: "Dolomites", sub: "High up in the Alps", items: ["x1jAFA-T7GU", "uJIhAvqFJxg", "1oGFKEePOFQ", "film-2788", "kQ0LkrVVuv0", "UWP6ZzHrqfo", "ATzEluEgZpw", "RIhZ4zFYBCQ", "PWHEBQS0QXo"] },
-    { id: "tokyo", title: "Tokyo at night", sub: "Shinjuku, Shibuya, Ikebukuro", items: ["W5ISGAqjAfg", "2uuaV_fI4LU", "GU8CEZReKxs", "XMAbH81gUbQ", "kYlfHSJVZT4", "xSJq_ivXjAc", "T11f_AGNKGg"] },
-    { id: "golden", title: "Golden hour", sub: "The best twenty minutes of the day", items: ["uPwWP83BCeg", "_-3P0X11GYI", "P4AQFdHDNkQ", "WAQ00FkbA7g", "-mCWpK4aLgQ", "GiDqZkXMqVM", "ypA56XUc4dE", "RraKuk4JjEU", "niYTtTIR-u4"] },
-  ] as Album[],
+    "Photos and a film from the road. I do this out of passion, and there's much more coming: more clips, more photos. What's here is only a tiny part, around 0.01%, of everything I've shot.",
+  media: mine,
+  // Design work: a few of the studio's best screens (ids in src/work.json); the rest is on webstern.co
+  design: ["poof-02-landing-page", "kaching-04-bundles-app", "acquisity-01-home-page", "god-of-prompt-02-home-page", "kaching-01-home", "acquisity-06-my-day"],
 };
 
 // ---------- Contact ----------
