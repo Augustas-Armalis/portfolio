@@ -1520,7 +1520,7 @@ function DeskWidgets({ dark }: { dark: boolean }) {
           <span>
             <span className={`block text-[11px] font-semibold uppercase tracking-[0.04em] ${dark ? "text-white/55" : "text-ink-3"}`}>Working on</span>
             <span className="t-headline block">{mainWork.name}</span>
-            <span className={`block text-[12px] leading-4 ${sub}`}>A team of four</span>
+            <span className={`block text-[12px] leading-4 ${sub}`}>A team of three</span>
           </span>
         </button>
         <button type="button" onClick={() => open("gallery")} aria-label="Open Gallery" className="sq-panel press pointer-events-auto relative aspect-square overflow-hidden rounded-[22px] bg-black shadow-[0_10px_30px_-12px_rgb(0_0_0/0.5)]">

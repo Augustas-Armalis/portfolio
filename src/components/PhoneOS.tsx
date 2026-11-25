@@ -549,7 +549,7 @@ function WorkingWidget({ onOpen }: { onOpen: Open }) {
       <span>
         <span className="block text-[20px] font-semibold leading-6 tracking-[-0.025em]">{mainWork.name}</span>
         <span className="block truncate text-[13px] leading-[17px] text-white/65">{mainWork.role}</span>
-        <span className="block truncate text-[13px] leading-[17px] text-white/45">A team of four</span>
+        <span className="block truncate text-[13px] leading-[17px] text-white/45">A team of three</span>
       </span>
     </Widget>
   );
