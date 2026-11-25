@@ -519,8 +519,8 @@ function ProjectsWidget({ onOpen }: { onOpen: Open }) {
 
 // A large picture from the Gallery, changing slowly.
 function PhotoWidget({ onOpen }: { onOpen: Open }) {
-  // a few of his photographs: the Gallery's Best of, one after another
-  const best = useMemo(() => (gallery.albums.find((x) => x.id === "best")?.items ?? []).map((id) => gallery.media.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m && m.kind === "photo"), []);
+  // his own photographs, one after another
+  const best = useMemo(() => gallery.media.filter((m) => m.kind === "photo"), []);
   const [i, setI] = useState(0);
   useHomeInterval(() => setI((n) => (n + 1) % Math.max(1, best.length)), 6000);
   const s = best[i];
@@ -528,7 +528,7 @@ function PhotoWidget({ onOpen }: { onOpen: Open }) {
   return (
     <Widget app="gallery" onOpen={onOpen} label="Open Gallery" className="block h-[clamp(132px,24dvh,206px)] w-full">
       <AnimatePresence initial={false}>
-        <motion.img key={s.id} src={s.src.replace(/w=\d+/, "w=900")} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: EASE_OUT }} />
+        <motion.img key={s.id} src={s.thumb} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: EASE_OUT }} />
       </AnimatePresence>
       <span aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgb(0_0_0/0.55))]" />
       <span className="absolute inset-x-4 bottom-3 flex items-baseline justify-between gap-3">

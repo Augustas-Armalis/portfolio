@@ -1503,10 +1503,8 @@ function Welcome() {
 // They only show where the screen is tall enough to hold them under the note.
 function DeskWidgets({ dark }: { dark: boolean }) {
   const open = useOS((s) => s.open);
-  const best = useMemo(() => {
-    const ids = gallery.albums.find((a) => a.id === "best")?.items ?? [];
-    return ids.map((id) => gallery.media.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m && m.kind === "photo");
-  }, []);
+  // his own photographs, one after another
+  const best = useMemo(() => gallery.media.filter((m) => m.kind === "photo"), []);
   const [i, setI] = useState(0);
   useLiveInterval(() => setI((n) => (n + 1) % best.length), best.length < 2 || reducedMotion() ? null : 7000);
   const featured = projects.contles;

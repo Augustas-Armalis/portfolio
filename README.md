@@ -25,11 +25,11 @@ Drop the originals in a folder (or in `media/inbox/`, which git ignores) and run
 bun run media -- "/path/to/folder"
 ```
 
-`scripts/optimize-media.mjs` only reads the originals. It writes web copies to `public/gallery/own/` and the list of them to `src/media.json`, and the Gallery picks them up as the "My travels" album, newest first.
+`scripts/optimize-media.mjs` only reads the originals. It writes web copies to `public/gallery/own/` and the list of them to `src/media.json`, and the Gallery shows them in My travels, the film first, then the photos newest first.
 
 - **Each photo:** turned upright, with all metadata dropped (no EXIF, no GPS). It's saved as webp at three sizes: 800 px for the grid (aim 80 KB or under), 1920 px for the viewer (400 KB or under), and 3200 px, fetched only when zoomed in. A 24 px copy is inlined as a blur-up placeholder.
 - **Each film:** H.264 at 1080p at most, capped at 2.6 Mbit/s, with AAC audio, fast start and no metadata. It also gets a webp poster and a 6-second silent 480p loop for its tile.
 
 Only new or changed files are encoded again; add `--force` to redo everything. Titles come from the filename, or the date for camera names like `IMG_1234`. A better title (and an optional `place`) goes in `scripts/media-captions.json`, keyed by the file's id (`porshe.JPG` is `porshe`).
 
-The Gallery and Shots are one Photos app (`src/components/apps/gallery.tsx`). The Gallery opens on the Library: your own photos and films, newest first, by the day each was taken. Shots opens on the Design shots album, whose pictures are listed in `shots.items` in `src/content.ts`.
+The Gallery shows only your own work. It opens on My travels: your photos and film, film first, under a few words from you. Design work is a small second tab, with a few Webstern screens chosen by id in `gallery.design` in `src/content.ts` and links to webstern.co. Shots opens on that tab.

@@ -6,7 +6,7 @@
 import { ArrowUpRight, FileText } from "lucide-react";
 import { Sym } from "../symbols";
 import { useEffect, useState } from "react";
-import { projectGroups, projects, type AppId, type Project } from "@/content";
+import { copiesOf, projectGroups, projects, type AppId, type Project } from "@/content";
 import { useOS } from "@/store";
 import { AppIcon } from "../icons";
 import { Btn, dragFile, InfoGrid, List, ListRow, QuickLook, SectionHeader, StatsRow, useChrome } from "../ui";
@@ -25,6 +25,31 @@ const eyebrowOf = (id: AppId, p: Project) => {
   return p.status === "Closed" ? "Venture, closed" : "Venture";
 };
 const isTall = (src: string) => /phone/.test(src);
+
+// a picture's shape on the page: a phone screen tall, the Contles photographs 4:3, a screen 16:10
+const aspectOf = (src: string) => (isTall(src) ? "aspect-[390/844]" : src.includes("contles") ? "aspect-[4/3]" : "aspect-[16/10]");
+// a picture the media pipeline made carries a 24 px copy: shown blurred until it is in
+const blurOf = (src: string) => {
+  const ph = copiesOf(src)?.placeholder;
+  return ph ? { backgroundImage: `url(${ph})` } : undefined;
+};
+// a picture that fades in once it has arrived, over its blur
+function Pic({ src, name, className, eager }: { src: string; name: string; className: string; eager?: boolean }) {
+  const [on, setOn] = useState(false);
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      loading={eager ? "eager" : "lazy"}
+      decoding="async"
+      onLoad={() => setOn(true)}
+      ref={(el) => void (el?.complete && el.naturalWidth && !on && setOn(true))}
+      {...dragFile(name, src)}
+      className={`block w-full object-cover object-top transition-opacity duration-300 ${on ? "opacity-100" : "opacity-0"} ${className}`}
+    />
+  );
+}
 
 function ProductPage({ id, p }: { id: AppId; p: Project }) {
   const { compact } = useChrome();
@@ -69,7 +94,30 @@ function ProductPage({ id, p }: { id: AppId; p: Project }) {
           <StatsRow stats={stats} />
         </div>
       )}
-      {(p.video || pics.length > 0) && (
+      {!p.video && pics.length >= 3 ? (
+        // three pictures or more: the first large, the rest a row of thumbnails under it; any opens in Quick Look
+        <section className={`${pad} pt-7`}>
+          <button type="button" onClick={() => setLook(0)} aria-label={`${p.name}, picture 1`} className="press sq-card block w-full overflow-hidden rounded-[18px] bg-[var(--fill-2)] bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)]" style={blurOf(pics[0])} data-sq="">
+            <Pic src={pics[0]} eager name={`${p.name} 1`} className={aspectOf(pics[0])} />
+          </button>
+          <div className={`mt-3 ${compact ? "-mx-5 flex snap-x snap-mandatory gap-2.5 overflow-x-auto scroll-px-5 px-5 pb-1 [scrollbar-width:none]" : "grid grid-cols-4 gap-3 @max-[559px]:grid-cols-2"}`}>
+            {pics.slice(1).map((src, k) => (
+              <button
+                type="button"
+                key={src}
+                onClick={() => setLook(k + 1)}
+                aria-label={`${p.name}, picture ${k + 2}`}
+                className={`press lift sq-card overflow-hidden rounded-[12px] bg-[var(--fill-2)] bg-cover bg-center shadow-[0_0_0_0.5px_rgb(0_0_0/0.1)] ${compact ? "w-[44%] shrink-0 snap-start" : ""}`}
+                style={blurOf(src)}
+                data-sq=""
+              >
+                <Pic src={copiesOf(src)?.grid ?? src} name={`${p.name} ${k + 2}`} className={aspectOf(src)} />
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : (
+        (p.video || pics.length > 0) && (
         <section className="pt-7">
           <div className={`flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] ${compact ? "scroll-px-5 px-5" : "scroll-px-10 px-10 @max-[559px]:scroll-px-6 @max-[559px]:px-6"}`}>
             {p.video && (
@@ -87,11 +135,12 @@ function ProductPage({ id, p }: { id: AppId; p: Project }) {
                 data-sq=""
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={src} alt="" loading={i ? "lazy" : "eager"} decoding="async" {...dragFile(`${p.name} ${i + 1}`, src)} className={`block w-full object-cover object-top ${isTall(src) ? "aspect-[390/844]" : src.includes("contles") ? "aspect-[4/3]" : "aspect-[16/10]"}`} />
+                <img src={src} alt="" loading={i ? "lazy" : "eager"} decoding="async" {...dragFile(`${p.name} ${i + 1}`, src)} className={`block w-full object-cover object-top ${aspectOf(src)}`} />
               </button>
             ))}
           </div>
         </section>
+      )
       )}
       {p.story && (
         <section className={`${pad} pt-7`}>
