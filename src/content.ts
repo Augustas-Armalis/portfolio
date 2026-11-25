@@ -233,20 +233,20 @@ const larpo: Project = {
   name: "Webstern",
   what: "A full-stack web partner for SaaS and AI teams.",
   story: [
-    "Webstern is my studio, and my first business. We design and build brands, websites and products for SaaS and AI teams, in custom code, shipped in weeks, not months.",
-    "I started it in 2024 under other names of my own. It was Larpo until this year; now it's Webstern. It has earned over six figures and is run by a team of four.",
+    "Webstern is my main focus. I reached six figures on my own; now, with a team of three, we aim to do that every year.",
+    "We do everything from website design in Figma to coding it: animations, logos and branding, design systems, backend and all the rest, in custom code, shipped in weeks, not months.",
     "Kaching, Acquisity, Poof and God of Prompt are among the teams we've built for. Acquisity came for product design, left with a rebrand, a website and a front end, and still works with us.",
   ],
   role: "Founder, head of design",
   years: "2024 – now",
-  status: "Taking projects",
+  status: "Open",
   stack: "Figma, React, Next.js, Motion, Three.js",
   image: "/img/p/webstern-1.webp",
   images: ["/img/p/webstern-2.webp"],
   numbers: [
     { label: "Revenue", value: "6 figures" },
-    { label: "Team", value: "4" },
-    { label: "Case studies", value: "4" },
+    { label: "Team", value: "3" },
+    { label: "Projects", value: "50+" },
   ],
   link: { label: "webstern.co", href: "https://webstern.co/" },
   get: { label: "Visit", href: "https://webstern.co/" },
@@ -285,7 +285,7 @@ export const projects: Partial<Record<AppId, Project>> = {
     story: [
       "Lunor began with me sharing my own designs. People bought them and used loads of them, which made it a small success of mine and then a proper library: real Figma files and coded components, straight from the workspaces of verified designers.",
       "Over 300 designs so far, from full product screens down to single components, every one editable. Open it, see exactly how it's built, and drop it into your own work.",
-      "I'm rebuilding it right now, and it's going to be huge. More to come.",
+      "It brought in my first MRR, almost four figures, and I'm reaching for that and more. I'm rebuilding it right now, and it's going to be huge. More to come.",
     ],
     role: "Founder",
     years: "Oct 2025 – now",
@@ -594,7 +594,7 @@ export const resume = {
     {
       title: "Experience",
       rows: [
-        { when: "2024 – now", title: "Founder, head of design", org: "Webstern", body: "A full-stack web partner for SaaS and AI teams: brand, websites and product, in custom code. My first business, started in 2024 and called Larpo until this year: over six figures earned, a team of four.", app: "larpo" },
+        { when: "2024 – now", title: "Founder, head of design", org: "Webstern", body: "A full-stack web partner for SaaS and AI teams: brand, websites and product, in custom code. Six figures reached alone, and now, with a team of three, the aim is to do that every year.", app: "larpo" },
         { when: "2025 – now", title: "Lead product designer", org: "Acquisity", body: "Over a year leading product design for Acquisity's AI acquisition platform: product, rebrand, website and front end." },
         { when: "2025 – 2026", title: "CEO, product and design", org: "Contles", body: "A creator-marketing platform, built from zero without investment. First at the ISM entrepreneurship club, then Kickstart Lab and Startup Fair, and a place on Rykliai, Lithuania's Shark Tank.", app: "contles" },
       ] as ResumeRow[],
@@ -622,13 +622,13 @@ export const resume = {
 export type Milestone = { when: string; title: string; body: string; app?: AppId; key?: boolean };
 export const timeline: Milestone[] = [
   { when: "2018", title: "The first camera", body: "Photographs from fifth grade on. Later films, a drone and the edit.", app: "gallery" },
-  { when: "2024", title: "My own studio", body: "Websites and products for clients, under the names that later became Webstern.", app: "larpo" },
+  { when: "2024", title: "My own studio", body: "Websites and products for clients, on my own. This is where the first six figures came from.", app: "larpo" },
   { when: "Jun 2025", title: "Acquisity", body: "Product design for an AI acquisition platform. Now I lead it." },
   { when: "Oct 2025", title: "Lunor", body: "My designs, shared. People bought and used loads of them.", app: "lunor" },
   { when: "Dec 2025", title: "Contles begins", body: "Brands and creators in one place. First at the ISM club, then Kickstart Lab, Startup Fair and Rykliai, Lithuania's Shark Tank.", app: "contles", key: true },
   { when: "2026", title: "Capto and Filzy", body: "An evening project that became a product, and a better way to send files.", app: "capto" },
   { when: "Aug 2026", title: "The novel, and a first release", body: "Žiemos naktys šviesesnės is finished. Nocturne for Absent Things comes out on Spotify.", app: "novel", key: true },
-  { when: "Aug 2026", title: "Larpo, the fourth brand", body: "The studio's new site goes live, with a team of four. Today it's Webstern.", app: "larpo", key: true },
+  { when: "Aug 2026", title: "Webstern goes live", body: "The studio's new site goes live, with a team of three.", app: "larpo", key: true },
   { when: "Oct 2026", title: "Rug and Afterlight", body: "A rug for your desktop, and a second release.", app: "rug" },
   { when: "Nov 2026", title: "Kiss You", body: "A first song, made with a singer.", app: "records", key: true },
 ];
